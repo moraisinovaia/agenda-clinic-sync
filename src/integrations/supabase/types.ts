@@ -1,0 +1,558 @@
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
+
+export type Database = {
+  // Allows to automatically instanciate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "12.2.3 (519615d)"
+  }
+  public: {
+    Tables: {
+      alimentos_teste_hidrogenio: {
+        Row: {
+          categoria: string | null
+          evitados: string[] | null
+          id: string
+          observacoes: string | null
+          permitidos: string[] | null
+        }
+        Insert: {
+          categoria?: string | null
+          evitados?: string[] | null
+          id?: string
+          observacoes?: string | null
+          permitidos?: string[] | null
+        }
+        Update: {
+          categoria?: string | null
+          evitados?: string[] | null
+          id?: string
+          observacoes?: string | null
+          permitidos?: string[] | null
+        }
+        Relationships: []
+      }
+      atendimentos: {
+        Row: {
+          ativo: boolean | null
+          codigo: string | null
+          coparticipacao_20: number | null
+          coparticipacao_40: number | null
+          created_at: string | null
+          forma_pagamento: string | null
+          horarios: Json | null
+          id: string
+          medico_id: string | null
+          nome: string
+          observacoes: string | null
+          restricoes: string | null
+          tipo: string
+          valor_particular: number | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          codigo?: string | null
+          coparticipacao_20?: number | null
+          coparticipacao_40?: number | null
+          created_at?: string | null
+          forma_pagamento?: string | null
+          horarios?: Json | null
+          id?: string
+          medico_id?: string | null
+          nome: string
+          observacoes?: string | null
+          restricoes?: string | null
+          tipo: string
+          valor_particular?: number | null
+        }
+        Update: {
+          ativo?: boolean | null
+          codigo?: string | null
+          coparticipacao_20?: number | null
+          coparticipacao_40?: number | null
+          created_at?: string | null
+          forma_pagamento?: string | null
+          horarios?: Json | null
+          id?: string
+          medico_id?: string | null
+          nome?: string
+          observacoes?: string | null
+          restricoes?: string | null
+          tipo?: string
+          valor_particular?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "atendimentos_medico_id_fkey"
+            columns: ["medico_id"]
+            isOneToOne: false
+            referencedRelation: "medicos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clinica_valores: {
+        Row: {
+          categoria: string
+          codigo_procedimento: string | null
+          created_at: string | null
+          forma_pagamento: string | null
+          id: number
+          observacoes: string | null
+          procedimento: string
+          valor_20_pct: number | null
+          valor_40_pct: number | null
+          valor_principal: number | null
+        }
+        Insert: {
+          categoria: string
+          codigo_procedimento?: string | null
+          created_at?: string | null
+          forma_pagamento?: string | null
+          id?: number
+          observacoes?: string | null
+          procedimento: string
+          valor_20_pct?: number | null
+          valor_40_pct?: number | null
+          valor_principal?: number | null
+        }
+        Update: {
+          categoria?: string
+          codigo_procedimento?: string | null
+          created_at?: string | null
+          forma_pagamento?: string | null
+          id?: number
+          observacoes?: string | null
+          procedimento?: string
+          valor_20_pct?: number | null
+          valor_40_pct?: number | null
+          valor_principal?: number | null
+        }
+        Relationships: []
+      }
+      configuracoes_clinica: {
+        Row: {
+          ativo: boolean | null
+          categoria: string | null
+          chave: string
+          created_at: string | null
+          dados_extras: Json | null
+          id: string
+          valor: string
+        }
+        Insert: {
+          ativo?: boolean | null
+          categoria?: string | null
+          chave: string
+          created_at?: string | null
+          dados_extras?: Json | null
+          id?: string
+          valor: string
+        }
+        Update: {
+          ativo?: boolean | null
+          categoria?: string | null
+          chave?: string
+          created_at?: string | null
+          dados_extras?: Json | null
+          id?: string
+          valor?: string
+        }
+        Relationships: []
+      }
+      medicos: {
+        Row: {
+          ativo: boolean | null
+          convenios_aceitos: string[] | null
+          convenios_restricoes: Json | null
+          created_at: string | null
+          especialidade: string
+          id: string
+          idade_maxima: number | null
+          idade_minima: number | null
+          nome: string
+          observacoes: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          convenios_aceitos?: string[] | null
+          convenios_restricoes?: Json | null
+          created_at?: string | null
+          especialidade: string
+          id?: string
+          idade_maxima?: number | null
+          idade_minima?: number | null
+          nome: string
+          observacoes?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          convenios_aceitos?: string[] | null
+          convenios_restricoes?: Json | null
+          created_at?: string | null
+          especialidade?: string
+          id?: string
+          idade_maxima?: number | null
+          idade_minima?: number | null
+          nome?: string
+          observacoes?: string | null
+        }
+        Relationships: []
+      }
+      n8n_chat_histories: {
+        Row: {
+          id: number
+          message: Json
+          session_id: string
+        }
+        Insert: {
+          id?: number
+          message: Json
+          session_id: string
+        }
+        Update: {
+          id?: number
+          message?: Json
+          session_id?: string
+        }
+        Relationships: []
+      }
+      preparos: {
+        Row: {
+          created_at: string | null
+          dias_suspensao: number | null
+          exame: string
+          id: string
+          instrucoes: Json | null
+          itens_levar: string | null
+          jejum_horas: number | null
+          medicacao_suspender: string | null
+          nome: string
+          observacoes_especiais: string | null
+          restricoes_alimentares: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          dias_suspensao?: number | null
+          exame: string
+          id?: string
+          instrucoes?: Json | null
+          itens_levar?: string | null
+          jejum_horas?: number | null
+          medicacao_suspender?: string | null
+          nome: string
+          observacoes_especiais?: string | null
+          restricoes_alimentares?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          dias_suspensao?: number | null
+          exame?: string
+          id?: string
+          instrucoes?: Json | null
+          itens_levar?: string | null
+          jejum_horas?: number | null
+          medicacao_suspender?: string | null
+          nome?: string
+          observacoes_especiais?: string | null
+          restricoes_alimentares?: string | null
+        }
+        Relationships: []
+      }
+      questionario_pre_colonoscopia: {
+        Row: {
+          id: string
+          obrigatorio: boolean | null
+          opcoes: string[] | null
+          ordem: number | null
+          pergunta: string
+          tipo_resposta: string | null
+        }
+        Insert: {
+          id?: string
+          obrigatorio?: boolean | null
+          opcoes?: string[] | null
+          ordem?: number | null
+          pergunta: string
+          tipo_resposta?: string | null
+        }
+        Update: {
+          id?: string
+          obrigatorio?: boolean | null
+          opcoes?: string[] | null
+          ordem?: number | null
+          pergunta?: string
+          tipo_resposta?: string | null
+        }
+        Relationships: []
+      }
+      valores_procedimentos: {
+        Row: {
+          categoria: string
+          codigo_procedimento: string | null
+          created_at: string | null
+          forma_pagamento: string | null
+          id: number
+          observacoes: string | null
+          procedimento: string
+          valor_20_pct: number | null
+          valor_40_pct: number | null
+          valor_principal: number | null
+        }
+        Insert: {
+          categoria: string
+          codigo_procedimento?: string | null
+          created_at?: string | null
+          forma_pagamento?: string | null
+          id?: number
+          observacoes?: string | null
+          procedimento: string
+          valor_20_pct?: number | null
+          valor_40_pct?: number | null
+          valor_principal?: number | null
+        }
+        Update: {
+          categoria?: string
+          codigo_procedimento?: string | null
+          created_at?: string | null
+          forma_pagamento?: string | null
+          id?: number
+          observacoes?: string | null
+          procedimento?: string
+          valor_20_pct?: number | null
+          valor_40_pct?: number | null
+          valor_principal?: number | null
+        }
+        Relationships: []
+      }
+    }
+    Views: {
+      vw_agente_alertas: {
+        Row: {
+          categoria: string | null
+          chave: string | null
+          dados_extras: Json | null
+          prioridade: string | null
+          valor: string | null
+        }
+        Insert: {
+          categoria?: string | null
+          chave?: string | null
+          dados_extras?: Json | null
+          prioridade?: never
+          valor?: string | null
+        }
+        Update: {
+          categoria?: string | null
+          chave?: string | null
+          dados_extras?: Json | null
+          prioridade?: never
+          valor?: string | null
+        }
+        Relationships: []
+      }
+      vw_agente_convenios: {
+        Row: {
+          convenio: string | null
+          dados_extras: Json | null
+          informacao: string | null
+          tipo: string | null
+        }
+        Relationships: []
+      }
+      vw_agente_medicos: {
+        Row: {
+          convenios_aceitos: string[] | null
+          convenios_restricoes: Json | null
+          coparticipacao_20: number | null
+          coparticipacao_40: number | null
+          especialidade: string | null
+          forma_pagamento: string | null
+          horarios: Json | null
+          idade_minima: number | null
+          medico: string | null
+          nome_atendimento: string | null
+          obs_atendimento: string | null
+          obs_medico: string | null
+          tipo_atendimento: string | null
+          valor_particular: number | null
+        }
+        Relationships: []
+      }
+      vw_agente_preparos: {
+        Row: {
+          dias_suspensao: number | null
+          exame: string | null
+          instrucoes: Json | null
+          itens_levar: string | null
+          jejum_horas: number | null
+          medicacao_suspender: string | null
+          nome: string | null
+          observacoes_especiais: string | null
+          restricoes_alimentares: string | null
+        }
+        Insert: {
+          dias_suspensao?: number | null
+          exame?: string | null
+          instrucoes?: Json | null
+          itens_levar?: string | null
+          jejum_horas?: number | null
+          medicacao_suspender?: string | null
+          nome?: string | null
+          observacoes_especiais?: string | null
+          restricoes_alimentares?: string | null
+        }
+        Update: {
+          dias_suspensao?: number | null
+          exame?: string | null
+          instrucoes?: Json | null
+          itens_levar?: string | null
+          jejum_horas?: number | null
+          medicacao_suspender?: string | null
+          nome?: string | null
+          observacoes_especiais?: string | null
+          restricoes_alimentares?: string | null
+        }
+        Relationships: []
+      }
+    }
+    Functions: {
+      [_ in never]: never
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+}
+
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  public: {
+    Enums: {},
+  },
+} as const
