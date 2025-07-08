@@ -289,6 +289,7 @@ export type Database = {
       }
       pacientes: {
         Row: {
+          celular: string
           convenio: string
           created_at: string
           data_nascimento: string
@@ -298,6 +299,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          celular?: string
           convenio: string
           created_at?: string
           data_nascimento: string
@@ -307,6 +309,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          celular?: string
           convenio?: string
           created_at?: string
           data_nascimento?: string
