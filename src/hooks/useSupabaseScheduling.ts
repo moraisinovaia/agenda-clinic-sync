@@ -121,15 +121,27 @@ export function useSupabaseScheduling() {
         .from('pacientes')
         .select('*')
         .eq('data_nascimento', birthDate)
-        .order('created_at', { ascending: false });
+        .order('updated_at', { ascending: false });
 
       if (error) {
         console.error('❌ Erro ao buscar pacientes:', error);
         throw error;
       }
 
-      console.log('📋 Pacientes encontrados:', data);
-      return data || [];
+      // Remover duplicatas baseado no nome completo e convênio para evitar pacientes repetidos
+      const uniquePatients = data ? data.reduce((acc, current) => {
+        const existing = acc.find(patient => 
+          patient.nome_completo.toLowerCase() === current.nome_completo.toLowerCase() &&
+          patient.convenio === current.convenio
+        );
+        if (!existing) {
+          acc.push(current);
+        }
+        return acc;
+      }, [] as typeof data) : [];
+
+      console.log('📋 Pacientes únicos encontrados:', uniquePatients);
+      return uniquePatients;
     } catch (error) {
       console.error('❌ Erro ao buscar pacientes:', error);
       toast({
