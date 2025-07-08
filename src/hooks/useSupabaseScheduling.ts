@@ -157,6 +157,32 @@ export function useSupabaseScheduling() {
       setLoading(true);
       console.log('🚀 Criando agendamento:', formData);
 
+      // Validar dados obrigatórios
+      if (!formData.medicoId || formData.medicoId.trim() === '') {
+        throw new Error('Médico é obrigatório');
+      }
+      if (!formData.atendimentoId || formData.atendimentoId.trim() === '') {
+        throw new Error('Tipo de atendimento é obrigatório');
+      }
+      if (!formData.nomeCompleto || formData.nomeCompleto.trim() === '') {
+        throw new Error('Nome completo é obrigatório');
+      }
+      if (!formData.dataNascimento) {
+        throw new Error('Data de nascimento é obrigatória');
+      }
+      if (!formData.convenio || formData.convenio.trim() === '') {
+        throw new Error('Convênio é obrigatório');
+      }
+      if (!formData.celular || formData.celular.trim() === '') {
+        throw new Error('Celular é obrigatório');
+      }
+      if (!formData.dataAgendamento) {
+        throw new Error('Data do agendamento é obrigatória');
+      }
+      if (!formData.horaAgendamento) {
+        throw new Error('Hora do agendamento é obrigatória');
+      }
+
       // Validar se a data/hora não é no passado
       const appointmentDateTime = new Date(`${formData.dataAgendamento}T${formData.horaAgendamento}`);
       const now = new Date();
