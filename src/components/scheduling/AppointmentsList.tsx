@@ -11,9 +11,11 @@ import { Calendar, Clock, User, Phone, Search } from 'lucide-react';
 
 interface AppointmentsListProps {
   appointments: AppointmentWithRelations[];
+  onEditAppointment?: (appointment: AppointmentWithRelations) => void;
+  onCancelAppointment?: (appointmentId: string) => void;
 }
 
-export function AppointmentsList({ appointments }: AppointmentsListProps) {
+export function AppointmentsList({ appointments, onEditAppointment, onCancelAppointment }: AppointmentsListProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
@@ -143,11 +145,19 @@ export function AppointmentsList({ appointments }: AppointmentsListProps) {
                       </div>
                       
                       <div className="flex gap-2">
-                        <Button variant="outline" size="sm">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => onEditAppointment?.(appointment)}
+                        >
                           Editar
                         </Button>
                         {appointment.status === 'agendado' && (
-                          <Button variant="outline" size="sm">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => onCancelAppointment?.(appointment.id)}
+                          >
                             Cancelar
                           </Button>
                         )}

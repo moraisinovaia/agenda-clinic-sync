@@ -262,7 +262,19 @@ const Index = () => {
         )}
 
         {viewMode === 'appointments-list' && (
-          <AppointmentsList appointments={appointments} />
+          <AppointmentsList 
+            appointments={appointments} 
+            onEditAppointment={(appointment) => {
+              // Encontrar o médico do agendamento
+              const doctor = doctors.find(d => d.id === appointment.medico_id);
+              if (doctor) {
+                setSelectedDoctor(doctor);
+                // TODO: Implementar funcionalidade de edição
+                console.log('Editar agendamento:', appointment);
+              }
+            }}
+            onCancelAppointment={cancelAppointment}
+          />
         )}
       </div>
     </div>
