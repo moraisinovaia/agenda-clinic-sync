@@ -39,6 +39,16 @@ export function AppointmentsList({ appointments, onEditAppointment, onCancelAppo
       appointment.pacientes?.nome_completo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       appointment.medicos?.nome?.toLowerCase().includes(searchTerm.toLowerCase());
     
+    // Se filtro específico para cancelado, mostrar apenas cancelados
+    if (statusFilter === 'cancelado') {
+      return matchesSearch && appointment.status === 'cancelado';
+    }
+    
+    // Por padrão, não mostrar cancelados (exceto quando filtro específico)
+    if (appointment.status === 'cancelado' && statusFilter !== 'cancelado') {
+      return false;
+    }
+    
     const matchesStatus = statusFilter === 'all' || appointment.status === statusFilter;
     
     return matchesSearch && matchesStatus;

@@ -13,15 +13,16 @@ import { DoctorSchedule } from '@/components/scheduling/DoctorSchedule';
 import { AppointmentsList } from '@/components/scheduling/AppointmentsList';
 
 import { useSupabaseScheduling } from '@/hooks/useSupabaseScheduling';
-import { Doctor, SchedulingFormData } from '@/types/scheduling';
+import { Doctor, SchedulingFormData, AppointmentWithRelations } from '@/types/scheduling';
 
-type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list';
+type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment';
 
 const Index = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('doctors');
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [lastAppointmentDate, setLastAppointmentDate] = useState<string | null>(null);
+  const [editingAppointment, setEditingAppointment] = useState<AppointmentWithRelations | null>(null);
 
   const {
     doctors,
@@ -77,6 +78,16 @@ const Index = () => {
     setViewMode('doctors');
     setSelectedDoctor(null);
     setLastAppointmentDate(null); // Limpar data do último agendamento
+    setEditingAppointment(null); // Limpar agendamento sendo editado
+  };
+
+  const handleEditAppointment = (appointment: AppointmentWithRelations) => {
+    const doctor = doctors.find(d => d.id === appointment.medico_id);
+    if (doctor) {
+      setSelectedDoctor(doctor);
+      setEditingAppointment(appointment);
+      setViewMode('edit-appointment');
+    }
   };
 
   const totalAppointments = appointments.length;
@@ -264,16 +275,21 @@ const Index = () => {
         {viewMode === 'appointments-list' && (
           <AppointmentsList 
             appointments={appointments} 
-            onEditAppointment={(appointment) => {
-              // Encontrar o médico do agendamento
-              const doctor = doctors.find(d => d.id === appointment.medico_id);
-              if (doctor) {
-                setSelectedDoctor(doctor);
-                // TODO: Implementar funcionalidade de edição
-                console.log('Editar agendamento:', appointment);
-              }
-            }}
+            onEditAppointment={handleEditAppointment}
             onCancelAppointment={cancelAppointment}
+          />
+        )}
+
+        {viewMode === 'edit-appointment' && editingAppointment && (
+          <SchedulingForm
+            doctors={doctors}
+            atendimentos={atendimentos}
+            appointments={appointments}
+            onSubmit={handleSubmitAppointment}
+            onCancel={handleBack}
+            getAtendimentosByDoctor={getAtendimentosByDoctor}
+            searchPatientsByBirthDate={searchPatientsByBirthDate}
+            editingAppointment={editingAppointment}
           />
         )}
       </div>

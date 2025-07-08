@@ -14,8 +14,11 @@ const initialFormData: SchedulingFormData = {
   observacoes: '',
 };
 
-export function useSchedulingForm() {
-  const [formData, setFormData] = useState<SchedulingFormData>(initialFormData);
+export function useSchedulingForm(initialData?: Partial<SchedulingFormData>) {
+  const [formData, setFormData] = useState<SchedulingFormData>({
+    ...initialFormData,
+    ...initialData
+  });
   const [loading, setLoading] = useState(false);
 
   const resetForm = () => {

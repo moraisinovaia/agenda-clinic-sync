@@ -19,6 +19,7 @@ interface SchedulingFormProps {
   onCancel: () => void;
   getAtendimentosByDoctor: (doctorId: string) => Atendimento[];
   searchPatientsByBirthDate: (birthDate: string) => Promise<any[]>;
+  editingAppointment?: AppointmentWithRelations;
 }
 
 export function SchedulingForm({ 
@@ -28,9 +29,24 @@ export function SchedulingForm({
   onSubmit, 
   onCancel,
   getAtendimentosByDoctor,
-  searchPatientsByBirthDate
+  searchPatientsByBirthDate,
+  editingAppointment
 }: SchedulingFormProps) {
-  const { formData, setFormData, loading, handleSubmit } = useSchedulingForm();
+  // Preparar dados iniciais para edição
+  const initialEditData = editingAppointment ? {
+    nomeCompleto: editingAppointment.pacientes?.nome_completo || '',
+    dataNascimento: editingAppointment.pacientes?.data_nascimento || '',
+    convenio: editingAppointment.pacientes?.convenio || '',
+    telefone: editingAppointment.pacientes?.telefone || '',
+    celular: editingAppointment.pacientes?.celular || '',
+    medicoId: editingAppointment.medico_id,
+    atendimentoId: editingAppointment.atendimento_id,
+    dataAgendamento: editingAppointment.data_agendamento,
+    horaAgendamento: editingAppointment.hora_agendamento,
+    observacoes: editingAppointment.observacoes || '',
+  } : undefined;
+
+  const { formData, setFormData, loading, handleSubmit } = useSchedulingForm(initialEditData);
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date>(new Date());
 
   const selectedDoctor = doctors.find(doctor => doctor.id === formData.medicoId);
@@ -80,7 +96,7 @@ export function SchedulingForm({
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <CalendarIcon className="h-5 w-5" />
-              Novo Agendamento
+              {editingAppointment ? 'Editar Agendamento' : 'Novo Agendamento'}
             </CardTitle>
           </CardHeader>
           
@@ -103,7 +119,10 @@ export function SchedulingForm({
 
               <div className="flex gap-2 pt-4">
                 <Button type="submit" disabled={loading} className="flex-1">
-                  {loading ? 'Agendando...' : 'Confirmar Agendamento'}
+                  {loading 
+                    ? (editingAppointment ? 'Atualizando...' : 'Agendando...') 
+                    : (editingAppointment ? 'Atualizar Agendamento' : 'Confirmar Agendamento')
+                  }
                 </Button>
                 <Button type="button" variant="outline" onClick={onCancel}>
                   Cancelar
