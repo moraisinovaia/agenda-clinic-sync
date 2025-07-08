@@ -1,8 +1,13 @@
+import { useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Clock } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Clock, Check, ChevronsUpDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Doctor, SchedulingFormData, Atendimento } from '@/types/scheduling';
 
 interface AppointmentDataFormProps {
@@ -18,6 +23,7 @@ export function AppointmentDataForm({
   doctors,
   atendimentos 
 }: AppointmentDataFormProps) {
+  const [openDoctorCombo, setOpenDoctorCombo] = useState(false);
   // Filtrar atendimentos baseado no médico selecionado
   const filteredAtendimentos = formData.medicoId 
     ? atendimentos.filter(atendimento => atendimento.medico_id === formData.medicoId)
@@ -61,26 +67,56 @@ export function AppointmentDataForm({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <Label htmlFor="medico">Médico *</Label>
-          <Select 
-            value={formData.medicoId} 
-            onValueChange={(value) => setFormData(prev => ({ 
-              ...prev, 
-              medicoId: value,
-              atendimentoId: '', // Reset atendimento when doctor changes
-              convenio: '' // Reset convenio when doctor changes
-            }))}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Selecione o médico" />
-            </SelectTrigger>
-            <SelectContent>
-              {doctors.map((doctor) => (
-                <SelectItem key={doctor.id} value={doctor.id}>
-                  {doctor.nome} - {doctor.especialidade}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Popover open={openDoctorCombo} onOpenChange={setOpenDoctorCombo}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                aria-expanded={openDoctorCombo}
+                className="w-full justify-between"
+              >
+                {formData.medicoId
+                  ? doctors.find((doctor) => doctor.id === formData.medicoId)?.nome + 
+                    " - " + 
+                    doctors.find((doctor) => doctor.id === formData.medicoId)?.especialidade
+                  : "Selecione o médico..."}
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-full p-0">
+              <Command>
+                <CommandInput placeholder="Buscar médico..." />
+                <CommandList>
+                  <CommandEmpty>Nenhum médico encontrado.</CommandEmpty>
+                  <CommandGroup>
+                    {doctors.map((doctor) => (
+                      <CommandItem
+                        key={doctor.id}
+                        value={`${doctor.nome} ${doctor.especialidade}`}
+                        onSelect={() => {
+                          setFormData(prev => ({
+                            ...prev,
+                            medicoId: doctor.id,
+                            atendimentoId: '', // Reset atendimento when doctor changes
+                            convenio: '' // Reset convenio when doctor changes
+                          }));
+                          setOpenDoctorCombo(false);
+                        }}
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            formData.medicoId === doctor.id ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        {doctor.nome} - {doctor.especialidade}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
         </div>
 
         <div>
