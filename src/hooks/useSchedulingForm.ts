@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { SchedulingFormData } from '@/types/scheduling';
 
 const initialFormData: SchedulingFormData = {
@@ -15,11 +15,23 @@ const initialFormData: SchedulingFormData = {
 };
 
 export function useSchedulingForm(initialData?: Partial<SchedulingFormData>) {
-  const [formData, setFormData] = useState<SchedulingFormData>({
+  const [formData, setFormData] = useState<SchedulingFormData>(() => ({
     ...initialFormData,
     ...initialData
-  });
+  }));
   const [loading, setLoading] = useState(false);
+  const hasInitialized = useRef(false);
+
+  // Garantir que os dados iniciais sejam aplicados apenas na primeira renderização
+  useEffect(() => {
+    if (initialData && !hasInitialized.current) {
+      setFormData(prev => ({
+        ...initialFormData,
+        ...initialData
+      }));
+      hasInitialized.current = true;
+    }
+  }, [initialData]);
 
   const resetForm = () => {
     setFormData(initialFormData);
