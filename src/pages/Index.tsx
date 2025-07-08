@@ -256,6 +256,7 @@ const Index = () => {
             doctor={selectedDoctor}
             appointments={appointments.filter(apt => apt.medico_id === selectedDoctor.id)}
             onCancelAppointment={cancelAppointment}
+            onEditAppointment={handleEditAppointment}
             onNewAppointment={() => setViewMode('new-appointment')}
             initialDate={lastAppointmentDate || undefined}
           />

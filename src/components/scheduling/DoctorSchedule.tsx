@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User, Trash2, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User, Trash2, Plus, Edit } from 'lucide-react';
 import { 
   AlertDialog, 
   AlertDialogAction, 
@@ -23,11 +23,12 @@ interface DoctorScheduleProps {
   doctor: Doctor;
   appointments: AppointmentWithRelations[];
   onCancelAppointment: (appointmentId: string) => Promise<void>;
+  onEditAppointment?: (appointment: AppointmentWithRelations) => void;
   onNewAppointment?: () => void;
   initialDate?: string; // Data inicial para posicionar o calendário
 }
 
-export function DoctorSchedule({ doctor, appointments, onCancelAppointment, onNewAppointment, initialDate }: DoctorScheduleProps) {
+export function DoctorSchedule({ doctor, appointments, onCancelAppointment, onEditAppointment, onNewAppointment, initialDate }: DoctorScheduleProps) {
   // Usar initialDate se fornecida, senão usar data atual
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     if (initialDate) {
@@ -172,6 +173,16 @@ export function DoctorSchedule({ doctor, appointments, onCancelAppointment, onNe
 
                          {/* Botões de ação */}
                          <div className="flex gap-2 pt-2">
+                           {onEditAppointment && (
+                             <Button 
+                               variant="outline" 
+                               size="sm"
+                               onClick={() => onEditAppointment(appointment)}
+                             >
+                               <Edit className="h-4 w-4 mr-1" />
+                               Editar
+                             </Button>
+                           )}
                            {appointment.status === 'agendado' && (
                              <AlertDialog>
                                <AlertDialogTrigger asChild>
