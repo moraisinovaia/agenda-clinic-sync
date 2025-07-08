@@ -81,9 +81,12 @@ export function useSupabaseScheduling() {
   // Criar novo agendamento
   const createAppointment = async (formData: SchedulingFormData) => {
     try {
+      console.log('=== DEBUG CREATE APPOINTMENT ===');
+      console.log('FormData received:', formData);
       setLoading(true);
 
       // Primeiro, criar o paciente
+      console.log('Creating patient...');
       const { data: patientData, error: patientError } = await supabase
         .from('pacientes')
         .insert({
@@ -95,9 +98,15 @@ export function useSupabaseScheduling() {
         .select()
         .single();
 
-      if (patientError) throw patientError;
+      console.log('Patient creation result:', { patientData, patientError });
+
+      if (patientError) {
+        console.error('Patient creation error:', patientError);
+        throw patientError;
+      }
 
       // Depois, criar o agendamento
+      console.log('Creating appointment...');
       const { data: appointmentData, error: appointmentError } = await supabase
         .from('agendamentos')
         .insert({
@@ -112,7 +121,12 @@ export function useSupabaseScheduling() {
         .select()
         .single();
 
-      if (appointmentError) throw appointmentError;
+      console.log('Appointment creation result:', { appointmentData, appointmentError });
+
+      if (appointmentError) {
+        console.error('Appointment creation error:', appointmentError);
+        throw appointmentError;
+      }
 
       toast({
         title: 'Sucesso!',
@@ -124,7 +138,13 @@ export function useSupabaseScheduling() {
       
       return appointmentData;
     } catch (error) {
-      console.error('Erro ao criar agendamento:', error);
+      console.error('=== FULL ERROR DETAILS ===');
+      console.error('Error object:', error);
+      console.error('Error message:', error.message);
+      console.error('Error details:', error.details);
+      console.error('Error hint:', error.hint);
+      console.error('Error code:', error.code);
+      
       toast({
         title: 'Erro',
         description: 'Não foi possível criar o agendamento',

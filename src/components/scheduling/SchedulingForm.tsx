@@ -95,6 +95,7 @@ export function SchedulingForm({
                 formData={formData}
                 setFormData={setFormData}
                 doctors={doctors}
+                atendimentos={atendimentos}
               />
 
               <div className="flex gap-2 pt-4">

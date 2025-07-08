@@ -3,18 +3,20 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Clock } from 'lucide-react';
-import { Doctor, SchedulingFormData } from '@/types/scheduling';
+import { Doctor, SchedulingFormData, Atendimento } from '@/types/scheduling';
 
 interface AppointmentDataFormProps {
   formData: SchedulingFormData;
   setFormData: React.Dispatch<React.SetStateAction<SchedulingFormData>>;
   doctors: Doctor[];
+  atendimentos: Atendimento[];
 }
 
 export function AppointmentDataForm({ 
   formData, 
   setFormData, 
-  doctors 
+  doctors,
+  atendimentos 
 }: AppointmentDataFormProps) {
   return (
     <div className="space-y-4">
@@ -58,9 +60,11 @@ export function AppointmentDataForm({
               <SelectValue placeholder="Selecione o tipo" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="consulta">Consulta</SelectItem>
-              <SelectItem value="retorno">Retorno</SelectItem>
-              <SelectItem value="exame">Exame</SelectItem>
+              {atendimentos.map((atendimento) => (
+                <SelectItem key={atendimento.id} value={atendimento.id}>
+                  {atendimento.nome} - {atendimento.tipo}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
