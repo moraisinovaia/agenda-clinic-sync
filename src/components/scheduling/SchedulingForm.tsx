@@ -66,6 +66,8 @@ export function SchedulingForm({
   const selectedDoctor = doctors.find(doctor => doctor.id === formData.medicoId);
   const availableConvenios = selectedDoctor?.convenios_aceitos || [];
   
+  console.log('Form medicoId:', formData.medicoId);
+  console.log('Doctors array:', doctors);
   console.log('Selected doctor:', selectedDoctor);
   console.log('Available convenios:', availableConvenios);
 
