@@ -18,6 +18,7 @@ interface SchedulingFormProps {
   onSubmit: (data: SchedulingFormData) => Promise<void>;
   onCancel: () => void;
   getAtendimentosByDoctor: (doctorId: string) => Atendimento[];
+  searchPatientsByBirthDate: (birthDate: string) => Promise<any[]>;
 }
 
 export function SchedulingForm({ 
@@ -26,7 +27,8 @@ export function SchedulingForm({
   appointments,
   onSubmit, 
   onCancel,
-  getAtendimentosByDoctor 
+  getAtendimentosByDoctor,
+  searchPatientsByBirthDate
 }: SchedulingFormProps) {
   const { formData, setFormData, loading, handleSubmit } = useSchedulingForm();
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date>(new Date());
@@ -89,6 +91,7 @@ export function SchedulingForm({
                 setFormData={setFormData}
                 availableConvenios={availableConvenios}
                 medicoSelected={medicoSelected}
+                searchPatientsByBirthDate={searchPatientsByBirthDate}
               />
 
               <AppointmentDataForm

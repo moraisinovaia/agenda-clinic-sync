@@ -112,7 +112,34 @@ export function useSupabaseScheduling() {
     }
   };
 
-  // Criar novo agendamento
+  // Buscar pacientes por data de nascimento
+  const searchPatientsByBirthDate = async (birthDate: string) => {
+    try {
+      console.log('🔍 Buscando pacientes por data de nascimento:', birthDate);
+      
+      const { data, error } = await supabase
+        .from('pacientes')
+        .select('*')
+        .eq('data_nascimento', birthDate)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('❌ Erro ao buscar pacientes:', error);
+        throw error;
+      }
+
+      console.log('📋 Pacientes encontrados:', data);
+      return data || [];
+    } catch (error) {
+      console.error('❌ Erro ao buscar pacientes:', error);
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível buscar os pacientes',
+        variant: 'destructive',
+      });
+      return [];
+    }
+  };
   const createAppointment = async (formData: SchedulingFormData) => {
     try {
       setLoading(true);
@@ -262,6 +289,7 @@ export function useSupabaseScheduling() {
     loading,
     createAppointment,
     cancelAppointment,
+    searchPatientsByBirthDate,
     getAtendimentosByDoctor,
     getAppointmentsByDoctorAndDate,
     refetch: () => Promise.all([fetchDoctors(), fetchAtendimentos(), fetchAppointments()]),

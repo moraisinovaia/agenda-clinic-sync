@@ -29,6 +29,7 @@ const Index = () => {
     loading,
     createAppointment,
     cancelAppointment,
+    searchPatientsByBirthDate,
     getAtendimentosByDoctor,
     getAppointmentsByDoctorAndDate
   } = useSupabaseScheduling();
@@ -248,6 +249,7 @@ const Index = () => {
             onSubmit={handleSubmitAppointment}
             onCancel={handleBack}
             getAtendimentosByDoctor={getAtendimentosByDoctor}
+            searchPatientsByBirthDate={searchPatientsByBirthDate}
           />
         )}
 
