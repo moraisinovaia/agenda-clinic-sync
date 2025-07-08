@@ -22,8 +22,6 @@ export function useSchedulingForm(initialData?: Partial<SchedulingFormData>) {
   const [loading, setLoading] = useState(false);
 
   const resetForm = () => {
-    console.log('🔴 RESETFORM CHAMADO - Dados antes do reset:', formData);
-    console.trace('🔴 Stack trace do resetForm:');
     setFormData(initialFormData);
   };
 
@@ -34,20 +32,15 @@ export function useSchedulingForm(initialData?: Partial<SchedulingFormData>) {
     e.preventDefault();
     setLoading(true);
     
-    console.log('🟡 INICIANDO handleSubmit com dados:', formData);
-    
     try {
-      console.log('🟡 Chamando onSubmit...');
       await onSubmit(formData);
-      console.log('🟢 onSubmit bem-sucedido - chamando resetForm');
       // Só resetar o formulário se não houve erro
       resetForm();
     } catch (error) {
       // Se houver erro, NÃO resetar o formulário - manter os dados preenchidos
-      console.log('🔴 Erro capturado no useSchedulingForm - mantendo dados do formulário:', error);
+      console.log('Erro capturado - mantendo dados do formulário');
     } finally {
       setLoading(false);
-      console.log('🟡 handleSubmit finalizado');
     }
   };
 

@@ -59,11 +59,8 @@ const Index = () => {
   };
 
   const handleSubmitAppointment = async (formData: SchedulingFormData) => {
-    console.log('🟦 INICIANDO handleSubmitAppointment no Index.tsx:', formData);
     try {
-      console.log('🟦 Chamando createAppointment...');
       await createAppointment(formData);
-      console.log('🟦 createAppointment bem-sucedido');
       
       // Só redirecionar para a agenda do médico se o agendamento foi bem-sucedido
       const doctor = doctors.find(d => d.id === formData.medicoId);
@@ -75,7 +72,6 @@ const Index = () => {
     } catch (error) {
       // Se há erro, não fazer nada - os dados permanecem no formulário
       // O erro já foi tratado no useSupabaseScheduling
-      console.log('🔴 Erro no agendamento Index.tsx - relançando erro:', error);
       throw error; // Relançar o erro para que o useSchedulingForm não chame resetForm()
     }
   };

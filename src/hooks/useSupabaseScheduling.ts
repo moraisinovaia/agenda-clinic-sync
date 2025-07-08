@@ -260,9 +260,11 @@ export function useSupabaseScheduling() {
       await Promise.all([fetchDoctors(), fetchAtendimentos(), fetchAppointments()]);
       console.log('✅ Todos os dados recarregados');
       
+      setLoading(false); // Setar loading como false após sucesso
       return appointmentData;
     } catch (error) {
       console.error('❌ Erro ao criar agendamento:', error);
+      setLoading(false); // Mover setLoading para antes do toast e throw
       
       // Se é um erro de validação (Error específico), mostrar a mensagem específica
       const errorMessage = error instanceof Error ? error.message : 'Não foi possível criar o agendamento';
@@ -272,9 +274,7 @@ export function useSupabaseScheduling() {
         description: errorMessage,
         variant: 'destructive',
       });
-      throw error;
-    } finally {
-      setLoading(false);
+      throw error; // Relançar erro APÓS setLoading e toast para manter dados do formulário
     }
   };
 
