@@ -28,6 +28,7 @@ export interface SchedulingFormData {
   dataNascimento: string;
   convenio: string;
   telefone: string;
+  celular: string;
   medicoId: string;
   atendimentoId: string;
   dataAgendamento: string;

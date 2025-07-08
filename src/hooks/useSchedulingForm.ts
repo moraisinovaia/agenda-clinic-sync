@@ -6,6 +6,7 @@ const initialFormData: SchedulingFormData = {
   dataNascimento: '',
   convenio: '',
   telefone: '',
+  celular: '',
   medicoId: '',
   atendimentoId: '',
   dataAgendamento: '',

@@ -73,6 +73,17 @@ export function PatientDataForm({
             id="telefone"
             value={formData.telefone}
             onChange={(e) => setFormData(prev => ({ ...prev, telefone: e.target.value }))}
+            placeholder="(xx) xxxx-xxxx"
+            required
+          />
+        </div>
+        
+        <div>
+          <Label htmlFor="celular">Celular *</Label>
+          <Input
+            id="celular"
+            value={formData.celular}
+            onChange={(e) => setFormData(prev => ({ ...prev, celular: e.target.value }))}
             placeholder="(xx) xxxxx-xxxx"
             required
           />
