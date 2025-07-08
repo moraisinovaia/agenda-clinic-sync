@@ -165,17 +165,14 @@ export function SchedulingForm({
                 <Select 
                   value={formData.atendimentoId} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, atendimentoId: value }))}
-                  disabled={!formData.medicoId}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione o tipo" />
                   </SelectTrigger>
                   <SelectContent>
-                    {availableAtendimentos.map((atendimento) => (
-                      <SelectItem key={atendimento.id} value={atendimento.id}>
-                        {atendimento.nome} - {atendimento.tipo}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="consulta">Consulta</SelectItem>
+                    <SelectItem value="retorno">Retorno</SelectItem>
+                    <SelectItem value="exame">Exame</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
