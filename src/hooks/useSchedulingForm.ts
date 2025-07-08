@@ -36,7 +36,8 @@ export function useSchedulingForm(initialData?: Partial<SchedulingFormData>) {
       await onSubmit(formData);
       resetForm();
     } catch (error) {
-      console.error('Erro ao agendar:', error);
+      // Não fazer log genérico aqui, deixar o useSupabaseScheduling lidar com o erro
+      // O erro específico já foi mostrado no toast pelo useSupabaseScheduling
     } finally {
       setLoading(false);
     }

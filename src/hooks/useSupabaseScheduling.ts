@@ -244,9 +244,13 @@ export function useSupabaseScheduling() {
       return appointmentData;
     } catch (error) {
       console.error('❌ Erro ao criar agendamento:', error);
+      
+      // Se é um erro de validação (Error específico), mostrar a mensagem específica
+      const errorMessage = error instanceof Error ? error.message : 'Não foi possível criar o agendamento';
+      
       toast({
         title: 'Erro',
-        description: 'Não foi possível criar o agendamento',
+        description: errorMessage,
         variant: 'destructive',
       });
       throw error;
