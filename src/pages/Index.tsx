@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Search, Calendar, Users, Clock } from 'lucide-react';
+import endogastroLogo from '@/assets/endogastro-logo.png';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -103,13 +104,20 @@ const Index = () => {
       <div className="border-b bg-card">
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-foreground">
-                Sistema de Agendamentos Médicos
-              </h1>
-              <p className="text-muted-foreground mt-1">
-                Gerencie consultas e exames com dados reais do Supabase
-              </p>
+            <div className="flex items-center gap-4">
+              <img 
+                src={endogastroLogo} 
+                alt="Endogastro Logo" 
+                className="h-16 w-auto"
+              />
+              <div>
+                <h1 className="text-3xl font-bold text-foreground">
+                  Endogastro
+                </h1>
+                <p className="text-muted-foreground mt-1">
+                  Sistema de Agendamentos Médicos
+                </p>
+              </div>
             </div>
             
             {viewMode !== 'doctors' && (
