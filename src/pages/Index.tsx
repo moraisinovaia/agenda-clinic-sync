@@ -59,14 +59,20 @@ const Index = () => {
   };
 
   const handleSubmitAppointment = async (formData: SchedulingFormData) => {
-    await createAppointment(formData);
-    
-    // Redirecionar para a agenda do médico após agendar
-    const doctor = doctors.find(d => d.id === formData.medicoId);
-    if (doctor) {
-      setSelectedDoctor(doctor);
-      setLastAppointmentDate(formData.dataAgendamento); // Guardar a data do agendamento
-      setViewMode('schedule');
+    try {
+      await createAppointment(formData);
+      
+      // Só redirecionar para a agenda do médico se o agendamento foi bem-sucedido
+      const doctor = doctors.find(d => d.id === formData.medicoId);
+      if (doctor) {
+        setSelectedDoctor(doctor);
+        setLastAppointmentDate(formData.dataAgendamento); // Guardar a data do agendamento
+        setViewMode('schedule');
+      }
+    } catch (error) {
+      // Se há erro, não fazer nada - os dados permanecem no formulário
+      // O erro já foi tratado no useSupabaseScheduling
+      console.log('Erro no agendamento - dados mantidos no formulário');
     }
   };
 
