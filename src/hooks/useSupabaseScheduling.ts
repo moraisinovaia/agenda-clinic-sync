@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Doctor, Atendimento, Patient, Appointment, SchedulingFormData } from '@/types/scheduling';
+import { Doctor, Atendimento, Patient, Appointment, SchedulingFormData, AppointmentWithRelations } from '@/types/scheduling';
 import { useToast } from '@/hooks/use-toast';
 
 export function useSupabaseScheduling() {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [atendimentos, setAtendimentos] = useState<Atendimento[]>([]);
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [appointments, setAppointments] = useState<AppointmentWithRelations[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 

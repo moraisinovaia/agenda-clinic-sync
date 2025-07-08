@@ -11,6 +11,12 @@ export interface DoctorWithAtendimentos extends Doctor {
   atendimentos: Atendimento[];
 }
 
+export interface AppointmentWithRelations extends Appointment {
+  pacientes: Patient | null;
+  medicos: Doctor | null;
+  atendimentos: Atendimento | null;
+}
+
 export interface TimeSlot {
   time: string;
   available: boolean;

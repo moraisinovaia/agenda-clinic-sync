@@ -9,11 +9,12 @@ import { Badge } from '@/components/ui/badge';
 import { DoctorCard } from '@/components/scheduling/DoctorCard';
 import { SchedulingForm } from '@/components/scheduling/SchedulingForm';
 import { DoctorSchedule } from '@/components/scheduling/DoctorSchedule';
+import { AppointmentsList } from '@/components/scheduling/AppointmentsList';
 
 import { useSupabaseScheduling } from '@/hooks/useSupabaseScheduling';
 import { Doctor, SchedulingFormData } from '@/types/scheduling';
 
-type ViewMode = 'doctors' | 'schedule' | 'new-appointment';
+type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list';
 
 const Index = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('doctors');
@@ -164,8 +165,8 @@ const Index = () => {
               </Card>
             </div>
 
-            {/* Search */}
-            <div className="mb-6">
+            {/* Actions */}
+            <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
               <div className="relative max-w-md">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -175,6 +176,15 @@ const Index = () => {
                   className="pl-10"
                 />
               </div>
+              
+              <Button 
+                onClick={() => setViewMode('appointments-list')}
+                variant="outline"
+                className="flex items-center gap-2"
+              >
+                <Calendar className="h-4 w-4" />
+                Ver Todos os Agendamentos
+              </Button>
             </div>
 
             {/* Doctors Grid */}
@@ -225,6 +235,10 @@ const Index = () => {
             onCancel={handleBack}
             getAtendimentosByDoctor={getAtendimentosByDoctor}
           />
+        )}
+
+        {viewMode === 'appointments-list' && (
+          <AppointmentsList appointments={appointments} />
         )}
       </div>
     </div>
