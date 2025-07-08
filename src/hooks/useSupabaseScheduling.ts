@@ -118,6 +118,14 @@ export function useSupabaseScheduling() {
       setLoading(true);
       console.log('🚀 Criando agendamento:', formData);
 
+      // Validar se a data/hora não é no passado
+      const appointmentDateTime = new Date(`${formData.dataAgendamento}T${formData.horaAgendamento}`);
+      const now = new Date();
+      
+      if (appointmentDateTime <= now) {
+        throw new Error('Não é possível agendar para uma data/hora que já passou');
+      }
+
       // Primeiro, criar o paciente
       const { data: patientData, error: patientError } = await supabase
         .from('pacientes')

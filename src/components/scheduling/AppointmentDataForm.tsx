@@ -23,6 +23,34 @@ export function AppointmentDataForm({
     ? atendimentos.filter(atendimento => atendimento.medico_id === formData.medicoId)
     : [];
 
+  // Função para obter data/hora atual
+  const now = new Date();
+  const today = now.toISOString().split('T')[0];
+  const currentTime = now.toTimeString().slice(0, 5);
+
+  // Função para validar horário
+  const isTimeValid = (selectedDate: string, selectedTime: string) => {
+    if (!selectedDate || !selectedTime) return true;
+    
+    // Se a data selecionada for hoje, verificar se o horário não é passado
+    if (selectedDate === today) {
+      return selectedTime > currentTime;
+    }
+    
+    // Se for data futura, qualquer horário é válido
+    return true;
+  };
+
+  // Função para obter horário mínimo baseado na data
+  const getMinTime = (selectedDate: string) => {
+    if (selectedDate === today) {
+      // Se for hoje, horário mínimo é a próxima hora
+      const nextHour = new Date(now.getTime() + 60 * 60 * 1000);
+      return nextHour.toTimeString().slice(0, 5);
+    }
+    return '07:00'; // Horário padrão de início
+  };
+
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold flex items-center gap-2">
@@ -87,10 +115,20 @@ export function AppointmentDataForm({
             id="dataAgendamento"
             type="date"
             value={formData.dataAgendamento}
-            onChange={(e) => setFormData(prev => ({ ...prev, dataAgendamento: e.target.value }))}
-            min={new Date().toISOString().split('T')[0]}
+            onChange={(e) => {
+              setFormData(prev => ({ 
+                ...prev, 
+                dataAgendamento: e.target.value,
+                // Reset horário se mudar a data para evitar horários inválidos
+                horaAgendamento: e.target.value === today ? '' : prev.horaAgendamento
+              }));
+            }}
+            min={today}
             required
           />
+          <p className="text-xs text-muted-foreground mt-1">
+            Apenas datas futuras são permitidas
+          </p>
         </div>
         
         <div>
@@ -100,8 +138,29 @@ export function AppointmentDataForm({
             type="time"
             value={formData.horaAgendamento}
             onChange={(e) => setFormData(prev => ({ ...prev, horaAgendamento: e.target.value }))}
+            min={getMinTime(formData.dataAgendamento)}
+            max="18:00"
+            step="1800" // Intervalos de 30 minutos
             required
+            className={
+              formData.dataAgendamento && formData.horaAgendamento && 
+              !isTimeValid(formData.dataAgendamento, formData.horaAgendamento) 
+                ? 'border-red-500' 
+                : ''
+            }
           />
+          <p className="text-xs text-muted-foreground mt-1">
+            {formData.dataAgendamento === today 
+              ? `Horário mínimo para hoje: ${getMinTime(formData.dataAgendamento)}`
+              : 'Horário de funcionamento: 07:00 às 18:00'
+            }
+          </p>
+          {formData.dataAgendamento && formData.horaAgendamento && 
+           !isTimeValid(formData.dataAgendamento, formData.horaAgendamento) && (
+            <p className="text-xs text-red-500 mt-1">
+              Não é possível agendar para um horário que já passou
+            </p>
+          )}
         </div>
       </div>
       
