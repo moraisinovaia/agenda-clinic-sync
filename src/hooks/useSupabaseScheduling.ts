@@ -162,10 +162,10 @@ export function useSupabaseScheduling() {
         description: `Agendamento criado para ${formData.dataAgendamento} às ${formData.horaAgendamento}`,
       });
 
-      // Recarregar agendamentos imediatamente
-      console.log('🔄 Recarregando agendamentos...');
-      await fetchAppointments();
-      console.log('✅ Agendamentos recarregados');
+      // Recarregar todos os dados para garantir consistência
+      console.log('🔄 Recarregando todos os dados...');
+      await Promise.all([fetchDoctors(), fetchAtendimentos(), fetchAppointments()]);
+      console.log('✅ Todos os dados recarregados');
       
       return appointmentData;
     } catch (error) {

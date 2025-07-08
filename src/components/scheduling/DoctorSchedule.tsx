@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { format, addDays, startOfWeek, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Doctor, Appointment } from '@/types/scheduling';
+import { Doctor, AppointmentWithRelations } from '@/types/scheduling';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -21,7 +21,7 @@ import {
 
 interface DoctorScheduleProps {
   doctor: Doctor;
-  appointments: Appointment[];
+  appointments: AppointmentWithRelations[];
   onCancelAppointment: (appointmentId: string) => Promise<void>;
 }
 
@@ -130,14 +130,20 @@ export function DoctorSchedule({ doctor, appointments, onCancelAppointment }: Do
                          </div>
                          
                          <div className="space-y-2">
-                           <div className="flex items-center gap-2">
-                             <User className="h-4 w-4 text-muted-foreground" />
-                             <span className="font-medium">Paciente agendado</span>
-                           </div>
-                           
-                           <div className="text-sm text-muted-foreground">
-                             Tipo: Consulta/Exame
-                           </div>
+                            <div className="flex items-center gap-2">
+                              <User className="h-4 w-4 text-muted-foreground" />
+                              <span className="font-medium">
+                                {appointment.pacientes?.nome_completo || 'Paciente'}
+                              </span>
+                            </div>
+                            
+                            <div className="text-sm text-muted-foreground">
+                              <strong>Convênio:</strong> {appointment.pacientes?.convenio || 'Não informado'}
+                            </div>
+                            
+                            <div className="text-sm text-muted-foreground">
+                              <strong>Tipo:</strong> {appointment.atendimentos?.nome || 'Consulta/Exame'}
+                            </div>
                            
                            {appointment.observacoes && (
                              <div className="text-sm text-muted-foreground">
