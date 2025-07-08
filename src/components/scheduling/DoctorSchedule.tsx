@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User, Trash2, Plus } from 'lucide-react';
 import { 
   AlertDialog, 
   AlertDialogAction, 
@@ -23,10 +23,11 @@ interface DoctorScheduleProps {
   doctor: Doctor;
   appointments: AppointmentWithRelations[];
   onCancelAppointment: (appointmentId: string) => Promise<void>;
+  onNewAppointment?: () => void;
   initialDate?: string; // Data inicial para posicionar o calendário
 }
 
-export function DoctorSchedule({ doctor, appointments, onCancelAppointment, initialDate }: DoctorScheduleProps) {
+export function DoctorSchedule({ doctor, appointments, onCancelAppointment, onNewAppointment, initialDate }: DoctorScheduleProps) {
   // Usar initialDate se fornecida, senão usar data atual
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     if (initialDate) {
@@ -70,12 +71,22 @@ export function DoctorSchedule({ doctor, appointments, onCancelAppointment, init
     <div className="space-y-6">
       <Card className="w-full">
         <CardHeader className="pb-4">
-          <CardTitle className="flex items-center gap-2">
-            <CalendarIcon className="h-5 w-5" />
-            Agenda - {doctor.nome}
-          </CardTitle>
-          <div className="text-sm text-muted-foreground">
-            {doctor.especialidade}
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <CalendarIcon className="h-5 w-5" />
+                Agenda - {doctor.nome}
+              </CardTitle>
+              <div className="text-sm text-muted-foreground">
+                {doctor.especialidade}
+              </div>
+            </div>
+            {onNewAppointment && (
+              <Button onClick={onNewAppointment} className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                Novo Agendamento
+              </Button>
+            )}
           </div>
         </CardHeader>
         
