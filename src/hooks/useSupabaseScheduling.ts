@@ -52,24 +52,54 @@ export function useSupabaseScheduling() {
     }
   };
 
-  // Buscar agendamentos
+  // Buscar agendamentos - versão simplificada para debugging
   const fetchAppointments = async () => {
     try {
-      const { data, error } = await supabase
+      // Primeiro buscar agendamentos simples
+      const { data: agendamentosData, error: agendamentosError } = await supabase
         .from('agendamentos')
-        .select(`
-          *,
-          pacientes (*),
-          medicos (*),
-          atendimentos (*)
-        `)
+        .select('*')
         .order('data_agendamento', { ascending: true })
         .order('hora_agendamento', { ascending: true });
 
-      if (error) throw error;
-      setAppointments(data || []);
+      if (agendamentosError) {
+        console.error('Erro na consulta de agendamentos:', agendamentosError);
+        throw agendamentosError;
+      }
+
+      // Se não há agendamentos, definir array vazio
+      if (!agendamentosData || agendamentosData.length === 0) {
+        setAppointments([]);
+        return;
+      }
+
+      // Buscar dados relacionados separadamente
+      const pacienteIds = [...new Set(agendamentosData.map(a => a.paciente_id))];
+      const medicoIds = [...new Set(agendamentosData.map(a => a.medico_id))];
+      const atendimentoIds = [...new Set(agendamentosData.map(a => a.atendimento_id))];
+
+      const [pacientesResult, medicosResult, atendimentosResult] = await Promise.all([
+        supabase.from('pacientes').select('*').in('id', pacienteIds),
+        supabase.from('medicos').select('*').in('id', medicoIds),
+        supabase.from('atendimentos').select('*').in('id', atendimentoIds)
+      ]);
+
+      const pacientesMap = new Map((pacientesResult.data || []).map(p => [p.id, p]));
+      const medicosMap = new Map((medicosResult.data || []).map(m => [m.id, m]));
+      const atendimentosMap = new Map((atendimentosResult.data || []).map(a => [a.id, a]));
+
+      // Combinar dados
+      const appointmentsWithRelations = agendamentosData.map(agendamento => ({
+        ...agendamento,
+        pacientes: pacientesMap.get(agendamento.paciente_id) || null,
+        medicos: medicosMap.get(agendamento.medico_id) || null,
+        atendimentos: atendimentosMap.get(agendamento.atendimento_id) || null,
+      }));
+
+      setAppointments(appointmentsWithRelations);
     } catch (error) {
       console.error('Erro ao buscar agendamentos:', error);
+      setAppointments([]); // Definir array vazio em caso de erro
       toast({
         title: 'Erro',
         description: 'Não foi possível carregar os agendamentos',
