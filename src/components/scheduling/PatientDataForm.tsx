@@ -17,6 +17,32 @@ export function PatientDataForm({
   availableConvenios, 
   medicoSelected 
 }: PatientDataFormProps) {
+  // Função para aplicar máscara de telefone
+  const formatPhone = (value: string) => {
+    // Remove tudo que não é número
+    const numbers = value.replace(/\D/g, '');
+    
+    // Aplica máscara baseada no tamanho
+    if (numbers.length <= 10) {
+      // Telefone fixo: (xx) xxxx-xxxx
+      return numbers.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3').replace(/-$/, '');
+    } else {
+      // Celular: (xx) xxxxx-xxxx
+      return numbers.replace(/(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3').replace(/-$/, '');
+    }
+  };
+
+  // Função para validar se o número está completo
+  const isValidPhone = (value: string) => {
+    const numbers = value.replace(/\D/g, '');
+    return numbers.length === 10 || numbers.length === 11;
+  };
+
+  const handlePhoneChange = (value: string, field: 'telefone' | 'celular') => {
+    const formatted = formatPhone(value);
+    setFormData(prev => ({ ...prev, [field]: formatted }));
+  };
+
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold flex items-center gap-2">
@@ -68,14 +94,17 @@ export function PatientDataForm({
         </div>
         
         <div>
-          <Label htmlFor="telefone">Telefone *</Label>
+          <Label htmlFor="telefone">Telefone</Label>
           <Input
             id="telefone"
             value={formData.telefone}
-            onChange={(e) => setFormData(prev => ({ ...prev, telefone: e.target.value }))}
+            onChange={(e) => handlePhoneChange(e.target.value, 'telefone')}
             placeholder="(xx) xxxx-xxxx"
-            required
+            maxLength={15}
           />
+          <p className="text-xs text-muted-foreground mt-1">
+            Opcional - Formato: (11) 1234-5678
+          </p>
         </div>
         
         <div>
@@ -83,10 +112,20 @@ export function PatientDataForm({
           <Input
             id="celular"
             value={formData.celular}
-            onChange={(e) => setFormData(prev => ({ ...prev, celular: e.target.value }))}
+            onChange={(e) => handlePhoneChange(e.target.value, 'celular')}
             placeholder="(xx) xxxxx-xxxx"
+            maxLength={15}
             required
+            className={!isValidPhone(formData.celular) && formData.celular ? 'border-red-500' : ''}
           />
+          <p className="text-xs text-muted-foreground mt-1">
+            Obrigatório - Formato: (11) 91234-5678
+          </p>
+          {!isValidPhone(formData.celular) && formData.celular && (
+            <p className="text-xs text-red-500 mt-1">
+              Número de celular inválido
+            </p>
+          )}
         </div>
       </div>
     </div>

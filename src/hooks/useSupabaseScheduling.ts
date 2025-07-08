@@ -125,7 +125,7 @@ export function useSupabaseScheduling() {
           nome_completo: formData.nomeCompleto,
           data_nascimento: formData.dataNascimento,
           convenio: formData.convenio,
-          telefone: formData.telefone,
+          telefone: formData.telefone || null, // Telefone opcional
           celular: formData.celular,
         })
         .select()

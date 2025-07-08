@@ -295,7 +295,7 @@ export type Database = {
           data_nascimento: string
           id: string
           nome_completo: string
-          telefone: string
+          telefone: string | null
           updated_at: string
         }
         Insert: {
@@ -305,7 +305,7 @@ export type Database = {
           data_nascimento: string
           id?: string
           nome_completo: string
-          telefone: string
+          telefone?: string | null
           updated_at?: string
         }
         Update: {
@@ -315,7 +315,7 @@ export type Database = {
           data_nascimento?: string
           id?: string
           nome_completo?: string
-          telefone?: string
+          telefone?: string | null
           updated_at?: string
         }
         Relationships: []
