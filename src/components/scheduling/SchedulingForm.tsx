@@ -63,6 +63,8 @@ export function SchedulingForm({
   };
 
   const availableAtendimentos = formData.medicoId ? getAtendimentosByDoctor(formData.medicoId) : [];
+  const selectedDoctor = doctors.find(doctor => doctor.id === formData.medicoId);
+  const availableConvenios = selectedDoctor?.convenios_aceitos || [];
 
   return (
     <Card className="w-full max-w-2xl mx-auto">
@@ -105,16 +107,25 @@ export function SchedulingForm({
                 />
               </div>
               
-              <div>
-                <Label htmlFor="convenio">Convênio *</Label>
-                <Input
-                  id="convenio"
-                  value={formData.convenio}
-                  onChange={(e) => setFormData(prev => ({ ...prev, convenio: e.target.value }))}
-                  placeholder="Nome do convênio"
-                  required
-                />
-              </div>
+               <div>
+                 <Label htmlFor="convenio">Convênio *</Label>
+                 <Select 
+                   value={formData.convenio} 
+                   onValueChange={(value) => setFormData(prev => ({ ...prev, convenio: value }))}
+                   disabled={!formData.medicoId}
+                 >
+                   <SelectTrigger>
+                     <SelectValue placeholder="Selecione o convênio" />
+                   </SelectTrigger>
+                   <SelectContent>
+                     {availableConvenios.map((convenio) => (
+                       <SelectItem key={convenio} value={convenio}>
+                         {convenio}
+                       </SelectItem>
+                     ))}
+                   </SelectContent>
+                 </Select>
+               </div>
               
               <div>
                 <Label htmlFor="telefone">Telefone *</Label>
@@ -144,7 +155,8 @@ export function SchedulingForm({
                   onValueChange={(value) => setFormData(prev => ({ 
                     ...prev, 
                     medicoId: value,
-                    atendimentoId: '' // Reset atendimento when doctor changes
+                    atendimentoId: '', // Reset atendimento when doctor changes
+                    convenio: '' // Reset convenio when doctor changes
                   }))}
                 >
                   <SelectTrigger>
