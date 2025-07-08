@@ -152,7 +152,7 @@ export function DoctorSchedule({ doctor, appointments, onCancelAppointment, onEd
                             <div className="flex items-center gap-2">
                               <User className="h-4 w-4 text-muted-foreground" />
                               <span className="font-medium">
-                                {appointment.pacientes?.nome_completo || 'Paciente'}
+                                {appointment.pacientes?.nome_completo || 'Paciente agendado'}
                               </span>
                             </div>
                             
