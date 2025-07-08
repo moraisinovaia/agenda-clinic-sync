@@ -73,6 +73,7 @@ const Index = () => {
       // Se há erro, não fazer nada - os dados permanecem no formulário
       // O erro já foi tratado no useSupabaseScheduling
       console.log('Erro no agendamento - dados mantidos no formulário');
+      throw error; // Relançar o erro para que o useSchedulingForm não chame resetForm()
     }
   };
 
