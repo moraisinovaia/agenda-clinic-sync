@@ -181,6 +181,43 @@ export function useSupabaseScheduling() {
     }
   };
 
+  // Cancelar agendamento
+  const cancelAppointment = async (appointmentId: string) => {
+    try {
+      setLoading(true);
+      console.log('🚫 Cancelando agendamento:', appointmentId);
+
+      const { error } = await supabase
+        .from('agendamentos')
+        .update({ status: 'cancelado' })
+        .eq('id', appointmentId);
+
+      if (error) {
+        console.error('❌ Erro ao cancelar agendamento:', error);
+        throw error;
+      }
+
+      toast({
+        title: 'Agendamento cancelado',
+        description: 'O agendamento foi cancelado com sucesso',
+      });
+
+      // Recarregar agendamentos
+      await fetchAppointments();
+      console.log('✅ Agendamento cancelado e lista atualizada');
+    } catch (error) {
+      console.error('❌ Erro ao cancelar agendamento:', error);
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível cancelar o agendamento',
+        variant: 'destructive',
+      });
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Buscar atendimentos por médico
   const getAtendimentosByDoctor = (doctorId: string) => {
     return atendimentos.filter(atendimento => atendimento.medico_id === doctorId);
@@ -215,6 +252,7 @@ export function useSupabaseScheduling() {
     appointments,
     loading,
     createAppointment,
+    cancelAppointment,
     getAtendimentosByDoctor,
     getAppointmentsByDoctorAndDate,
     refetch: () => Promise.all([fetchDoctors(), fetchAtendimentos(), fetchAppointments()]),

@@ -6,14 +6,26 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User, Trash2 } from 'lucide-react';
+import { 
+  AlertDialog, 
+  AlertDialogAction, 
+  AlertDialogCancel, 
+  AlertDialogContent, 
+  AlertDialogDescription, 
+  AlertDialogFooter, 
+  AlertDialogHeader, 
+  AlertDialogTitle, 
+  AlertDialogTrigger 
+} from '@/components/ui/alert-dialog';
 
 interface DoctorScheduleProps {
   doctor: Doctor;
   appointments: Appointment[];
+  onCancelAppointment: (appointmentId: string) => Promise<void>;
 }
 
-export function DoctorSchedule({ doctor, appointments }: DoctorScheduleProps) {
+export function DoctorSchedule({ doctor, appointments, onCancelAppointment }: DoctorScheduleProps) {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   
   const getAppointmentsForDate = (date: Date) => {
@@ -115,24 +127,56 @@ export function DoctorSchedule({ doctor, appointments }: DoctorScheduleProps) {
                           >
                             {appointment.status}
                           </Badge>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-medium">Paciente agendado</span>
-                          </div>
-                          
-                          <div className="text-sm text-muted-foreground">
-                            Tipo: Consulta/Exame
-                          </div>
-                          
-                          {appointment.observacoes && (
-                            <div className="text-sm text-muted-foreground">
-                              <strong>Observações:</strong> {appointment.observacoes}
-                            </div>
-                          )}
-                        </div>
+                         </div>
+                         
+                         <div className="space-y-2">
+                           <div className="flex items-center gap-2">
+                             <User className="h-4 w-4 text-muted-foreground" />
+                             <span className="font-medium">Paciente agendado</span>
+                           </div>
+                           
+                           <div className="text-sm text-muted-foreground">
+                             Tipo: Consulta/Exame
+                           </div>
+                           
+                           {appointment.observacoes && (
+                             <div className="text-sm text-muted-foreground">
+                               <strong>Observações:</strong> {appointment.observacoes}
+                             </div>
+                           )}
+                         </div>
+
+                         {/* Botões de ação */}
+                         <div className="flex gap-2 pt-2">
+                           {appointment.status === 'agendado' && (
+                             <AlertDialog>
+                               <AlertDialogTrigger asChild>
+                                 <Button variant="destructive" size="sm">
+                                   <Trash2 className="h-4 w-4 mr-1" />
+                                   Cancelar
+                                 </Button>
+                               </AlertDialogTrigger>
+                               <AlertDialogContent>
+                                 <AlertDialogHeader>
+                                   <AlertDialogTitle>Cancelar Agendamento</AlertDialogTitle>
+                                   <AlertDialogDescription>
+                                     Tem certeza que deseja cancelar este agendamento para {format(selectedDate, "dd/MM/yyyy")} às {appointment.hora_agendamento}? 
+                                     Esta ação não pode ser desfeita.
+                                   </AlertDialogDescription>
+                                 </AlertDialogHeader>
+                                 <AlertDialogFooter>
+                                   <AlertDialogCancel>Não cancelar</AlertDialogCancel>
+                                   <AlertDialogAction
+                                     onClick={() => onCancelAppointment(appointment.id)}
+                                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                   >
+                                     Sim, cancelar
+                                   </AlertDialogAction>
+                                 </AlertDialogFooter>
+                               </AlertDialogContent>
+                             </AlertDialog>
+                           )}
+                         </div>
                       </Card>
                     ))
                 ) : (

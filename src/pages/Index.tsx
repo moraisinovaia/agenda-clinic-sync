@@ -27,6 +27,7 @@ const Index = () => {
     appointments,
     loading,
     createAppointment,
+    cancelAppointment,
     getAtendimentosByDoctor,
     getAppointmentsByDoctorAndDate
   } = useSupabaseScheduling();
@@ -232,6 +233,7 @@ const Index = () => {
           <DoctorSchedule
             doctor={selectedDoctor}
             appointments={appointments.filter(apt => apt.medico_id === selectedDoctor.id)}
+            onCancelAppointment={cancelAppointment}
           />
         )}
 
