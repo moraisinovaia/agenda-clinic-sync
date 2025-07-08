@@ -1,37 +1,30 @@
-export interface Doctor {
-  id: string;
-  name: string;
-  specialty: string;
-  workingHours: {
-    start: string;
-    end: string;
-    days: number[]; // 0 = domingo, 1 = segunda, etc.
-  };
-  consultationDuration: number; // em minutos
-}
+import { Tables } from '@/integrations/supabase/types';
 
-export interface Patient {
-  id?: string;
-  fullName: string;
-  birthDate: string;
-  insurance: string;
-  phone: string;
-}
+// Tipos baseados nas tabelas do Supabase
+export type Doctor = Tables<'medicos'>;
+export type Atendimento = Tables<'atendimentos'>;
+export type Patient = Tables<'pacientes'>;
+export type Appointment = Tables<'agendamentos'>;
 
-export interface Appointment {
-  id: string;
-  doctorId: string;
-  patient: Patient;
-  date: string;
-  time: string;
-  type: 'consultation' | 'exam';
-  status: 'scheduled' | 'completed' | 'cancelled';
-  scheduledBy: 'receptionist' | 'n8n-agent';
-  notes?: string;
+// Tipos auxiliares para UI
+export interface DoctorWithAtendimentos extends Doctor {
+  atendimentos: Atendimento[];
 }
 
 export interface TimeSlot {
   time: string;
   available: boolean;
   appointmentId?: string;
+}
+
+export interface SchedulingFormData {
+  nomeCompleto: string;
+  dataNascimento: string;
+  convenio: string;
+  telefone: string;
+  medicoId: string;
+  atendimentoId: string;
+  dataAgendamento: string;
+  horaAgendamento: string;
+  observacoes?: string;
 }

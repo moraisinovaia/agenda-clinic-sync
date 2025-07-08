@@ -10,9 +10,8 @@ import { DoctorCard } from '@/components/scheduling/DoctorCard';
 import { SchedulingForm } from '@/components/scheduling/SchedulingForm';
 import { DoctorSchedule } from '@/components/scheduling/DoctorSchedule';
 
-import { doctors } from '@/data/doctors';
-import { useScheduling } from '@/hooks/useScheduling';
-import { Doctor, Appointment } from '@/types/scheduling';
+import { useSupabaseScheduling } from '@/hooks/useSupabaseScheduling';
+import { Doctor, SchedulingFormData } from '@/types/scheduling';
 
 type ViewMode = 'doctors' | 'schedule' | 'new-appointment';
 
@@ -20,19 +19,20 @@ const Index = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('doctors');
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>();
-  const [selectedTime, setSelectedTime] = useState<string | undefined>();
 
-  const { 
-    appointments, 
-    addAppointment, 
-    getAppointmentsForDoctor, 
-    generateTimeSlots 
-  } = useScheduling();
+  const {
+    doctors,
+    atendimentos,
+    appointments,
+    loading,
+    createAppointment,
+    getAtendimentosByDoctor,
+    getAppointmentsByDoctorAndDate
+  } = useSupabaseScheduling();
 
   const filteredDoctors = doctors.filter(doctor => 
-    doctor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    doctor.specialty.toLowerCase().includes(searchTerm.toLowerCase())
+    doctor.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    doctor.especialidade.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handleScheduleDoctor = (doctorId: string) => {
@@ -51,37 +51,38 @@ const Index = () => {
     }
   };
 
-  const handleSubmitAppointment = (appointment: Omit<Appointment, 'id'>) => {
-    addAppointment(appointment);
+  const handleSubmitAppointment = async (formData: SchedulingFormData) => {
+    await createAppointment(formData);
     setViewMode('schedule');
-    setSelectedDate(undefined);
-    setSelectedTime(undefined);
   };
 
   const handleNewAppointment = () => {
     setViewMode('new-appointment');
-    setSelectedDate(undefined);
-    setSelectedTime(undefined);
   };
 
   const handleBack = () => {
     setViewMode('doctors');
     setSelectedDoctor(null);
-    setSelectedDate(undefined);
-    setSelectedTime(undefined);
   };
-
-  const availableSlots = selectedDoctor && selectedDate 
-    ? generateTimeSlots(selectedDoctor, selectedDate)
-    : [];
 
   const totalAppointments = appointments.length;
   const todayAppointments = appointments.filter(apt => 
-    apt.date === new Date().toISOString().split('T')[0]
+    apt.data_agendamento === new Date().toISOString().split('T')[0]
   ).length;
   const pendingAppointments = appointments.filter(apt => 
-    apt.status === 'scheduled'
+    apt.status === 'agendado'
   ).length;
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-gray-600">Carregando dados da clínica...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -94,7 +95,7 @@ const Index = () => {
                 Sistema de Agendamentos Médicos
               </h1>
               <p className="text-muted-foreground mt-1">
-                Gerencie consultas e exames para 20 especialistas
+                Gerencie consultas e exames com dados reais do Supabase
               </p>
             </div>
             
@@ -156,7 +157,7 @@ const Index = () => {
                     </Badge>
                     <div>
                       <p className="text-2xl font-bold">{pendingAppointments}</p>
-                      <p className="text-sm text-muted-foreground">Pendentes</p>
+                      <p className="text-sm text-muted-foreground">Agendados</p>
                     </div>
                   </div>
                 </CardContent>
@@ -177,29 +178,32 @@ const Index = () => {
             </div>
 
             {/* Doctors Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {filteredDoctors.map((doctor) => (
-                <div key={doctor.id} className="space-y-2">
-                  <DoctorCard
-                    doctor={doctor}
-                    onSchedule={handleScheduleDoctor}
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleViewSchedule(doctor.id)}
-                    className="w-full"
-                  >
-                    Ver Agenda
-                  </Button>
-                </div>
-              ))}
-            </div>
-
-            {filteredDoctors.length === 0 && (
+            {filteredDoctors.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {filteredDoctors.map((doctor) => (
+                  <div key={doctor.id} className="space-y-2">
+                    <DoctorCard
+                      doctor={doctor}
+                      onSchedule={handleScheduleDoctor}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleViewSchedule(doctor.id)}
+                      className="w-full"
+                    >
+                      Ver Agenda
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
               <Card className="p-8 text-center">
                 <p className="text-muted-foreground">
-                  Nenhum médico encontrado com o termo "{searchTerm}"
+                  {searchTerm ? 
+                    `Nenhum médico encontrado com o termo "${searchTerm}"` : 
+                    'Nenhum médico encontrado. Verifique se existem médicos ativos no sistema.'
+                  }
                 </p>
               </Card>
             )}
@@ -209,21 +213,17 @@ const Index = () => {
         {viewMode === 'schedule' && selectedDoctor && (
           <DoctorSchedule
             doctor={selectedDoctor}
-            appointments={getAppointmentsForDoctor(selectedDoctor.id)}
-            onNewAppointment={handleNewAppointment}
+            appointments={appointments.filter(apt => apt.medico_id === selectedDoctor.id)}
           />
         )}
 
-        {viewMode === 'new-appointment' && selectedDoctor && (
+        {viewMode === 'new-appointment' && (
           <SchedulingForm
-            doctor={selectedDoctor}
-            selectedDate={selectedDate}
-            onDateSelect={setSelectedDate}
-            availableSlots={availableSlots}
-            selectedTime={selectedTime}
-            onTimeSelect={setSelectedTime}
+            doctors={doctors}
+            atendimentos={atendimentos}
             onSubmit={handleSubmitAppointment}
             onCancel={handleBack}
+            getAtendimentosByDoctor={getAtendimentosByDoctor}
           />
         )}
       </div>

@@ -1,294 +1,230 @@
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { CalendarIcon } from 'lucide-react';
-
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
-import { useToast } from '@/hooks/use-toast';
-
-import { Doctor, Patient, Appointment, TimeSlot } from '@/types/scheduling';
-import { cn } from '@/lib/utils';
-
-const formSchema = z.object({
-  fullName: z.string().min(3, 'Nome deve ter pelo menos 3 caracteres'),
-  birthDate: z.string().min(1, 'Data de nascimento é obrigatória'),
-  insurance: z.string().min(1, 'Convênio é obrigatório'),
-  phone: z.string().min(10, 'Telefone deve ter pelo menos 10 dígitos'),
-  appointmentType: z.enum(['consultation', 'exam']),
-  notes: z.string().optional(),
-});
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Calendar, Clock, User, Phone } from 'lucide-react';
+import { Doctor, Atendimento, SchedulingFormData } from '@/types/scheduling';
 
 interface SchedulingFormProps {
-  doctor: Doctor;
-  selectedDate: Date | undefined;
-  onDateSelect: (date: Date | undefined) => void;
-  availableSlots: TimeSlot[];
-  selectedTime: string | undefined;
-  onTimeSelect: (time: string) => void;
-  onSubmit: (appointment: Omit<Appointment, 'id'>) => void;
+  doctors: Doctor[];
+  atendimentos: Atendimento[];
+  onSubmit: (data: SchedulingFormData) => Promise<void>;
   onCancel: () => void;
+  getAtendimentosByDoctor: (doctorId: string) => Atendimento[];
 }
 
-export function SchedulingForm({
-  doctor,
-  selectedDate,
-  onDateSelect,
-  availableSlots,
-  selectedTime,
-  onTimeSelect,
-  onSubmit,
-  onCancel
+export function SchedulingForm({ 
+  doctors, 
+  atendimentos, 
+  onSubmit, 
+  onCancel,
+  getAtendimentosByDoctor 
 }: SchedulingFormProps) {
-  const { toast } = useToast();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      fullName: '',
-      birthDate: '',
-      insurance: '',
-      phone: '',
-      appointmentType: 'consultation',
-      notes: '',
-    },
+  const [formData, setFormData] = useState<SchedulingFormData>({
+    nomeCompleto: '',
+    dataNascimento: '',
+    convenio: '',
+    telefone: '',
+    medicoId: '',
+    atendimentoId: '',
+    dataAgendamento: '',
+    horaAgendamento: '',
+    observacoes: '',
   });
+  
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (values: z.infer<typeof formSchema>) => {
-    if (!selectedDate || !selectedTime) {
-      toast({
-        title: "Erro",
-        description: "Selecione data e horário",
-        variant: "destructive"
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    
+    try {
+      await onSubmit(formData);
+      // Reset form
+      setFormData({
+        nomeCompleto: '',
+        dataNascimento: '',
+        convenio: '',
+        telefone: '',
+        medicoId: '',
+        atendimentoId: '',
+        dataAgendamento: '',
+        horaAgendamento: '',
+        observacoes: '',
       });
-      return;
+    } catch (error) {
+      console.error('Erro ao agendar:', error);
+    } finally {
+      setLoading(false);
     }
-
-    setIsSubmitting(true);
-
-    const appointment: Omit<Appointment, 'id'> = {
-      doctorId: doctor.id,
-      patient: {
-        fullName: values.fullName,
-        birthDate: values.birthDate,
-        insurance: values.insurance,
-        phone: values.phone,
-      },
-      date: format(selectedDate, 'yyyy-MM-dd'),
-      time: selectedTime,
-      type: values.appointmentType,
-      status: 'scheduled',
-      scheduledBy: 'receptionist',
-      notes: values.notes,
-    };
-
-    onSubmit(appointment);
-    setIsSubmitting(false);
   };
 
-  const isWeekend = (date: Date) => {
-    const day = date.getDay();
-    return !doctor.workingHours.days.includes(day);
-  };
+  const availableAtendimentos = formData.medicoId ? getAtendimentosByDoctor(formData.medicoId) : [];
 
   return (
-    <Card className="max-w-2xl mx-auto">
+    <Card className="w-full max-w-2xl mx-auto">
       <CardHeader>
-        <CardTitle className="text-xl">
-          Agendar com {doctor.name} - {doctor.specialty}
+        <CardTitle className="flex items-center gap-2">
+          <Calendar className="h-5 w-5" />
+          Novo Agendamento
         </CardTitle>
       </CardHeader>
-
-      <CardContent className="space-y-6">
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+      
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Dados do Paciente */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <User className="h-4 w-4" />
+              Dados do Paciente
+            </h3>
             
-            {/* Data */}
-            <div className="space-y-2">
-              <Label>Data do Agendamento</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !selectedDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {selectedDate ? (
-                      format(selectedDate, "PPP", { locale: ptBR })
-                    ) : (
-                      <span>Selecione uma data</span>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={selectedDate}
-                    onSelect={onDateSelect}
-                    disabled={(date) => date < new Date() || isWeekend(date)}
-                    initialFocus
-                    className="pointer-events-auto"
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            {/* Horário */}
-            {selectedDate && (
-              <div className="space-y-2">
-                <Label>Horário Disponível</Label>
-                <div className="grid grid-cols-4 gap-2">
-                  {availableSlots.map((slot) => (
-                    <Button
-                      key={slot.time}
-                      type="button"
-                      variant={selectedTime === slot.time ? "default" : "outline"}
-                      size="sm"
-                      disabled={!slot.available}
-                      onClick={() => onTimeSelect(slot.time)}
-                      className="h-10"
-                    >
-                      {slot.time}
-                    </Button>
-                  ))}
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="nomeCompleto">Nome Completo *</Label>
+                <Input
+                  id="nomeCompleto"
+                  value={formData.nomeCompleto}
+                  onChange={(e) => setFormData(prev => ({ ...prev, nomeCompleto: e.target.value }))}
+                  placeholder="Nome completo do paciente"
+                  required
+                />
               </div>
-            )}
+              
+              <div>
+                <Label htmlFor="dataNascimento">Data de Nascimento *</Label>
+                <Input
+                  id="dataNascimento"
+                  type="date"
+                  value={formData.dataNascimento}
+                  onChange={(e) => setFormData(prev => ({ ...prev, dataNascimento: e.target.value }))}
+                  required
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="convenio">Convênio *</Label>
+                <Input
+                  id="convenio"
+                  value={formData.convenio}
+                  onChange={(e) => setFormData(prev => ({ ...prev, convenio: e.target.value }))}
+                  placeholder="Nome do convênio"
+                  required
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="telefone">Telefone *</Label>
+                <Input
+                  id="telefone"
+                  value={formData.telefone}
+                  onChange={(e) => setFormData(prev => ({ ...prev, telefone: e.target.value }))}
+                  placeholder="(xx) xxxxx-xxxx"
+                  required
+                />
+              </div>
+            </div>
+          </div>
 
-            {/* Dados do Paciente */}
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="fullName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nome Completo</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Digite o nome completo" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          {/* Dados do Agendamento */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <Clock className="h-4 w-4" />
+              Dados do Agendamento
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="medico">Médico *</Label>
+                <Select 
+                  value={formData.medicoId} 
+                  onValueChange={(value) => setFormData(prev => ({ 
+                    ...prev, 
+                    medicoId: value,
+                    atendimentoId: '' // Reset atendimento when doctor changes
+                  }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o médico" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {doctors.map((doctor) => (
+                      <SelectItem key={doctor.id} value={doctor.id}>
+                        {doctor.nome} - {doctor.especialidade}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-              <FormField
-                control={form.control}
-                name="birthDate"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Data de Nascimento</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+              <div>
+                <Label htmlFor="atendimento">Tipo de Atendimento *</Label>
+                <Select 
+                  value={formData.atendimentoId} 
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, atendimentoId: value }))}
+                  disabled={!formData.medicoId}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableAtendimentos.map((atendimento) => (
+                      <SelectItem key={atendimento.id} value={atendimento.id}>
+                        {atendimento.nome} - {atendimento.tipo}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div>
+                <Label htmlFor="dataAgendamento">Data *</Label>
+                <Input
+                  id="dataAgendamento"
+                  type="date"
+                  value={formData.dataAgendamento}
+                  onChange={(e) => setFormData(prev => ({ ...prev, dataAgendamento: e.target.value }))}
+                  min={new Date().toISOString().split('T')[0]}
+                  required
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="horaAgendamento">Horário *</Label>
+                <Input
+                  id="horaAgendamento"
+                  type="time"
+                  value={formData.horaAgendamento}
+                  onChange={(e) => setFormData(prev => ({ ...prev, horaAgendamento: e.target.value }))}
+                  required
+                />
+              </div>
+            </div>
+            
+            <div>
+              <Label htmlFor="observacoes">Observações</Label>
+              <Textarea
+                id="observacoes"
+                value={formData.observacoes}
+                onChange={(e) => setFormData(prev => ({ ...prev, observacoes: e.target.value }))}
+                placeholder="Informações adicionais sobre o agendamento"
+                rows={3}
               />
             </div>
+          </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="insurance"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Convênio</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Nome do convênio" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="phone"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Telefone</FormLabel>
-                    <FormControl>
-                      <Input placeholder="(11) 99999-9999" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <FormField
-              control={form.control}
-              name="appointmentType"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Tipo de Atendimento</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione o tipo" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="consultation">Consulta</SelectItem>
-                      <SelectItem value="exam">Exame</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Observações (opcional)</FormLabel>
-                  <FormControl>
-                    <Textarea 
-                      placeholder="Observações adicionais..." 
-                      className="resize-none" 
-                      {...field} 
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="flex gap-3 pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onCancel}
-                className="flex-1"
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                disabled={isSubmitting || !selectedDate || !selectedTime}
-                className="flex-1"
-              >
-                {isSubmitting ? 'Agendando...' : 'Confirmar Agendamento'}
-              </Button>
-            </div>
-          </form>
-        </Form>
+          <div className="flex gap-2 pt-4">
+            <Button type="submit" disabled={loading} className="flex-1">
+              {loading ? 'Agendando...' : 'Confirmar Agendamento'}
+            </Button>
+            <Button type="button" variant="outline" onClick={onCancel}>
+              Cancelar
+            </Button>
+          </div>
+        </form>
       </CardContent>
     </Card>
   );

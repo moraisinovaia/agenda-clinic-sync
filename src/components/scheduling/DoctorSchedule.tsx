@@ -1,154 +1,135 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { format, addDays, startOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
-
-import { Button } from '@/components/ui/button';
+import { Doctor, Appointment } from '@/types/scheduling';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Doctor, Appointment } from '@/types/scheduling';
+import { Button } from '@/components/ui/button';
+import { ChevronLeft, ChevronRight, Calendar, Clock } from 'lucide-react';
 
 interface DoctorScheduleProps {
   doctor: Doctor;
   appointments: Appointment[];
-  onNewAppointment: () => void;
 }
 
-export function DoctorSchedule({ doctor, appointments, onNewAppointment }: DoctorScheduleProps) {
+export function DoctorSchedule({ doctor, appointments }: DoctorScheduleProps) {
   const [currentWeek, setCurrentWeek] = useState(new Date());
+  
+  const weekStart = startOfWeek(currentWeek, { weekStartsOn: 0 });
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
-  const weekDays = useMemo(() => {
-    const start = startOfWeek(currentWeek, { weekStartsOn: 1 });
-    return Array.from({ length: 7 }, (_, i) => addDays(start, i));
-  }, [currentWeek]);
-
-  const workingDays = weekDays.filter(day => 
-    doctor.workingHours.days.includes(day.getDay())
-  );
-
-  const getAppointmentsForDay = (date: Date) => {
+  const getAppointmentsForDate = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
-    return appointments.filter(apt => apt.date === dateStr);
+    return appointments.filter(
+      appointment => 
+        appointment.medico_id === doctor.id && 
+        appointment.data_agendamento === dateStr
+    );
   };
 
-  const generateTimeSlots = () => {
-    const slots = [];
-    const [startHour, startMinute] = doctor.workingHours.start.split(':').map(Number);
-    const [endHour, endMinute] = doctor.workingHours.end.split(':').map(Number);
-    
-    let currentHour = startHour;
-    let currentMinute = startMinute;
-    
-    while (currentHour < endHour || (currentHour === endHour && currentMinute < endMinute)) {
-      const timeStr = `${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}`;
-      slots.push(timeStr);
-      
-      currentMinute += doctor.consultationDuration;
-      if (currentMinute >= 60) {
-        currentHour += Math.floor(currentMinute / 60);
-        currentMinute = currentMinute % 60;
-      }
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'agendado':
+        return 'bg-blue-100 text-blue-800';
+      case 'confirmado':
+        return 'bg-green-100 text-green-800';
+      case 'realizado':
+        return 'bg-gray-100 text-gray-800';
+      case 'cancelado':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
-    
-    return slots;
-  };
-
-  const timeSlots = generateTimeSlots();
-
-  const previousWeek = () => {
-    setCurrentWeek(prev => addDays(prev, -7));
-  };
-
-  const nextWeek = () => {
-    setCurrentWeek(prev => addDays(prev, 7));
   };
 
   return (
     <Card className="w-full">
-      <CardHeader>
+      <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-xl">
-            Agenda - {doctor.name}
+          <CardTitle className="flex items-center gap-2">
+            <Calendar className="h-5 w-5" />
+            Agenda - {doctor.nome}
           </CardTitle>
-          <Button onClick={onNewAppointment} size="sm">
-            <Plus className="h-4 w-4 mr-2" />
-            Novo Agendamento
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentWeek(addDays(currentWeek, -7))}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm font-medium px-2">
+              {format(weekStart, 'dd/MM', { locale: ptBR })} - {format(addDays(weekStart, 6), 'dd/MM/yyyy', { locale: ptBR })}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentWeek(addDays(currentWeek, 7))}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
-        
-        <div className="flex items-center gap-4">
-          <Button variant="outline" size="sm" onClick={previousWeek}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          
-          <span className="font-medium">
-            {format(weekDays[0], 'dd MMM', { locale: ptBR })} - {format(weekDays[6], 'dd MMM yyyy', { locale: ptBR })}
-          </span>
-          
-          <Button variant="outline" size="sm" onClick={nextWeek}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+        <div className="text-sm text-muted-foreground">
+          {doctor.especialidade}
         </div>
       </CardHeader>
-
+      
       <CardContent>
-        <div className="grid grid-cols-6 gap-2">
-          {/* Coluna de horários */}
-          <div className="space-y-2">
-            <div className="h-12 flex items-center justify-center font-medium text-sm">
-              Horário
-            </div>
-            {timeSlots.map(time => (
-              <div key={time} className="h-16 flex items-center justify-center text-sm text-muted-foreground border-r">
-                {time}
-              </div>
-            ))}
-          </div>
-
-          {/* Colunas dos dias */}
-          {workingDays.map((day, dayIndex) => {
-            const dayAppointments = getAppointmentsForDay(day);
+        <div className="grid grid-cols-7 gap-2">
+          {weekDays.map((day, index) => {
+            const dayAppointments = getAppointmentsForDate(day);
+            const isToday = format(day, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
             
             return (
-              <div key={dayIndex} className="space-y-2">
-                <div className="h-12 flex flex-col items-center justify-center bg-muted/50 rounded-lg">
-                  <div className="font-medium text-sm">
+              <div key={index} className="space-y-2">
+                <div className={`text-center p-2 rounded-lg text-sm font-medium ${
+                  isToday ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                }`}>
+                  <div className="text-xs">
                     {format(day, 'EEE', { locale: ptBR })}
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    {format(day, 'dd/MM')}
+                  <div>
+                    {format(day, 'dd', { locale: ptBR })}
                   </div>
                 </div>
                 
-                {timeSlots.map(time => {
-                  const appointment = dayAppointments.find(apt => apt.time === time);
-                  
-                  return (
-                    <div key={time} className="h-16 border rounded-md p-1">
-                      {appointment ? (
-                        <div className="h-full bg-primary/10 border border-primary/20 rounded px-2 py-1 text-xs">
-                          <div className="font-medium truncate">
-                            {appointment.patient.fullName}
-                          </div>
-                          <div className="text-muted-foreground">
-                            {appointment.type === 'consultation' ? 'Consulta' : 'Exame'}
-                          </div>
-                          <Badge 
-                            variant={appointment.status === 'scheduled' ? 'default' : 'secondary'}
-                            className="text-xs mt-1"
-                          >
-                            {appointment.status === 'scheduled' ? 'Agendado' : 
-                             appointment.status === 'completed' ? 'Concluído' : 'Cancelado'}
-                          </Badge>
+                <div className="space-y-1 min-h-[200px]">
+                  {dayAppointments.length > 0 ? (
+                    dayAppointments.map((appointment) => (
+                      <div
+                        key={appointment.id}
+                        className="p-2 bg-white border rounded-lg shadow-sm text-xs space-y-1"
+                      >
+                        <div className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          <span className="font-medium">
+                            {appointment.hora_agendamento}
+                          </span>
                         </div>
-                      ) : (
-                        <div className="h-full bg-muted/20 rounded flex items-center justify-center text-xs text-muted-foreground">
-                          Livre
+                        
+                        <div className="truncate font-medium">
+                          Paciente agendado
                         </div>
-                      )}
+                        
+                        <div className="text-muted-foreground truncate">
+                          Consulta/Exame
+                        </div>
+                        
+                        <Badge 
+                          variant="secondary" 
+                          className={`text-xs ${getStatusColor(appointment.status)}`}
+                        >
+                          {appointment.status}
+                        </Badge>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-xs text-muted-foreground p-2 text-center">
+                      Sem agendamentos
                     </div>
-                  );
-                })}
+                  )}
+                </div>
               </div>
             );
           })}

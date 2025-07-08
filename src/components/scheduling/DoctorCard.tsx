@@ -10,32 +10,34 @@ interface DoctorCardProps {
 }
 
 export function DoctorCard({ doctor, onSchedule }: DoctorCardProps) {
-  const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-  const workingDays = doctor.workingHours.days.map(day => dayNames[day]).join(', ');
-
   return (
     <Card className="hover:shadow-md transition-shadow">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-lg">
           <User className="h-5 w-5 text-primary" />
-          {doctor.name}
+          {doctor.nome}
         </CardTitle>
         <Badge variant="secondary" className="w-fit">
-          {doctor.specialty}
+          {doctor.especialidade}
         </Badge>
       </CardHeader>
       
       <CardContent className="space-y-3">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Calendar className="h-4 w-4" />
-          <span>{workingDays}</span>
+          <span>Disponível para agendamento</span>
         </div>
         
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Clock className="h-4 w-4" />
-          <span>{doctor.workingHours.start} - {doctor.workingHours.end}</span>
-          <span className="text-xs">({doctor.consultationDuration}min)</span>
+          <span>Horários conforme disponibilidade</span>
         </div>
+        
+        {doctor.convenios_aceitos && doctor.convenios_aceitos.length > 0 && (
+          <div className="text-xs text-muted-foreground">
+            <strong>Convênios:</strong> {doctor.convenios_aceitos.join(', ')}
+          </div>
+        )}
         
         <Button 
           onClick={() => onSchedule(doctor.id)} 

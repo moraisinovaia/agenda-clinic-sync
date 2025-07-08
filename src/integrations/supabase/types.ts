@@ -14,6 +14,70 @@ export type Database = {
   }
   public: {
     Tables: {
+      agendamentos: {
+        Row: {
+          atendimento_id: string
+          created_at: string
+          criado_por: string
+          data_agendamento: string
+          hora_agendamento: string
+          id: string
+          medico_id: string
+          observacoes: string | null
+          paciente_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          atendimento_id: string
+          created_at?: string
+          criado_por?: string
+          data_agendamento: string
+          hora_agendamento: string
+          id?: string
+          medico_id: string
+          observacoes?: string | null
+          paciente_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          atendimento_id?: string
+          created_at?: string
+          criado_por?: string
+          data_agendamento?: string
+          hora_agendamento?: string
+          id?: string
+          medico_id?: string
+          observacoes?: string | null
+          paciente_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agendamentos_atendimento_id_fkey"
+            columns: ["atendimento_id"]
+            isOneToOne: false
+            referencedRelation: "atendimentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agendamentos_medico_id_fkey"
+            columns: ["medico_id"]
+            isOneToOne: false
+            referencedRelation: "medicos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agendamentos_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       alimentos_teste_hidrogenio: {
         Row: {
           categoria: string | null
@@ -220,6 +284,36 @@ export type Database = {
           id?: number
           message?: Json
           session_id?: string
+        }
+        Relationships: []
+      }
+      pacientes: {
+        Row: {
+          convenio: string
+          created_at: string
+          data_nascimento: string
+          id: string
+          nome_completo: string
+          telefone: string
+          updated_at: string
+        }
+        Insert: {
+          convenio: string
+          created_at?: string
+          data_nascimento: string
+          id?: string
+          nome_completo: string
+          telefone: string
+          updated_at?: string
+        }
+        Update: {
+          convenio?: string
+          created_at?: string
+          data_nascimento?: string
+          id?: string
+          nome_completo?: string
+          telefone?: string
+          updated_at?: string
         }
         Relationships: []
       }
