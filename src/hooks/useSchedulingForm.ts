@@ -34,10 +34,11 @@ export function useSchedulingForm(initialData?: Partial<SchedulingFormData>) {
     
     try {
       await onSubmit(formData);
+      // Só resetar o formulário se não houve erro
       resetForm();
     } catch (error) {
-      // Não fazer log genérico aqui, deixar o useSupabaseScheduling lidar com o erro
-      // O erro específico já foi mostrado no toast pelo useSupabaseScheduling
+      // Se houver erro, NÃO resetar o formulário - manter os dados preenchidos
+      console.log('Erro capturado no useSchedulingForm - mantendo dados do formulário');
     } finally {
       setLoading(false);
     }
