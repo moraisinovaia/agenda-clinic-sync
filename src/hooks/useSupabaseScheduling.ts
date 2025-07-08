@@ -55,12 +55,16 @@ export function useSupabaseScheduling() {
   // Buscar agendamentos - versão simplificada para debugging
   const fetchAppointments = async () => {
     try {
+      console.log('🔍 Buscando agendamentos...');
+      
       // Primeiro buscar agendamentos simples
       const { data: agendamentosData, error: agendamentosError } = await supabase
         .from('agendamentos')
         .select('*')
         .order('data_agendamento', { ascending: true })
         .order('hora_agendamento', { ascending: true });
+
+      console.log('📋 Agendamentos encontrados:', agendamentosData);
 
       if (agendamentosError) {
         console.error('Erro na consulta de agendamentos:', agendamentosError);
