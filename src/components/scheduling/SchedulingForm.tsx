@@ -27,11 +27,6 @@ export function SchedulingForm({
   const availableConvenios = selectedDoctor?.convenios_aceitos || [];
   const medicoSelected = !!formData.medicoId;
 
-  console.log('Form medicoId:', formData.medicoId);
-  console.log('Doctors array:', doctors);
-  console.log('Selected doctor:', selectedDoctor);
-  console.log('Available convenios:', availableConvenios);
-
   return (
     <Card className="w-full max-w-2xl mx-auto">
       <CardHeader>

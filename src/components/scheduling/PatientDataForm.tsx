@@ -17,6 +17,8 @@ export function PatientDataForm({
   availableConvenios, 
   medicoSelected 
 }: PatientDataFormProps) {
+  console.log('PatientDataForm - availableConvenios:', availableConvenios);
+  console.log('PatientDataForm - medicoSelected:', medicoSelected);
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold flex items-center gap-2">
