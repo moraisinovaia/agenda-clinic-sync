@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { format, addDays, startOfWeek } from 'date-fns';
+import { format, addDays, startOfWeek, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Doctor, Appointment } from '@/types/scheduling';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight, Calendar, Clock } from 'lucide-react';
+import { Calendar } from '@/components/ui/calendar';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User } from 'lucide-react';
 
 interface DoctorScheduleProps {
   doctor: Doctor;
@@ -13,11 +14,8 @@ interface DoctorScheduleProps {
 }
 
 export function DoctorSchedule({ doctor, appointments }: DoctorScheduleProps) {
-  const [currentWeek, setCurrentWeek] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   
-  const weekStart = startOfWeek(currentWeek, { weekStartsOn: 0 });
-  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-
   const getAppointmentsForDate = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     return appointments.filter(
@@ -27,114 +25,191 @@ export function DoctorSchedule({ doctor, appointments }: DoctorScheduleProps) {
     );
   };
 
+  // Função para verificar se uma data tem agendamentos
+  const hasAppointments = (date: Date) => {
+    return getAppointmentsForDate(date).length > 0;
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'agendado':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-blue-100 text-blue-800 border-blue-200';
       case 'confirmado':
-        return 'bg-green-100 text-green-800';
+        return 'bg-green-100 text-green-800 border-green-200';
       case 'realizado':
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-gray-100 text-gray-800 border-gray-200';
       case 'cancelado':
-        return 'bg-red-100 text-red-800';
+        return 'bg-red-100 text-red-800 border-red-200';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
+  const selectedDateAppointments = getAppointmentsForDate(selectedDate);
+
   return (
-    <Card className="w-full">
-      <CardHeader className="pb-4">
-        <div className="flex items-center justify-between">
+    <div className="space-y-6">
+      <Card className="w-full">
+        <CardHeader className="pb-4">
           <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
+            <CalendarIcon className="h-5 w-5" />
             Agenda - {doctor.nome}
           </CardTitle>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentWeek(addDays(currentWeek, -7))}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="text-sm font-medium px-2">
-              {format(weekStart, 'dd/MM', { locale: ptBR })} - {format(addDays(weekStart, 6), 'dd/MM/yyyy', { locale: ptBR })}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentWeek(addDays(currentWeek, 7))}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+          <div className="text-sm text-muted-foreground">
+            {doctor.especialidade}
           </div>
-        </div>
-        <div className="text-sm text-muted-foreground">
-          {doctor.especialidade}
-        </div>
-      </CardHeader>
-      
-      <CardContent>
-        <div className="grid grid-cols-7 gap-2">
-          {weekDays.map((day, index) => {
-            const dayAppointments = getAppointmentsForDate(day);
-            const isToday = format(day, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
-            
-            return (
-              <div key={index} className="space-y-2">
-                <div className={`text-center p-2 rounded-lg text-sm font-medium ${
-                  isToday ? 'bg-primary text-primary-foreground' : 'bg-muted'
-                }`}>
-                  <div className="text-xs">
-                    {format(day, 'EEE', { locale: ptBR })}
-                  </div>
-                  <div>
-                    {format(day, 'dd', { locale: ptBR })}
-                  </div>
-                </div>
-                
-                <div className="space-y-1 min-h-[200px]">
-                  {dayAppointments.length > 0 ? (
-                    dayAppointments.map((appointment) => (
-                      <div
-                        key={appointment.id}
-                        className="p-2 bg-white border rounded-lg shadow-sm text-xs space-y-1"
-                      >
-                        <div className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          <span className="font-medium">
-                            {appointment.hora_agendamento}
-                          </span>
-                        </div>
-                        
-                        <div className="truncate font-medium">
-                          Paciente agendado
-                        </div>
-                        
-                        <div className="text-muted-foreground truncate">
-                          Consulta/Exame
-                        </div>
-                        
-                        <Badge 
-                          variant="secondary" 
-                          className={`text-xs ${getStatusColor(appointment.status)}`}
-                        >
-                          {appointment.status}
-                        </Badge>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-xs text-muted-foreground p-2 text-center">
-                      Sem agendamentos
-                    </div>
-                  )}
+        </CardHeader>
+        
+        <CardContent className="space-y-6">
+          <div className="grid lg:grid-cols-2 gap-6">
+            {/* Calendário */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Selecione uma data</h3>
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={(date) => date && setSelectedDate(date)}
+                locale={ptBR}
+                className="rounded-md border shadow-sm bg-background p-3 pointer-events-auto"
+                modifiers={{
+                  hasAppointments: (date) => hasAppointments(date)
+                }}
+                modifiersStyles={{
+                  hasAppointments: {
+                    backgroundColor: 'hsl(var(--primary))',
+                    color: 'hsl(var(--primary-foreground))',
+                    fontWeight: 'bold'
+                  }
+                }}
+              />
+              <div className="text-xs text-muted-foreground space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-primary rounded"></div>
+                  <span>Dias com agendamentos</span>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      </CardContent>
-    </Card>
+            </div>
+
+            {/* Lista de agendamentos do dia selecionado */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">
+                Agendamentos para {format(selectedDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+              </h3>
+              
+              <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                {selectedDateAppointments.length > 0 ? (
+                  selectedDateAppointments
+                    .sort((a, b) => a.hora_agendamento.localeCompare(b.hora_agendamento))
+                    .map((appointment) => (
+                      <Card key={appointment.id} className="p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4 text-primary" />
+                            <span className="font-semibold text-lg">
+                              {appointment.hora_agendamento}
+                            </span>
+                          </div>
+                          <Badge 
+                            variant="secondary" 
+                            className={`${getStatusColor(appointment.status)}`}
+                          >
+                            {appointment.status}
+                          </Badge>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-muted-foreground" />
+                            <span className="font-medium">Paciente agendado</span>
+                          </div>
+                          
+                          <div className="text-sm text-muted-foreground">
+                            Tipo: Consulta/Exame
+                          </div>
+                          
+                          {appointment.observacoes && (
+                            <div className="text-sm text-muted-foreground">
+                              <strong>Observações:</strong> {appointment.observacoes}
+                            </div>
+                          )}
+                        </div>
+                      </Card>
+                    ))
+                ) : (
+                  <Card className="p-8 text-center">
+                    <CalendarIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <h4 className="text-lg font-medium text-muted-foreground mb-2">
+                      Nenhum agendamento
+                    </h4>
+                    <p className="text-sm text-muted-foreground">
+                      Não há agendamentos para esta data.
+                    </p>
+                  </Card>
+                )}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Resumo estatístico */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <CalendarIcon className="h-5 w-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">
+                {appointments.filter(apt => apt.medico_id === doctor.id && apt.status === 'agendado').length}
+              </p>
+              <p className="text-sm text-muted-foreground">Agendados</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-green-100 rounded-lg">
+              <Clock className="h-5 w-5 text-green-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">
+                {appointments.filter(apt => apt.medico_id === doctor.id && apt.status === 'confirmado').length}
+              </p>
+              <p className="text-sm text-muted-foreground">Confirmados</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-gray-100 rounded-lg">
+              <User className="h-5 w-5 text-gray-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">
+                {appointments.filter(apt => apt.medico_id === doctor.id && apt.status === 'realizado').length}
+              </p>
+              <p className="text-sm text-muted-foreground">Realizados</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-red-100 rounded-lg">
+              <CalendarIcon className="h-5 w-5 text-red-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">
+                {appointments.filter(apt => apt.medico_id === doctor.id && apt.status === 'cancelado').length}
+              </p>
+              <p className="text-sm text-muted-foreground">Cancelados</p>
+            </div>
+          </div>
+        </Card>
+      </div>
+    </div>
   );
 }
