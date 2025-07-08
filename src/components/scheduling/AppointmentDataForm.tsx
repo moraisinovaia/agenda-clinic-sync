@@ -18,6 +18,11 @@ export function AppointmentDataForm({
   doctors,
   atendimentos 
 }: AppointmentDataFormProps) {
+  // Filtrar atendimentos baseado no médico selecionado
+  const filteredAtendimentos = formData.medicoId 
+    ? atendimentos.filter(atendimento => atendimento.medico_id === formData.medicoId)
+    : [];
+
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold flex items-center gap-2">
@@ -55,12 +60,19 @@ export function AppointmentDataForm({
           <Select 
             value={formData.atendimentoId} 
             onValueChange={(value) => setFormData(prev => ({ ...prev, atendimentoId: value }))}
+            disabled={!formData.medicoId}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Selecione o tipo" />
+              <SelectValue placeholder={
+                !formData.medicoId 
+                  ? "Selecione primeiro um médico" 
+                  : filteredAtendimentos.length === 0 
+                    ? "Nenhum atendimento disponível" 
+                    : "Selecione o tipo"
+              } />
             </SelectTrigger>
             <SelectContent>
-              {atendimentos.map((atendimento) => (
+              {filteredAtendimentos.map((atendimento) => (
                 <SelectItem key={atendimento.id} value={atendimento.id}>
                   {atendimento.nome} - {atendimento.tipo}
                 </SelectItem>
