@@ -54,7 +54,15 @@ const Index = () => {
 
   const handleSubmitAppointment = async (formData: SchedulingFormData) => {
     await createAppointment(formData);
-    setViewMode('schedule');
+    
+    // Buscar o médico correto e mostrar sua agenda
+    const doctor = doctors.find(d => d.id === formData.medicoId);
+    if (doctor) {
+      setSelectedDoctor(doctor);
+      setViewMode('schedule');
+    } else {
+      setViewMode('doctors');
+    }
   };
 
   const handleNewAppointment = () => {

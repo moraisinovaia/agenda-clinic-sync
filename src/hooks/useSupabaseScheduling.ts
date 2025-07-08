@@ -116,6 +116,7 @@ export function useSupabaseScheduling() {
   const createAppointment = async (formData: SchedulingFormData) => {
     try {
       setLoading(true);
+      console.log('🚀 Criando agendamento:', formData);
 
       // Primeiro, criar o paciente
       const { data: patientData, error: patientError } = await supabase
@@ -129,7 +130,11 @@ export function useSupabaseScheduling() {
         .select()
         .single();
 
-      if (patientError) throw patientError;
+      if (patientError) {
+        console.error('❌ Erro ao criar paciente:', patientError);
+        throw patientError;
+      }
+      console.log('✅ Paciente criado:', patientData);
 
       // Depois, criar o agendamento
       const { data: appointmentData, error: appointmentError } = await supabase
@@ -146,19 +151,25 @@ export function useSupabaseScheduling() {
         .select()
         .single();
 
-      if (appointmentError) throw appointmentError;
+      if (appointmentError) {
+        console.error('❌ Erro ao criar agendamento:', appointmentError);
+        throw appointmentError;
+      }
+      console.log('✅ Agendamento criado:', appointmentData);
 
       toast({
         title: 'Sucesso!',
-        description: 'Agendamento criado com sucesso',
+        description: `Agendamento criado para ${formData.dataAgendamento} às ${formData.horaAgendamento}`,
       });
 
-      // Recarregar agendamentos
+      // Recarregar agendamentos imediatamente
+      console.log('🔄 Recarregando agendamentos...');
       await fetchAppointments();
+      console.log('✅ Agendamentos recarregados');
       
       return appointmentData;
     } catch (error) {
-      console.error('Erro ao criar agendamento:', error);
+      console.error('❌ Erro ao criar agendamento:', error);
       toast({
         title: 'Erro',
         description: 'Não foi possível criar o agendamento',
