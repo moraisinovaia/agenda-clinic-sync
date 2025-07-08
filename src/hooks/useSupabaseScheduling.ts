@@ -191,6 +191,25 @@ export function useSupabaseScheduling() {
         throw new Error('Não é possível agendar para uma data/hora que já passou');
       }
 
+      // Verificar se já existe um agendamento no mesmo horário para o mesmo médico
+      const { data: existingAppointment, error: conflictError } = await supabase
+        .from('agendamentos')
+        .select('id')
+        .eq('medico_id', formData.medicoId)
+        .eq('data_agendamento', formData.dataAgendamento)
+        .eq('hora_agendamento', formData.horaAgendamento)
+        .eq('status', 'agendado')
+        .maybeSingle();
+
+      if (conflictError) {
+        console.error('❌ Erro ao verificar conflitos de horário:', conflictError);
+        throw new Error('Erro ao verificar disponibilidade do horário');
+      }
+
+      if (existingAppointment) {
+        throw new Error('Este horário já está ocupado para o médico selecionado. Por favor, escolha outro horário.');
+      }
+
       // Primeiro, criar o paciente
       const { data: patientData, error: patientError } = await supabase
         .from('pacientes')
