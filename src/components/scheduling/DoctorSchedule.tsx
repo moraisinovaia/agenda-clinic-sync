@@ -23,10 +23,17 @@ interface DoctorScheduleProps {
   doctor: Doctor;
   appointments: AppointmentWithRelations[];
   onCancelAppointment: (appointmentId: string) => Promise<void>;
+  initialDate?: string; // Data inicial para posicionar o calendário
 }
 
-export function DoctorSchedule({ doctor, appointments, onCancelAppointment }: DoctorScheduleProps) {
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+export function DoctorSchedule({ doctor, appointments, onCancelAppointment, initialDate }: DoctorScheduleProps) {
+  // Usar initialDate se fornecida, senão usar data atual
+  const [selectedDate, setSelectedDate] = useState<Date>(() => {
+    if (initialDate) {
+      return new Date(initialDate);
+    }
+    return new Date();
+  });
   
   const getAppointmentsForDate = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');

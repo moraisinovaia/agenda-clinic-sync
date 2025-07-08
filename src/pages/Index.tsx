@@ -20,6 +20,7 @@ const Index = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('doctors');
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [lastAppointmentDate, setLastAppointmentDate] = useState<string | null>(null);
 
   const {
     doctors,
@@ -49,13 +50,21 @@ const Index = () => {
     const doctor = doctors.find(d => d.id === doctorId);
     if (doctor) {
       setSelectedDoctor(doctor);
+      setLastAppointmentDate(null); // Limpar data do último agendamento
       setViewMode('schedule');
     }
   };
 
   const handleSubmitAppointment = async (formData: SchedulingFormData) => {
     await createAppointment(formData);
-    // Deixar que a recepcionista navegue manualmente
+    
+    // Redirecionar para a agenda do médico após agendar
+    const doctor = doctors.find(d => d.id === formData.medicoId);
+    if (doctor) {
+      setSelectedDoctor(doctor);
+      setLastAppointmentDate(formData.dataAgendamento); // Guardar a data do agendamento
+      setViewMode('schedule');
+    }
   };
 
   const handleNewAppointment = () => {
@@ -65,6 +74,7 @@ const Index = () => {
   const handleBack = () => {
     setViewMode('doctors');
     setSelectedDoctor(null);
+    setLastAppointmentDate(null); // Limpar data do último agendamento
   };
 
   const totalAppointments = appointments.length;
@@ -226,6 +236,7 @@ const Index = () => {
             doctor={selectedDoctor}
             appointments={appointments.filter(apt => apt.medico_id === selectedDoctor.id)}
             onCancelAppointment={cancelAppointment}
+            initialDate={lastAppointmentDate || undefined}
           />
         )}
 
