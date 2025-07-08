@@ -231,6 +231,7 @@ const Index = () => {
           <SchedulingForm
             doctors={doctors}
             atendimentos={atendimentos}
+            appointments={appointments}
             onSubmit={handleSubmitAppointment}
             onCancel={handleBack}
             getAtendimentosByDoctor={getAtendimentosByDoctor}
