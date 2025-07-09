@@ -103,6 +103,10 @@ const Index = () => {
     setEditingAppointment(null); // Limpar agendamento sendo editado
   };
 
+  const handleBackToFilaEspera = () => {
+    setViewMode('fila-espera');
+  };
+
   const handleEditAppointment = (appointment: AppointmentWithRelations) => {
     const doctor = doctors.find(d => d.id === appointment.medico_id);
     if (doctor) {
@@ -154,8 +158,11 @@ const Index = () => {
             </div>
             
             {viewMode !== 'doctors' && (
-              <Button onClick={handleBack} variant="outline">
-                Voltar aos Médicos
+              <Button 
+                onClick={viewMode === 'nova-fila' ? handleBackToFilaEspera : handleBack} 
+                variant="outline"
+              >
+                {viewMode === 'nova-fila' ? 'Voltar à Fila de Espera' : 'Voltar aos Médicos'}
               </Button>
             )}
           </div>
@@ -380,7 +387,7 @@ const Index = () => {
             doctors={doctors}
             atendimentos={atendimentos}
             onSubmit={adicionarFilaEspera}
-            onCancel={handleBack}
+            onCancel={handleBackToFilaEspera}
             searchPatientsByBirthDate={searchPatientsByBirthDate}
           />
         )}
