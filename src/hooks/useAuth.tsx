@@ -2,7 +2,6 @@ import { useState, useEffect, createContext, useContext, useRef } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { useNavigate } from 'react-router-dom';
 
 interface Profile {
   id: string;
@@ -53,7 +52,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
-  const navigate = useNavigate();
   const isLoggingOut = useRef(false);
 
   const fetchProfile = async (userId: string) => {
@@ -302,8 +300,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         description: 'Até logo!',
       });
       
-      // Usar navigate em vez de window.location.href
-      navigate('/auth', { replace: true });
+      // Redirecionar para a página de auth
+      window.location.href = '/auth';
       
       // Resetar a flag após um delay
       setTimeout(() => {
@@ -336,7 +334,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         description: 'Até logo!',
       });
       
-      navigate('/auth', { replace: true });
+      window.location.href = '/auth';
       
       setTimeout(() => {
         isLoggingOut.current = false;
