@@ -1,0 +1,38 @@
+{
+  "name": "Endogastro - Sistema de Agendamentos",
+  "short_name": "Endogastro",
+  "description": "Sistema de Agendamentos Médicos da Clínica Endogastro",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/endogastro-logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/endogastro-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["medical", "productivity", "business"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Nova Consulta",
+      "url": "/?action=new-appointment",
+      "description": "Agendar nova consulta médica"
+    },
+    {
+      "name": "Fila de Espera",
+      "url": "/?action=waiting-list",
+      "description": "Gerenciar fila de espera"
+    }
+  ]
+}
