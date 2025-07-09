@@ -83,16 +83,21 @@ export function useSupabaseScheduling() {
       const pacienteIds = [...new Set(agendamentosData.map(a => a.paciente_id))];
       const medicoIds = [...new Set(agendamentosData.map(a => a.medico_id))];
       const atendimentoIds = [...new Set(agendamentosData.map(a => a.atendimento_id))];
+      const criadoPorUserIds = [...new Set(agendamentosData.map(a => a.criado_por_user_id).filter(Boolean))];
 
-      const [pacientesResult, medicosResult, atendimentosResult] = await Promise.all([
+      const [pacientesResult, medicosResult, atendimentosResult, profilesResult] = await Promise.all([
         supabase.from('pacientes').select('*').in('id', pacienteIds),
         supabase.from('medicos').select('*').in('id', medicoIds),
-        supabase.from('atendimentos').select('*').in('id', atendimentoIds)
+        supabase.from('atendimentos').select('*').in('id', atendimentoIds),
+        criadoPorUserIds.length > 0 
+          ? supabase.from('profiles').select('*').in('user_id', criadoPorUserIds)
+          : Promise.resolve({ data: [] })
       ]);
 
       const pacientesMap = new Map((pacientesResult.data || []).map(p => [p.id, p]));
       const medicosMap = new Map((medicosResult.data || []).map(m => [m.id, m]));
       const atendimentosMap = new Map((atendimentosResult.data || []).map(a => [a.id, a]));
+      const profilesMap = new Map((profilesResult.data || []).map(p => [p.user_id, p]));
 
       // Combinar dados
       const appointmentsWithRelations = agendamentosData.map(agendamento => ({
@@ -100,6 +105,7 @@ export function useSupabaseScheduling() {
         pacientes: pacientesMap.get(agendamento.paciente_id) || null,
         medicos: medicosMap.get(agendamento.medico_id) || null,
         atendimentos: atendimentosMap.get(agendamento.atendimento_id) || null,
+        criado_por_profile: agendamento.criado_por_user_id ? profilesMap.get(agendamento.criado_por_user_id) || null : null,
       }));
 
       setAppointments(appointmentsWithRelations);

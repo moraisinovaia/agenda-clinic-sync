@@ -154,7 +154,11 @@ export function AppointmentsList({ appointments, onEditAppointment, onCancelAppo
                         )}
 
                         <div className="text-xs text-muted-foreground">
-                          <strong>Agendado por:</strong> {appointment.criado_por || 'Recepcionista'}
+                          <strong>Agendado por:</strong> {
+                            appointment.criado_por_profile?.nome || 
+                            appointment.criado_por || 
+                            'Recepcionista'
+                          }
                         </div>
                       </div>
                       
