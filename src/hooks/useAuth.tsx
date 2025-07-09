@@ -2,6 +2,7 @@ import { useState, useEffect, createContext, useContext } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useNavigate } from 'react-router-dom';
 
 interface Profile {
   id: string;
@@ -218,13 +219,29 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const signOut = async () => {
     try {
-      await supabase.auth.signOut();
+      console.log('🚪 Fazendo logout...');
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error('❌ Erro no logout:', error);
+        throw error;
+      }
+      
+      // Limpar estados locais
+      setUser(null);
+      setProfile(null);
+      setSession(null);
+      
+      console.log('✅ Logout realizado com sucesso');
       toast({
         title: 'Logout realizado',
         description: 'Até logo!',
       });
+      
+      // Forçar redirecionamento para /auth
+      window.location.href = '/auth';
     } catch (error) {
-      console.error('Erro no logout:', error);
+      console.error('❌ Erro no logout:', error);
       toast({
         title: 'Erro',
         description: 'Erro ao fazer logout',
