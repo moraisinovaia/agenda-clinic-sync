@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,20 +6,41 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Clock, User, Calendar, Phone, AlertCircle, CheckCircle, X, Search } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Clock, User, Calendar, Phone, AlertCircle, CheckCircle, X, Search, RefreshCw } from 'lucide-react';
 import { FilaEsperaWithRelations, FilaStatus } from '@/types/fila-espera';
 
 interface FilaEsperaListProps {
   filaEspera: FilaEsperaWithRelations[];
   status: FilaStatus;
+  loading?: boolean;
+  error?: string | null;
   onUpdateStatus: (id: string, status: string) => Promise<boolean>;
   onRemove: (id: string) => Promise<boolean>;
+  onLoadData?: () => Promise<void>;
 }
 
-export function FilaEsperaList({ filaEspera, status, onUpdateStatus, onRemove }: FilaEsperaListProps) {
+export function FilaEsperaList({ 
+  filaEspera, 
+  status, 
+  loading = false, 
+  error, 
+  onUpdateStatus, 
+  onRemove, 
+  onLoadData 
+}: FilaEsperaListProps) {
   const [filtroStatus, setFiltroStatus] = useState<string>('todos');
   const [filtroMedico, setFiltroMedico] = useState<string>('todos');
   const [busca, setBusca] = useState('');
+  const [dataLoaded, setDataLoaded] = useState(false);
+
+  // Carregar dados automaticamente quando o componente monta
+  useEffect(() => {
+    if (!dataLoaded && onLoadData) {
+      onLoadData();
+      setDataLoaded(true);
+    }
+  }, [onLoadData, dataLoaded]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -193,7 +214,61 @@ export function FilaEsperaList({ filaEspera, status, onUpdateStatus, onRemove }:
 
       {/* Lista da Fila */}
       <div className="space-y-4">
-        {filaFiltrada.length === 0 ? (
+        {loading ? (
+          // Skeleton loading
+          <div className="space-y-4">
+            {[...Array(3)].map((_, i) => (
+              <Card key={i}>
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <Skeleton className="h-4 w-4" />
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-6 w-20" />
+                        <Skeleton className="h-4 w-16" />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <Skeleton className="h-4 w-24" />
+                        <Skeleton className="h-4 w-28" />
+                        <Skeleton className="h-4 w-20" />
+                        <Skeleton className="h-4 w-32" />
+                      </div>
+                      <Skeleton className="h-3 w-48" />
+                    </div>
+                    <div className="flex flex-col gap-2 ml-4">
+                      <Skeleton className="h-8 w-20" />
+                      <Skeleton className="h-8 w-20" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : error ? (
+          // Erro com botão de retry
+          <Card>
+            <CardContent className="p-8 text-center">
+              <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-muted-foreground mb-2">
+                Erro ao carregar a fila
+              </h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                {error}
+              </p>
+              {onLoadData && (
+                <Button 
+                  onClick={() => onLoadData()} 
+                  variant="outline"
+                  className="flex items-center gap-2"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Tentar Novamente
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        ) : filaFiltrada.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center">
               <Clock className="h-12 w-12 text-muted-foreground mx-auto mb-4" />

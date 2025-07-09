@@ -44,6 +44,8 @@ const Index = () => {
   const {
     filaEspera,
     loading: filaLoading,
+    error: filaError,
+    fetchFilaEspera,
     adicionarFilaEspera,
     atualizarStatusFila,
     removerDaFila,
@@ -364,8 +366,11 @@ const Index = () => {
             <FilaEsperaList 
               filaEspera={filaEspera}
               status={getFilaStatus()}
+              loading={filaLoading}
+              error={filaError}
               onUpdateStatus={atualizarStatusFila}
               onRemove={removerDaFila}
+              onLoadData={() => fetchFilaEspera(true)}
             />
           </div>
         )}

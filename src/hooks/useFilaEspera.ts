@@ -5,12 +5,16 @@ import { FilaEsperaWithRelations, FilaEsperaFormData, FilaStatus } from '@/types
 
 export const useFilaEspera = () => {
   const [filaEspera, setFilaEspera] = useState<FilaEsperaWithRelations[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const { toast } = useToast();
 
-  const fetchFilaEspera = async () => {
+  const fetchFilaEspera = async (showToastOnError = false) => {
     try {
       setLoading(true);
+      setError(null);
+      
       const { data, error } = await supabase
         .from('fila_espera')
         .select(`
@@ -25,22 +29,38 @@ export const useFilaEspera = () => {
 
       if (error) {
         console.error('Erro ao buscar fila de espera:', error);
-        toast({
-          title: "Erro",
-          description: "Não foi possível carregar a fila de espera.",
-          variant: "destructive",
-        });
+        setError(error.message);
+        
+        // Só mostrar toast se explicitamente solicitado
+        if (showToastOnError && retryCount === 0) {
+          toast({
+            title: "Erro",
+            description: "Não foi possível carregar a fila de espera.",
+            variant: "destructive",
+          });
+        }
+        
+        // Tentar novamente automaticamente em caso de erro de permissão
+        if (error.message.includes('permission') && retryCount < 2) {
+          setRetryCount(prev => prev + 1);
+          setTimeout(() => fetchFilaEspera(false), 1000 * (retryCount + 1));
+        }
         return;
       }
 
       setFilaEspera(data || []);
+      setRetryCount(0);
     } catch (error) {
       console.error('Erro inesperado:', error);
-      toast({
-        title: "Erro",
-        description: "Erro inesperado ao carregar dados.",
-        variant: "destructive",
-      });
+      setError('Erro inesperado ao carregar dados');
+      
+      if (showToastOnError) {
+        toast({
+          title: "Erro",
+          description: "Erro inesperado ao carregar dados.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -173,13 +193,15 @@ export const useFilaEspera = () => {
     return filaEspera.filter(f => f.medico_id === medicoId && f.status === 'aguardando');
   };
 
-  useEffect(() => {
-    fetchFilaEspera();
-  }, []);
+  // Remover o useEffect para não carregar automaticamente
+  // useEffect(() => {
+  //   fetchFilaEspera();
+  // }, []);
 
   return {
     filaEspera,
     loading,
+    error,
     fetchFilaEspera,
     adicionarFilaEspera,
     atualizarStatusFila,
