@@ -156,7 +156,7 @@ export function AppointmentsList({ appointments, onEditAppointment, onCancelAppo
                         <div className="text-xs text-muted-foreground">
                           <strong>Agendado por:</strong> {
                             appointment.criado_por_profile?.nome || 
-                            appointment.criado_por || 
+                            (appointment.criado_por_user_id ? 'Recepcionista' : appointment.criado_por) ||
                             'Recepcionista'
                           }
                         </div>

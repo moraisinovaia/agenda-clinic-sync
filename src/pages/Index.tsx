@@ -16,7 +16,7 @@ import { AppointmentsList } from '@/components/scheduling/AppointmentsList';
 import { PreparosView } from '@/components/preparos/PreparosView';
 import { FilaEsperaForm } from '@/components/fila-espera/FilaEsperaForm';
 import { FilaEsperaList } from '@/components/fila-espera/FilaEsperaList';
-import { InstallPrompt } from '@/components/InstallPrompt';
+import { InstallButton } from '@/components/InstallButton';
 
 import { useSupabaseScheduling } from '@/hooks/useSupabaseScheduling';
 import { useFilaEspera } from '@/hooks/useFilaEspera';
@@ -192,6 +192,8 @@ const Index = () => {
                   {viewMode === 'nova-fila' ? 'Voltar à Fila de Espera' : 'Voltar aos Médicos'}
                 </Button>
               )}
+              
+              <InstallButton />
               
               <Button 
                 onClick={signOut} 
@@ -428,9 +430,6 @@ const Index = () => {
           />
         )}
       </div>
-      
-      {/* Install Prompt */}
-      <InstallPrompt />
     </div>
   );
 };
