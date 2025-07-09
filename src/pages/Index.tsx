@@ -14,6 +14,7 @@ import { AppointmentsList } from '@/components/scheduling/AppointmentsList';
 import { PreparosView } from '@/components/preparos/PreparosView';
 import { FilaEsperaForm } from '@/components/fila-espera/FilaEsperaForm';
 import { FilaEsperaList } from '@/components/fila-espera/FilaEsperaList';
+import { InstallPrompt } from '@/components/InstallPrompt';
 
 import { useSupabaseScheduling } from '@/hooks/useSupabaseScheduling';
 import { useFilaEspera } from '@/hooks/useFilaEspera';
@@ -392,6 +393,9 @@ const Index = () => {
           />
         )}
       </div>
+      
+      {/* Install Prompt */}
+      <InstallPrompt />
     </div>
   );
 };

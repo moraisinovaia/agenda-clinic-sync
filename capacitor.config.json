@@ -1,0 +1,20 @@
+{
+  "appId": "app.lovable.a40e486464bb4dca964edf65edb76756",
+  "appName": "agenda-clinic-sync",
+  "bundledWebRuntime": false,
+  "npmClient": "npm",
+  "webDir": "dist",
+  "server": {
+    "url": "https://a40e4864-64bb-4dca-964e-df65edb76756.lovableproject.com?forceHideBadge=true",
+    "cleartext": true
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "backgroundColor": "#ffffff",
+      "androidSplashResourceName": "splash",
+      "showSpinner": true,
+      "spinnerColor": "#2563eb"
+    }
+  }
+}
