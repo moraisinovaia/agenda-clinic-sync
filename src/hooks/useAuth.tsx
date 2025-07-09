@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext } from 'react';
+import { useState, useEffect, createContext, useContext, useRef } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -53,6 +53,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const isLoggingOut = useRef(false);
 
   const fetchProfile = async (userId: string) => {
     try {
@@ -83,48 +85,57 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   useEffect(() => {
-    let isSubscribed = true; // Flag para evitar atualizações após desmontagem
+    let isSubscribed = true;
     
-    // Configurar listener de mudanças de autenticação
+    // Configurar listener de mudanças de autenticação PRIMEIRO
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (!isSubscribed) return; // Ignorar se componente foi desmontado
+        if (!isSubscribed) return;
         
         console.log('🔄 Auth state changed:', event, session ? 'com sessão' : 'sem sessão');
         
-        // Se for evento de logout, limpar tudo imediatamente
-        if (event === 'SIGNED_OUT' || !session) {
-          console.log('🚪 Usuário fez logout, limpando estados...');
-          setSession(null);
-          setUser(null);
-          setProfile(null);
-          setLoading(false);
+        // Se estamos fazendo logout, ignorar qualquer nova sessão
+        if (isLoggingOut.current) {
+          console.log('🚫 Logout em andamento, ignorando auth state change');
           return;
         }
         
-        // Se for login/signup
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        // Se for evento de logout ou não há sessão
+        if (event === 'SIGNED_OUT' || !session) {
+          console.log('🚪 Usuário fez logout, limpando estados...');
+          if (!isLoggingOut.current) {
+            setSession(null);
+            setUser(null);
+            setProfile(null);
+            setLoading(false);
+          }
+          return;
+        }
+        
+        // Se for login/signup e não estamos fazendo logout
+        if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && !isLoggingOut.current) {
           console.log('🔑 Usuário logado, configurando sessão...');
           setSession(session);
           setUser(session?.user ?? null);
           
           if (session?.user) {
-            // Buscar perfil do usuário com retry se não encontrar
+            // Buscar perfil do usuário
             setTimeout(async () => {
-              if (!isSubscribed) return;
+              if (!isSubscribed || isLoggingOut.current) return;
               
               let profileData = await fetchProfile(session.user.id);
               
-              // Se não encontrou o perfil, tentar novamente após um delay (trigger pode estar processando)
-              if (!profileData) {
+              if (!profileData && !isLoggingOut.current) {
                 console.log('🔄 Perfil não encontrado, tentando novamente em 2 segundos...');
                 setTimeout(async () => {
-                  if (!isSubscribed) return;
+                  if (!isSubscribed || isLoggingOut.current) return;
                   profileData = await fetchProfile(session.user.id);
-                  setProfile(profileData);
-                  setLoading(false);
+                  if (!isLoggingOut.current) {
+                    setProfile(profileData);
+                    setLoading(false);
+                  }
                 }, 2000);
-              } else {
+              } else if (!isLoggingOut.current) {
                 setProfile(profileData);
                 setLoading(false);
               }
@@ -137,25 +148,27 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       }
     );
 
-    // Verificar sessão existente APENAS na inicialização
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!isSubscribed) return;
-      
-      console.log('🔍 Verificando sessão existente:', session ? 'encontrada' : 'não encontrada');
-      
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        fetchProfile(session.user.id).then((profileData) => {
-          if (!isSubscribed) return;
-          setProfile(profileData);
+    // Verificar sessão existente APENAS se não estamos fazendo logout
+    if (!isLoggingOut.current) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (!isSubscribed || isLoggingOut.current) return;
+        
+        console.log('🔍 Verificando sessão existente:', session ? 'encontrada' : 'não encontrada');
+        
+        if (session) {
+          setSession(session);
+          setUser(session.user);
+          
+          fetchProfile(session.user.id).then((profileData) => {
+            if (!isSubscribed || isLoggingOut.current) return;
+            setProfile(profileData);
+            setLoading(false);
+          });
+        } else {
           setLoading(false);
-        });
-      } else {
-        setLoading(false);
-      }
-    });
+        }
+      });
+    }
 
     return () => {
       isSubscribed = false;
@@ -252,25 +265,36 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     try {
       console.log('🚪 Iniciando processo de logout...');
       
-      // Primeiro limpar estados locais para evitar re-login automático
+      // Marcar que estamos fazendo logout
+      isLoggingOut.current = true;
+      
+      // Limpar estados locais primeiro
       setUser(null);
       setProfile(null);
       setSession(null);
       setLoading(false);
       
-      // Fazer logout no Supabase com configuração específica
+      // Limpar todo o localStorage do Supabase
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('supabase.auth.')) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+      
+      // Limpar também o sessionStorage
+      sessionStorage.clear();
+      
+      // Fazer logout no Supabase
       const { error } = await supabase.auth.signOut({
-        scope: 'global' // Logout de todas as sessões
+        scope: 'global'
       });
       
       if (error) {
         console.error('⚠️ Erro no logout do Supabase:', error);
-        // Continuar mesmo com erro - o importante é que limpamos os estados locais
       }
-      
-      // Limpar storage local manualmente para garantir
-      localStorage.removeItem('supabase.auth.token');
-      sessionStorage.clear();
       
       console.log('✅ Logout realizado com sucesso');
       toast({
@@ -278,22 +302,33 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         description: 'Até logo!',
       });
       
-      // Forçar redirecionamento após um pequeno delay
+      // Usar navigate em vez de window.location.href
+      navigate('/auth', { replace: true });
+      
+      // Resetar a flag após um delay
       setTimeout(() => {
-        window.location.href = '/auth';
-      }, 500);
+        isLoggingOut.current = false;
+      }, 1000);
       
     } catch (error) {
       console.error('❌ Erro no logout:', error);
       
-      // Mesmo com erro, limpar tudo e redirecionar
+      // Mesmo com erro, limpar tudo
+      isLoggingOut.current = true;
       setUser(null);
       setProfile(null);
       setSession(null);
       setLoading(false);
       
-      // Limpar storage manual
-      localStorage.removeItem('supabase.auth.token');
+      // Limpar storage
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('supabase.auth.')) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(key => localStorage.removeItem(key));
       sessionStorage.clear();
       
       toast({
@@ -301,9 +336,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         description: 'Até logo!',
       });
       
+      navigate('/auth', { replace: true });
+      
       setTimeout(() => {
-        window.location.href = '/auth';
-      }, 500);
+        isLoggingOut.current = false;
+      }, 1000);
     }
   };
 
