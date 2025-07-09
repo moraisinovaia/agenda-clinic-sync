@@ -152,6 +152,10 @@ export function AppointmentsList({ appointments, onEditAppointment, onCancelAppo
                             <strong>Observações:</strong> {appointment.observacoes}
                           </div>
                         )}
+
+                        <div className="text-xs text-muted-foreground">
+                          <strong>Agendado por:</strong> {appointment.criado_por || 'Recepcionista'}
+                        </div>
                       </div>
                       
                       <div className="flex gap-2">

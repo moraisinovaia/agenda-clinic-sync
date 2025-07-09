@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Doctor, Atendimento, Patient, Appointment, SchedulingFormData, AppointmentWithRelations } from '@/types/scheduling';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 
 export function useSupabaseScheduling() {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
@@ -9,6 +10,7 @@ export function useSupabaseScheduling() {
   const [appointments, setAppointments] = useState<AppointmentWithRelations[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const { user, profile } = useAuth();
 
   // Buscar médicos ativos
   const fetchDoctors = async () => {
@@ -238,7 +240,8 @@ export function useSupabaseScheduling() {
           data_agendamento: formData.dataAgendamento,
           hora_agendamento: formData.horaAgendamento,
           observacoes: formData.observacoes,
-          criado_por: 'recepcionista',
+          criado_por: profile?.nome || 'Recepcionista',
+          criado_por_user_id: user?.id,
         })
         .select()
         .single();

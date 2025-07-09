@@ -19,6 +19,7 @@ export type Database = {
           atendimento_id: string
           created_at: string
           criado_por: string
+          criado_por_user_id: string | null
           data_agendamento: string
           hora_agendamento: string
           id: string
@@ -32,6 +33,7 @@ export type Database = {
           atendimento_id: string
           created_at?: string
           criado_por?: string
+          criado_por_user_id?: string | null
           data_agendamento: string
           hora_agendamento: string
           id?: string
@@ -45,6 +47,7 @@ export type Database = {
           atendimento_id?: string
           created_at?: string
           criado_por?: string
+          criado_por_user_id?: string | null
           data_agendamento?: string
           hora_agendamento?: string
           id?: string
@@ -492,6 +495,39 @@ export type Database = {
           nome?: string
           observacoes_especiais?: string | null
           restricoes_alimentares?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          ativo: boolean | null
+          created_at: string | null
+          email: string
+          id: string
+          nome: string
+          role: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          ativo?: boolean | null
+          created_at?: string | null
+          email: string
+          id?: string
+          nome: string
+          role?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          ativo?: boolean | null
+          created_at?: string | null
+          email?: string
+          id?: string
+          nome?: string
+          role?: string
+          updated_at?: string | null
+          user_id?: string
         }
         Relationships: []
       }

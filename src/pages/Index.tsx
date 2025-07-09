@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { Navigate, Link } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
 import { Search, Calendar, Users, Clock } from 'lucide-react';
 import endogastroLogo from '@/assets/endogastro-logo.png';
 
@@ -24,6 +26,7 @@ import { FilaEsperaFormData } from '@/types/fila-espera';
 type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos' | 'fila-espera' | 'nova-fila';
 
 const Index = () => {
+  const { user, profile, loading: authLoading, signOut } = useAuth();
   const [viewMode, setViewMode] = useState<ViewMode>('doctors');
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -125,6 +128,23 @@ const Index = () => {
     apt.status === 'agendado'
   ).length;
 
+  // Verificar autenticação
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-gray-600">Verificando autenticação...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Redirecionar para login se não estiver autenticado
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -155,17 +175,32 @@ const Index = () => {
                 <p className="text-muted-foreground mt-1">
                   Sistema de Agendamentos Médicos
                 </p>
+                {profile && (
+                  <p className="text-sm text-primary font-medium">
+                    Recepcionista: {profile.nome}
+                  </p>
+                )}
               </div>
             </div>
             
-            {viewMode !== 'doctors' && (
+            <div className="flex items-center gap-2">
+              {viewMode !== 'doctors' && (
+                <Button 
+                  onClick={viewMode === 'nova-fila' ? handleBackToFilaEspera : handleBack} 
+                  variant="outline"
+                >
+                  {viewMode === 'nova-fila' ? 'Voltar à Fila de Espera' : 'Voltar aos Médicos'}
+                </Button>
+              )}
+              
               <Button 
-                onClick={viewMode === 'nova-fila' ? handleBackToFilaEspera : handleBack} 
+                onClick={signOut} 
                 variant="outline"
+                size="sm"
               >
-                {viewMode === 'nova-fila' ? 'Voltar à Fila de Espera' : 'Voltar aos Médicos'}
+                Sair
               </Button>
-            )}
+            </div>
           </div>
         </div>
       </div>
