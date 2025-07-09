@@ -220,17 +220,20 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const signOut = async () => {
     try {
       console.log('🚪 Fazendo logout...');
-      const { error } = await supabase.auth.signOut();
       
-      if (error) {
-        console.error('❌ Erro no logout:', error);
-        throw error;
-      }
-      
-      // Limpar estados locais
+      // Primeiro limpar estados locais
       setUser(null);
       setProfile(null);
       setSession(null);
+      setLoading(false);
+      
+      // Depois fazer logout no Supabase
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error('⚠️ Erro no logout do Supabase (mas continuando):', error);
+        // Não lançar erro, apenas logar - o importante é limpar o estado local
+      }
       
       console.log('✅ Logout realizado com sucesso');
       toast({
@@ -238,15 +241,29 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         description: 'Até logo!',
       });
       
-      // Forçar redirecionamento para /auth
-      window.location.href = '/auth';
+      // Forçar redirecionamento para /auth após um pequeno delay
+      setTimeout(() => {
+        window.location.href = '/auth';
+      }, 100);
+      
     } catch (error) {
       console.error('❌ Erro no logout:', error);
+      
+      // Mesmo com erro, limpar estados e redirecionar
+      setUser(null);
+      setProfile(null);
+      setSession(null);
+      setLoading(false);
+      
       toast({
-        title: 'Erro',
-        description: 'Erro ao fazer logout',
-        variant: 'destructive',
+        title: 'Logout realizado',
+        description: 'Até logo!',
       });
+      
+      // Redirecionar mesmo com erro
+      setTimeout(() => {
+        window.location.href = '/auth';
+      }, 100);
     }
   };
 
