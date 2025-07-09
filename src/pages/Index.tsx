@@ -11,11 +11,12 @@ import { DoctorCard } from '@/components/scheduling/DoctorCard';
 import { SchedulingForm } from '@/components/scheduling/SchedulingForm';
 import { DoctorSchedule } from '@/components/scheduling/DoctorSchedule';
 import { AppointmentsList } from '@/components/scheduling/AppointmentsList';
+import { PreparosView } from '@/components/preparos/PreparosView';
 
 import { useSupabaseScheduling } from '@/hooks/useSupabaseScheduling';
 import { Doctor, SchedulingFormData, AppointmentWithRelations } from '@/types/scheduling';
 
-type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment';
+type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos';
 
 const Index = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('doctors');
@@ -214,14 +215,24 @@ const Index = () => {
                 />
               </div>
               
-              <Button 
-                onClick={() => setViewMode('appointments-list')}
-                variant="outline"
-                className="flex items-center gap-2"
-              >
-                <Calendar className="h-4 w-4" />
-                Ver Todos os Agendamentos
-              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  onClick={() => setViewMode('appointments-list')}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                >
+                  <Calendar className="h-4 w-4" />
+                  Ver Todos os Agendamentos
+                </Button>
+                
+                <Button 
+                  onClick={() => setViewMode('preparos')}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                >
+                  📋 Preparos de Exames
+                </Button>
+              </div>
             </div>
 
             {/* Doctors Grid */}
@@ -299,6 +310,20 @@ const Index = () => {
             searchPatientsByBirthDate={searchPatientsByBirthDate}
             editingAppointment={editingAppointment}
           />
+        )}
+
+        {viewMode === 'preparos' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold">Preparos de Exames</h2>
+                <p className="text-muted-foreground mt-1">
+                  Instruções detalhadas para preparação de exames
+                </p>
+              </div>
+            </div>
+            <PreparosView showAll={true} />
+          </div>
         )}
       </div>
     </div>
