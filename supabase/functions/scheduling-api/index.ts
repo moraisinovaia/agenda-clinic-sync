@@ -287,6 +287,42 @@ serve(async (req) => {
   }
 })
 
+// Função para enviar WhatsApp via Evolution API
+async function enviarWhatsAppEvolution(celular: string, mensagem: string) {
+  try {
+    const evolutionUrl = Deno.env.get('EVOLUTION_API_URL') || 'https://evolutionapi.inovaia.online';
+    const apiKey = Deno.env.get('EVOLUTION_API_KEY') || 'grozNCsxwy32iYir20LRw7dfIRNPI8UZ';
+    const instanceName = Deno.env.get('EVOLUTION_INSTANCE_NAME') || 'Endogastro';
+
+    console.log(`📱 Enviando WhatsApp via Evolution API para: ${celular}`);
+
+    const response = await fetch(`${evolutionUrl}/message/sendText/${instanceName}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': apiKey
+      },
+      body: JSON.stringify({
+        number: celular,
+        text: mensagem
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ Erro ao enviar WhatsApp: ${response.status} - ${errorText}`);
+      throw new Error(`Evolution API error: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log('✅ WhatsApp enviado com sucesso:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ Erro na integração Evolution API:', error);
+    throw error;
+  }
+}
+
 // Função para enviar preparos automáticos
 async function enviarPreparosAutomaticos(appointment: any) {
   try {
@@ -314,15 +350,14 @@ async function enviarPreparosAutomaticos(appointment: any) {
       // Montar mensagem de preparo
       const mensagem = montarMensagemPreparo(preparo, appointment);
       
-      // Simular envio de WhatsApp (integração real seria aqui)
-      console.log(`📱 Enviando preparo para ${paciente.celular}:`);
-      console.log(mensagem);
-      
-      // Aqui você integraria com a API real do WhatsApp
-      // await enviarWhatsApp(paciente.celular, mensagem);
-      
-      // Log para auditoria
-      console.log(`✅ Preparo enviado para ${paciente.nome_completo} - ${preparo.nome}`);
+      try {
+        // Enviar WhatsApp real via Evolution API
+        await enviarWhatsAppEvolution(paciente.celular, mensagem);
+        console.log(`✅ Preparo enviado para ${paciente.nome_completo} - ${preparo.nome}`);
+      } catch (whatsappError) {
+        console.error(`❌ Falha ao enviar WhatsApp para ${paciente.celular}:`, whatsappError);
+        // Mesmo com falha no WhatsApp, não interrompe o agendamento
+      }
     } else {
       console.log(`ℹ️ Nenhum preparo específico encontrado para ${appointment.atendimentos.nome}`);
     }
