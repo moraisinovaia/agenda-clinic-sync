@@ -183,6 +183,13 @@ export function useSupabaseScheduling() {
       if (!formData.horaAgendamento) {
         throw new Error('Hora do agendamento é obrigatória');
       }
+      
+      // Validar se o usuário está autenticado
+      if (!user?.id) {
+        throw new Error('Usuário não está autenticado');
+      }
+      
+      console.log('✅ Validações passaram, criando agendamento...');
 
       // Validar se a data/hora não é no passado
       const appointmentDateTime = new Date(`${formData.dataAgendamento}T${formData.horaAgendamento}`);
@@ -219,7 +226,7 @@ export function useSupabaseScheduling() {
           data_nascimento: formData.dataNascimento,
           convenio: formData.convenio,
           telefone: formData.telefone || null, // Telefone opcional
-          celular: formData.celular,
+          celular: formData.celular || '', // Garantir que nunca seja null
         })
         .select()
         .single();
@@ -240,7 +247,7 @@ export function useSupabaseScheduling() {
           data_agendamento: formData.dataAgendamento,
           hora_agendamento: formData.horaAgendamento,
           observacoes: formData.observacoes,
-          criado_por: profile?.nome || 'Recepcionista',
+          criado_por: 'recepcionista', // Usar valor que atende ao constraint
           criado_por_user_id: user?.id,
         })
         .select()

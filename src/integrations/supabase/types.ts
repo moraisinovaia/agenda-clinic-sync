@@ -425,7 +425,7 @@ export type Database = {
       }
       pacientes: {
         Row: {
-          celular: string
+          celular: string | null
           convenio: string
           created_at: string
           data_nascimento: string
@@ -435,7 +435,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          celular?: string
+          celular?: string | null
           convenio: string
           created_at?: string
           data_nascimento: string
@@ -445,7 +445,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          celular?: string
+          celular?: string | null
           convenio?: string
           created_at?: string
           data_nascimento?: string

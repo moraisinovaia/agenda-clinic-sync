@@ -55,20 +55,28 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const fetchProfile = async (userId: string) => {
     try {
+      console.log('🔍 Buscando perfil para usuário:', userId);
+      
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle(); // Usar maybeSingle para evitar erro se não encontrar
 
       if (error) {
-        console.error('Erro ao buscar perfil:', error);
+        console.error('❌ Erro ao buscar perfil:', error);
         return null;
       }
 
+      if (!data) {
+        console.log('⚠️ Perfil não encontrado, pode estar sendo criado pelo trigger');
+        return null;
+      }
+
+      console.log('✅ Perfil encontrado:', data);
       return data;
     } catch (error) {
-      console.error('Erro ao buscar perfil:', error);
+      console.error('❌ Erro ao buscar perfil:', error);
       return null;
     }
   };
@@ -81,11 +89,22 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          // Buscar perfil do usuário
+          // Buscar perfil do usuário com retry se não encontrar
           setTimeout(async () => {
-            const profileData = await fetchProfile(session.user.id);
-            setProfile(profileData);
-            setLoading(false);
+            let profileData = await fetchProfile(session.user.id);
+            
+            // Se não encontrou o perfil, tentar novamente após um delay (trigger pode estar processando)
+            if (!profileData) {
+              console.log('🔄 Perfil não encontrado, tentando novamente em 2 segundos...');
+              setTimeout(async () => {
+                profileData = await fetchProfile(session.user.id);
+                setProfile(profileData);
+                setLoading(false);
+              }, 2000);
+            } else {
+              setProfile(profileData);
+              setLoading(false);
+            }
           }, 0);
         } else {
           setProfile(null);
