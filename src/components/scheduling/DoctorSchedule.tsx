@@ -160,15 +160,23 @@ export function DoctorSchedule({ doctor, appointments, onCancelAppointment, onEd
                               <strong>Convênio:</strong> {appointment.pacientes?.convenio || 'Não informado'}
                             </div>
                             
-                            <div className="text-sm text-muted-foreground">
-                              <strong>Tipo:</strong> {appointment.atendimentos?.nome || 'Consulta/Exame'}
-                            </div>
-                           
-                           {appointment.observacoes && (
                              <div className="text-sm text-muted-foreground">
-                               <strong>Observações:</strong> {appointment.observacoes}
+                               <strong>Tipo:</strong> {appointment.atendimentos?.nome || 'Consulta/Exame'}
                              </div>
-                           )}
+
+                             <div className="text-sm text-muted-foreground">
+                               <strong>Agendado por:</strong> {
+                                 appointment.criado_por_profile?.nome || 
+                                 (appointment.criado_por_user_id ? 'Recepcionista' : appointment.criado_por) ||
+                                 'Recepcionista'
+                               }
+                             </div>
+                            
+                            {appointment.observacoes && (
+                              <div className="text-sm text-muted-foreground">
+                                <strong>Observações:</strong> {appointment.observacoes}
+                              </div>
+                            )}
                          </div>
 
                          {/* Botões de ação */}
