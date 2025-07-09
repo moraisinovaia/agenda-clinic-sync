@@ -83,44 +83,72 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   useEffect(() => {
+    let isSubscribed = true; // Flag para evitar atualizações após desmontagem
+    
     // Configurar listener de mudanças de autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
+        if (!isSubscribed) return; // Ignorar se componente foi desmontado
         
-        if (session?.user) {
-          // Buscar perfil do usuário com retry se não encontrar
-          setTimeout(async () => {
-            let profileData = await fetchProfile(session.user.id);
-            
-            // Se não encontrou o perfil, tentar novamente após um delay (trigger pode estar processando)
-            if (!profileData) {
-              console.log('🔄 Perfil não encontrado, tentando novamente em 2 segundos...');
-              setTimeout(async () => {
-                profileData = await fetchProfile(session.user.id);
-                setProfile(profileData);
-                setLoading(false);
-              }, 2000);
-            } else {
-              setProfile(profileData);
-              setLoading(false);
-            }
-          }, 0);
-        } else {
+        console.log('🔄 Auth state changed:', event, session ? 'com sessão' : 'sem sessão');
+        
+        // Se for evento de logout, limpar tudo imediatamente
+        if (event === 'SIGNED_OUT' || !session) {
+          console.log('🚪 Usuário fez logout, limpando estados...');
+          setSession(null);
+          setUser(null);
           setProfile(null);
           setLoading(false);
+          return;
+        }
+        
+        // Se for login/signup
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          console.log('🔑 Usuário logado, configurando sessão...');
+          setSession(session);
+          setUser(session?.user ?? null);
+          
+          if (session?.user) {
+            // Buscar perfil do usuário com retry se não encontrar
+            setTimeout(async () => {
+              if (!isSubscribed) return;
+              
+              let profileData = await fetchProfile(session.user.id);
+              
+              // Se não encontrou o perfil, tentar novamente após um delay (trigger pode estar processando)
+              if (!profileData) {
+                console.log('🔄 Perfil não encontrado, tentando novamente em 2 segundos...');
+                setTimeout(async () => {
+                  if (!isSubscribed) return;
+                  profileData = await fetchProfile(session.user.id);
+                  setProfile(profileData);
+                  setLoading(false);
+                }, 2000);
+              } else {
+                setProfile(profileData);
+                setLoading(false);
+              }
+            }, 0);
+          } else {
+            setProfile(null);
+            setLoading(false);
+          }
         }
       }
     );
 
-    // Verificar sessão existente
+    // Verificar sessão existente APENAS na inicialização
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!isSubscribed) return;
+      
+      console.log('🔍 Verificando sessão existente:', session ? 'encontrada' : 'não encontrada');
+      
       setSession(session);
       setUser(session?.user ?? null);
       
       if (session?.user) {
         fetchProfile(session.user.id).then((profileData) => {
+          if (!isSubscribed) return;
           setProfile(profileData);
           setLoading(false);
         });
@@ -129,7 +157,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isSubscribed = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
@@ -219,21 +250,27 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const signOut = async () => {
     try {
-      console.log('🚪 Fazendo logout...');
+      console.log('🚪 Iniciando processo de logout...');
       
-      // Primeiro limpar estados locais
+      // Primeiro limpar estados locais para evitar re-login automático
       setUser(null);
       setProfile(null);
       setSession(null);
       setLoading(false);
       
-      // Depois fazer logout no Supabase
-      const { error } = await supabase.auth.signOut();
+      // Fazer logout no Supabase com configuração específica
+      const { error } = await supabase.auth.signOut({
+        scope: 'global' // Logout de todas as sessões
+      });
       
       if (error) {
-        console.error('⚠️ Erro no logout do Supabase (mas continuando):', error);
-        // Não lançar erro, apenas logar - o importante é limpar o estado local
+        console.error('⚠️ Erro no logout do Supabase:', error);
+        // Continuar mesmo com erro - o importante é que limpamos os estados locais
       }
+      
+      // Limpar storage local manualmente para garantir
+      localStorage.removeItem('supabase.auth.token');
+      sessionStorage.clear();
       
       console.log('✅ Logout realizado com sucesso');
       toast({
@@ -241,29 +278,32 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         description: 'Até logo!',
       });
       
-      // Forçar redirecionamento para /auth após um pequeno delay
+      // Forçar redirecionamento após um pequeno delay
       setTimeout(() => {
         window.location.href = '/auth';
-      }, 100);
+      }, 500);
       
     } catch (error) {
       console.error('❌ Erro no logout:', error);
       
-      // Mesmo com erro, limpar estados e redirecionar
+      // Mesmo com erro, limpar tudo e redirecionar
       setUser(null);
       setProfile(null);
       setSession(null);
       setLoading(false);
+      
+      // Limpar storage manual
+      localStorage.removeItem('supabase.auth.token');
+      sessionStorage.clear();
       
       toast({
         title: 'Logout realizado',
         description: 'Até logo!',
       });
       
-      // Redirecionar mesmo com erro
       setTimeout(() => {
         window.location.href = '/auth';
-      }, 100);
+      }, 500);
     }
   };
 
