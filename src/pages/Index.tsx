@@ -12,11 +12,15 @@ import { SchedulingForm } from '@/components/scheduling/SchedulingForm';
 import { DoctorSchedule } from '@/components/scheduling/DoctorSchedule';
 import { AppointmentsList } from '@/components/scheduling/AppointmentsList';
 import { PreparosView } from '@/components/preparos/PreparosView';
+import { FilaEsperaForm } from '@/components/fila-espera/FilaEsperaForm';
+import { FilaEsperaList } from '@/components/fila-espera/FilaEsperaList';
 
 import { useSupabaseScheduling } from '@/hooks/useSupabaseScheduling';
+import { useFilaEspera } from '@/hooks/useFilaEspera';
 import { Doctor, SchedulingFormData, AppointmentWithRelations } from '@/types/scheduling';
+import { FilaEsperaFormData } from '@/types/fila-espera';
 
-type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos';
+type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos' | 'fila-espera' | 'nova-fila';
 
 const Index = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('doctors');
@@ -36,6 +40,15 @@ const Index = () => {
     getAtendimentosByDoctor,
     getAppointmentsByDoctorAndDate
   } = useSupabaseScheduling();
+
+  const {
+    filaEspera,
+    loading: filaLoading,
+    adicionarFilaEspera,
+    atualizarStatusFila,
+    removerDaFila,
+    getFilaStatus
+  } = useFilaEspera();
 
   const filteredDoctors = doctors.filter(doctor => 
     doctor.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -232,6 +245,15 @@ const Index = () => {
                 >
                   📋 Preparos de Exames
                 </Button>
+                
+                <Button 
+                  onClick={() => setViewMode('fila-espera')}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                >
+                  <Clock className="h-4 w-4" />
+                  Fila de Espera
+                </Button>
               </div>
             </div>
 
@@ -324,6 +346,38 @@ const Index = () => {
             </div>
             <PreparosView showAll={true} />
           </div>
+        )}
+
+        {viewMode === 'fila-espera' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold">Fila de Espera</h2>
+                <p className="text-muted-foreground mt-1">
+                  Gerencie a fila de espera para otimizar ocupação dos médicos
+                </p>
+              </div>
+              <Button onClick={() => setViewMode('nova-fila')}>
+                Adicionar à Fila
+              </Button>
+            </div>
+            <FilaEsperaList 
+              filaEspera={filaEspera}
+              status={getFilaStatus()}
+              onUpdateStatus={atualizarStatusFila}
+              onRemove={removerDaFila}
+            />
+          </div>
+        )}
+
+        {viewMode === 'nova-fila' && (
+          <FilaEsperaForm
+            doctors={doctors}
+            atendimentos={atendimentos}
+            onSubmit={adicionarFilaEspera}
+            onCancel={handleBack}
+            searchPatientsByBirthDate={searchPatientsByBirthDate}
+          />
         )}
       </div>
     </div>

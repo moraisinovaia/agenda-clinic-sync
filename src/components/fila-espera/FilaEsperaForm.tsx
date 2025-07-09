@@ -1,0 +1,358 @@
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { CalendarIcon, Clock, User } from 'lucide-react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { FilaEsperaFormData } from '@/types/fila-espera';
+import { Doctor, Atendimento } from '@/types/scheduling';
+
+interface FilaEsperaFormProps {
+  doctors: Doctor[];
+  atendimentos: Atendimento[];
+  onSubmit: (data: FilaEsperaFormData) => Promise<boolean>;
+  onCancel: () => void;
+  searchPatientsByBirthDate: (birthDate: string) => Promise<any[]>;
+}
+
+export function FilaEsperaForm({
+  doctors,
+  atendimentos,
+  onSubmit,
+  onCancel,
+  searchPatientsByBirthDate
+}: FilaEsperaFormProps) {
+  const [formData, setFormData] = useState<FilaEsperaFormData>({
+    pacienteId: '',
+    medicoId: '',
+    atendimentoId: '',
+    dataPreferida: '',
+    periodoPreferido: 'qualquer',
+    observacoes: '',
+    prioridade: 1,
+    dataLimite: '',
+  });
+
+  const [pacienteData, setPacienteData] = useState({
+    nomeCompleto: '',
+    dataNascimento: '',
+    celular: '',
+    convenio: '',
+  });
+
+  const [searchingPatient, setSearchingPatient] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date>();
+  const [selectedLimitDate, setSelectedLimitDate] = useState<Date>();
+
+  const selectedDoctor = doctors.find(d => d.id === formData.medicoId);
+  const doctorAtendimentos = atendimentos.filter(a => a.medico_id === formData.medicoId);
+
+  const handleSearchPatient = async () => {
+    if (!pacienteData.dataNascimento) return;
+    
+    setSearchingPatient(true);
+    try {
+      const patients = await searchPatientsByBirthDate(pacienteData.dataNascimento);
+      
+      if (patients && patients.length > 0) {
+        const patient = patients[0];
+        setPacienteData({
+          nomeCompleto: patient.nome_completo || '',
+          dataNascimento: patient.data_nascimento || '',
+          celular: patient.celular || '',
+          convenio: patient.convenio || '',
+        });
+        setFormData(prev => ({ ...prev, pacienteId: patient.id }));
+      }
+    } catch (error) {
+      console.error('Erro ao buscar paciente:', error);
+    } finally {
+      setSearchingPatient(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!formData.pacienteId || !formData.medicoId || !formData.atendimentoId || !formData.dataPreferida) {
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const success = await onSubmit(formData);
+      if (success) {
+        onCancel();
+      }
+    } catch (error) {
+      console.error('Erro ao adicionar à fila:', error);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="w-full max-w-4xl mx-auto">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Clock className="h-5 w-5" />
+            Adicionar à Fila de Espera
+          </CardTitle>
+        </CardHeader>
+        
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Dados do Paciente */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium flex items-center gap-2">
+                <User className="h-4 w-4" />
+                Dados do Paciente
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="dataNascimento">Data de Nascimento</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="dataNascimento"
+                      type="date"
+                      value={pacienteData.dataNascimento}
+                      onChange={(e) => setPacienteData(prev => ({ ...prev, dataNascimento: e.target.value }))}
+                      className="flex-1"
+                    />
+                    <Button 
+                      type="button" 
+                      onClick={handleSearchPatient}
+                      disabled={!pacienteData.dataNascimento || searchingPatient}
+                      variant="outline"
+                    >
+                      {searchingPatient ? 'Buscando...' : 'Buscar'}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="nomeCompleto">Nome Completo</Label>
+                  <Input
+                    id="nomeCompleto"
+                    value={pacienteData.nomeCompleto}
+                    onChange={(e) => setPacienteData(prev => ({ ...prev, nomeCompleto: e.target.value }))}
+                    placeholder="Nome do paciente"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="celular">Celular</Label>
+                  <Input
+                    id="celular"
+                    value={pacienteData.celular}
+                    onChange={(e) => setPacienteData(prev => ({ ...prev, celular: e.target.value }))}
+                    placeholder="(XX) XXXXX-XXXX"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="convenio">Convênio</Label>
+                  <Input
+                    id="convenio"
+                    value={pacienteData.convenio}
+                    onChange={(e) => setPacienteData(prev => ({ ...prev, convenio: e.target.value }))}
+                    placeholder="Nome do convênio"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Preferências de Agendamento */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Preferências de Agendamento</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="medico">Médico</Label>
+                  <Select onValueChange={(value) => setFormData(prev => ({ ...prev, medicoId: value, atendimentoId: '' }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um médico" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {doctors.map((doctor) => (
+                        <SelectItem key={doctor.id} value={doctor.id}>
+                          {doctor.nome} - {doctor.especialidade}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="atendimento">Tipo de Atendimento</Label>
+                  <Select 
+                    disabled={!formData.medicoId}
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, atendimentoId: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o atendimento" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {doctorAtendimentos.map((atendimento) => (
+                        <SelectItem key={atendimento.id} value={atendimento.id}>
+                          {atendimento.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Data Preferida</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !selectedDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {selectedDate ? (
+                          format(selectedDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
+                        ) : (
+                          <span>Selecione uma data</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={selectedDate}
+                        onSelect={(date) => {
+                          setSelectedDate(date);
+                          if (date) {
+                            setFormData(prev => ({ ...prev, dataPreferida: format(date, 'yyyy-MM-dd') }));
+                          }
+                        }}
+                        disabled={(date) => date < new Date()}
+                        locale={ptBR}
+                        className="rounded-md border shadow-sm bg-background p-3 pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="periodo">Período Preferido</Label>
+                  <Select 
+                    value={formData.periodoPreferido}
+                    onValueChange={(value: 'manha' | 'tarde' | 'qualquer') => 
+                      setFormData(prev => ({ ...prev, periodoPreferido: value }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="manha">Manhã</SelectItem>
+                      <SelectItem value="tarde">Tarde</SelectItem>
+                      <SelectItem value="qualquer">Qualquer horário</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="prioridade">Prioridade (1-5)</Label>
+                  <Select 
+                    value={formData.prioridade.toString()}
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, prioridade: parseInt(value) }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">1 - Baixa</SelectItem>
+                      <SelectItem value="2">2 - Normal</SelectItem>
+                      <SelectItem value="3">3 - Média</SelectItem>
+                      <SelectItem value="4">4 - Alta</SelectItem>
+                      <SelectItem value="5">5 - Urgente</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Data Limite (opcional)</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !selectedLimitDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {selectedLimitDate ? (
+                          format(selectedLimitDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
+                        ) : (
+                          <span>Até quando aceita?</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={selectedLimitDate}
+                        onSelect={(date) => {
+                          setSelectedLimitDate(date);
+                          setFormData(prev => ({ 
+                            ...prev, 
+                            dataLimite: date ? format(date, 'yyyy-MM-dd') : '' 
+                          }));
+                        }}
+                        disabled={(date) => date < new Date()}
+                        locale={ptBR}
+                        className="rounded-md border shadow-sm bg-background p-3 pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="observacoes">Observações</Label>
+                <Textarea
+                  id="observacoes"
+                  value={formData.observacoes}
+                  onChange={(e) => setFormData(prev => ({ ...prev, observacoes: e.target.value }))}
+                  placeholder="Observações adicionais sobre a preferência do paciente..."
+                  rows={3}
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-4">
+              <Button 
+                type="submit" 
+                disabled={submitting || !formData.pacienteId || !formData.medicoId || !formData.dataPreferida}
+                className="flex-1"
+              >
+                {submitting ? 'Adicionando...' : 'Adicionar à Fila'}
+              </Button>
+              <Button type="button" variant="outline" onClick={onCancel}>
+                Cancelar
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

@@ -230,6 +230,136 @@ export type Database = {
         }
         Relationships: []
       }
+      fila_espera: {
+        Row: {
+          agendamento_id: string | null
+          atendimento_id: string
+          created_at: string
+          data_limite: string | null
+          data_preferida: string
+          id: string
+          medico_id: string
+          observacoes: string | null
+          paciente_id: string
+          periodo_preferido: string | null
+          prioridade: number | null
+          status: string | null
+          tentativas_contato: number | null
+          ultimo_contato: string | null
+          updated_at: string
+        }
+        Insert: {
+          agendamento_id?: string | null
+          atendimento_id: string
+          created_at?: string
+          data_limite?: string | null
+          data_preferida: string
+          id?: string
+          medico_id: string
+          observacoes?: string | null
+          paciente_id: string
+          periodo_preferido?: string | null
+          prioridade?: number | null
+          status?: string | null
+          tentativas_contato?: number | null
+          ultimo_contato?: string | null
+          updated_at?: string
+        }
+        Update: {
+          agendamento_id?: string | null
+          atendimento_id?: string
+          created_at?: string
+          data_limite?: string | null
+          data_preferida?: string
+          id?: string
+          medico_id?: string
+          observacoes?: string | null
+          paciente_id?: string
+          periodo_preferido?: string | null
+          prioridade?: number | null
+          status?: string | null
+          tentativas_contato?: number | null
+          ultimo_contato?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_fila_agendamento"
+            columns: ["agendamento_id"]
+            isOneToOne: false
+            referencedRelation: "agendamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_fila_atendimento"
+            columns: ["atendimento_id"]
+            isOneToOne: false
+            referencedRelation: "atendimentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_fila_medico"
+            columns: ["medico_id"]
+            isOneToOne: false
+            referencedRelation: "medicos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_fila_paciente"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fila_notificacoes: {
+        Row: {
+          canal_notificacao: string | null
+          created_at: string
+          data_agendamento: string
+          fila_id: string
+          hora_agendamento: string
+          horario_disponivel: string
+          id: string
+          resposta_paciente: string | null
+          status_envio: string | null
+          tempo_limite: string
+        }
+        Insert: {
+          canal_notificacao?: string | null
+          created_at?: string
+          data_agendamento: string
+          fila_id: string
+          hora_agendamento: string
+          horario_disponivel: string
+          id?: string
+          resposta_paciente?: string | null
+          status_envio?: string | null
+          tempo_limite: string
+        }
+        Update: {
+          canal_notificacao?: string | null
+          created_at?: string
+          data_agendamento?: string
+          fila_id?: string
+          hora_agendamento?: string
+          horario_disponivel?: string
+          id?: string
+          resposta_paciente?: string | null
+          status_envio?: string | null
+          tempo_limite?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_notif_fila"
+            columns: ["fila_id"]
+            isOneToOne: false
+            referencedRelation: "fila_espera"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       medicos: {
         Row: {
           ativo: boolean | null
