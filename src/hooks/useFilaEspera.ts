@@ -193,10 +193,10 @@ export const useFilaEspera = () => {
     return filaEspera.filter(f => f.medico_id === medicoId && f.status === 'aguardando');
   };
 
-  // Remover o useEffect para não carregar automaticamente
-  // useEffect(() => {
-  //   fetchFilaEspera();
-  // }, []);
+  // Carregar dados automaticamente quando o hook é usado
+  useEffect(() => {
+    fetchFilaEspera();
+  }, []);
 
   return {
     filaEspera,

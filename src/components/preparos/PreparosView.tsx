@@ -30,6 +30,7 @@ export function PreparosView({ atendimentoNome, showAll = false }: PreparosViewP
   useEffect(() => {
     async function fetchPreparos() {
       try {
+        setLoading(true);
         let query = supabase.from('preparos').select('*').order('nome');
         
         if (!showAll && atendimentoNome) {
@@ -38,7 +39,10 @@ export function PreparosView({ atendimentoNome, showAll = false }: PreparosViewP
 
         const { data, error } = await query;
 
-        if (error) throw error;
+        if (error) {
+          console.error('Erro ao carregar preparos:', error);
+          throw error;
+        }
         setPreparos(data || []);
       } catch (error) {
         console.error('Erro ao carregar preparos:', error);
