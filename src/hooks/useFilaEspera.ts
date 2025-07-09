@@ -68,6 +68,7 @@ export const useFilaEspera = () => {
 
   const adicionarFilaEspera = async (formData: FilaEsperaFormData) => {
     try {
+      setLoading(true);
       const { error } = await supabase
         .from('fila_espera')
         .insert({
@@ -79,6 +80,7 @@ export const useFilaEspera = () => {
           observacoes: formData.observacoes,
           prioridade: formData.prioridade,
           data_limite: formData.dataLimite,
+          status: 'aguardando'
         });
 
       if (error) {
@@ -106,6 +108,8 @@ export const useFilaEspera = () => {
         variant: "destructive",
       });
       return false;
+    } finally {
+      setLoading(false);
     }
   };
 
