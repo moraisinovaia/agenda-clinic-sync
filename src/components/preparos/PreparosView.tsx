@@ -170,24 +170,47 @@ export function PreparosView({ atendimentoNome, showAll = false }: PreparosViewP
                     Instruções Detalhadas
                   </div>
                   <div className="text-sm text-muted-foreground pl-6">
-                    {Array.isArray(preparo.instrucoes) ? (
-                      <ol className="list-decimal list-inside space-y-1">
-                        {preparo.instrucoes.map((instrucao: string, index: number) => (
-                          <li key={index}>{instrucao}</li>
-                        ))}
-                      </ol>
-                    ) : typeof preparo.instrucoes === 'object' ? (
-                      <ul className="space-y-1">
-                        {Object.entries(preparo.instrucoes).map(([key, value]) => (
-                          <li key={key} className="flex">
-                            <span className="font-medium mr-2">{key}:</span>
-                            <span>{String(value)}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p>{String(preparo.instrucoes)}</p>
-                    )}
+                    {(() => {
+                      try {
+                        if (Array.isArray(preparo.instrucoes)) {
+                          return (
+                            <ol className="list-decimal list-inside space-y-2">
+                              {preparo.instrucoes.map((item: any, index: number) => {
+                                if (typeof item === 'object' && item !== null) {
+                                  return (
+                                    <li key={index} className="space-y-1">
+                                      {item.momento && (
+                                        <span className="font-medium text-primary">
+                                          {item.momento}:{' '}
+                                        </span>
+                                      )}
+                                      <span>{item.instrucao || String(item)}</span>
+                                    </li>
+                                  );
+                                }
+                                return <li key={index}>{String(item)}</li>;
+                              })}
+                            </ol>
+                          );
+                        } else if (typeof preparo.instrucoes === 'object') {
+                          return (
+                            <ul className="space-y-1">
+                              {Object.entries(preparo.instrucoes).map(([key, value]) => (
+                                <li key={key} className="flex">
+                                  <span className="font-medium mr-2">{key}:</span>
+                                  <span>{String(value)}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          );
+                        } else {
+                          return <p>{String(preparo.instrucoes)}</p>;
+                        }
+                      } catch (error) {
+                        console.error('Erro ao renderizar instruções:', error, preparo.instrucoes);
+                        return <p className="text-destructive">Erro ao carregar instruções</p>;
+                      }
+                    })()}
                   </div>
                 </div>
               </>
