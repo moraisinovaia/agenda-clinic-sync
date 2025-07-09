@@ -237,6 +237,7 @@ export type Database = {
           convenios_restricoes: Json | null
           created_at: string | null
           especialidade: string
+          horarios: Json | null
           id: string
           idade_maxima: number | null
           idade_minima: number | null
@@ -249,6 +250,7 @@ export type Database = {
           convenios_restricoes?: Json | null
           created_at?: string | null
           especialidade: string
+          horarios?: Json | null
           id?: string
           idade_maxima?: number | null
           idade_minima?: number | null
@@ -261,6 +263,7 @@ export type Database = {
           convenios_restricoes?: Json | null
           created_at?: string | null
           especialidade?: string
+          horarios?: Json | null
           id?: string
           idade_maxima?: number | null
           idade_minima?: number | null

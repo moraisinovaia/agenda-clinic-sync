@@ -87,6 +87,15 @@ serve(async (req) => {
         );
       }
 
+      // Buscar dados do médico incluindo horários
+      const { data: doctor, error: doctorError } = await supabase
+        .from('medicos')
+        .select('nome, horarios')
+        .eq('id', doctorId)
+        .single();
+
+      if (doctorError) throw doctorError;
+
       // Buscar agendamentos existentes para a data
       const { data: appointments, error } = await supabase
         .from('agendamentos')
@@ -97,19 +106,78 @@ serve(async (req) => {
 
       if (error) throw error;
 
-      // Horários padrão de funcionamento (8h às 18h, intervalos de 30min)
-      const workingHours = [];
-      for (let hour = 8; hour < 18; hour++) {
-        workingHours.push(`${hour.toString().padStart(2, '0')}:00`);
-        workingHours.push(`${hour.toString().padStart(2, '0')}:30`);
+      // Obter dia da semana da data
+      const dateObj = new Date(date + 'T00:00:00');
+      const dayNames = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
+      const dayOfWeek = dayNames[dateObj.getDay()];
+
+      // Verificar se médico tem horários configurados para este dia
+      const doctorSchedule = doctor.horarios?.[dayOfWeek] || [];
+      
+      if (doctorSchedule.length === 0) {
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            data: {
+              date,
+              doctorId,
+              doctorName: doctor.nome,
+              dayOfWeek,
+              slots: [],
+              totalSlots: 0,
+              availableSlots: 0,
+              message: `${doctor.nome} não atende às ${dayOfWeek}s`
+            }
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
 
-      // Marcar horários ocupados
+      // Gerar slots baseados nos horários reais do médico
+      const slots = [];
       const occupiedTimes = appointments.map(apt => apt.hora_agendamento);
-      const availability = workingHours.map(time => ({
-        time,
-        available: !occupiedTimes.includes(time)
-      }));
+
+      for (const schedule of doctorSchedule) {
+        // Verificar se é quinzenal e se hoje é a semana correta
+        if (schedule.quinzenal) {
+          const weekNumber = Math.ceil(dateObj.getDate() / 7);
+          if (weekNumber % 2 === 0) continue; // Pular semanas pares para quinzenais
+        }
+
+        // Gerar horários dentro do intervalo do agendamento
+        const startTime = schedule.inicio;
+        const endTime = schedule.fim;
+        const vagas = schedule.vagas || 1;
+        const tipo = schedule.tipo;
+
+        // Para cada vaga, criar um slot de 30 minutos
+        for (let v = 0; v < vagas; v++) {
+          const slotTime = startTime; // Por simplicidade, usar horário de início
+          
+          slots.push({
+            time: slotTime,
+            tipo: tipo,
+            available: !occupiedTimes.includes(slotTime),
+            schedule: {
+              inicio: schedule.inicio,
+              fim: schedule.fim,
+              tipo: schedule.tipo,
+              vagas: schedule.vagas
+            }
+          });
+        }
+      }
+
+      // Remover duplicatas e ordenar
+      const uniqueSlots = slots.reduce((acc, current) => {
+        const existing = acc.find(slot => slot.time === current.time && slot.tipo === current.tipo);
+        if (!existing) {
+          acc.push(current);
+        }
+        return acc;
+      }, []);
+
+      uniqueSlots.sort((a, b) => a.time.localeCompare(b.time));
 
       return new Response(
         JSON.stringify({ 
@@ -117,9 +185,40 @@ serve(async (req) => {
           data: {
             date,
             doctorId,
-            slots: availability,
-            totalSlots: availability.length,
-            availableSlots: availability.filter(slot => slot.available).length
+            doctorName: doctor.nome,
+            dayOfWeek,
+            slots: uniqueSlots,
+            totalSlots: uniqueSlots.length,
+            availableSlots: uniqueSlots.filter(slot => slot.available).length,
+            schedule: doctorSchedule
+          }
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // GET /clinic-data/doctors/:id/schedule - Horários detalhados do médico
+    if (method === 'GET' && pathParts[1] === 'doctors' && pathParts[3] === 'schedule') {
+      const doctorId = pathParts[2];
+      
+      const { data: doctor, error } = await supabase
+        .from('medicos')
+        .select('nome, especialidade, horarios')
+        .eq('id', doctorId)
+        .eq('ativo', true)
+        .single();
+
+      if (error) throw error;
+
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          data: {
+            doctorId,
+            nome: doctor.nome,
+            especialidade: doctor.especialidade,
+            horarios: doctor.horarios || {},
+            diasAtendimento: Object.keys(doctor.horarios || {})
           }
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
