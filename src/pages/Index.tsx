@@ -13,6 +13,7 @@ import { DoctorCard } from '@/components/scheduling/DoctorCard';
 import { SchedulingForm } from '@/components/scheduling/SchedulingForm';
 import { DoctorSchedule } from '@/components/scheduling/DoctorSchedule';
 import { AppointmentsList } from '@/components/scheduling/AppointmentsList';
+import { BloqueioAgenda } from '@/components/scheduling/BloqueioAgenda';
 import { PreparosView } from '@/components/preparos/PreparosView';
 import { FilaEsperaForm } from '@/components/fila-espera/FilaEsperaForm';
 import { FilaEsperaList } from '@/components/fila-espera/FilaEsperaList';
@@ -23,7 +24,7 @@ import { useFilaEspera } from '@/hooks/useFilaEspera';
 import { Doctor, SchedulingFormData, AppointmentWithRelations } from '@/types/scheduling';
 import { FilaEsperaFormData } from '@/types/fila-espera';
 
-type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos' | 'fila-espera' | 'nova-fila';
+type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos' | 'fila-espera' | 'nova-fila' | 'bloqueio-agenda';
 
 const Index = () => {
   const { user, profile, loading: authLoading, signOut } = useAuth();
@@ -301,6 +302,14 @@ const Index = () => {
                   <Clock className="h-4 w-4" />
                   Fila de Espera
                 </Button>
+                
+                <Button 
+                  onClick={() => setViewMode('bloqueio-agenda')}
+                  variant="destructive"
+                  className="flex items-center gap-2"
+                >
+                  🚫 Bloquear Agenda
+                </Button>
               </div>
             </div>
 
@@ -428,6 +437,22 @@ const Index = () => {
             onCancel={handleBackToFilaEspera}
             searchPatientsByBirthDate={searchPatientsByBirthDate}
           />
+        )}
+
+        {viewMode === 'bloqueio-agenda' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold">Bloqueio de Agenda Médica</h2>
+                <p className="text-muted-foreground mt-1">
+                  Bloqueie a agenda de um médico e notifique automaticamente os pacientes
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-center">
+              <BloqueioAgenda medicos={doctors} />
+            </div>
+          </div>
         )}
       </div>
     </div>

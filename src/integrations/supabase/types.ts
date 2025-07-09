@@ -164,6 +164,53 @@ export type Database = {
           },
         ]
       }
+      bloqueios_agenda: {
+        Row: {
+          created_at: string
+          criado_por: string
+          criado_por_user_id: string | null
+          data_fim: string
+          data_inicio: string
+          id: string
+          medico_id: string
+          motivo: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          criado_por?: string
+          criado_por_user_id?: string | null
+          data_fim: string
+          data_inicio: string
+          id?: string
+          medico_id: string
+          motivo: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          criado_por?: string
+          criado_por_user_id?: string | null
+          data_fim?: string
+          data_inicio?: string
+          id?: string
+          medico_id?: string
+          motivo?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bloqueios_agenda_medico_id_fkey"
+            columns: ["medico_id"]
+            isOneToOne: false
+            referencedRelation: "medicos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clinica_valores: {
         Row: {
           categoria: string
