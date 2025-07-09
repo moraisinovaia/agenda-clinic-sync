@@ -84,35 +84,42 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   useEffect(() => {
     let isSubscribed = true;
+    let initialized = false;
     
-    // Configurar listener de mudanças de autenticação PRIMEIRO
+    console.log('🔄 Inicializando AuthProvider...');
+    
+    // Configurar listener de mudanças de autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!isSubscribed) return;
         
-        console.log('🔄 Auth state changed:', event, session ? 'com sessão' : 'sem sessão');
+        console.log('🔄 Auth state changed:', event, session ? 'com sessão' : 'sem sessão', 'initialized:', initialized);
         
-        // Se estamos fazendo logout, ignorar qualquer nova sessão
+        // Se estamos fazendo logout, ignorar completamente qualquer evento
         if (isLoggingOut.current) {
           console.log('🚫 Logout em andamento, ignorando auth state change');
           return;
         }
         
-        // Se for evento de logout ou não há sessão
-        if (event === 'SIGNED_OUT' || !session) {
-          console.log('🚪 Usuário fez logout, limpando estados...');
-          if (!isLoggingOut.current) {
-            setSession(null);
-            setUser(null);
-            setProfile(null);
-            setLoading(false);
-          }
+        // Só processar eventos após a inicialização OU se for SIGNED_OUT
+        if (!initialized && event !== 'SIGNED_OUT') {
+          console.log('🔄 Aguardando inicialização completa para processar:', event);
           return;
         }
         
-        // Se for login/signup e não estamos fazendo logout
-        if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && !isLoggingOut.current) {
-          console.log('🔑 Usuário logado, configurando sessão...');
+        // Se for evento de logout ou não há sessão
+        if (event === 'SIGNED_OUT' || !session) {
+          console.log('🚪 Processando logout/sem sessão...');
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          setLoading(false);
+          return;
+        }
+        
+        // Se for login/signup após inicialização
+        if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && initialized) {
+          console.log('🔑 Processando login após inicialização...');
           setSession(session);
           setUser(session?.user ?? null);
           
@@ -146,29 +153,54 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       }
     );
 
-    // Verificar sessão existente APENAS se não estamos fazendo logout
-    if (!isLoggingOut.current) {
-      supabase.auth.getSession().then(({ data: { session } }) => {
+    // Verificar sessão existente APENAS na inicialização
+    const initializeAuth = async () => {
+      if (!isSubscribed || isLoggingOut.current) return;
+      
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
         if (!isSubscribed || isLoggingOut.current) return;
         
-        console.log('🔍 Verificando sessão existente:', session ? 'encontrada' : 'não encontrada');
+        console.log('🔍 Sessão inicial verificada:', session ? 'encontrada' : 'não encontrada', error ? `(erro: ${error.message})` : '');
         
-        if (session) {
+        if (session && !error) {
           setSession(session);
           setUser(session.user);
           
-          fetchProfile(session.user.id).then((profileData) => {
-            if (!isSubscribed || isLoggingOut.current) return;
-            setProfile(profileData);
-            setLoading(false);
-          });
+          const profileData = await fetchProfile(session.user.id);
+          if (!isSubscribed || isLoggingOut.current) return;
+          
+          setProfile(profileData);
+          setLoading(false);
         } else {
+          setSession(null);
+          setUser(null);
+          setProfile(null);
           setLoading(false);
         }
-      });
-    }
+        
+        // Marcar como inicializado APÓS processar a sessão inicial
+        initialized = true;
+        console.log('✅ Inicialização completa');
+        
+      } catch (error) {
+        console.error('❌ Erro na inicialização:', error);
+        if (!isSubscribed || isLoggingOut.current) return;
+        
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        setLoading(false);
+        initialized = true;
+      }
+    };
+    
+    // Executar inicialização
+    initializeAuth();
 
     return () => {
+      console.log('🧹 Limpando AuthProvider...');
       isSubscribed = false;
       subscription.unsubscribe();
     };
@@ -272,15 +304,18 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       setSession(null);
       setLoading(false);
       
-      // Limpar todo o localStorage do Supabase
+      // Limpar todo o localStorage do Supabase de forma mais efetiva
       const keysToRemove = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && key.startsWith('supabase.auth.')) {
+        if (key && (key.startsWith('supabase') || key.includes('auth') || key.includes('session'))) {
           keysToRemove.push(key);
         }
       }
-      keysToRemove.forEach(key => localStorage.removeItem(key));
+      keysToRemove.forEach(key => {
+        console.log('🧹 Removendo chave:', key);
+        localStorage.removeItem(key);
+      });
       
       // Limpar também o sessionStorage
       sessionStorage.clear();
@@ -318,15 +353,18 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       setSession(null);
       setLoading(false);
       
-      // Limpar storage
+      // Limpar storage com a mesma lógica
       const keysToRemove = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && key.startsWith('supabase.auth.')) {
+        if (key && (key.startsWith('supabase') || key.includes('auth') || key.includes('session'))) {
           keysToRemove.push(key);
         }
       }
-      keysToRemove.forEach(key => localStorage.removeItem(key));
+      keysToRemove.forEach(key => {
+        console.log('🧹 Removendo chave (erro):', key);
+        localStorage.removeItem(key);
+      });
       sessionStorage.clear();
       
       toast({
