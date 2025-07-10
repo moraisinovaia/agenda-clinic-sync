@@ -39,7 +39,7 @@ serve(async (req) => {
     // POST /bloqueio-agenda - Criar bloqueio e notificar pacientes
     if (method === 'POST') {
       const body = await req.json();
-      console.log('📝 Dados recebidos para bloqueio:', body);
+      console.log('📝 Dados recebidos para bloqueio:', JSON.stringify(body, null, 2));
 
       const { 
         medicoId, 
@@ -49,7 +49,7 @@ serve(async (req) => {
         criadoPor = 'recepcionista'
       } = body;
 
-      // Validações
+      // Validações básicas
       if (!medicoId || !dataInicio || !dataFim || !motivo) {
         console.error('❌ Dados obrigatórios não fornecidos:', { medicoId, dataInicio, dataFim, motivo });
         return new Response(
@@ -61,15 +61,65 @@ serve(async (req) => {
         );
       }
 
-      // Validar se o médico existe
+      // Validar formato UUID do médico
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(medicoId)) {
+        console.error('❌ Formato de UUID inválido para medicoId:', medicoId);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'ID do médico deve ser um UUID válido' 
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Validar formato das datas
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(dataInicio) || !dateRegex.test(dataFim)) {
+        console.error('❌ Formato de data inválido:', { dataInicio, dataFim });
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Datas devem estar no formato YYYY-MM-DD' 
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Validar se data início é anterior ou igual à data fim
+      if (new Date(dataInicio) > new Date(dataFim)) {
+        console.error('❌ Data de início posterior à data de fim:', { dataInicio, dataFim });
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Data de início deve ser anterior ou igual à data de fim' 
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log('🔍 Validando se o médico existe...');
+      // Validar se o médico existe - usar maybeSingle() ao invés de single()
       const { data: medico, error: errorMedico } = await supabase
         .from('medicos')
         .select('id, nome')
         .eq('id', medicoId)
-        .single();
+        .maybeSingle();
 
-      if (errorMedico || !medico) {
-        console.error('❌ Médico não encontrado:', medicoId, errorMedico);
+      if (errorMedico) {
+        console.error('❌ Erro ao buscar médico:', errorMedico);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: `Erro ao validar médico: ${errorMedico.message}` 
+          }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (!medico) {
+        console.error('❌ Médico não encontrado:', medicoId);
         return new Response(
           JSON.stringify({ 
             success: false, 
