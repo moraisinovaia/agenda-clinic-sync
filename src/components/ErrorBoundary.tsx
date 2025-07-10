@@ -28,25 +28,17 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('🚨 Error Boundary capturou erro:', error, errorInfo);
-    
     this.setState({
       error,
       errorInfo
     });
 
-    // Log para auditoria/monitoramento
-    if (typeof window !== 'undefined') {
-      // Aqui você poderia enviar o erro para um serviço de monitoramento
-      console.error('Erro crítico na aplicação:', {
-        error: error.message,
-        stack: error.stack,
-        componentStack: errorInfo.componentStack,
-        timestamp: new Date().toISOString(),
-        userAgent: navigator.userAgent,
-        url: window.location.href
-      });
-    }
+    // Log simplificado para produção
+    console.error('Erro crítico na aplicação:', {
+      error: error.message,
+      timestamp: new Date().toISOString(),
+      url: window.location.href
+    });
   }
 
   handleRetry = () => {

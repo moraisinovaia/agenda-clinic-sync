@@ -64,15 +64,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         .maybeSingle();
 
       if (error) {
-        return null;
-      }
-
-      if (!data) {
+        console.error('Erro ao buscar perfil:', error);
         return null;
       }
 
       return data;
     } catch (error) {
+      console.error('Erro inesperado ao buscar perfil:', error);
       return null;
     }
   };
@@ -111,26 +109,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           setUser(session?.user ?? null);
           
           if (session?.user) {
-            // Buscar perfil do usuário
+            // Buscar perfil do usuário sem timeouts complexos
             setTimeout(async () => {
               if (!isSubscribed || isLoggingOut.current) return;
               
-              let profileData = await fetchProfile(session.user.id);
-              
-              if (!profileData && !isLoggingOut.current) {
-                setTimeout(async () => {
-                  if (!isSubscribed || isLoggingOut.current) return;
-                  profileData = await fetchProfile(session.user.id);
-                  if (!isLoggingOut.current) {
-                    setProfile(profileData);
-                    setLoading(false);
-                  }
-                }, 2000);
-              } else if (!isLoggingOut.current) {
+              const profileData = await fetchProfile(session.user.id);
+              if (!isLoggingOut.current) {
                 setProfile(profileData);
                 setLoading(false);
               }
-            }, 0);
+            }, 100);
           } else {
             setProfile(null);
             setLoading(false);
@@ -197,7 +185,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           .from('profiles')
           .select('email')
           .eq('username', emailOrUsername)
-          .single();
+          .maybeSingle();
           
         if (profileError || !profile) {
           toast({
@@ -238,7 +226,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
       return { error };
     } catch (error) {
-      console.error('Erro no login:', error);
       toast({
         title: 'Erro',
         description: 'Erro inesperado ao fazer login',
@@ -251,7 +238,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const signUp = async (email: string, password: string, nome: string, username: string) => {
     try {
       // Verificar se o username já existe
-      const { data: existingProfile, error: usernameError } = await supabase
+      const { data: existingProfile } = await supabase
         .from('profiles')
         .select('username')
         .eq('username', username)
@@ -301,7 +288,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
       return { error };
     } catch (error) {
-      console.error('Erro no cadastro:', error);
       toast({
         title: 'Erro',
         description: 'Erro inesperado ao criar conta',
