@@ -21,9 +21,27 @@ import { useFilaEspera } from '@/hooks/useFilaEspera';
 import { useViewMode } from '@/hooks/useViewMode';
 import { SchedulingFormData, AppointmentWithRelations } from '@/types/scheduling';
 import { Button } from '@/components/ui/button';
+import { AuthTest } from '@/components/AuthTest';
 
 const Index = () => {
   const { user, profile, loading: authLoading, signOut } = useAuth();
+  
+  // Redirecionar para login se não autenticado
+  if (!authLoading && !user) {
+    return <Navigate to="/auth" replace />;
+  }
+  
+  // Loading state durante verificação de autenticação
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Verificando autenticação...</p>
+        </div>
+      </div>
+    );
+  }
   const [searchTerm, setSearchTerm] = useState('');
   
   const {
@@ -105,23 +123,6 @@ const Index = () => {
       setViewMode('edit-appointment');
     }
   };
-
-  // Verificar autenticação
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-gray-600">Verificando autenticação...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Redirecionar para login se não estiver autenticado
-  if (!user) {
-    return <Navigate to="/auth" replace />;
-  }
 
   if (loading) {
     return (
@@ -285,6 +286,22 @@ const Index = () => {
             </div>
             <div className="flex justify-center">
               <BloqueioAgenda />
+            </div>
+          </div>
+        )}
+
+        {viewMode === 'auth-test' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold">Teste de Autenticação</h2>
+                <p className="text-muted-foreground mt-1">
+                  Verifique o status completo da autenticação e sessão
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-center">
+              <AuthTest />
             </div>
           </div>
         )}

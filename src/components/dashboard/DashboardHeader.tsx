@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 import { InstallButton } from '@/components/InstallButton';
 import endogastroLogo from '@/assets/endogastro-logo.png';
 
-type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos' | 'fila-espera' | 'nova-fila' | 'bloqueio-agenda' | 'relatorio-agenda';
+type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos' | 'fila-espera' | 'nova-fila' | 'bloqueio-agenda' | 'relatorio-agenda' | 'auth-test';
 
 interface DashboardHeaderProps {
   viewMode: ViewMode;
