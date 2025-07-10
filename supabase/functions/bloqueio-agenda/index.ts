@@ -13,10 +13,21 @@ serve(async (req) => {
   }
 
   try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('❌ Variáveis de ambiente não configuradas');
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Configuração do servidor incompleta' 
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const method = req.method;
 
@@ -35,6 +46,7 @@ serve(async (req) => {
 
       // Validações
       if (!medicoId || !dataInicio || !dataFim || !motivo) {
+        console.error('❌ Dados obrigatórios não fornecidos:', { medicoId, dataInicio, dataFim, motivo });
         return new Response(
           JSON.stringify({ 
             success: false, 
@@ -43,6 +55,26 @@ serve(async (req) => {
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
+
+      // Validar se o médico existe
+      const { data: medico, error: errorMedico } = await supabase
+        .from('medicos')
+        .select('id, nome')
+        .eq('id', medicoId)
+        .single();
+
+      if (errorMedico || !medico) {
+        console.error('❌ Médico não encontrado:', medicoId, errorMedico);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Médico não encontrado' 
+          }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log('✅ Médico validado:', medico.nome);
 
       // Buscar agendamentos que serão afetados ANTES de criar o bloqueio
       const { data: agendamentosAfetados, error: errorAgendamentos } = await supabase

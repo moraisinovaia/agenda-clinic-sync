@@ -66,7 +66,15 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ medicos }) => {
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Erro na invocação da função:', error);
+        throw new Error(error.message || 'Erro ao processar solicitação');
+      }
+
+      if (!data?.success) {
+        console.error('❌ Resposta de erro da função:', data);
+        throw new Error(data?.error || 'Erro desconhecido no servidor');
+      }
 
       const resultado = data.data;
       
@@ -85,9 +93,17 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ medicos }) => {
 
     } catch (error) {
       console.error('❌ Erro ao bloquear agenda:', error);
+      
+      // Mostrar erro mais específico se disponível
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      
       toast({
-        title: "Erro",
-        description: "Erro ao bloquear agenda. Tente novamente.",
+        title: "Erro ao Bloquear Agenda",
+        description: errorMessage.includes('Médico não encontrado') 
+          ? "Médico selecionado não foi encontrado. Tente novamente."
+          : errorMessage.includes('Configuração do servidor')
+          ? "Erro de configuração do servidor. Entre em contato com o suporte."
+          : `Erro: ${errorMessage}`,
         variant: "destructive",
       });
     } finally {
