@@ -248,7 +248,16 @@ export function SchedulingForm({
                             
                             <div className="text-sm text-muted-foreground flex items-center gap-2">
                               <User className="h-4 w-4" />
-                              <span>Paciente agendado</span>
+                              <div className="flex flex-col">
+                                <span className="font-medium text-foreground">
+                                  {appointment.pacientes?.nome_completo || 'Paciente agendado'}
+                                </span>
+                                {appointment.pacientes?.convenio && (
+                                  <span className="text-xs">
+                                    {appointment.pacientes.convenio}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
                         ))
