@@ -87,57 +87,32 @@ export const BloqueioAgenda: React.FC = () => {
     setLoading(true);
 
     try {
-      console.log('🔒 Iniciando bloqueio de agenda...');
-      console.log('📝 Dados enviados:', { medicoId, dataInicio, dataFim, motivo });
-      
-      // PRIMEIRO: Testar se a Edge Function está funcionando
-      console.log('🧪 Testando Edge Function...');
-      const { data: testData, error: testError } = await supabase.functions.invoke('bloqueio-agenda', {
-        body: { test: true }
-      });
-      
-      console.log('🧪 Resultado do teste:', { testData, testError });
-      
-      if (testError) {
-        console.error('❌ Edge Function não está funcionando:', testError);
-        throw new Error(`Edge Function com problema: ${testError.message}`);
-      }
-      
-      console.log('✅ Edge Function funcionando, enviando dados reais...');
+      console.log('🔒 Enviando bloqueio de agenda...');
       
       const { data, error } = await supabase.functions.invoke('bloqueio-agenda', {
         body: {
           medicoId,
           dataInicio,
           dataFim,
-          motivo,
-          criadoPor: 'recepcionista'
+          motivo
         }
       });
 
       console.log('📡 Resposta da função:', { data, error });
 
       if (error) {
-        console.error('❌ Erro na invocação da função:', error);
-        
-        // Tratar erros específicos da Edge Function
-        if (error.message?.includes('Edge Function returned a non-2xx status code')) {
-          throw new Error('Erro no servidor. Verifique os logs da função para mais detalhes.');
-        }
-        
-        throw new Error(error.message || 'Erro ao processar solicitação');
+        console.error('❌ Erro na função:', error);
+        throw new Error(error.message || 'Erro na comunicação com o servidor');
       }
 
       if (!data?.success) {
-        console.error('❌ Resposta de erro da função:', data);
+        console.error('❌ Resposta de erro:', data);
         throw new Error(data?.error || 'Erro desconhecido no servidor');
       }
 
-      const resultado = data.data;
-      
       toast({
         title: "Agenda Bloqueada com Sucesso!",
-        description: `${resultado.agendamentos_cancelados} agendamento(s) cancelado(s) e pacientes notificados via WhatsApp.`,
+        description: `${data.data.agendamentos_afetados} agendamento(s) serão cancelados.`,
       });
 
       // Limpar formulário
@@ -146,35 +121,14 @@ export const BloqueioAgenda: React.FC = () => {
       setDataFim('');
       setMotivo('');
 
-      console.log('✅ Bloqueio realizado com sucesso:', resultado);
+      console.log('✅ Bloqueio realizado:', data.data);
 
     } catch (error) {
-      console.error('❌ Erro ao bloquear agenda:', error);
-      
-      // Mostrar erro mais específico se disponível
-      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
-      
-      let userFriendlyMessage = '';
-      
-      if (errorMessage.includes('Médico não encontrado')) {
-        userFriendlyMessage = "O médico selecionado não foi encontrado. Tente selecionar outro médico.";
-      } else if (errorMessage.includes('UUID válido')) {
-        userFriendlyMessage = "Erro interno: ID do médico inválido. Tente recarregar a página.";
-      } else if (errorMessage.includes('formato YYYY-MM-DD')) {
-        userFriendlyMessage = "Formato de data inválido. Verifique as datas selecionadas.";
-      } else if (errorMessage.includes('Data de início deve ser anterior')) {
-        userFriendlyMessage = "A data de início deve ser anterior ou igual à data de fim.";
-      } else if (errorMessage.includes('Configuração do servidor')) {
-        userFriendlyMessage = "Erro de configuração do servidor. Entre em contato com o suporte técnico.";
-      } else if (errorMessage.includes('Erro no servidor')) {
-        userFriendlyMessage = "Erro interno do servidor. Verifique os logs ou tente novamente em alguns minutos.";
-      } else {
-        userFriendlyMessage = `Erro: ${errorMessage}`;
-      }
+      console.error('❌ Erro:', error);
       
       toast({
         title: "Erro ao Bloquear Agenda",
-        description: userFriendlyMessage,
+        description: error instanceof Error ? error.message : 'Erro desconhecido',
         variant: "destructive",
       });
     } finally {
