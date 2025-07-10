@@ -22,13 +22,15 @@ import {
 interface DoctorScheduleProps {
   doctor: Doctor;
   appointments: AppointmentWithRelations[];
+  blockedDates?: any[];
+  isDateBlocked?: (doctorId: string, date: Date) => boolean;
   onCancelAppointment: (appointmentId: string) => Promise<void>;
   onEditAppointment?: (appointment: AppointmentWithRelations) => void;
   onNewAppointment?: () => void;
   initialDate?: string; // Data inicial para posicionar o calendário
 }
 
-export function DoctorSchedule({ doctor, appointments, onCancelAppointment, onEditAppointment, onNewAppointment, initialDate }: DoctorScheduleProps) {
+export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDateBlocked, onCancelAppointment, onEditAppointment, onNewAppointment, initialDate }: DoctorScheduleProps) {
   // Usar initialDate se fornecida, senão usar data atual
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     if (initialDate) {
@@ -49,6 +51,21 @@ export function DoctorSchedule({ doctor, appointments, onCancelAppointment, onEd
   // Função para verificar se uma data tem agendamentos
   const hasAppointments = (date: Date) => {
     return getAppointmentsForDate(date).length > 0;
+  };
+
+  // Função para verificar se uma data está bloqueada
+  const hasBlocks = (date: Date) => {
+    if (isDateBlocked) {
+      return isDateBlocked(doctor.id, date);
+    }
+    // Fallback manual se isDateBlocked não estiver disponível
+    const dateStr = date.toISOString().split('T')[0];
+    return blockedDates.some(blocked => 
+      blocked.medico_id === doctor.id &&
+      blocked.status === 'ativo' &&
+      dateStr >= blocked.data_inicio &&
+      dateStr <= blocked.data_fim
+    );
   };
 
   const getStatusColor = (status: string) => {
@@ -103,13 +120,20 @@ export function DoctorSchedule({ doctor, appointments, onCancelAppointment, onEd
                 locale={ptBR}
                 className="rounded-md border shadow-sm bg-background p-3 pointer-events-auto"
                 modifiers={{
-                  hasAppointments: (date) => hasAppointments(date)
+                  hasAppointments: (date) => hasAppointments(date),
+                  hasBlocks: (date) => hasBlocks(date)
                 }}
                 modifiersStyles={{
                   hasAppointments: {
                     backgroundColor: 'hsl(var(--primary))',
                     color: 'hsl(var(--primary-foreground))',
                     fontWeight: 'bold'
+                  },
+                  hasBlocks: {
+                    backgroundColor: 'hsl(var(--destructive))',
+                    color: 'hsl(var(--destructive-foreground))',
+                    fontWeight: 'bold',
+                    textDecoration: 'line-through'
                   }
                 }}
               />
@@ -117,6 +141,10 @@ export function DoctorSchedule({ doctor, appointments, onCancelAppointment, onEd
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 bg-primary rounded"></div>
                   <span>Dias com agendamentos</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-destructive rounded"></div>
+                  <span>Dias bloqueados</span>
                 </div>
               </div>
             </div>

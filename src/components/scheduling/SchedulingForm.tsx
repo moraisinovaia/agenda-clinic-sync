@@ -15,6 +15,8 @@ interface SchedulingFormProps {
   doctors: Doctor[];
   atendimentos: Atendimento[];
   appointments: AppointmentWithRelations[];
+  blockedDates?: any[];
+  isDateBlocked?: (doctorId: string, date: Date) => boolean;
   onSubmit: (data: SchedulingFormData) => Promise<void>;
   onCancel: () => void;
   getAtendimentosByDoctor: (doctorId: string) => Atendimento[];
@@ -26,6 +28,8 @@ export function SchedulingForm({
   doctors, 
   atendimentos, 
   appointments,
+  blockedDates = [],
+  isDateBlocked,
   onSubmit, 
   onCancel,
   getAtendimentosByDoctor,
@@ -67,6 +71,22 @@ export function SchedulingForm({
   const hasAppointmentsOnDate = (date: Date) => {
     if (!selectedDoctor) return false;
     return getAppointmentsForDoctorAndDate(selectedDoctor.id, date).length > 0;
+  };
+
+  // Função para verificar se uma data está bloqueada para o médico selecionado
+  const hasBlocksOnDate = (date: Date) => {
+    if (!selectedDoctor) return false;
+    if (isDateBlocked) {
+      return isDateBlocked(selectedDoctor.id, date);
+    }
+    // Fallback manual se isDateBlocked não estiver disponível
+    const dateStr = date.toISOString().split('T')[0];
+    return blockedDates.some(blocked => 
+      blocked.medico_id === selectedDoctor.id &&
+      blocked.status === 'ativo' &&
+      dateStr >= blocked.data_inicio &&
+      dateStr <= blocked.data_fim
+    );
   };
 
   const selectedDateAppointments = selectedDoctor 
@@ -168,20 +188,34 @@ export function SchedulingForm({
                     onSelect={(date) => date && setSelectedCalendarDate(date)}
                     locale={ptBR}
                     className="rounded-md border shadow-sm bg-background p-3 pointer-events-auto"
+                    disabled={(date) => hasBlocksOnDate(date)}
                     modifiers={{
-                      hasAppointments: (date) => hasAppointmentsOnDate(date)
+                      hasAppointments: (date) => hasAppointmentsOnDate(date),
+                      hasBlocks: (date) => hasBlocksOnDate(date)
                     }}
                     modifiersStyles={{
                       hasAppointments: {
                         backgroundColor: 'hsl(var(--primary))',
                         color: 'hsl(var(--primary-foreground))',
                         fontWeight: 'bold'
+                      },
+                      hasBlocks: {
+                        backgroundColor: 'hsl(var(--destructive))',
+                        color: 'hsl(var(--destructive-foreground))',
+                        fontWeight: 'bold',
+                        textDecoration: 'line-through'
                       }
                     }}
                   />
-                  <div className="text-xs text-muted-foreground flex items-center gap-2">
-                    <div className="w-3 h-3 bg-primary rounded"></div>
-                    <span>Dias com agendamentos</span>
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 bg-primary rounded"></div>
+                      <span>Dias com agendamentos</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 bg-destructive rounded"></div>
+                      <span>Dias bloqueados (não disponíveis)</span>
+                    </div>
                   </div>
                 </div>
 

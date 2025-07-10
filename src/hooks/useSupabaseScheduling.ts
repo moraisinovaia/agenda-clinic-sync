@@ -8,6 +8,7 @@ export function useSupabaseScheduling() {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [atendimentos, setAtendimentos] = useState<Atendimento[]>([]);
   const [appointments, setAppointments] = useState<AppointmentWithRelations[]>([]);
+  const [blockedDates, setBlockedDates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const { user, profile } = useAuth();
@@ -51,6 +52,25 @@ export function useSupabaseScheduling() {
         description: 'Não foi possível carregar os tipos de atendimento',
         variant: 'destructive',
       });
+    }
+  };
+
+  // Buscar bloqueios de agenda
+  const fetchBlockedDates = async () => {
+    try {
+      console.log('🔍 Buscando bloqueios de agenda...');
+      const { data, error } = await supabase
+        .from('bloqueios_agenda')
+        .select('*')
+        .eq('status', 'ativo')
+        .order('data_inicio');
+
+      if (error) throw error;
+      setBlockedDates(data || []);
+      console.log('📋 Bloqueios encontrados:', data);
+    } catch (error) {
+      console.error('Erro ao buscar bloqueios:', error);
+      setBlockedDates([]);
     }
   };
 
@@ -205,6 +225,25 @@ export function useSupabaseScheduling() {
         throw new Error('Não é possível agendar para uma data/hora que já passou');
       }
 
+      // Verificar se a data está bloqueada para este médico
+      const { data: blockedDate, error: blockError } = await supabase
+        .from('bloqueios_agenda')
+        .select('id, motivo')
+        .eq('medico_id', formData.medicoId)
+        .eq('status', 'ativo')
+        .lte('data_inicio', formData.dataAgendamento)
+        .gte('data_fim', formData.dataAgendamento)
+        .maybeSingle();
+
+      if (blockError) {
+        console.error('❌ Erro ao verificar bloqueios:', blockError);
+        throw new Error('Erro ao verificar disponibilidade da agenda');
+      }
+
+      if (blockedDate) {
+        throw new Error(`A agenda está bloqueada nesta data. Motivo: ${blockedDate.motivo}`);
+      }
+
       // Verificar se já existe um agendamento no mesmo horário para o mesmo médico
       const { data: existingAppointment, error: conflictError } = await supabase
         .from('agendamentos')
@@ -272,7 +311,7 @@ export function useSupabaseScheduling() {
 
       // Recarregar todos os dados para garantir consistência
       console.log('🔄 Recarregando todos os dados...');
-      await Promise.all([fetchDoctors(), fetchAtendimentos(), fetchAppointments()]);
+      await Promise.all([fetchDoctors(), fetchAtendimentos(), fetchAppointments(), fetchBlockedDates()]);
       console.log('✅ Todos os dados recarregados');
       
       return appointmentData;
@@ -342,6 +381,24 @@ export function useSupabaseScheduling() {
     );
   };
 
+  // Verificar se uma data está bloqueada para um médico
+  const isDateBlocked = (doctorId: string, date: Date) => {
+    const dateStr = date.toISOString().split('T')[0];
+    return blockedDates.some(blocked => 
+      blocked.medico_id === doctorId &&
+      blocked.status === 'ativo' &&
+      dateStr >= blocked.data_inicio &&
+      dateStr <= blocked.data_fim
+    );
+  };
+
+  // Obter bloqueios para um médico específico
+  const getBlockedDatesByDoctor = (doctorId: string) => {
+    return blockedDates.filter(blocked => 
+      blocked.medico_id === doctorId && blocked.status === 'ativo'
+    );
+  };
+
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
@@ -349,6 +406,7 @@ export function useSupabaseScheduling() {
         fetchDoctors(),
         fetchAtendimentos(),
         fetchAppointments(),
+        fetchBlockedDates(),
       ]);
       setLoading(false);
     };
@@ -360,12 +418,15 @@ export function useSupabaseScheduling() {
     doctors,
     atendimentos,
     appointments,
+    blockedDates,
     loading,
     createAppointment,
     cancelAppointment,
     searchPatientsByBirthDate,
     getAtendimentosByDoctor,
     getAppointmentsByDoctorAndDate,
-    refetch: () => Promise.all([fetchDoctors(), fetchAtendimentos(), fetchAppointments()]),
+    isDateBlocked,
+    getBlockedDatesByDoctor,
+    refetch: () => Promise.all([fetchDoctors(), fetchAtendimentos(), fetchAppointments(), fetchBlockedDates()]),
   };
 }
