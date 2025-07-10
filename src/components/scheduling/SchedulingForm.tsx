@@ -228,9 +228,17 @@ export function SchedulingForm({
                   <div className="space-y-2 max-h-[300px] overflow-y-auto">
                     {selectedDateAppointments.length > 0 ? (
                       selectedDateAppointments
+                        .filter(appointment => appointment.status !== 'cancelado' && appointment.status !== 'cancelado_bloqueio') // Esconder cancelados
                         .sort((a, b) => a.hora_agendamento.localeCompare(b.hora_agendamento))
                         .map((appointment) => (
-                          <div key={appointment.id} className="p-3 border rounded-lg bg-background space-y-2">
+                          <div 
+                            key={appointment.id} 
+                            className={`p-3 border rounded-lg space-y-2 ${
+                              appointment.status === 'confirmado' 
+                                ? 'bg-green-50 border-green-200' 
+                                : 'bg-background'
+                            }`}
+                          >
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
                                 <Clock className="h-4 w-4 text-primary" />
@@ -240,9 +248,13 @@ export function SchedulingForm({
                               </div>
                               <Badge 
                                 variant="secondary" 
-                                className={`text-xs ${getStatusColor(appointment.status)}`}
+                                className={`text-xs ${
+                                  appointment.status === 'confirmado'
+                                    ? 'bg-green-100 text-green-800 border-green-200'
+                                    : getStatusColor(appointment.status)
+                                }`}
                               >
-                                {appointment.status}
+                                {appointment.status === 'confirmado' ? 'confirmado' : appointment.status}
                               </Badge>
                             </div>
                             
