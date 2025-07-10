@@ -147,7 +147,23 @@ serve(async (req) => {
         );
       }
 
-      console.log('🔍 Validando se o médico existe...');
+      console.log('🔍 Validando se o médico existe na base de dados...');
+      console.log('📋 ID do médico recebido:', medicoId);
+      
+      // Listar todos os médicos para debug
+      const { data: todosMedicos, error: errorListaMedicos } = await supabase
+        .from('medicos')
+        .select('id, nome');
+        
+      if (errorListaMedicos) {
+        console.error('❌ Erro ao listar médicos:', errorListaMedicos);
+      } else {
+        console.log('📋 Médicos disponíveis na base:');
+        todosMedicos?.forEach(m => {
+          console.log(`  - ${m.nome}: ${m.id}`);
+        });
+      }
+      
       // Validar se o médico existe - usar maybeSingle() ao invés de single()
       const { data: medico, error: errorMedico } = await supabase
         .from('medicos')
@@ -160,24 +176,33 @@ serve(async (req) => {
         return new Response(
           JSON.stringify({ 
             success: false, 
-            error: `Erro ao validar médico: ${errorMedico.message}` 
+            error: `Erro ao validar médico: ${errorMedico.message}`,
+            errorDetails: errorMedico
           }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
       if (!medico) {
-        console.error('❌ Médico não encontrado:', medicoId);
+        console.error('❌ Médico não encontrado com ID:', medicoId);
+        console.log('💡 IDs disponíveis:', todosMedicos?.map(m => m.id));
         return new Response(
           JSON.stringify({ 
             success: false, 
-            error: 'Médico não encontrado' 
+            error: 'Médico não encontrado',
+            details: {
+              medicoId: medicoId,
+              medicosDisponiveis: todosMedicos?.map(m => ({ id: m.id, nome: m.nome }))
+            }
           }),
           { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
-      console.log('✅ Médico validado:', medico.nome);
+      console.log('✅ Médico validado:', {
+        id: medico.id,
+        nome: medico.nome
+      });
 
       // Buscar agendamentos que serão afetados ANTES de criar o bloqueio
       const { data: agendamentosAfetados, error: errorAgendamentos } = await supabase
