@@ -13,8 +13,12 @@ serve(async (req) => {
   }
 
   try {
+    console.log('🔧 Verificando configuração...');
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    console.log('URL configurada:', supabaseUrl ? 'Sim' : 'Não');
+    console.log('Service Key configurada:', supabaseServiceKey ? 'Sim' : 'Não');
     
     if (!supabaseUrl || !supabaseServiceKey) {
       console.error('❌ Variáveis de ambiente não configuradas');
@@ -27,6 +31,7 @@ serve(async (req) => {
       );
     }
 
+    console.log('🔌 Criando cliente Supabase com Service Role Key...');
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const method = req.method;
@@ -98,6 +103,7 @@ serve(async (req) => {
       console.log(`📋 Encontrados ${agendamentosAfetados?.length || 0} agendamentos para cancelar`);
 
       // Criar o bloqueio de agenda
+      console.log('💾 Criando bloqueio na base de dados...');
       const { data: bloqueio, error: errorBloqueio } = await supabase
         .from('bloqueios_agenda')
         .insert({
@@ -112,7 +118,13 @@ serve(async (req) => {
 
       if (errorBloqueio) {
         console.error('❌ Erro ao criar bloqueio:', errorBloqueio);
-        throw errorBloqueio;
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: `Erro ao criar bloqueio: ${errorBloqueio.message}` 
+          }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
 
       console.log('✅ Bloqueio criado:', bloqueio.id);

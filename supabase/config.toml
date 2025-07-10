@@ -53,5 +53,8 @@ ip_version = "ipv4"
 [functions.scheduling-api]
 verify_jwt = false
 
+[functions.bloqueio-agenda]
+verify_jwt = false
+
 [functions.clinic-data]
 verify_jwt = false
