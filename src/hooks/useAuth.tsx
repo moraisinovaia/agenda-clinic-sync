@@ -57,28 +57,22 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const fetchProfile = async (userId: string) => {
     try {
-      console.log('🔍 Buscando perfil para usuário:', userId);
-      
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('user_id', userId)
-        .maybeSingle(); // Usar maybeSingle para evitar erro se não encontrar
+        .maybeSingle();
 
       if (error) {
-        console.error('❌ Erro ao buscar perfil:', error);
         return null;
       }
 
       if (!data) {
-        console.log('⚠️ Perfil não encontrado, pode estar sendo criado pelo trigger');
         return null;
       }
 
-      console.log('✅ Perfil encontrado:', data);
       return data;
     } catch (error) {
-      console.error('❌ Erro ao buscar perfil:', error);
       return null;
     }
   };
@@ -87,30 +81,23 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     let isSubscribed = true;
     let initialized = false;
     
-    console.log('🔄 Inicializando AuthProvider...');
-    
     // Configurar listener de mudanças de autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!isSubscribed) return;
         
-        console.log('🔄 Auth state changed:', event, session ? 'com sessão' : 'sem sessão', 'initialized:', initialized);
-        
         // Se estamos fazendo logout, ignorar completamente qualquer evento
         if (isLoggingOut.current) {
-          console.log('🚫 Logout em andamento, ignorando auth state change');
           return;
         }
         
         // Só processar eventos após a inicialização OU se for SIGNED_OUT
         if (!initialized && event !== 'SIGNED_OUT') {
-          console.log('🔄 Aguardando inicialização completa para processar:', event);
           return;
         }
         
         // Se for evento de logout ou não há sessão
         if (event === 'SIGNED_OUT' || !session) {
-          console.log('🚪 Processando logout/sem sessão...');
           setSession(null);
           setUser(null);
           setProfile(null);
@@ -120,7 +107,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         
         // Se for login/signup após inicialização
         if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && initialized) {
-          console.log('🔑 Processando login após inicialização...');
           setSession(session);
           setUser(session?.user ?? null);
           
@@ -132,7 +118,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
               let profileData = await fetchProfile(session.user.id);
               
               if (!profileData && !isLoggingOut.current) {
-                console.log('🔄 Perfil não encontrado, tentando novamente em 2 segundos...');
                 setTimeout(async () => {
                   if (!isSubscribed || isLoggingOut.current) return;
                   profileData = await fetchProfile(session.user.id);
@@ -163,8 +148,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         
         if (!isSubscribed || isLoggingOut.current) return;
         
-        console.log('🔍 Sessão inicial verificada:', session ? 'encontrada' : 'não encontrada', error ? `(erro: ${error.message})` : '');
-        
         if (session && !error) {
           setSession(session);
           setUser(session.user);
@@ -183,10 +166,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         
         // Marcar como inicializado APÓS processar a sessão inicial
         initialized = true;
-        console.log('✅ Inicialização completa');
         
       } catch (error) {
-        console.error('❌ Erro na inicialização:', error);
         if (!isSubscribed || isLoggingOut.current) return;
         
         setSession(null);
@@ -201,7 +182,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     initializeAuth();
 
     return () => {
-      console.log('🧹 Limpando AuthProvider...');
       isSubscribed = false;
       subscription.unsubscribe();
     };
@@ -213,7 +193,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       
       // Se não contém @, assume que é username e busca o email
       if (!emailOrUsername.includes('@')) {
-        console.log('🔍 Buscando email por username:', emailOrUsername);
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('email')
@@ -221,7 +200,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           .single();
           
         if (profileError || !profile) {
-          console.error('❌ Username não encontrado:', profileError);
           toast({
             title: 'Erro no login',
             description: 'Nome de usuário não encontrado',
@@ -231,7 +209,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         }
         
         email = profile.email;
-        console.log('✅ Email encontrado para username:', email);
       }
 
       const { error } = await supabase.auth.signInWithPassword({
@@ -336,8 +313,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const signOut = async () => {
     try {
-      console.log('🚪 Iniciando processo de logout...');
-      
       // Marcar que estamos fazendo logout
       isLoggingOut.current = true;
       
@@ -356,7 +331,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         }
       }
       keysToRemove.forEach(key => {
-        console.log('🧹 Removendo chave:', key);
         localStorage.removeItem(key);
       });
       
@@ -368,11 +342,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         scope: 'global'
       });
       
-      if (error) {
-        console.error('⚠️ Erro no logout do Supabase:', error);
-      }
-      
-      console.log('✅ Logout realizado com sucesso');
       toast({
         title: 'Logout realizado',
         description: 'Até logo!',
@@ -387,8 +356,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       }, 1000);
       
     } catch (error) {
-      console.error('❌ Erro no logout:', error);
-      
       // Mesmo com erro, limpar tudo
       isLoggingOut.current = true;
       setUser(null);
@@ -405,7 +372,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         }
       }
       keysToRemove.forEach(key => {
-        console.log('🧹 Removendo chave (erro):', key);
         localStorage.removeItem(key);
       });
       sessionStorage.clear();
