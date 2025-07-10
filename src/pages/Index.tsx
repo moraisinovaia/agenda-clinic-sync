@@ -450,7 +450,7 @@ const Index = () => {
               </div>
             </div>
             <div className="flex justify-center">
-              <BloqueioAgenda medicos={doctors} />
+              <BloqueioAgenda />
             </div>
           </div>
         )}

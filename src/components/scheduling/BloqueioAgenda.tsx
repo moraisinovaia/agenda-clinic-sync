@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Calendar, AlertTriangle, Clock, User, FileText, Check, ChevronsUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,18 +17,51 @@ interface Medico {
   especialidade: string;
 }
 
-interface BloqueioAgendaProps {
-  medicos: Medico[];
-}
-
-export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ medicos }) => {
+export const BloqueioAgenda: React.FC = () => {
   const [loading, setLoading] = useState(false);
+  const [loadingMedicos, setLoadingMedicos] = useState(true);
+  const [medicos, setMedicos] = useState<Medico[]>([]);
   const [medicoId, setMedicoId] = useState('');
   const [openCombobox, setOpenCombobox] = useState(false);
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
   const [motivo, setMotivo] = useState('');
   const { toast } = useToast();
+
+  // Carregar médicos diretamente da base de dados
+  useEffect(() => {
+    const carregarMedicos = async () => {
+      try {
+        setLoadingMedicos(true);
+        console.log('🔍 Carregando médicos da base de dados...');
+        
+        const { data, error } = await supabase
+          .from('medicos')
+          .select('id, nome, especialidade')
+          .eq('ativo', true)
+          .order('nome');
+
+        if (error) {
+          console.error('❌ Erro ao carregar médicos:', error);
+          throw error;
+        }
+
+        console.log('✅ Médicos carregados:', data);
+        setMedicos(data || []);
+      } catch (error) {
+        console.error('❌ Erro ao carregar médicos:', error);
+        toast({
+          title: "Erro",
+          description: "Não foi possível carregar a lista de médicos",
+          variant: "destructive",
+        });
+      } finally {
+        setLoadingMedicos(false);
+      }
+    };
+
+    carregarMedicos();
+  }, [toast]);
 
   const handleBloqueioAgenda = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -149,6 +182,16 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ medicos }) => {
       </CardHeader>
       
       <CardContent>
+        {loadingMedicos ? (
+          <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Carregando médicos...</p>
+          </div>
+        ) : medicos.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-muted-foreground">Nenhum médico ativo encontrado</p>
+          </div>
+        ) : (
         <form onSubmit={handleBloqueioAgenda} className="space-y-6">
           {/* Seleção do Médico */}
           <div className="space-y-2">
@@ -285,6 +328,7 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ medicos }) => {
             )}
           </Button>
         </form>
+        )}
       </CardContent>
     </Card>
   );
