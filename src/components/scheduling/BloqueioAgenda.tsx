@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
-import { Calendar, AlertTriangle, Clock, User, FileText } from 'lucide-react';
+import { Calendar, AlertTriangle, Clock, User, FileText, Check, ChevronsUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { cn } from '@/lib/utils';
 
 interface Medico {
   id: string;
@@ -22,6 +24,7 @@ interface BloqueioAgendaProps {
 export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ medicos }) => {
   const [loading, setLoading] = useState(false);
   const [medicoId, setMedicoId] = useState('');
+  const [openCombobox, setOpenCombobox] = useState(false);
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
   const [motivo, setMotivo] = useState('');
@@ -110,22 +113,53 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ medicos }) => {
         <form onSubmit={handleBloqueioAgenda} className="space-y-6">
           {/* Seleção do Médico */}
           <div className="space-y-2">
-            <Label htmlFor="medico" className="flex items-center gap-2">
+            <Label className="flex items-center gap-2">
               <User className="h-4 w-4" />
               Médico
             </Label>
-            <Select value={medicoId} onValueChange={setMedicoId} required>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o médico" />
-              </SelectTrigger>
-              <SelectContent>
-                {medicos.map((medico) => (
-                  <SelectItem key={medico.id} value={medico.id}>
-                    {medico.nome} - {medico.especialidade}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openCombobox}
+                  className="w-full justify-between"
+                >
+                  {medicoId
+                    ? medicos.find((medico) => medico.id === medicoId)?.nome + " - " + medicos.find((medico) => medico.id === medicoId)?.especialidade
+                    : "Selecione o médico..."}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-full p-0 z-50" style={{ width: 'var(--radix-popover-trigger-width)' }}>
+                <Command>
+                  <CommandInput placeholder="Pesquisar médico..." />
+                  <CommandList>
+                    <CommandEmpty>Nenhum médico encontrado.</CommandEmpty>
+                    <CommandGroup>
+                      {medicos.map((medico) => (
+                        <CommandItem
+                          key={medico.id}
+                          value={`${medico.nome} ${medico.especialidade}`}
+                          onSelect={() => {
+                            setMedicoId(medico.id === medicoId ? "" : medico.id);
+                            setOpenCombobox(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              medicoId === medico.id ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          {medico.nome} - {medico.especialidade}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Período do Bloqueio */}
