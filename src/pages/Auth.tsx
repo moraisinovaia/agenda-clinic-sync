@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, User, Lock, Mail } from 'lucide-react';
+import { Loader2, User, Lock, Mail, AtSign } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
 export default function Auth() {
@@ -13,12 +13,13 @@ export default function Auth() {
   const [isLoading, setIsLoading] = useState(false);
   
   const [loginData, setLoginData] = useState({
-    email: '',
+    emailOrUsername: '',
     password: ''
   });
   
   const [signupData, setSignupData] = useState({
     nome: '',
+    username: '',
     email: '',
     password: '',
     confirmPassword: ''
@@ -31,17 +32,17 @@ export default function Auth() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!loginData.email || !loginData.password) return;
+    if (!loginData.emailOrUsername || !loginData.password) return;
     
     setIsLoading(true);
-    await signIn(loginData.email, loginData.password);
+    await signIn(loginData.emailOrUsername, loginData.password);
     setIsLoading(false);
   };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!signupData.nome || !signupData.email || !signupData.password) {
+    if (!signupData.nome || !signupData.username || !signupData.email || !signupData.password) {
       return;
     }
     
@@ -50,7 +51,7 @@ export default function Auth() {
     }
     
     setIsLoading(true);
-    await signUp(signupData.email, signupData.password, signupData.nome);
+    await signUp(signupData.email, signupData.password, signupData.nome, signupData.username);
     setIsLoading(false);
   };
 
@@ -79,16 +80,16 @@ export default function Auth() {
             <TabsContent value="login" className="space-y-4">
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="login-email">Email</Label>
+                  <Label htmlFor="login-emailOrUsername">Email ou Nome de Usuário</Label>
                   <div className="relative">
-                    <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <AtSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                     <Input
-                      id="login-email"
-                      type="email"
-                      placeholder="seu@email.com"
+                      id="login-emailOrUsername"
+                      type="text"
+                      placeholder="email@exemplo.com ou usuario"
                       className="pl-10"
-                      value={loginData.email}
-                      onChange={(e) => setLoginData(prev => ({ ...prev, email: e.target.value }))}
+                      value={loginData.emailOrUsername}
+                      onChange={(e) => setLoginData(prev => ({ ...prev, emailOrUsername: e.target.value }))}
                       required
                     />
                   </div>
@@ -142,6 +143,25 @@ export default function Auth() {
                 </div>
                 
                 <div className="space-y-2">
+                  <Label htmlFor="signup-username">Nome de Usuário</Label>
+                  <div className="relative">
+                    <AtSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="signup-username"
+                      type="text"
+                      placeholder="usuario123"
+                      className="pl-10"
+                      value={signupData.username}
+                      onChange={(e) => setSignupData(prev => ({ ...prev, username: e.target.value }))}
+                      required
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Este será seu nome para login no sistema
+                  </p>
+                </div>
+                
+                <div className="space-y-2">
                   <Label htmlFor="signup-email">Email</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -155,6 +175,9 @@ export default function Auth() {
                       required
                     />
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    Para validação e recuperação da conta
+                  </p>
                 </div>
                 
                 <div className="space-y-2">

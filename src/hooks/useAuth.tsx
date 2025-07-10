@@ -10,6 +10,7 @@ interface Profile {
   email: string;
   role: string;
   ativo: boolean;
+  username?: string;
   created_at: string;
   updated_at: string;
 }
@@ -19,8 +20,8 @@ interface AuthContextType {
   profile: Profile | null;
   session: Session | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: any }>;
-  signUp: (email: string, password: string, nome: string) => Promise<{ error: any }>;
+  signIn: (emailOrUsername: string, password: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, nome: string, username: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
 }
 
@@ -206,8 +207,33 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     };
   }, []);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (emailOrUsername: string, password: string) => {
     try {
+      let email = emailOrUsername;
+      
+      // Se não contém @, assume que é username e busca o email
+      if (!emailOrUsername.includes('@')) {
+        console.log('🔍 Buscando email por username:', emailOrUsername);
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('email')
+          .eq('username', emailOrUsername)
+          .single();
+          
+        if (profileError || !profile) {
+          console.error('❌ Username não encontrado:', profileError);
+          toast({
+            title: 'Erro no login',
+            description: 'Nome de usuário não encontrado',
+            variant: 'destructive',
+          });
+          return { error: new Error('Nome de usuário não encontrado') };
+        }
+        
+        email = profile.email;
+        console.log('✅ Email encontrado para username:', email);
+      }
+
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -216,7 +242,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       if (error) {
         let errorMessage = 'Erro ao fazer login';
         if (error.message.includes('Invalid login credentials')) {
-          errorMessage = 'Email ou senha incorretos';
+          errorMessage = 'Email/usuário ou senha incorretos';
         } else if (error.message.includes('Email not confirmed')) {
           errorMessage = 'Email não confirmado. Verifique sua caixa de entrada.';
         }
@@ -245,8 +271,24 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
-  const signUp = async (email: string, password: string, nome: string) => {
+  const signUp = async (email: string, password: string, nome: string, username: string) => {
     try {
+      // Verificar se o username já existe
+      const { data: existingProfile, error: usernameError } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('username', username)
+        .maybeSingle();
+        
+      if (existingProfile) {
+        toast({
+          title: 'Erro no cadastro',
+          description: 'Este nome de usuário já está em uso',
+          variant: 'destructive',
+        });
+        return { error: new Error('Este nome de usuário já está em uso') };
+      }
+
       const { error } = await supabase.auth.signUp({
         email,
         password,
@@ -254,6 +296,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           emailRedirectTo: `${window.location.origin}/`,
           data: {
             nome: nome,
+            username: username,
             role: 'recepcionista'
           }
         }

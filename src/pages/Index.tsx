@@ -18,6 +18,7 @@ import { PreparosView } from '@/components/preparos/PreparosView';
 import { FilaEsperaForm } from '@/components/fila-espera/FilaEsperaForm';
 import { FilaEsperaList } from '@/components/fila-espera/FilaEsperaList';
 import { InstallButton } from '@/components/InstallButton';
+import { TestLogin } from '@/components/TestLogin';
 
 import { useSupabaseScheduling } from '@/hooks/useSupabaseScheduling';
 import { useFilaEspera } from '@/hooks/useFilaEspera';
@@ -463,6 +464,8 @@ const Index = () => {
             </div>
           </div>
         )}
+        
+        <TestLogin />
       </div>
     </div>
   );
