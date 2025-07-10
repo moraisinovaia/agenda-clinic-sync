@@ -6,71 +6,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// Função auxiliar para testar conectividade
-async function testSupabaseConnection(supabase: any) {
-  try {
-    console.log('🧪 Testando conectividade básica...');
-    const { data, error } = await supabase
-      .from('medicos')
-      .select('count')
-      .limit(1);
-    
-    if (error) {
-      console.log('❌ Erro no teste de conectividade:', error);
-      return { success: false, error };
-    }
-    
-    console.log('✅ Teste de conectividade bem-sucedido');
-    return { success: true };
-  } catch (err) {
-    console.log('❌ Exceção no teste de conectividade:', err);
-    return { success: false, error: err };
-  }
-}
-
-// Função para tentar inserção com retry
-async function insertBloqueioWithRetry(supabase: any, data: any, maxRetries = 3) {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    console.log(`🔄 Tentativa ${attempt}/${maxRetries} de inserção...`);
-    
-    try {
-      const { data: result, error } = await supabase
-        .from('bloqueios_agenda')
-        .insert(data)
-        .select()
-        .single();
-
-      if (error) {
-        console.log(`❌ Erro na tentativa ${attempt}:`, {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code
-        });
-        
-        if (attempt === maxRetries) {
-          return { data: null, error };
-        }
-        
-        // Aguardar antes da próxima tentativa
-        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-        continue;
-      }
-
-      console.log(`✅ Inserção bem-sucedida na tentativa ${attempt}`);
-      return { data: result, error: null };
-    } catch (err) {
-      console.log(`❌ Exceção na tentativa ${attempt}:`, err);
-      if (attempt === maxRetries) {
-        return { data: null, error: err };
-      }
-      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-    }
-  }
-}
-
 serve(async (req) => {
-  console.log('🚀 BLOQUEIO AGENDA - VERSÃO ROBUSTA INICIADA');
+  console.log('🚀 BLOQUEIO AGENDA - VERSÃO SIMPLES');
   console.log('📅 Timestamp:', new Date().toISOString());
   console.log('🌐 Método:', req.method);
   console.log('🔗 URL:', req.url);
@@ -90,64 +27,31 @@ serve(async (req) => {
   }
 
   try {
-    // 1. VALIDAÇÃO EXPLÍCITA DAS VARIÁVEIS DE AMBIENTE
+    // Criar cliente Supabase simples
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
-    console.log('🔧 Configurações detalhadas:', {
-      url: supabaseUrl ? `${supabaseUrl.substring(0, 20)}...` : 'AUSENTE',
-      serviceKey: supabaseServiceKey ? `${supabaseServiceKey.substring(0, 10)}...` : 'AUSENTE',
-      urlLength: supabaseUrl?.length || 0,
-      keyLength: supabaseServiceKey?.length || 0
+    console.log('🔧 Configurações:', {
+      hasUrl: !!supabaseUrl,
+      hasKey: !!supabaseServiceKey
     });
 
     if (!supabaseUrl || !supabaseServiceKey) {
-      console.log('❌ Configurações ausentes - variáveis de ambiente não encontradas');
+      console.log('❌ Configurações ausentes');
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Configuração do servidor incompleta - variáveis de ambiente ausentes',
-          details: {
-            hasUrl: !!supabaseUrl,
-            hasKey: !!supabaseServiceKey
-          }
+          error: 'Configuração do servidor incompleta'
         }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // 2. CRIAR CLIENTE COM CONFIGURAÇÕES EXPLÍCITAS
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      },
-      global: {
-        headers: {
-          'Authorization': `Bearer ${supabaseServiceKey}`,
-          'apikey': supabaseServiceKey,
-          'Content-Type': 'application/json',
-          'Prefer': 'return=representation'
-        }
-      }
-    });
-    console.log('✅ Cliente Supabase criado com headers personalizados');
+    // Cliente Supabase simplificado
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    console.log('✅ Cliente Supabase criado');
 
-    // 3. TESTE DE CONECTIVIDADE BÁSICA
-    const connectionTest = await testSupabaseConnection(supabase);
-    if (!connectionTest.success) {
-      console.log('❌ Falha no teste de conectividade');
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Falha na conectividade com Supabase',
-          details: connectionTest.error
-        }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Ler corpo da requisição
+    // Ler dados da requisição
     const body = await req.json();
     console.log('📋 Dados recebidos:', body);
 
@@ -165,17 +69,28 @@ serve(async (req) => {
       );
     }
 
-    console.log('🔍 Verificando se médico existe...');
+    console.log('🔍 Verificando médico...');
     
     // Verificar se médico existe
     const { data: medico, error: medicoError } = await supabase
       .from('medicos')
       .select('id, nome')
       .eq('id', medicoId)
-      .single();
+      .maybeSingle();
 
-    if (medicoError || !medico) {
-      console.log('❌ Médico não encontrado:', medicoError);
+    if (medicoError) {
+      console.log('❌ Erro ao verificar médico:', medicoError);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Erro ao verificar médico' 
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!medico) {
+      console.log('❌ Médico não encontrado');
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -187,7 +102,7 @@ serve(async (req) => {
 
     console.log('✅ Médico encontrado:', medico.nome);
 
-    // 4. PREPARAR DADOS PARA INSERÇÃO
+    // Preparar dados para inserção
     const insertData = {
       medico_id: medicoId,
       data_inicio: dataInicio,
@@ -196,49 +111,33 @@ serve(async (req) => {
       criado_por: 'recepcionista'
     };
     
-    console.log('📝 Dados preparados para inserção:', insertData);
+    console.log('📝 Inserindo bloqueio:', insertData);
 
-    // 5. INSERIR BLOQUEIO COM RETRY E LOGS DETALHADOS
-    console.log('💾 Iniciando processo de criação de bloqueio...');
-    
-    const { data: bloqueio, error: bloqueioError } = await insertBloqueioWithRetry(supabase, insertData);
+    // Inserir bloqueio
+    const { data: bloqueio, error: bloqueioError } = await supabase
+      .from('bloqueios_agenda')
+      .insert(insertData)
+      .select()
+      .single();
 
-    if (bloqueioError || !bloqueio) {
-      console.log('❌ FALHA DEFINITIVA na criação do bloqueio:', {
-        error: bloqueioError,
-        errorType: typeof bloqueioError,
-        errorConstructor: bloqueioError?.constructor?.name,
-        message: bloqueioError?.message || 'Erro desconhecido',
-        details: bloqueioError?.details || 'Sem detalhes',
-        hint: bloqueioError?.hint || 'Sem dica',
-        code: bloqueioError?.code || 'Sem código'
-      });
-      
+    if (bloqueioError) {
+      console.log('❌ Erro ao criar bloqueio:', bloqueioError);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Falha ao criar bloqueio após múltiplas tentativas',
-          details: {
-            message: bloqueioError?.message || 'Erro desconhecido',
-            code: bloqueioError?.code || 'UNKNOWN',
-            hint: bloqueioError?.hint || 'Verifique os logs para mais detalhes'
-          }
+          error: 'Erro ao criar bloqueio',
+          details: bloqueioError.message
         }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('✅ Bloqueio criado com sucesso:', {
-      id: bloqueio.id,
-      medico_id: bloqueio.medico_id,
-      data_inicio: bloqueio.data_inicio,
-      data_fim: bloqueio.data_fim
-    });
+    console.log('✅ Bloqueio criado:', bloqueio.id);
 
     // Buscar agendamentos afetados
     console.log('🔍 Buscando agendamentos afetados...');
     
-    const { data: agendamentos, error: agendamentosError } = await supabase
+    const { data: agendamentos } = await supabase
       .from('agendamentos')
       .select('id, data_agendamento, hora_agendamento')
       .eq('medico_id', medicoId)
@@ -246,11 +145,7 @@ serve(async (req) => {
       .lte('data_agendamento', dataFim)
       .eq('status', 'agendado');
 
-    if (agendamentosError) {
-      console.log('⚠️ Erro ao buscar agendamentos:', agendamentosError);
-    } else {
-      console.log(`📋 Encontrados ${agendamentos?.length || 0} agendamentos para cancelar`);
-    }
+    console.log(`📋 Encontrados ${agendamentos?.length || 0} agendamentos para cancelar`);
 
     // Retornar sucesso
     return new Response(
@@ -264,7 +159,7 @@ serve(async (req) => {
           periodo: `${dataInicio} até ${dataFim}`
         }
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
