@@ -85,24 +85,55 @@ export function RelatorioAgenda({ doctors, appointments, onBack }: RelatorioAgen
 
   return (
     <div className="space-y-6">
+      <style type="text/css" media="print">{`
+        @page {
+          margin: 0.5in;
+          size: A4;
+        }
+        body {
+          font-family: Arial, sans-serif;
+          font-size: 12px;
+          line-height: 1.4;
+        }
+        .print\\:shadow-none {
+          box-shadow: none !important;
+        }
+        .print\\:border-none {
+          border: none !important;
+        }
+        .print\\:hidden {
+          display: none !important;
+        }
+        .print\\:pb-4 {
+          padding-bottom: 1rem !important;
+        }
+        .print\\:border-gray-300 {
+          border-color: #d1d5db !important;
+        }
+      `}</style>
+      
       <div className="print:hidden">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-2xl font-bold">Relatório de Agenda Médica</h2>
-            <p className="text-muted-foreground mt-1">
-              Gere relatórios personalizados da agenda dos médicos
+            <h2 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">
+              Relatório de Agenda Médica
+            </h2>
+            <p className="text-muted-foreground mt-2 text-lg">
+              Gere relatórios personalizados e profissionais da agenda dos médicos
             </p>
           </div>
-          <Button onClick={onBack} variant="outline">
-            Voltar
+          <Button onClick={onBack} variant="outline" size="lg" className="shadow-md">
+            ← Voltar
           </Button>
         </div>
 
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Filtros do Relatório
+        <Card className="mb-6 shadow-lg border-0 bg-gradient-to-br from-background to-muted/20">
+          <CardHeader className="bg-gradient-to-r from-primary/10 to-primary/5 border-b">
+            <CardTitle className="flex items-center gap-3 text-xl">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <FileText className="h-6 w-6 text-primary" />
+              </div>
+              Configurar Relatório
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -164,15 +195,24 @@ export function RelatorioAgenda({ doctors, appointments, onBack }: RelatorioAgen
               </div>
             </div>
 
-            <div className="flex gap-2">
-              <Button onClick={handleGenerateReport} className="flex items-center gap-2">
-                <FileText className="h-4 w-4" />
+            <div className="flex gap-3 pt-2">
+              <Button 
+                onClick={handleGenerateReport} 
+                className="flex items-center gap-2 px-6 py-3 font-medium shadow-md hover:shadow-lg transition-all"
+                size="lg"
+              >
+                <FileText className="h-5 w-5" />
                 Gerar Relatório
               </Button>
               {showReport && (
-                <Button onClick={handlePrint} variant="outline" className="flex items-center gap-2">
-                  <Printer className="h-4 w-4" />
-                  Imprimir
+                <Button 
+                  onClick={handlePrint} 
+                  variant="outline" 
+                  className="flex items-center gap-2 px-6 py-3 font-medium shadow-md hover:shadow-lg transition-all"
+                  size="lg"
+                >
+                  <Printer className="h-5 w-5" />
+                  Imprimir Relatório
                 </Button>
               )}
             </div>
@@ -182,65 +222,110 @@ export function RelatorioAgenda({ doctors, appointments, onBack }: RelatorioAgen
 
       {showReport && (
         <div className="print:shadow-none print:border-none">
-          <Card>
-            <CardHeader className="print:pb-4">
-              <div className="text-center space-y-2">
-                <h1 className="text-2xl font-bold">Relatório de Agenda Médica</h1>
-                <div className="text-lg font-medium">
-                  Dr. {selectedDoctor?.nome} - {selectedDoctor?.especialidade}
+          <Card className="shadow-xl border-0 overflow-hidden">
+            <CardHeader className="print:pb-4 bg-gradient-to-r from-primary/5 to-primary/10 border-b-2 border-primary/20">
+              <div className="text-center space-y-4">
+                <div className="flex items-center justify-center gap-3 mb-4">
+                  <div className="p-3 rounded-full bg-primary/10">
+                    <Calendar className="h-8 w-8 text-primary" />
+                  </div>
+                  <h1 className="text-3xl font-bold text-primary">Relatório de Agenda Médica</h1>
                 </div>
-                <div className="text-sm text-muted-foreground">
-                  Período: {formatDate(dataInicio)} a {formatDate(dataFim)}
+                
+                <div className="bg-background rounded-lg p-4 shadow-inner border">
+                  <div className="text-xl font-semibold text-foreground mb-2">
+                    Dr. {selectedDoctor?.nome}
+                  </div>
+                  <div className="text-lg text-muted-foreground">
+                    {selectedDoctor?.especialidade}
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div className="bg-background rounded-lg p-3 border">
+                    <div className="font-medium text-foreground">Período</div>
+                    <div className="text-muted-foreground">
+                      {formatDate(dataInicio)} a {formatDate(dataFim)}
+                    </div>
+                  </div>
                   {(horaInicio !== '00:00' || horaFim !== '23:59') && (
-                    <span> | Horário: {formatTime(horaInicio)} às {formatTime(horaFim)}</span>
+                    <div className="bg-background rounded-lg p-3 border">
+                      <div className="font-medium text-foreground">Horário</div>
+                      <div className="text-muted-foreground">
+                        {formatTime(horaInicio)} às {formatTime(horaFim)}
+                      </div>
+                    </div>
                   )}
                 </div>
-                <div className="text-xs text-muted-foreground">
+                
+                <div className="text-xs text-muted-foreground bg-background rounded p-2 border">
                   Relatório gerado em: {format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
                 </div>
               </div>
             </CardHeader>
             <CardContent>
               {filteredAppointments.length > 0 ? (
-                <div className="space-y-4">
-                  <div className="text-sm font-medium mb-4">
-                    Total de agendamentos: {filteredAppointments.length}
+                <div className="space-y-6">
+                  <div className="bg-primary/10 rounded-lg p-4 border border-primary/20">
+                    <div className="text-lg font-semibold text-primary flex items-center gap-2">
+                      <Badge variant="secondary" className="text-lg px-3 py-1">
+                        {filteredAppointments.length}
+                      </Badge>
+                      agendamento{filteredAppointments.length !== 1 ? 's' : ''} encontrado{filteredAppointments.length !== 1 ? 's' : ''}
+                    </div>
                   </div>
                   
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {filteredAppointments.map((appointment, index) => (
-                      <div key={appointment.id} className="border rounded-lg p-4 print:border-gray-300">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-sm">#{index + 1}</span>
-                            <Calendar className="h-4 w-4 text-primary" />
-                            <span className="font-medium">{formatDate(appointment.data_agendamento)}</span>
-                            <Clock className="h-4 w-4 text-primary ml-2" />
-                            <span className="font-medium">{formatTime(appointment.hora_agendamento)}</span>
+                      <div key={appointment.id} className="bg-background border-2 border-border rounded-xl p-6 print:border-gray-300 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2 bg-primary/10 rounded-lg px-3 py-2">
+                              <span className="font-bold text-primary text-lg">#{String(index + 1).padStart(2, '0')}</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-2 bg-muted rounded-lg px-3 py-2">
+                                <Calendar className="h-5 w-5 text-primary" />
+                                <span className="font-semibold text-lg">{formatDate(appointment.data_agendamento)}</span>
+                              </div>
+                              <div className="flex items-center gap-2 bg-muted rounded-lg px-3 py-2">
+                                <Clock className="h-5 w-5 text-primary" />
+                                <span className="font-semibold text-lg">{formatTime(appointment.hora_agendamento)}</span>
+                              </div>
+                            </div>
                           </div>
-                          <Badge className={getStatusColor(appointment.status)}>
+                          <Badge className={`${getStatusColor(appointment.status)} text-sm px-3 py-1`}>
                             {appointment.status === 'confirmado' ? 'Confirmado' : 'Agendado'}
                           </Badge>
                         </div>
                         
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                          <div>
-                            <strong>Paciente:</strong> {appointment.pacientes?.nome_completo}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                          <div className="space-y-2">
+                            <div className="bg-muted/50 rounded-lg p-3">
+                              <div className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Paciente</div>
+                              <div className="font-semibold text-lg">{appointment.pacientes?.nome_completo}</div>
+                            </div>
+                            <div className="bg-muted/50 rounded-lg p-3">
+                              <div className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Convênio</div>
+                              <div className="font-medium">{appointment.pacientes?.convenio}</div>
+                            </div>
                           </div>
-                          <div>
-                            <strong>Convênio:</strong> {appointment.pacientes?.convenio}
-                          </div>
-                          <div>
-                            <strong>Contato:</strong> {appointment.pacientes?.celular || appointment.pacientes?.telefone || '-'}
-                          </div>
-                          <div>
-                            <strong>Procedimento:</strong> {appointment.atendimentos?.nome}
+                          <div className="space-y-2">
+                            <div className="bg-muted/50 rounded-lg p-3">
+                              <div className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Contato</div>
+                              <div className="font-medium">{appointment.pacientes?.celular || appointment.pacientes?.telefone || 'Não informado'}</div>
+                            </div>
+                            <div className="bg-muted/50 rounded-lg p-3">
+                              <div className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Procedimento</div>
+                              <div className="font-medium">{appointment.atendimentos?.nome}</div>
+                            </div>
                           </div>
                         </div>
                         
                         {appointment.observacoes && (
-                          <div className="mt-2 text-sm">
-                            <strong>Observações:</strong> {appointment.observacoes}
+                          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-4">
+                            <div className="text-xs text-amber-700 uppercase tracking-wide font-medium mb-1">Observações</div>
+                            <div className="text-sm text-amber-800">{appointment.observacoes}</div>
                           </div>
                         )}
                       </div>
@@ -248,9 +333,12 @@ export function RelatorioAgenda({ doctors, appointments, onBack }: RelatorioAgen
                   </div>
                 </div>
               ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>Nenhum agendamento encontrado para os filtros selecionados.</p>
+                <div className="text-center py-12 text-muted-foreground">
+                  <div className="bg-muted/20 rounded-full p-6 w-24 h-24 mx-auto mb-6 flex items-center justify-center">
+                    <FileText className="h-12 w-12 opacity-50" />
+                  </div>
+                  <h3 className="text-xl font-medium mb-2">Nenhum agendamento encontrado</h3>
+                  <p className="text-sm">Verifique os filtros selecionados e tente novamente.</p>
                 </div>
               )}
             </CardContent>

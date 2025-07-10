@@ -10,7 +10,7 @@ import { PreparosView } from '@/components/preparos/PreparosView';
 import { FilaEsperaForm } from '@/components/fila-espera/FilaEsperaForm';
 import { FilaEsperaList } from '@/components/fila-espera/FilaEsperaList';
 import { RelatorioAgenda } from '@/components/scheduling/RelatorioAgenda';
-import { TestLogin } from '@/components/TestLogin';
+
 import { StatsCards } from '@/components/dashboard/StatsCards';
 import { DoctorsView } from '@/components/dashboard/DoctorsView';
 import { DashboardActions } from '@/components/dashboard/DashboardActions';
@@ -288,8 +288,6 @@ const Index = () => {
             </div>
           </div>
         )}
-        
-        <TestLogin />
       </div>
     </div>
   );
