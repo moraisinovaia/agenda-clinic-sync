@@ -17,6 +17,7 @@ import { BloqueioAgenda } from '@/components/scheduling/BloqueioAgenda';
 import { PreparosView } from '@/components/preparos/PreparosView';
 import { FilaEsperaForm } from '@/components/fila-espera/FilaEsperaForm';
 import { FilaEsperaList } from '@/components/fila-espera/FilaEsperaList';
+import { RelatorioAgenda } from '@/components/scheduling/RelatorioAgenda';
 import { InstallButton } from '@/components/InstallButton';
 import { TestLogin } from '@/components/TestLogin';
 
@@ -25,7 +26,7 @@ import { useFilaEspera } from '@/hooks/useFilaEspera';
 import { Doctor, SchedulingFormData, AppointmentWithRelations } from '@/types/scheduling';
 import { FilaEsperaFormData } from '@/types/fila-espera';
 
-type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos' | 'fila-espera' | 'nova-fila' | 'bloqueio-agenda';
+type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos' | 'fila-espera' | 'nova-fila' | 'bloqueio-agenda' | 'relatorio-agenda';
 
 const Index = () => {
   const { user, profile, loading: authLoading, signOut } = useAuth();
@@ -308,6 +309,14 @@ const Index = () => {
                 </Button>
                 
                 <Button 
+                  onClick={() => setViewMode('relatorio-agenda')}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                >
+                  📄 Relatório de Agenda
+                </Button>
+                
+                <Button 
                   onClick={() => setViewMode('bloqueio-agenda')}
                   variant="destructive"
                   className="flex items-center gap-2"
@@ -446,6 +455,14 @@ const Index = () => {
             onSubmit={adicionarFilaEspera}
             onCancel={handleBackToFilaEspera}
             searchPatientsByBirthDate={searchPatientsByBirthDate}
+          />
+        )}
+
+        {viewMode === 'relatorio-agenda' && (
+          <RelatorioAgenda
+            doctors={doctors}
+            appointments={appointments}
+            onBack={handleBack}
           />
         )}
 
