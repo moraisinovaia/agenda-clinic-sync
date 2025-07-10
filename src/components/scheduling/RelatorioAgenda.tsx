@@ -23,8 +23,15 @@ export function RelatorioAgenda({ doctors, appointments, onBack }: RelatorioAgen
   const [horaInicio, setHoraInicio] = useState<string>('00:00');
   const [horaFim, setHoraFim] = useState<string>('23:59');
   const [showReport, setShowReport] = useState(false);
+  const [searchDoctor, setSearchDoctor] = useState<string>('');
 
   const selectedDoctor = doctors.find(d => d.id === selectedDoctorId);
+  
+  // Filtrar médicos baseado na pesquisa
+  const filteredDoctors = doctors.filter(doctor => 
+    doctor.nome.toLowerCase().includes(searchDoctor.toLowerCase()) ||
+    doctor.especialidade.toLowerCase().includes(searchDoctor.toLowerCase())
+  );
 
   const filteredAppointments = appointments.filter(appointment => {
     if (!selectedDoctorId || appointment.medico_id !== selectedDoctorId) return false;
@@ -140,21 +147,25 @@ export function RelatorioAgenda({ doctors, appointments, onBack }: RelatorioAgen
                     <SelectValue placeholder="Digite o nome do médico ou selecione" />
                   </SelectTrigger>
                   <SelectContent>
-                    <div className="px-2 py-1">
+                    <div className="px-2 py-1 sticky top-0 bg-background border-b">
                       <Input
                         placeholder="Pesquisar médico..."
                         className="h-8 text-sm"
-                        onChange={(e) => {
-                          const search = e.target.value.toLowerCase();
-                          // Filtrar médicos em tempo real seria ideal, mas por simplicidade mantemos todos visíveis
-                        }}
+                        value={searchDoctor}
+                        onChange={(e) => setSearchDoctor(e.target.value)}
                       />
                     </div>
-                    {doctors.map((doctor) => (
-                      <SelectItem key={doctor.id} value={doctor.id}>
-                        Dr. {doctor.nome} - {doctor.especialidade}
-                      </SelectItem>
-                    ))}
+                    {filteredDoctors.length > 0 ? (
+                      filteredDoctors.map((doctor) => (
+                        <SelectItem key={doctor.id} value={doctor.id}>
+                          Dr. {doctor.nome} - {doctor.especialidade}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <div className="px-2 py-3 text-sm text-muted-foreground text-center">
+                        Nenhum médico encontrado
+                      </div>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
