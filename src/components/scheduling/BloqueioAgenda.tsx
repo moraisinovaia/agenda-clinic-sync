@@ -90,6 +90,21 @@ export const BloqueioAgenda: React.FC = () => {
       console.log('🔒 Iniciando bloqueio de agenda...');
       console.log('📝 Dados enviados:', { medicoId, dataInicio, dataFim, motivo });
       
+      // PRIMEIRO: Testar se a Edge Function está funcionando
+      console.log('🧪 Testando Edge Function...');
+      const { data: testData, error: testError } = await supabase.functions.invoke('bloqueio-agenda', {
+        body: { test: true }
+      });
+      
+      console.log('🧪 Resultado do teste:', { testData, testError });
+      
+      if (testError) {
+        console.error('❌ Edge Function não está funcionando:', testError);
+        throw new Error(`Edge Function com problema: ${testError.message}`);
+      }
+      
+      console.log('✅ Edge Function funcionando, enviando dados reais...');
+      
       const { data, error } = await supabase.functions.invoke('bloqueio-agenda', {
         body: {
           medicoId,

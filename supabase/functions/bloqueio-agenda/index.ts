@@ -89,6 +89,19 @@ serve(async (req) => {
       const body = await req.json();
       console.log('📝 Dados recebidos para bloqueio:', JSON.stringify(body, null, 2));
 
+      // Verificar se é um teste
+      if (body.test === true) {
+        console.log('🧪 MODO TESTE - Retornando sucesso simples');
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            message: 'Edge Function funcionando perfeitamente!',
+            timestamp: new Date().toISOString()
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       const { 
         medicoId, 
         dataInicio, 
