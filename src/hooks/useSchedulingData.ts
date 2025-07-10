@@ -97,12 +97,15 @@ export function useSchedulingData() {
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      await Promise.all([
-        fetchDoctors(),
-        fetchAtendimentos(),
-        fetchBlockedDates(),
-      ]);
-      setLoading(false);
+      try {
+        await Promise.all([
+          fetchDoctors(),
+          fetchAtendimentos(),
+          fetchBlockedDates(),
+        ]);
+      } finally {
+        setLoading(false);
+      }
     };
 
     loadData();

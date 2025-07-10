@@ -8,74 +8,58 @@ export function useAppointmentsList() {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  // Buscar agendamentos usando a função otimizada
+  // Buscar agendamentos - versão simplificada para evitar problemas
   const fetchAppointments = async () => {
     try {
-      console.log('🔍 Buscando agendamentos otimizados...');
+      console.log('🔍 Buscando agendamentos...');
       
-      const { data, error } = await supabase.rpc('buscar_agendamentos_otimizado');
+      // Primeiro buscar agendamentos simples
+      const { data: agendamentosData, error: agendamentosError } = await supabase
+        .from('agendamentos')
+        .select('*')
+        .order('data_agendamento', { ascending: true })
+        .order('hora_agendamento', { ascending: true });
 
-      if (error) {
-        console.error('Erro na consulta de agendamentos:', error);
-        throw error;
+      console.log('📋 Agendamentos encontrados:', agendamentosData);
+
+      if (agendamentosError) {
+        console.error('Erro na consulta de agendamentos:', agendamentosError);
+        throw agendamentosError;
       }
 
-      console.log('📋 Agendamentos encontrados:', data);
+      // Se não há agendamentos, definir array vazio
+      if (!agendamentosData || agendamentosData.length === 0) {
+        setAppointments([]);
+        return;
+      }
 
-      // Transformar os dados para o formato esperado
-      const appointmentsWithRelations = (data || []).map((row: any) => ({
-        id: row.id,
-        paciente_id: row.paciente_id,
-        medico_id: row.medico_id,
-        atendimento_id: row.atendimento_id,
-        data_agendamento: row.data_agendamento,
-        hora_agendamento: row.hora_agendamento,
-        status: row.status,
-        observacoes: row.observacoes,
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-        criado_por: row.criado_por,
-        criado_por_user_id: row.criado_por_user_id,
-        pacientes: {
-          id: row.paciente_id,
-          nome_completo: row.paciente_nome,
-          convenio: row.paciente_convenio,
-          celular: row.paciente_celular,
-          data_nascimento: '', // Não incluído na função otimizada
-          telefone: null,
-          created_at: '',
-          updated_at: '',
-        },
-        medicos: {
-          id: row.medico_id,
-          nome: row.medico_nome,
-          especialidade: row.medico_especialidade,
-          ativo: true,
-          convenios_aceitos: null,
-          convenios_restricoes: null,
-          created_at: null,
-          horarios: null,
-          idade_maxima: null,
-          idade_minima: null,
-          observacoes: null,
-        },
-        atendimentos: {
-          id: row.atendimento_id,
-          nome: row.atendimento_nome,
-          tipo: row.atendimento_tipo,
-          ativo: true,
-          codigo: null,
-          coparticipacao_20: null,
-          coparticipacao_40: null,
-          created_at: null,
-          forma_pagamento: null,
-          horarios: null,
-          medico_id: null,
-          observacoes: null,
-          restricoes: null,
-          valor_particular: null,
-        },
-        criado_por_profile: null,
+      // Buscar dados relacionados separadamente
+      const pacienteIds = [...new Set(agendamentosData.map(a => a.paciente_id))];
+      const medicoIds = [...new Set(agendamentosData.map(a => a.medico_id))];
+      const atendimentoIds = [...new Set(agendamentosData.map(a => a.atendimento_id))];
+      const criadoPorUserIds = [...new Set(agendamentosData.map(a => a.criado_por_user_id).filter(Boolean))];
+
+      const [pacientesResult, medicosResult, atendimentosResult, profilesResult] = await Promise.all([
+        supabase.from('pacientes').select('*').in('id', pacienteIds),
+        supabase.from('medicos').select('*').in('id', medicoIds),
+        supabase.from('atendimentos').select('*').in('id', atendimentoIds),
+        criadoPorUserIds.length > 0 
+          ? supabase.from('profiles').select('*').in('user_id', criadoPorUserIds)
+          : Promise.resolve({ data: [] })
+      ]);
+
+      const pacientesMap = new Map((pacientesResult.data || []).map(p => [p.id, p]));
+      const medicosMap = new Map((medicosResult.data || []).map(m => [m.id, m]));
+      const atendimentosMap = new Map((atendimentosResult.data || []).map(a => [a.id, a]));
+      const profilesMap = new Map((profilesResult.data || []).map(p => [p.user_id, p]));
+
+      // Combinar dados
+      const appointmentsWithRelations = agendamentosData.map(agendamento => ({
+        ...agendamento,
+        pacientes: pacientesMap.get(agendamento.paciente_id) || null,
+        medicos: medicosMap.get(agendamento.medico_id) || null,
+        atendimentos: atendimentosMap.get(agendamento.atendimento_id) || null,
+        criado_por_profile: agendamento.criado_por_user_id ? profilesMap.get(agendamento.criado_por_user_id) || null : null,
       }));
 
       setAppointments(appointmentsWithRelations);
@@ -87,6 +71,8 @@ export function useAppointmentsList() {
         description: 'Não foi possível carregar os agendamentos',
         variant: 'destructive',
       });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -137,7 +123,12 @@ export function useAppointmentsList() {
   };
 
   useEffect(() => {
-    fetchAppointments();
+    const loadAppointments = async () => {
+      setLoading(true);
+      await fetchAppointments();
+    };
+    
+    loadAppointments();
   }, []);
 
   return {
