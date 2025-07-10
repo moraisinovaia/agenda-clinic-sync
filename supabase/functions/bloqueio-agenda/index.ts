@@ -13,28 +13,76 @@ serve(async (req) => {
   }
 
   try {
-    console.log('🔧 Verificando configuração...');
+    console.log('🚀 === INICIANDO BLOQUEIO AGENDA ===');
+    console.log('📅 Timestamp:', new Date().toISOString());
+    console.log('🌐 Método HTTP:', req.method);
+    console.log('🔗 URL:', req.url);
+    
+    // Verificar configuração
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
-    console.log('URL configurada:', supabaseUrl ? 'Sim' : 'Não');
-    console.log('Service Key configurada:', supabaseServiceKey ? 'Sim' : 'Não');
+    console.log('🔧 Configuração:');
+    console.log('  - SUPABASE_URL:', supabaseUrl ? '✅ Configurada' : '❌ Não configurada');
+    console.log('  - SERVICE_KEY:', supabaseServiceKey ? '✅ Configurada' : '❌ Não configurada');
     
     if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('❌ Variáveis de ambiente não configuradas');
+      console.error('❌ ERRO: Variáveis de ambiente não configuradas');
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Configuração do servidor incompleta' 
+          error: 'Configuração do servidor incompleta',
+          details: {
+            supabaseUrl: !!supabaseUrl,
+            serviceKey: !!supabaseServiceKey
+          }
         }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('🔌 Criando cliente Supabase com Service Role Key...');
+    console.log('🔌 Criando cliente Supabase...');
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    console.log('✅ Cliente Supabase criado com sucesso');
 
     const method = req.method;
+    console.log('📋 Processando método:', method);
+
+    // Teste simples para verificar se a função está funcionando
+    if (method === 'GET' && req.url.includes('?test=true')) {
+      console.log('🧪 MODO TESTE ATIVADO');
+      
+      // Testar conexão com banco
+      console.log('🔍 Testando conexão com banco...');
+      const { data: testMedicos, error: testError } = await supabase
+        .from('medicos')
+        .select('id, nome')
+        .limit(1);
+        
+      if (testError) {
+        console.error('❌ Erro ao conectar com banco:', testError);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Erro de conexão com banco',
+            details: testError
+          }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      console.log('✅ Conexão com banco OK');
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: 'Função funcionando corretamente',
+          timestamp: new Date().toISOString(),
+          database: 'conectado',
+          medicos_sample: testMedicos
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // POST /bloqueio-agenda - Criar bloqueio e notificar pacientes
     if (method === 'POST') {
@@ -152,32 +200,87 @@ serve(async (req) => {
 
       console.log(`📋 Encontrados ${agendamentosAfetados?.length || 0} agendamentos para cancelar`);
 
-      // Criar o bloqueio de agenda
-      console.log('💾 Criando bloqueio na base de dados...');
-      const { data: bloqueio, error: errorBloqueio } = await supabase
-        .from('bloqueios_agenda')
-        .insert({
-          medico_id: medicoId,
-          data_inicio: dataInicio,
-          data_fim: dataFim,
-          motivo: motivo,
-          criado_por: criadoPor,
-        })
-        .select()
-        .single();
+      // SIMPLIFICAÇÃO: Testar inserção básica primeiro
+      console.log('🧪 === TESTE DE INSERÇÃO SIMPLIFICADA ===');
+      console.log('📋 Dados que serão inseridos:');
+      console.log('  - medico_id:', medicoId);
+      console.log('  - data_inicio:', dataInicio);
+      console.log('  - data_fim:', dataFim);
+      console.log('  - motivo:', motivo);
+      console.log('  - criado_por:', criadoPor);
+      
+      // Primeiro, vamos tentar uma inserção super simples sem WhatsApp
+      console.log('💾 Tentando inserção básica na tabela bloqueios_agenda...');
+      
+      try {
+        const { data: bloqueio, error: errorBloqueio } = await supabase
+          .from('bloqueios_agenda')
+          .insert({
+            medico_id: medicoId,
+            data_inicio: dataInicio,
+            data_fim: dataFim,
+            motivo: motivo,
+            criado_por: criadoPor,
+          })
+          .select()
+          .single();
 
-      if (errorBloqueio) {
-        console.error('❌ Erro ao criar bloqueio:', errorBloqueio);
+        if (errorBloqueio) {
+          console.error('❌ ERRO ESPECÍFICO NA INSERÇÃO:', {
+            message: errorBloqueio.message,
+            details: errorBloqueio.details,
+            hint: errorBloqueio.hint,
+            code: errorBloqueio.code
+          });
+          
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: `Erro detalhado na inserção: ${errorBloqueio.message}`,
+              errorDetails: {
+                message: errorBloqueio.message,
+                details: errorBloqueio.details,
+                hint: errorBloqueio.hint,
+                code: errorBloqueio.code
+              }
+            }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        console.log('✅ SUCESSO! Bloqueio criado:', {
+          id: bloqueio?.id,
+          medico_id: bloqueio?.medico_id,
+          created_at: bloqueio?.created_at
+        });
+        
+        // Por enquanto, retornar sucesso SEM fazer WhatsApp para isolar o problema
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            message: 'Bloqueio criado com sucesso (modo simplificado)',
+            data: {
+              bloqueio,
+              agendamentos_cancelados: agendamentosAfetados?.length || 0,
+              nota: 'WhatsApp desabilitado para teste'
+            }
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+        
+      } catch (insertError) {
+        console.error('❌ ERRO INESPERADO NA INSERÇÃO:', insertError);
+        console.error('Stack trace:', insertError.stack);
+        
         return new Response(
           JSON.stringify({ 
             success: false, 
-            error: `Erro ao criar bloqueio: ${errorBloqueio.message}` 
+            error: `Erro inesperado: ${insertError.message}`,
+            stack: insertError.stack
           }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-
-      console.log('✅ Bloqueio criado:', bloqueio.id);
 
       // Enviar notificações WhatsApp para os pacientes afetados
       const notificacoes = [];
