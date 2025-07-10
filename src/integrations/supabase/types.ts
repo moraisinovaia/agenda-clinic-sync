@@ -81,6 +81,42 @@ export type Database = {
           },
         ]
       }
+      agendamentos_audit: {
+        Row: {
+          action: string
+          agendamento_id: string
+          changed_at: string | null
+          changed_by: string | null
+          id: string
+          ip_address: unknown | null
+          new_data: Json | null
+          old_data: Json | null
+          user_agent: string | null
+        }
+        Insert: {
+          action: string
+          agendamento_id: string
+          changed_at?: string | null
+          changed_by?: string | null
+          id?: string
+          ip_address?: unknown | null
+          new_data?: Json | null
+          old_data?: Json | null
+          user_agent?: string | null
+        }
+        Update: {
+          action?: string
+          agendamento_id?: string
+          changed_at?: string | null
+          changed_by?: string | null
+          id?: string
+          ip_address?: unknown | null
+          new_data?: Json | null
+          old_data?: Json | null
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       alimentos_teste_hidrogenio: {
         Row: {
           categoria: string | null

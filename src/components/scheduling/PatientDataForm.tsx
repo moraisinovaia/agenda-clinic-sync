@@ -4,7 +4,8 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { User, Search, UserCheck } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { User, Search, UserCheck, AlertCircle, CheckCircle } from 'lucide-react';
 import { SchedulingFormData } from '@/types/scheduling';
 
 interface PatientDataFormProps {
@@ -13,6 +14,12 @@ interface PatientDataFormProps {
   availableConvenios: string[];
   medicoSelected: boolean;
   searchPatientsByBirthDate: (birthDate: string) => Promise<any[]>;
+  selectedDoctor?: {
+    nome: string;
+    idade_minima?: number;
+    idade_maxima?: number;
+    convenios_aceitos?: string[];
+  };
 }
 
 export function PatientDataForm({ 
@@ -20,11 +27,59 @@ export function PatientDataForm({
   setFormData, 
   availableConvenios, 
   medicoSelected,
-  searchPatientsByBirthDate
+  searchPatientsByBirthDate,
+  selectedDoctor
 }: PatientDataFormProps) {
   const [foundPatients, setFoundPatients] = useState<any[]>([]);
   const [searchingPatients, setSearchingPatients] = useState(false);
   const [showPatientsList, setShowPatientsList] = useState(false);
+
+  // Calcular idade do paciente
+  const calculateAge = (birthDate: string) => {
+    if (!birthDate) return null;
+    const today = new Date();
+    const birth = new Date(birthDate);
+    let age = today.getFullYear() - birth.getFullYear();
+    const monthDiff = today.getMonth() - birth.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+      age--;
+    }
+    return age;
+  };
+
+  const patientAge = calculateAge(formData.dataNascimento);
+
+  // Validações de idade vs médico
+  const getAgeValidation = () => {
+    if (!selectedDoctor || !patientAge) return null;
+
+    const { idade_minima, idade_maxima } = selectedDoctor;
+    
+    if (idade_minima && patientAge < idade_minima) {
+      return {
+        type: 'error',
+        message: `Idade mínima para ${selectedDoctor.nome}: ${idade_minima} anos (paciente tem ${patientAge} anos)`
+      };
+    }
+    
+    if (idade_maxima && patientAge > idade_maxima) {
+      return {
+        type: 'error',
+        message: `Idade máxima para ${selectedDoctor.nome}: ${idade_maxima} anos (paciente tem ${patientAge} anos)`
+      };
+    }
+
+    if (idade_minima || idade_maxima) {
+      return {
+        type: 'success',
+        message: `Idade compatível com ${selectedDoctor.nome} (${patientAge} anos)`
+      };
+    }
+
+    return null;
+  };
+
+  const ageValidation = getAgeValidation();
 
   // Buscar pacientes quando a data de nascimento for alterada
   useEffect(() => {
@@ -184,6 +239,20 @@ export function PatientDataForm({
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Alerta de validação de idade */}
+      {ageValidation && (
+        <Alert variant={ageValidation.type === 'error' ? 'destructive' : 'default'}>
+          {ageValidation.type === 'error' ? (
+            <AlertCircle className="h-4 w-4" />
+          ) : (
+            <CheckCircle className="h-4 w-4 text-green-600" />
+          )}
+          <AlertDescription>
+            {ageValidation.message}
+          </AlertDescription>
+        </Alert>
       )}
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

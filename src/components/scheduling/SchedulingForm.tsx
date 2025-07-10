@@ -128,6 +128,7 @@ export function SchedulingForm({
                 availableConvenios={availableConvenios}
                 medicoSelected={medicoSelected}
                 searchPatientsByBirthDate={searchPatientsByBirthDate}
+                selectedDoctor={selectedDoctor}
               />
 
               <AppointmentDataForm

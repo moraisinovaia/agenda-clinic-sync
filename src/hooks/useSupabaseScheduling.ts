@@ -184,25 +184,35 @@ export function useSupabaseScheduling() {
     try {
       console.log('🚀 Criando agendamento:', formData);
 
-      // Validar dados obrigatórios
-      if (!formData.medicoId || formData.medicoId.trim() === '') {
+      // Validações de dados obrigatórios mais rigorosas
+      if (!formData.medicoId?.trim()) {
         throw new Error('Médico é obrigatório');
       }
-      if (!formData.atendimentoId || formData.atendimentoId.trim() === '') {
+      if (!formData.atendimentoId?.trim()) {
         throw new Error('Tipo de atendimento é obrigatório');
       }
-      if (!formData.nomeCompleto || formData.nomeCompleto.trim() === '') {
+      if (!formData.nomeCompleto?.trim()) {
         throw new Error('Nome completo é obrigatório');
+      }
+      if (formData.nomeCompleto.trim().length < 3) {
+        throw new Error('Nome completo deve ter pelo menos 3 caracteres');
       }
       if (!formData.dataNascimento) {
         throw new Error('Data de nascimento é obrigatória');
       }
-      if (!formData.convenio || formData.convenio.trim() === '') {
+      if (!formData.convenio?.trim()) {
         throw new Error('Convênio é obrigatório');
       }
-      if (!formData.celular || formData.celular.trim() === '') {
+      if (!formData.celular?.trim()) {
         throw new Error('Celular é obrigatório');
       }
+      
+      // Validação de formato de celular brasileiro
+      const celularRegex = /^\(\d{2}\)\s\d{4,5}-\d{4}$/;
+      if (!celularRegex.test(formData.celular)) {
+        throw new Error('Formato de celular inválido. Use o formato (XX) XXXXX-XXXX');
+      }
+      
       if (!formData.dataAgendamento) {
         throw new Error('Data do agendamento é obrigatória');
       }
@@ -214,52 +224,88 @@ export function useSupabaseScheduling() {
       if (!user?.id) {
         throw new Error('Usuário não está autenticado');
       }
-      
-      console.log('✅ Validações passaram, criando agendamento...');
 
-      // Validar se a data/hora não é no passado
+      // Validações de negócio
       const appointmentDateTime = new Date(`${formData.dataAgendamento}T${formData.horaAgendamento}`);
       const now = new Date();
+      const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
       
-      if (appointmentDateTime <= now) {
-        throw new Error('Não é possível agendar para uma data/hora que já passou');
+      if (appointmentDateTime <= oneHourFromNow) {
+        throw new Error('Agendamento deve ser feito com pelo menos 1 hora de antecedência');
       }
 
-      // Verificar se a data está bloqueada para este médico
-      const { data: blockedDate, error: blockError } = await supabase
-        .from('bloqueios_agenda')
-        .select('id, motivo')
-        .eq('medico_id', formData.medicoId)
-        .eq('status', 'ativo')
-        .lte('data_inicio', formData.dataAgendamento)
-        .gte('data_fim', formData.dataAgendamento)
-        .maybeSingle();
+      // Validar idade do paciente
+      const birthDate = new Date(formData.dataNascimento);
+      const age = Math.floor((now.getTime() - birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+      
+      if (age < 0 || age > 120) {
+        throw new Error('Data de nascimento inválida');
+      }
 
-      if (blockError) {
-        console.error('❌ Erro ao verificar bloqueios:', blockError);
+      // Buscar informações do médico para validações
+      const selectedDoctor = doctors.find(d => d.id === formData.medicoId);
+      if (!selectedDoctor) {
+        throw new Error('Médico selecionado não encontrado');
+      }
+
+      // Validar se médico está ativo
+      if (!selectedDoctor.ativo) {
+        throw new Error('Médico selecionado não está ativo');
+      }
+
+      // Validar idade vs médico
+      if (selectedDoctor.idade_minima && age < selectedDoctor.idade_minima) {
+        throw new Error(`Paciente muito jovem para este médico (mínimo: ${selectedDoctor.idade_minima} anos)`);
+      }
+      if (selectedDoctor.idade_maxima && age > selectedDoctor.idade_maxima) {
+        throw new Error(`Paciente muito idoso para este médico (máximo: ${selectedDoctor.idade_maxima} anos)`);
+      }
+
+      // Validar convênio aceito
+      if (selectedDoctor.convenios_aceitos && selectedDoctor.convenios_aceitos.length > 0) {
+        if (!selectedDoctor.convenios_aceitos.includes(formData.convenio)) {
+          throw new Error(`Convênio "${formData.convenio}" não é aceito por este médico`);
+        }
+      }
+
+      console.log('✅ Validações rigorosas passaram, verificando disponibilidade...');
+
+      // Verificar conflitos em paralelo (mais eficiente)
+      const [blockedResult, conflictResult] = await Promise.all([
+        supabase
+          .from('bloqueios_agenda')
+          .select('id, motivo')
+          .eq('medico_id', formData.medicoId)
+          .eq('status', 'ativo')
+          .lte('data_inicio', formData.dataAgendamento)
+          .gte('data_fim', formData.dataAgendamento)
+          .maybeSingle(),
+        
+        supabase
+          .from('agendamentos')
+          .select('id, pacientes(nome_completo)')
+          .eq('medico_id', formData.medicoId)
+          .eq('data_agendamento', formData.dataAgendamento)
+          .eq('hora_agendamento', formData.horaAgendamento)
+          .in('status', ['agendado', 'confirmado'])
+          .maybeSingle()
+      ]);
+
+      if (blockedResult.error) {
+        console.error('❌ Erro ao verificar bloqueios:', blockedResult.error);
         throw new Error('Erro ao verificar disponibilidade da agenda');
       }
 
-      if (blockedDate) {
-        throw new Error(`A agenda está bloqueada nesta data. Motivo: ${blockedDate.motivo}`);
+      if (blockedResult.data) {
+        throw new Error(`A agenda está bloqueada nesta data. Motivo: ${blockedResult.data.motivo}`);
       }
 
-      // Verificar se já existe um agendamento no mesmo horário para o mesmo médico
-      const { data: existingAppointment, error: conflictError } = await supabase
-        .from('agendamentos')
-        .select('id')
-        .eq('medico_id', formData.medicoId)
-        .eq('data_agendamento', formData.dataAgendamento)
-        .eq('hora_agendamento', formData.horaAgendamento)
-        .eq('status', 'agendado')
-        .maybeSingle();
-
-      if (conflictError) {
-        console.error('❌ Erro ao verificar conflitos de horário:', conflictError);
+      if (conflictResult.error) {
+        console.error('❌ Erro ao verificar conflitos:', conflictResult.error);
         throw new Error('Erro ao verificar disponibilidade do horário');
       }
 
-      if (existingAppointment) {
+      if (conflictResult.data) {
         throw new Error('Este horário já está ocupado para o médico selecionado. Por favor, escolha outro horário.');
       }
 
