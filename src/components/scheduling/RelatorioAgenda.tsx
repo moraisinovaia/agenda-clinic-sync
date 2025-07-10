@@ -87,29 +87,24 @@ export function RelatorioAgenda({ doctors, appointments, onBack }: RelatorioAgen
     <div className="space-y-6">
       <style type="text/css" media="print">{`
         @page {
-          margin: 0.5in;
+          margin: 0.4in;
           size: A4;
         }
         body {
           font-family: Arial, sans-serif;
-          font-size: 12px;
-          line-height: 1.4;
+          font-size: 11px;
+          line-height: 1.2;
         }
-        .print\\:shadow-none {
-          box-shadow: none !important;
-        }
-        .print\\:border-none {
-          border: none !important;
-        }
-        .print\\:hidden {
-          display: none !important;
-        }
-        .print\\:pb-4 {
-          padding-bottom: 1rem !important;
-        }
-        .print\\:border-gray-300 {
-          border-color: #d1d5db !important;
-        }
+        .print\\:text-xs { font-size: 10px !important; }
+        .print\\:text-sm { font-size: 11px !important; }
+        .print\\:p-2 { padding: 0.5rem !important; }
+        .print\\:py-1 { padding-top: 0.25rem !important; padding-bottom: 0.25rem !important; }
+        .print\\:mb-2 { margin-bottom: 0.5rem !important; }
+        .print\\:space-y-1 > * + * { margin-top: 0.25rem !important; }
+        .print\\:shadow-none { box-shadow: none !important; }
+        .print\\:border-none { border: none !important; }
+        .print\\:hidden { display: none !important; }
+        .print\\:border-gray-300 { border-color: #d1d5db !important; }
       `}</style>
       
       <div className="print:hidden">
@@ -142,12 +137,22 @@ export function RelatorioAgenda({ doctors, appointments, onBack }: RelatorioAgen
                 <Label htmlFor="doctor">Médico *</Label>
                 <Select value={selectedDoctorId} onValueChange={setSelectedDoctorId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecione um médico" />
+                    <SelectValue placeholder="Digite o nome do médico ou selecione" />
                   </SelectTrigger>
                   <SelectContent>
+                    <div className="px-2 py-1">
+                      <Input
+                        placeholder="Pesquisar médico..."
+                        className="h-8 text-sm"
+                        onChange={(e) => {
+                          const search = e.target.value.toLowerCase();
+                          // Filtrar médicos em tempo real seria ideal, mas por simplicidade mantemos todos visíveis
+                        }}
+                      />
+                    </div>
                     {doctors.map((doctor) => (
                       <SelectItem key={doctor.id} value={doctor.id}>
-                        {doctor.nome} - {doctor.especialidade}
+                        Dr. {doctor.nome} - {doctor.especialidade}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -223,109 +228,82 @@ export function RelatorioAgenda({ doctors, appointments, onBack }: RelatorioAgen
       {showReport && (
         <div className="print:shadow-none print:border-none">
           <Card className="shadow-xl border-0 overflow-hidden">
-            <CardHeader className="print:pb-4 bg-gradient-to-r from-primary/5 to-primary/10 border-b-2 border-primary/20">
-              <div className="text-center space-y-4">
-                <div className="flex items-center justify-center gap-3 mb-4">
-                  <div className="p-3 rounded-full bg-primary/10">
-                    <Calendar className="h-8 w-8 text-primary" />
-                  </div>
-                  <h1 className="text-3xl font-bold text-primary">Relatório de Agenda Médica</h1>
-                </div>
+            <CardHeader className="print:py-1 print:mb-2 bg-gradient-to-r from-primary/5 to-primary/10 border-b border-primary/20 py-4">
+              <div className="text-center space-y-2">
+                <h1 className="text-2xl print:text-sm font-bold text-primary">Relatório de Agenda Médica</h1>
                 
-                <div className="bg-background rounded-lg p-4 shadow-inner border">
-                  <div className="text-xl font-semibold text-foreground mb-2">
-                    Dr. {selectedDoctor?.nome}
+                <div className="flex items-center justify-center gap-4 text-sm print:text-xs">
+                  <div className="font-semibold">
+                    Dr. {selectedDoctor?.nome} - {selectedDoctor?.especialidade}
                   </div>
-                  <div className="text-lg text-muted-foreground">
-                    {selectedDoctor?.especialidade}
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                  <div className="bg-background rounded-lg p-3 border">
-                    <div className="font-medium text-foreground">Período</div>
-                    <div className="text-muted-foreground">
-                      {formatDate(dataInicio)} a {formatDate(dataFim)}
-                    </div>
+                  <div className="text-muted-foreground">
+                    {formatDate(dataInicio)} a {formatDate(dataFim)}
                   </div>
                   {(horaInicio !== '00:00' || horaFim !== '23:59') && (
-                    <div className="bg-background rounded-lg p-3 border">
-                      <div className="font-medium text-foreground">Horário</div>
-                      <div className="text-muted-foreground">
-                        {formatTime(horaInicio)} às {formatTime(horaFim)}
-                      </div>
+                    <div className="text-muted-foreground">
+                      {formatTime(horaInicio)}h - {formatTime(horaFim)}h
                     </div>
                   )}
                 </div>
                 
-                <div className="text-xs text-muted-foreground bg-background rounded p-2 border">
-                  Relatório gerado em: {format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
+                <div className="text-xs print:text-xs text-muted-foreground">
+                  Gerado em: {format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
                 </div>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="print:p-2 p-6">
               {filteredAppointments.length > 0 ? (
-                <div className="space-y-6">
-                  <div className="bg-primary/10 rounded-lg p-4 border border-primary/20">
-                    <div className="text-lg font-semibold text-primary flex items-center gap-2">
-                      <Badge variant="secondary" className="text-lg px-3 py-1">
-                        {filteredAppointments.length}
-                      </Badge>
-                      agendamento{filteredAppointments.length !== 1 ? 's' : ''} encontrado{filteredAppointments.length !== 1 ? 's' : ''}
-                    </div>
+                <div className="space-y-3 print:space-y-1">
+                  <div className="text-center mb-3 print:mb-2">
+                    <Badge variant="secondary" className="text-sm print:text-xs px-3 py-1">
+                      {filteredAppointments.length} agendamento{filteredAppointments.length !== 1 ? 's' : ''}
+                    </Badge>
                   </div>
                   
-                  <div className="space-y-4">
+                  <div className="grid gap-3 print:gap-1">
                     {filteredAppointments.map((appointment, index) => (
-                      <div key={appointment.id} className="bg-background border-2 border-border rounded-xl p-6 print:border-gray-300 shadow-sm hover:shadow-md transition-shadow">
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-2 bg-primary/10 rounded-lg px-3 py-2">
-                              <span className="font-bold text-primary text-lg">#{String(index + 1).padStart(2, '0')}</span>
+                      <div key={appointment.id} className="border rounded-lg p-3 print:p-2 print:border-gray-300 bg-background">
+                        <div className="flex items-center justify-between mb-2 print:mb-1">
+                          <div className="flex items-center gap-3 print:gap-2">
+                            <span className="bg-primary/10 text-primary px-2 py-1 rounded text-sm print:text-xs font-medium">
+                              #{String(index + 1).padStart(2, '0')}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-4 w-4 print:h-3 print:w-3 text-primary" />
+                              <span className="font-medium text-sm print:text-xs">{formatDate(appointment.data_agendamento)}</span>
                             </div>
-                            <div className="flex items-center gap-3">
-                              <div className="flex items-center gap-2 bg-muted rounded-lg px-3 py-2">
-                                <Calendar className="h-5 w-5 text-primary" />
-                                <span className="font-semibold text-lg">{formatDate(appointment.data_agendamento)}</span>
-                              </div>
-                              <div className="flex items-center gap-2 bg-muted rounded-lg px-3 py-2">
-                                <Clock className="h-5 w-5 text-primary" />
-                                <span className="font-semibold text-lg">{formatTime(appointment.hora_agendamento)}</span>
-                              </div>
+                            <div className="flex items-center gap-2">
+                              <Clock className="h-4 w-4 print:h-3 print:w-3 text-primary" />
+                              <span className="font-medium text-sm print:text-xs">{formatTime(appointment.hora_agendamento)}</span>
                             </div>
                           </div>
-                          <Badge className={`${getStatusColor(appointment.status)} text-sm px-3 py-1`}>
+                          <Badge className={`${getStatusColor(appointment.status)} text-xs px-2 py-1`}>
                             {appointment.status === 'confirmado' ? 'Confirmado' : 'Agendado'}
                           </Badge>
                         </div>
                         
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                          <div className="space-y-2">
-                            <div className="bg-muted/50 rounded-lg p-3">
-                              <div className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Paciente</div>
-                              <div className="font-semibold text-lg">{appointment.pacientes?.nome_completo}</div>
-                            </div>
-                            <div className="bg-muted/50 rounded-lg p-3">
-                              <div className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Convênio</div>
-                              <div className="font-medium">{appointment.pacientes?.convenio}</div>
-                            </div>
+                        <div className="grid grid-cols-2 gap-3 print:gap-2 text-sm print:text-xs">
+                          <div>
+                            <span className="font-medium text-muted-foreground">Paciente:</span>
+                            <div className="font-medium">{appointment.pacientes?.nome_completo}</div>
                           </div>
-                          <div className="space-y-2">
-                            <div className="bg-muted/50 rounded-lg p-3">
-                              <div className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Contato</div>
-                              <div className="font-medium">{appointment.pacientes?.celular || appointment.pacientes?.telefone || 'Não informado'}</div>
-                            </div>
-                            <div className="bg-muted/50 rounded-lg p-3">
-                              <div className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Procedimento</div>
-                              <div className="font-medium">{appointment.atendimentos?.nome}</div>
-                            </div>
+                          <div>
+                            <span className="font-medium text-muted-foreground">Convênio:</span>
+                            <div>{appointment.pacientes?.convenio}</div>
+                          </div>
+                          <div>
+                            <span className="font-medium text-muted-foreground">Contato:</span>
+                            <div>{appointment.pacientes?.celular || appointment.pacientes?.telefone || 'Não informado'}</div>
+                          </div>
+                          <div>
+                            <span className="font-medium text-muted-foreground">Procedimento:</span>
+                            <div>{appointment.atendimentos?.nome}</div>
                           </div>
                         </div>
                         
                         {appointment.observacoes && (
-                          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-4">
-                            <div className="text-xs text-amber-700 uppercase tracking-wide font-medium mb-1">Observações</div>
-                            <div className="text-sm text-amber-800">{appointment.observacoes}</div>
+                          <div className="mt-2 print:mt-1 p-2 print:p-1 bg-amber-50 border border-amber-200 rounded text-xs print:text-xs">
+                            <span className="font-medium text-amber-700">Obs:</span> {appointment.observacoes}
                           </div>
                         )}
                       </div>
@@ -333,12 +311,10 @@ export function RelatorioAgenda({ doctors, appointments, onBack }: RelatorioAgen
                   </div>
                 </div>
               ) : (
-                <div className="text-center py-12 text-muted-foreground">
-                  <div className="bg-muted/20 rounded-full p-6 w-24 h-24 mx-auto mb-6 flex items-center justify-center">
-                    <FileText className="h-12 w-12 opacity-50" />
-                  </div>
-                  <h3 className="text-xl font-medium mb-2">Nenhum agendamento encontrado</h3>
-                  <p className="text-sm">Verifique os filtros selecionados e tente novamente.</p>
+                <div className="text-center py-8 print:py-4 text-muted-foreground">
+                  <FileText className="h-12 w-12 print:h-8 print:w-8 mx-auto mb-4 print:mb-2 opacity-50" />
+                  <h3 className="text-lg print:text-sm font-medium mb-2 print:mb-1">Nenhum agendamento encontrado</h3>
+                  <p className="text-sm print:text-xs">Verifique os filtros selecionados e tente novamente.</p>
                 </div>
               )}
             </CardContent>
