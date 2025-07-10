@@ -201,15 +201,7 @@ export type Database = {
           status?: string
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "bloqueios_agenda_medico_id_fkey"
-            columns: ["medico_id"]
-            isOneToOne: false
-            referencedRelation: "medicos"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       clinica_valores: {
         Row: {
