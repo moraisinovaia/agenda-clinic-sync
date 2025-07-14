@@ -22,7 +22,7 @@ export const SystemMonitor = () => {
   const checkDatabaseConnection = async () => {
     const startTime = Date.now();
     try {
-      // Use uma tabela pública que não requer autenticação
+      // Teste simples de conectividade com a base de dados
       const { error } = await supabase
         .from('medicos')
         .select('id')
@@ -41,6 +41,7 @@ export const SystemMonitor = () => {
       setStatus(prev => ({
         ...prev,
         databaseConnected: false,
+        responseTime: 0,
         lastUpdate: new Date()
       }));
     }
