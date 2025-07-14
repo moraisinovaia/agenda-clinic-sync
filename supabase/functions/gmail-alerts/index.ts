@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { Resend } from "npm:resend@4.0.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,35 +22,34 @@ const handler = async (req: Request): Promise<Response> => {
   try {
     const { to, subject, message, alertType, data }: AlertEmail = await req.json();
 
-    const gmailUser = Deno.env.get("GMAIL_USER");
-    const gmailPassword = Deno.env.get("GMAIL_APP_PASSWORD");
+    const resendApiKey = Deno.env.get("RESEND_API_KEY");
 
-    if (!gmailUser || !gmailPassword) {
-      throw new Error("Gmail credentials not configured");
+    if (!resendApiKey) {
+      throw new Error("Resend API key not configured");
     }
+
+    const resend = new Resend(resendApiKey);
 
     // Create email content with HTML formatting
     const htmlContent = generateEmailHTML(subject, message, alertType, data);
     
-    // Prepare email data for Gmail SMTP
-    const emailData = {
-      from: gmailUser,
-      to: to,
+    // Send email via Resend
+    const response = await resend.emails.send({
+      from: "Endogastro Alertas <onboarding@resend.dev>",
+      to: [to],
       subject: `[Endogastro] ${subject}`,
       html: htmlContent,
-    };
+    });
 
-    // Send email via Gmail SMTP using fetch to a SMTP service
-    const response = await sendEmailViaGmail(emailData, gmailUser, gmailPassword);
-
-    console.log("Alert email sent successfully:", { to, subject, alertType });
+    console.log("Alert email sent successfully:", { to, subject, alertType, response });
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         message: "Alert sent successfully",
         alertType,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        emailId: response.data?.id
       }),
       {
         status: 200,
@@ -128,35 +128,6 @@ function generateEmailHTML(subject: string, message: string, alertType: string, 
     </body>
     </html>
   `;
-}
-
-async function sendEmailViaGmail(emailData: any, user: string, password: string): Promise<any> {
-  // Use a third-party service or implement SMTP directly
-  // For simplicity, we'll use a service that accepts Gmail credentials
-  // In production, consider using Resend, SendGrid, or similar services
-  
-  const boundary = `boundary_${Date.now()}`;
-  
-  const emailContent = [
-    `To: ${emailData.to}`,
-    `From: ${emailData.from}`,
-    `Subject: ${emailData.subject}`,
-    `MIME-Version: 1.0`,
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
-    '',
-    `--${boundary}`,
-    `Content-Type: text/html; charset=UTF-8`,
-    '',
-    emailData.html,
-    '',
-    `--${boundary}--`
-  ].join('\r\n');
-
-  // For this implementation, we'll use a webhook/service approach
-  // In a real scenario, you'd implement proper SMTP connection
-  console.log("Email would be sent:", emailData);
-  
-  return { success: true, messageId: `msg_${Date.now()}` };
 }
 
 serve(handler);
