@@ -15,23 +15,36 @@ interface AlertEmail {
 }
 
 const handler = async (req: Request): Promise<Response> => {
+  console.log("📧 Gmail alerts function called");
+  
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { to, subject, message, alertType, data }: AlertEmail = await req.json();
+    const requestBody = await req.json();
+    console.log("📨 Request body:", JSON.stringify(requestBody, null, 2));
+    
+    const { to, subject, message, alertType, data }: AlertEmail = requestBody;
+
+    if (!to || !subject || !message) {
+      throw new Error("Missing required fields: to, subject, or message");
+    }
 
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
 
     if (!resendApiKey) {
-      throw new Error("Resend API key not configured");
+      console.error("❌ RESEND_API_KEY não configurada");
+      throw new Error("Resend API key not configured. Please configure RESEND_API_KEY in the edge function secrets.");
     }
 
+    console.log("🔑 Resend API key found, initializing...");
     const resend = new Resend(resendApiKey);
 
     // Create email content with HTML formatting
     const htmlContent = generateEmailHTML(subject, message, alertType, data);
+    
+    console.log("📧 Sending email to:", to);
     
     // Send email via Resend
     const response = await resend.emails.send({
@@ -41,7 +54,7 @@ const handler = async (req: Request): Promise<Response> => {
       html: htmlContent,
     });
 
-    console.log("Alert email sent successfully:", { to, subject, alertType, response });
+    console.log("✅ Email sent successfully:", response);
 
     return new Response(
       JSON.stringify({ 
@@ -49,7 +62,8 @@ const handler = async (req: Request): Promise<Response> => {
         message: "Alert sent successfully",
         alertType,
         timestamp: new Date().toISOString(),
-        emailId: response.data?.id
+        emailId: response.data?.id,
+        to: to
       }),
       {
         status: 200,

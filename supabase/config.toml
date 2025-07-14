@@ -58,3 +58,12 @@ verify_jwt = false
 
 [functions.clinic-data]
 verify_jwt = false
+
+[functions.gmail-alerts]
+verify_jwt = false
+
+[functions.fila-notificacao]
+verify_jwt = false
+
+[functions.whatsapp-availability]
+verify_jwt = false

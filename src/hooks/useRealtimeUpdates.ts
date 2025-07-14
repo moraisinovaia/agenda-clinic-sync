@@ -76,7 +76,7 @@ export const useRealtimeUpdates = (config: RealtimeConfig) => {
             
             if (status === 'SUBSCRIBED') {
               console.log(`✅ Realtime connected for ${config.table}`);
-            } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
               console.warn(`❌ Realtime connection issue for ${config.table}:`, status);
               
               // Only show error notification for critical failures, not connection retries
@@ -85,13 +85,12 @@ export const useRealtimeUpdates = (config: RealtimeConfig) => {
               }
               
               // Retry connection after 5 seconds for non-critical failures
-              if (status !== 'CLOSED') {
-                retryTimeout = setTimeout(() => {
-                  console.log(`🔄 Retrying realtime connection for ${config.table}`);
-                  setupRealtime();
-                }, 5000);
-              }
+              retryTimeout = setTimeout(() => {
+                console.log(`🔄 Retrying realtime connection for ${config.table}`);
+                setupRealtime();
+              }, 5000);
             }
+            // Don't log CLOSED status as it's normal during reconnections
           });
       } catch (error) {
         console.error('Error setting up realtime:', error);
