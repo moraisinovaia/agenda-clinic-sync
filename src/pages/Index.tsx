@@ -12,13 +12,16 @@ import { FilaEsperaList } from '@/components/fila-espera/FilaEsperaList';
 import { RelatorioAgenda } from '@/components/scheduling/RelatorioAgenda';
 
 import { StatsCards } from '@/components/dashboard/StatsCards';
+import { SystemHealthDashboard } from '@/components/dashboard/SystemHealthDashboard';
 import { DoctorsView } from '@/components/dashboard/DoctorsView';
 import { DashboardActions } from '@/components/dashboard/DashboardActions';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
+import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 
 import { useSupabaseScheduling } from '@/hooks/useSupabaseScheduling';
 import { useFilaEspera } from '@/hooks/useFilaEspera';
 import { useViewMode } from '@/hooks/useViewMode';
+import { useNotifications } from '@/hooks/useNotifications';
 import { SchedulingFormData, AppointmentWithRelations } from '@/types/scheduling';
 import { Button } from '@/components/ui/button';
 import { AuthTest } from '@/components/AuthTest';
@@ -83,6 +86,12 @@ const Index = () => {
     getFilaStatus
   } = useFilaEspera();
 
+  const {
+    notifyNewAppointment,
+    notifyAppointmentConflict,
+    notifyCancellation,
+  } = useNotifications();
+
   const handleScheduleDoctor = (doctorId: string) => {
     const doctor = doctors.find(d => d.id === doctorId);
     if (doctor) {
@@ -106,6 +115,13 @@ const Index = () => {
       
       const doctor = doctors.find(d => d.id === formData.medicoId);
       if (doctor) {
+        // Send notification for new appointment
+        notifyNewAppointment(
+          formData.nomeCompleto,
+          doctor.nome,
+          formData.horaAgendamento
+        );
+        
         setSelectedDoctor(doctor);
         setLastAppointmentDate(formData.dataAgendamento);
         setViewMode('schedule');
@@ -143,11 +159,13 @@ const Index = () => {
         onBack={goBack}
         onBackToFilaEspera={goBackToFilaEspera}
         onSignOut={signOut}
+        notificationCenter={<NotificationCenter />}
       />
 
       <div className="container mx-auto px-4 py-6">
         {viewMode === 'doctors' && (
           <>
+            <SystemHealthDashboard doctors={doctors} appointments={appointments} />
             <StatsCards doctors={doctors} appointments={appointments} />
             
             <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
@@ -196,7 +214,8 @@ const Index = () => {
 
         {viewMode === 'appointments-list' && (
           <AppointmentsList 
-            appointments={appointments} 
+            appointments={appointments}
+            doctors={doctors}
             onEditAppointment={handleEditAppointment}
             onCancelAppointment={cancelAppointment}
           />

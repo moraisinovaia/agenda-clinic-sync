@@ -1,23 +1,35 @@
-import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { AppointmentWithRelations } from '@/types/scheduling';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar, Clock, User, Phone, Search } from 'lucide-react';
+import { Calendar, Clock, User, Phone } from 'lucide-react';
+import { AppointmentFilters } from '@/components/filters/AppointmentFilters';
+import { useAdvancedAppointmentFilters } from '@/hooks/useAdvancedAppointmentFilters';
 
 interface AppointmentsListProps {
   appointments: AppointmentWithRelations[];
+  doctors: any[];
   onEditAppointment?: (appointment: AppointmentWithRelations) => void;
   onCancelAppointment?: (appointmentId: string) => void;
 }
 
-export function AppointmentsList({ appointments, onEditAppointment, onCancelAppointment }: AppointmentsListProps) {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+export function AppointmentsList({ appointments, doctors, onEditAppointment, onCancelAppointment }: AppointmentsListProps) {
+  const {
+    searchTerm,
+    statusFilter,
+    dateFilter,
+    doctorFilter,
+    convenioFilter,
+    setSearchTerm,
+    setStatusFilter,
+    setDateFilter,
+    setDoctorFilter,
+    setConvenioFilter,
+    filteredAppointments,
+    getFilterStats,
+  } = useAdvancedAppointmentFilters(appointments);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -29,78 +41,52 @@ export function AppointmentsList({ appointments, onEditAppointment, onCancelAppo
         return 'bg-gray-100 text-gray-800 border-gray-200';
       case 'cancelado':
         return 'bg-red-100 text-red-800 border-red-200';
+      case 'cancelado_bloqueio':
+        return 'bg-orange-100 text-orange-800 border-orange-200';
       default:
         return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
-  const filteredAppointments = appointments.filter(appointment => {
-    const matchesSearch = 
-      appointment.pacientes?.nome_completo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      appointment.medicos?.nome?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    // Se filtro específico para cancelado, mostrar apenas cancelados
-    if (statusFilter === 'cancelado') {
-      return matchesSearch && appointment.status === 'cancelado';
-    }
-    
-    // Por padrão, não mostrar cancelados (exceto quando filtro específico)
-    if (appointment.status === 'cancelado' && statusFilter !== 'cancelado') {
-      return false;
-    }
-    
-    const matchesStatus = statusFilter === 'all' || appointment.status === statusFilter;
-    
-    return matchesSearch && matchesStatus;
-  });
-
-  const sortedAppointments = filteredAppointments.sort((a, b) => {
-    const dateA = new Date(`${a.data_agendamento}T${a.hora_agendamento}`);
-    const dateB = new Date(`${b.data_agendamento}T${b.hora_agendamento}`);
-    return dateB.getTime() - dateA.getTime(); // Mais recentes primeiro
-  });
+  const { total, filtered } = getFilterStats();
 
   return (
     <div className="space-y-6">
+      {/* Advanced Filters */}
+      <AppointmentFilters
+        searchTerm={searchTerm}
+        onSearchChange={setSearchTerm}
+        statusFilter={statusFilter}
+        onStatusChange={setStatusFilter}
+        dateFilter={dateFilter}
+        onDateFilterChange={setDateFilter}
+        doctorFilter={doctorFilter}
+        onDoctorFilterChange={setDoctorFilter}
+        convenioFilter={convenioFilter}
+        onConvenioFilterChange={setConvenioFilter}
+        doctors={doctors}
+        appointments={appointments}
+      />
+
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            Lista de Agendamentos
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              Lista de Agendamentos
+            </CardTitle>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>Mostrando {filtered} de {total} agendamentos</span>
+            </div>
+          </div>
         </CardHeader>
         
         <CardContent className="space-y-4">
-          {/* Filtros */}
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por paciente ou médico..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue placeholder="Filtrar por status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os status</SelectItem>
-                <SelectItem value="agendado">Agendado</SelectItem>
-                <SelectItem value="confirmado">Confirmado</SelectItem>
-                <SelectItem value="realizado">Realizado</SelectItem>
-                <SelectItem value="cancelado">Cancelado</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
 
           {/* Lista de agendamentos */}
           <div className="space-y-3">
-            {sortedAppointments.length > 0 ? (
-              sortedAppointments.map((appointment) => (
+            {filteredAppointments.length > 0 ? (
+              filteredAppointments.map((appointment) => (
                 <Card key={appointment.id} className="border-l-4 border-l-primary">
                   <CardContent className="p-4">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -187,10 +173,10 @@ export function AppointmentsList({ appointments, onEditAppointment, onCancelAppo
             ) : (
               <Card className="p-8 text-center">
                 <p className="text-muted-foreground">
-                  {searchTerm || statusFilter !== 'all' 
-                    ? 'Nenhum agendamento encontrado com os filtros aplicados'
-                    : 'Nenhum agendamento encontrado'
-                  }
+                  Nenhum agendamento encontrado com os filtros aplicados
+                </p>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Total de agendamentos: {total}
                 </p>
               </Card>
             )}

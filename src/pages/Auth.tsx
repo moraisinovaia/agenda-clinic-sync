@@ -1,19 +1,27 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, User, Lock, Mail, AtSign } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Loader2, User, Lock, Mail, AtSign, AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/hooks/useAuth';
+import { useRememberMe } from '@/hooks/useRememberMe';
+import { useToast } from '@/hooks/use-toast';
 
 export default function Auth() {
   const { user, loading, signIn, signUp } = useAuth();
+  const { rememberMe, savedUsername, saveCredentials } = useRememberMe();
+  const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [rememberMeChecked, setRememberMeChecked] = useState(false);
   
   const [loginData, setLoginData] = useState({
-    emailOrUsername: '',
+    emailOrUsername: savedUsername || '',
     password: ''
   });
   
@@ -25,6 +33,14 @@ export default function Auth() {
     confirmPassword: ''
   });
 
+  // Set initial remember me state and load saved username
+  useEffect(() => {
+    setRememberMeChecked(rememberMe);
+    if (savedUsername) {
+      setLoginData(prev => ({ ...prev, emailOrUsername: savedUsername }));
+    }
+  }, [rememberMe, savedUsername]);
+
   // Redirecionar se já estiver autenticado
   if (user && !loading) {
     return <Navigate to="/" replace />;
@@ -32,27 +48,82 @@ export default function Auth() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!loginData.emailOrUsername || !loginData.password) return;
+    if (!loginData.emailOrUsername || !loginData.password) {
+      setError('Por favor, preencha todos os campos');
+      return;
+    }
     
+    setError(null);
     setIsLoading(true);
-    await signIn(loginData.emailOrUsername, loginData.password);
-    setIsLoading(false);
+    
+    try {
+      await signIn(loginData.emailOrUsername, loginData.password);
+      
+      // Save credentials if remember me is checked
+      saveCredentials(loginData.emailOrUsername, rememberMeChecked);
+      
+      toast({
+        title: 'Login realizado com sucesso!',
+        description: 'Bem-vindo ao sistema de agendamentos.',
+      });
+    } catch (error: any) {
+      const errorMessage = error.message === 'Invalid credentials' 
+        ? 'Email/usuário ou senha incorretos'
+        : 'Erro ao fazer login. Tente novamente.';
+      
+      setError(errorMessage);
+      toast({
+        title: 'Erro no login',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!signupData.nome || !signupData.username || !signupData.email || !signupData.password) {
+      setError('Por favor, preencha todos os campos obrigatórios');
       return;
     }
     
     if (signupData.password !== signupData.confirmPassword) {
+      setError('As senhas não coincidem');
+      return;
+    }
+
+    if (signupData.password.length < 6) {
+      setError('A senha deve ter pelo menos 6 caracteres');
       return;
     }
     
+    setError(null);
     setIsLoading(true);
-    await signUp(signupData.email, signupData.password, signupData.nome, signupData.username);
-    setIsLoading(false);
+    
+    try {
+      await signUp(signupData.email, signupData.password, signupData.nome, signupData.username);
+      
+      toast({
+        title: 'Conta criada com sucesso!',
+        description: 'Você pode fazer login agora.',
+      });
+    } catch (error: any) {
+      const errorMessage = error.message.includes('already registered')
+        ? 'Este email já está cadastrado'
+        : 'Erro ao criar conta. Tente novamente.';
+      
+      setError(errorMessage);
+      toast({
+        title: 'Erro ao criar conta',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (loading) {
@@ -78,6 +149,13 @@ export default function Auth() {
             </TabsList>
             
             <TabsContent value="login" className="space-y-4">
+              {error && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+              
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="login-emailOrUsername">Email ou Nome de Usuário</Label>
@@ -110,6 +188,18 @@ export default function Auth() {
                     />
                   </div>
                 </div>
+
+                {/* Remember Me Checkbox */}
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="remember-me"
+                    checked={rememberMeChecked}
+                    onCheckedChange={(checked) => setRememberMeChecked(checked as boolean)}
+                  />
+                  <Label htmlFor="remember-me" className="text-sm">
+                    Lembrar de mim
+                  </Label>
+                </div>
                 
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? (
@@ -125,6 +215,13 @@ export default function Auth() {
             </TabsContent>
             
             <TabsContent value="signup" className="space-y-4">
+              {error && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+              
               <form onSubmit={handleSignup} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="signup-nome">Nome Completo</Label>

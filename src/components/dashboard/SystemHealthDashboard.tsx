@@ -1,218 +1,127 @@
 import { useState, useEffect } from 'react';
+import { Activity, Wifi, WifiOff, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/integrations/supabase/client';
-import { 
-  Activity, 
-  AlertCircle, 
-  CheckCircle2, 
-  Clock, 
-  Users, 
-  Calendar,
-  Database,
-  Wifi
-} from 'lucide-react';
 
-interface SystemHealth {
-  dbConnection: 'connected' | 'error' | 'checking';
-  appointmentsToday: number;
-  activeUsers: number;
-  recentErrors: any[];
-  lastUpdate: Date;
+interface SystemHealthProps {
+  doctors: any[];
+  appointments: any[];
 }
 
-export function SystemHealthDashboard() {
-  const [health, setHealth] = useState<SystemHealth>({
-    dbConnection: 'checking',
-    appointmentsToday: 0,
-    activeUsers: 0,
-    recentErrors: [],
-    lastUpdate: new Date()
-  });
-
-  const checkSystemHealth = async () => {
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      
-      // Verificar conexão DB e buscar dados
-      const [appointmentsResult, profilesResult] = await Promise.all([
-        supabase
-          .from('agendamentos')
-          .select('id, status')
-          .eq('data_agendamento', today)
-          .in('status', ['agendado', 'confirmado']),
-        
-        supabase
-          .from('profiles')
-          .select('id')
-          .eq('ativo', true)
-      ]);
-
-      // Buscar erros recentes da auditoria (se existir)
-      const auditResult = await supabase
-        .from('agendamentos_audit')
-        .select('*')
-        .gte('changed_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
-        .order('changed_at', { ascending: false })
-        .limit(10);
-
-      setHealth({
-        dbConnection: 'connected',
-        appointmentsToday: appointmentsResult.data?.length || 0,
-        activeUsers: profilesResult.data?.length || 0,
-        recentErrors: auditResult.data || [],
-        lastUpdate: new Date()
-      });
-
-    } catch (error) {
-      console.error('Erro ao verificar saúde do sistema:', error);
-      setHealth(prev => ({
-        ...prev,
-        dbConnection: 'error',
-        lastUpdate: new Date()
-      }));
-    }
-  };
+export const SystemHealthDashboard = ({ doctors, appointments }: SystemHealthProps) => {
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [dbStatus, setDbStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+  const [lastSync, setLastSync] = useState<Date>(new Date());
 
   useEffect(() => {
-    checkSystemHealth();
-    const interval = setInterval(checkSystemHealth, 30000); // Check a cada 30s
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    checkDatabaseConnection();
+    
+    const interval = setInterval(() => {
+      checkDatabaseConnection();
+      setLastSync(new Date());
+    }, 30000);
+
     return () => clearInterval(interval);
   }, []);
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'connected':
-        return <CheckCircle2 className="h-4 w-4 text-green-600" />;
-      case 'error':
-        return <AlertCircle className="h-4 w-4 text-red-600" />;
-      case 'checking':
-        return <Clock className="h-4 w-4 text-yellow-600 animate-pulse" />;
-      default:
-        return <AlertCircle className="h-4 w-4 text-gray-400" />;
+  const checkDatabaseConnection = async () => {
+    try {
+      setDbStatus('checking');
+      await supabase.from('profiles').select('id').limit(1);
+      setDbStatus('online');
+    } catch (error) {
+      setDbStatus('offline');
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'connected':
-        return 'bg-green-100 text-green-800 border-green-200';
-      case 'error':
-        return 'bg-red-100 text-red-800 border-red-200';
-      case 'checking':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
+  const today = new Date().toISOString().split('T')[0];
+  const todayAppointments = appointments.filter(apt => apt.data_agendamento === today).length;
+  const activeDoctors = doctors.filter(d => d.ativo).length;
+  const occupationRate = activeDoctors > 0 ? Math.round((todayAppointments / (activeDoctors * 8)) * 100) : 0;
+
+  const getHealthStatus = () => {
+    if (!isOnline || dbStatus === 'offline') return 'critical';
+    return 'healthy';
   };
+
+  const healthStatus = getHealthStatus();
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold flex items-center gap-2">
-          <Activity className="h-5 w-5" />
-          Saúde do Sistema
-        </h3>
-        <Badge variant="outline" className="text-xs">
-          Última atualização: {health.lastUpdate.toLocaleTimeString()}
-        </Badge>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Status da Conexão */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Wifi className="h-4 w-4" />
-              Conexão DB
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              {getStatusIcon(health.dbConnection)}
-              <Badge className={getStatusColor(health.dbConnection)}>
-                {health.dbConnection === 'connected' && 'Conectado'}
-                {health.dbConnection === 'error' && 'Erro'}
-                {health.dbConnection === 'checking' && 'Verificando...'}
-              </Badge>
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Status do Sistema</CardTitle>
+          <Activity className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center space-x-2">
+            {healthStatus === 'healthy' ? (
+              <CheckCircle className="h-4 w-4 text-green-500" />
+            ) : (
+              <AlertTriangle className="h-4 w-4 text-red-500" />
+            )}
+            <Badge variant={healthStatus === 'healthy' ? 'default' : 'destructive'}>
+              {healthStatus === 'healthy' ? 'Saudável' : 'Crítico'}
+            </Badge>
+          </div>
+          <div className="mt-2 space-y-1">
+            <div className="flex items-center text-xs text-muted-foreground">
+              {isOnline ? (
+                <Wifi className="h-3 w-3 mr-1 text-green-500" />
+              ) : (
+                <WifiOff className="h-3 w-3 mr-1 text-red-500" />
+              )}
+              {isOnline ? 'Online' : 'Offline'}
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Agendamentos Hoje */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              Agendamentos Hoje
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-primary">
-              {health.appointmentsToday}
+            <div className="flex items-center text-xs text-muted-foreground">
+              <div className={`h-2 w-2 rounded-full mr-1 ${
+                dbStatus === 'online' ? 'bg-green-500' : 
+                dbStatus === 'offline' ? 'bg-red-500' : 'bg-yellow-500'
+              }`} />
+              DB: {dbStatus === 'online' ? 'Conectado' : 
+                   dbStatus === 'offline' ? 'Desconectado' : 'Verificando...'}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Agendados e confirmados
-            </p>
-          </CardContent>
-        </Card>
+          </div>
+        </CardContent>
+      </Card>
 
-        {/* Usuários Ativos */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              Usuários Ativos
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-primary">
-              {health.activeUsers}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Recepcionistas ativas
-            </p>
-          </CardContent>
-        </Card>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Ocupação Hoje</CardTitle>
+          <Clock className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">{occupationRate}%</div>
+          <Progress value={occupationRate} className="mt-2" />
+          <p className="text-xs text-muted-foreground mt-2">
+            {todayAppointments} agendamentos hoje
+          </p>
+        </CardContent>
+      </Card>
 
-        {/* Atividade Recente */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Database className="h-4 w-4" />
-              Atividade
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-primary">
-              {health.recentErrors.length}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Operações (24h)
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Alertas do Sistema */}
-      {health.dbConnection === 'error' && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            Problema de conexão com o banco de dados. Verifique sua conexão de internet ou contate o suporte.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {health.appointmentsToday > 50 && (
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            Alto volume de agendamentos hoje ({health.appointmentsToday}). Monitore a capacidade da clínica.
-          </AlertDescription>
-        </Alert>
-      )}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            <span>Última sincronização:</span>
+            <span>{lastSync.toLocaleTimeString('pt-BR')}</span>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
-}
+};

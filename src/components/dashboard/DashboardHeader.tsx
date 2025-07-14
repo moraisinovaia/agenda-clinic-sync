@@ -10,14 +10,16 @@ interface DashboardHeaderProps {
   onBack: () => void;
   onBackToFilaEspera: () => void;
   onSignOut: () => void;
+  notificationCenter?: React.ReactNode;
 }
 
 export const DashboardHeader = ({ 
   viewMode, 
   profileName, 
   onBack, 
-  onBackToFilaEspera, 
-  onSignOut 
+  onBackToFilaEspera,
+  onSignOut,
+  notificationCenter
 }: DashboardHeaderProps) => {
   return (
     <div className="border-b bg-card">
@@ -45,6 +47,8 @@ export const DashboardHeader = ({
           </div>
           
           <div className="flex items-center gap-2">
+            {notificationCenter}
+            
             {viewMode !== 'doctors' && (
               <Button 
                 onClick={viewMode === 'nova-fila' ? onBackToFilaEspera : onBack} 
