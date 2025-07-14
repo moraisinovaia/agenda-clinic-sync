@@ -1,5 +1,8 @@
 import { Button } from '@/components/ui/button';
 import { InstallButton } from '@/components/InstallButton';
+import { NotificationCenter } from '@/components/notifications/NotificationCenter';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { KeyboardShortcutsHelp } from '@/components/ui/keyboard-shortcuts-help';
 import endogastroLogo from '@/assets/endogastro-logo.png';
 
 type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos' | 'fila-espera' | 'nova-fila' | 'bloqueio-agenda' | 'relatorio-agenda' | 'auth-test';
@@ -47,7 +50,9 @@ export const DashboardHeader = ({
           </div>
           
           <div className="flex items-center gap-2">
-            {notificationCenter}
+            <KeyboardShortcutsHelp />
+            <ThemeToggle />
+            <NotificationCenter />
             
             {viewMode !== 'doctors' && (
               <Button 

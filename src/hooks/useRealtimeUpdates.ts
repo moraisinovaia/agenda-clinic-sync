@@ -67,8 +67,11 @@ export const useRealtimeUpdates = (config: RealtimeConfig) => {
         handleDelete
       )
       .subscribe((status) => {
-        if (status === 'SUBSCRIPTION_ERROR') {
-          notifySystemError('Erro na conexão em tempo real');
+        if (status !== 'SUBSCRIBED') {
+          console.error('Realtime subscription error:', status);
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            notifySystemError('Erro na conexão em tempo real');
+          }
         }
       });
 

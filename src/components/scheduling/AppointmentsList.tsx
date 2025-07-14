@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar, Clock, User, Phone } from 'lucide-react';
 import { AppointmentFilters } from '@/components/filters/AppointmentFilters';
 import { useAdvancedAppointmentFilters } from '@/hooks/useAdvancedAppointmentFilters';
+import { useDebounce } from '@/hooks/useDebounce';
 
 interface AppointmentsListProps {
   appointments: AppointmentWithRelations[];
@@ -30,6 +31,9 @@ export function AppointmentsList({ appointments, doctors, onEditAppointment, onC
     filteredAppointments,
     getFilterStats,
   } = useAdvancedAppointmentFilters(appointments);
+
+  // Debounce search to improve performance
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   const getStatusColor = (status: string) => {
     switch (status) {

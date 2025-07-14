@@ -66,10 +66,10 @@ export const SystemMonitor = () => {
     };
   }, []);
 
-  const getStatusColor = () => {
+  const getStatusColor = (): "default" | "destructive" | "secondary" | "outline" => {
     if (!status.isOnline || !status.databaseConnected) return 'destructive';
-    if (status.responseTime > 1000) return 'warning';
-    return 'success';
+    if (status.responseTime > 1000) return 'secondary';
+    return 'default';
   };
 
   const getStatusText = () => {
@@ -116,7 +116,7 @@ export const SystemMonitor = () => {
         {status.databaseConnected && (
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted-foreground">Latência</span>
-            <Badge variant={status.responseTime > 1000 ? 'warning' : 'default'}>
+            <Badge variant={status.responseTime > 1000 ? 'secondary' : 'default'}>
               {status.responseTime}ms
             </Badge>
           </div>

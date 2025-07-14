@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useSupabaseScheduling } from '@/hooks/useSupabaseScheduling';
+import { useKeyboardShortcuts, DEFAULT_SHORTCUTS } from '@/hooks/useKeyboardShortcuts';
+import { useNotifications } from '@/hooks/useNotifications';
 
 import { SchedulingForm } from '@/components/scheduling/SchedulingForm';
 import { DoctorSchedule } from '@/components/scheduling/DoctorSchedule';
@@ -16,18 +19,75 @@ import { SystemHealthDashboard } from '@/components/dashboard/SystemHealthDashbo
 import { DoctorsView } from '@/components/dashboard/DoctorsView';
 import { DashboardActions } from '@/components/dashboard/DashboardActions';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
-import { NotificationCenter } from '@/components/notifications/NotificationCenter';
+import { 
+  LazyDashboard, 
+  LazySchedulingForm, 
+  LazyAppointmentsList, 
+  LazyFilaEspera, 
+  LazyPreparos,
+  LazyWrapper 
+} from '@/components/performance/LazyComponents';
+import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
+import { SystemMonitor } from '@/components/system/SystemMonitor';
 
-import { useSupabaseScheduling } from '@/hooks/useSupabaseScheduling';
 import { useFilaEspera } from '@/hooks/useFilaEspera';
 import { useViewMode } from '@/hooks/useViewMode';
-import { useNotifications } from '@/hooks/useNotifications';
 import { SchedulingFormData, AppointmentWithRelations } from '@/types/scheduling';
 import { Button } from '@/components/ui/button';
 import { AuthTest } from '@/components/AuthTest';
 
 const Index = () => {
   const { user, profile, loading: authLoading, signOut } = useAuth();
+  const {
+    viewMode,
+    setViewMode,
+    selectedDoctor,
+    setSelectedDoctor,
+    lastAppointmentDate,
+    setLastAppointmentDate,
+    editingAppointment,
+    setEditingAppointment,
+    goBack,
+    goBackToFilaEspera
+  } = useViewMode();
+  const notifications = useNotifications();
+
+  // Setup keyboard shortcuts
+  const shortcuts = [
+    ...DEFAULT_SHORTCUTS,
+    {
+      key: 'n',
+      ctrlKey: true,
+      action: () => setViewMode('new-appointment'),
+      description: 'Ctrl+N - Novo agendamento'
+    },
+    {
+      key: 'l',
+      ctrlKey: true,
+      action: () => setViewMode('appointments-list'),
+      description: 'Ctrl+L - Lista de agendamentos'
+    },
+    {
+      key: 'd',
+      ctrlKey: true,
+      action: () => setViewMode('doctors'),
+      description: 'Ctrl+D - Dashboard'
+    }
+  ];
+
+  useKeyboardShortcuts(shortcuts);
+
+  // Setup realtime updates
+  useRealtimeUpdates({
+    table: 'agendamentos',
+    onInsert: (payload) => {
+      console.log('Novo agendamento em tempo real:', payload);
+      // Optionally refresh data
+    },
+    onUpdate: (payload) => {
+      console.log('Agendamento atualizado:', payload);
+    }
+  });
   
   // Redirecionar para login se não autenticado
   if (!authLoading && !user) {
@@ -45,20 +105,8 @@ const Index = () => {
       </div>
     );
   }
-  const [searchTerm, setSearchTerm] = useState('');
   
-  const {
-    viewMode,
-    setViewMode,
-    selectedDoctor,
-    setSelectedDoctor,
-    lastAppointmentDate,
-    setLastAppointmentDate,
-    editingAppointment,
-    setEditingAppointment,
-    goBack,
-    goBackToFilaEspera
-  } = useViewMode();
+  const [searchTerm, setSearchTerm] = useState('');
 
   const {
     doctors,
@@ -159,30 +207,37 @@ const Index = () => {
         onBack={goBack}
         onBackToFilaEspera={goBackToFilaEspera}
         onSignOut={signOut}
-        notificationCenter={<NotificationCenter />}
       />
 
       <div className="container mx-auto px-4 py-6">
         {viewMode === 'doctors' && (
-          <>
-            <SystemHealthDashboard doctors={doctors} appointments={appointments} />
-            <StatsCards doctors={doctors} appointments={appointments} />
-            
-            <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-              <div className="relative max-w-md">
-                {/* This will be moved to DoctorsView component */}
-              </div>
-              <DashboardActions onViewChange={setViewMode} />
-            </div>
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+              <div className="lg:col-span-3">
+                <SystemHealthDashboard doctors={doctors} appointments={appointments} />
+                <StatsCards doctors={doctors} appointments={appointments} />
+                
+                <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                  <div className="relative max-w-md">
+                    {/* This will be moved to DoctorsView component */}
+                  </div>
+                  <DashboardActions onViewChange={setViewMode} />
+                </div>
 
-            <DoctorsView
-              doctors={doctors}
-              searchTerm={searchTerm}
-              onSearchChange={setSearchTerm}
-              onScheduleDoctor={handleScheduleDoctor}
-              onViewSchedule={handleViewSchedule}
-            />
-          </>
+                <DoctorsView
+                  doctors={doctors}
+                  searchTerm={searchTerm}
+                  onSearchChange={setSearchTerm}
+                  onScheduleDoctor={handleScheduleDoctor}
+                  onViewSchedule={handleViewSchedule}
+                />
+              </div>
+              
+              <div className="lg:col-span-1">
+                <SystemMonitor />
+              </div>
+            </div>
+          </div>
         )}
 
         {viewMode === 'schedule' && selectedDoctor && (
