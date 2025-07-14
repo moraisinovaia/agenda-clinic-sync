@@ -40,6 +40,10 @@ import { AuthTest } from '@/components/AuthTest';
 
 const Index = () => {
   const { user, profile, loading: authLoading, signOut } = useAuth();
+  
+  // Estados sempre inicializados na mesma ordem (antes de qualquer return)
+  const [searchTerm, setSearchTerm] = useState('');
+  
   const {
     viewMode,
     setViewMode,
@@ -52,6 +56,38 @@ const Index = () => {
     goBack,
     goBackToFilaEspera
   } = useViewMode();
+
+  const {
+    doctors,
+    atendimentos,
+    appointments,
+    blockedDates,
+    loading,
+    createAppointment,
+    cancelAppointment,
+    searchPatientsByBirthDate,
+    getAtendimentosByDoctor,
+    getAppointmentsByDoctorAndDate,
+    isDateBlocked,
+    getBlockedDatesByDoctor
+  } = useSupabaseScheduling();
+
+  const {
+    filaEspera,
+    loading: filaLoading,
+    error: filaError,
+    fetchFilaEspera,
+    adicionarFilaEspera,
+    atualizarStatusFila,
+    removerDaFila,
+    getFilaStatus
+  } = useFilaEspera();
+
+  const {
+    notifyNewAppointment,
+    notifyAppointmentConflict,
+    notifyCancellation,
+  } = useNotifications();
 
   // Setup keyboard shortcuts
   const shortcuts = [
@@ -125,41 +161,6 @@ const Index = () => {
       </div>
     );
   }
-  
-  // Estados sempre inicializados na mesma ordem
-  const [searchTerm, setSearchTerm] = useState('');
-
-  const {
-    doctors,
-    atendimentos,
-    appointments,
-    blockedDates,
-    loading,
-    createAppointment,
-    cancelAppointment,
-    searchPatientsByBirthDate,
-    getAtendimentosByDoctor,
-    getAppointmentsByDoctorAndDate,
-    isDateBlocked,
-    getBlockedDatesByDoctor
-  } = useSupabaseScheduling();
-
-  const {
-    filaEspera,
-    loading: filaLoading,
-    error: filaError,
-    fetchFilaEspera,
-    adicionarFilaEspera,
-    atualizarStatusFila,
-    removerDaFila,
-    getFilaStatus
-  } = useFilaEspera();
-
-  const {
-    notifyNewAppointment,
-    notifyAppointmentConflict,
-    notifyCancellation,
-  } = useNotifications();
 
   const handleScheduleDoctor = (doctorId: string) => {
     const doctor = doctors.find(d => d.id === doctorId);
