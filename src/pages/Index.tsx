@@ -378,19 +378,7 @@ const Index = () => {
         )}
 
         {viewMode === 'bloqueio-agenda' && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold">Bloqueio de Agenda Médica</h2>
-                <p className="text-muted-foreground mt-1">
-                  Bloqueie a agenda de um médico e notifique automaticamente os pacientes
-                </p>
-              </div>
-            </div>
-            <div className="flex justify-center">
-              <BloqueioAgenda />
-            </div>
-          </div>
+          <BloqueioAgenda onBack={goBack} />
         )}
 
         {viewMode === 'auth-test' && (

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, AlertTriangle, Clock, User, FileText, Check, ChevronsUpDown } from 'lucide-react';
+import { Calendar, AlertTriangle, Clock, User, FileText, Check, ChevronsUpDown, ArrowLeft, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -17,7 +17,11 @@ interface Medico {
   especialidade: string;
 }
 
-export const BloqueioAgenda: React.FC = () => {
+interface BloqueioAgendaProps {
+  onBack?: () => void;
+}
+
+export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack }) => {
   const [loading, setLoading] = useState(false);
   const [loadingMedicos, setLoadingMedicos] = useState(true);
   const [medicos, setMedicos] = useState<Medico[]>([]);
@@ -26,6 +30,7 @@ export const BloqueioAgenda: React.FC = () => {
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
   const [motivo, setMotivo] = useState('');
+  const [showConfirmation, setShowConfirmation] = useState(false);
   const { toast } = useToast();
 
   // Carregar médicos diretamente da base de dados
@@ -63,7 +68,7 @@ export const BloqueioAgenda: React.FC = () => {
     carregarMedicos();
   }, [toast]);
 
-  const handleBloqueioAgenda = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!medicoId || !dataInicio || !dataFim || !motivo) {
@@ -84,7 +89,12 @@ export const BloqueioAgenda: React.FC = () => {
       return;
     }
 
+    setShowConfirmation(true);
+  };
+
+  const handleBloqueioAgenda = async () => {
     setLoading(true);
+    setShowConfirmation(false);
 
     try {
       console.log('🔒 Enviando bloqueio de agenda...');
@@ -139,16 +149,28 @@ export const BloqueioAgenda: React.FC = () => {
   const medicoSelecionado = medicos.find(m => m.id === medicoId);
 
   return (
-    <Card className="w-full max-w-2xl">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <AlertTriangle className="h-5 w-5 text-destructive" />
-          Bloqueio de Agenda Médica
-        </CardTitle>
-        <CardDescription>
-          Bloqueie a agenda de um médico e notifique automaticamente os pacientes agendados via WhatsApp
-        </CardDescription>
-      </CardHeader>
+    <div className="w-full max-w-4xl mx-auto space-y-4">
+      {onBack && (
+        <Button 
+          onClick={onBack}
+          variant="outline" 
+          className="flex items-center gap-2"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Voltar ao Dashboard
+        </Button>
+      )}
+      
+      <Card className="w-full">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-destructive" />
+            Bloqueio de Agenda Médica
+          </CardTitle>
+          <CardDescription>
+            Bloqueie a agenda de um médico e notifique automaticamente os pacientes agendados via WhatsApp
+          </CardDescription>
+        </CardHeader>
       
       <CardContent>
         {loadingMedicos ? (
@@ -161,7 +183,7 @@ export const BloqueioAgenda: React.FC = () => {
             <p className="text-muted-foreground">Nenhum médico ativo encontrado</p>
           </div>
         ) : (
-        <form onSubmit={handleBloqueioAgenda} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6">
           {/* Seleção do Médico */}
           <div className="space-y-2">
             <Label className="flex items-center gap-2">
@@ -300,5 +322,59 @@ export const BloqueioAgenda: React.FC = () => {
         )}
       </CardContent>
     </Card>
+
+    {/* Modal de Confirmação */}
+    {showConfirmation && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-destructive">
+              <AlertCircle className="h-5 w-5" />
+              Confirmar Bloqueio de Agenda
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
+              <p className="text-sm text-destructive font-medium mb-2">
+                ⚠️ Esta ação NÃO pode ser desfeita!
+              </p>
+              <ul className="text-sm space-y-1">
+                <li>• Médico: <strong>{medicoSelecionado?.nome}</strong></li>
+                <li>• Período: <strong>{new Date(dataInicio).toLocaleDateString('pt-BR')}</strong> até <strong>{new Date(dataFim).toLocaleDateString('pt-BR')}</strong></li>
+                <li>• Todos os agendamentos serão cancelados</li>
+                <li>• Pacientes serão notificados via WhatsApp</li>
+              </ul>
+            </div>
+            
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowConfirmation(false)}
+                className="flex-1"
+                disabled={loading}
+              >
+                Cancelar
+              </Button>
+              <Button 
+                variant="destructive" 
+                onClick={handleBloqueioAgenda}
+                className="flex-1"
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <Clock className="mr-2 h-4 w-4 animate-spin" />
+                    Processando...
+                  </>
+                ) : (
+                  'Confirmar Bloqueio'
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )}
+    </div>
   );
 };
