@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Wifi, WifiOff, Database, DatabaseZap } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAlertSystem } from '@/hooks/useAlertSystem';
 
 interface SystemStatus {
   isOnline: boolean;
@@ -12,6 +13,7 @@ interface SystemStatus {
 }
 
 export const SystemMonitor = () => {
+  const { sendDatabaseIssueAlert, sendSystemDownAlert } = useAlertSystem();
   const [status, setStatus] = useState<SystemStatus>({
     isOnline: navigator.onLine,
     databaseConnected: false,
@@ -31,13 +33,28 @@ export const SystemMonitor = () => {
       const endTime = Date.now();
       const responseTime = endTime - startTime;
 
+      const wasConnected = status.databaseConnected;
+      const isNowConnected = !error;
+
+      // Enviar alerta se o status mudou de conectado para desconectado
+      if (wasConnected && !isNowConnected && error) {
+        await sendDatabaseIssueAlert(error);
+      }
+
       setStatus(prev => ({
         ...prev,
-        databaseConnected: !error,
+        databaseConnected: isNowConnected,
         responseTime,
         lastUpdate: new Date()
       }));
     } catch (error) {
+      const wasConnected = status.databaseConnected;
+      
+      // Enviar alerta se estava conectado e agora não está
+      if (wasConnected) {
+        await sendSystemDownAlert({ error });
+      }
+
       setStatus(prev => ({
         ...prev,
         databaseConnected: false,

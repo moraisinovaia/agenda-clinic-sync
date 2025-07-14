@@ -19,6 +19,7 @@ import { SystemHealthDashboard } from '@/components/dashboard/SystemHealthDashbo
 import { DoctorsView } from '@/components/dashboard/DoctorsView';
 import { DashboardActions } from '@/components/dashboard/DashboardActions';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
+import { AlertSystem } from '@/components/alerts/AlertSystem';
 import { 
   LazyDashboard, 
   LazySchedulingForm, 
@@ -376,6 +377,10 @@ const Index = () => {
               <AuthTest />
             </div>
           </div>
+        )}
+
+        {viewMode === 'alertas' && (
+          <AlertSystem />
         )}
       </div>
     </div>

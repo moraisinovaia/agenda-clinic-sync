@@ -1,7 +1,7 @@
-import { Calendar, Clock } from 'lucide-react';
+import { Calendar, Clock, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos' | 'fila-espera' | 'nova-fila' | 'bloqueio-agenda' | 'relatorio-agenda' | 'auth-test';
+type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos' | 'fila-espera' | 'nova-fila' | 'bloqueio-agenda' | 'relatorio-agenda' | 'auth-test' | 'alertas';
 
 interface DashboardActionsProps {
   onViewChange: (view: ViewMode) => void;
@@ -50,6 +50,15 @@ export const DashboardActions = ({ onViewChange }: DashboardActionsProps) => {
         className="flex items-center gap-2"
       >
         🚫 Bloquear Agenda
+      </Button>
+      
+      <Button 
+        onClick={() => onViewChange('alertas')}
+        variant="outline"
+        className="flex items-center gap-2"
+      >
+        <Bell className="h-4 w-4" />
+        Sistema de Alertas
       </Button>
       
       <Button 
