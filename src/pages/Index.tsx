@@ -213,7 +213,6 @@ const Index = () => {
           <div className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
               <div className="lg:col-span-3">
-                <SystemHealthDashboard doctors={doctors} appointments={appointments} />
                 <StatsCards doctors={doctors} appointments={appointments} />
                 
                 <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
