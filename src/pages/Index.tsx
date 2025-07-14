@@ -50,7 +50,6 @@ const Index = () => {
     goBack,
     goBackToFilaEspera
   } = useViewMode();
-  const notifications = useNotifications();
 
   // Setup keyboard shortcuts
   const shortcuts = [

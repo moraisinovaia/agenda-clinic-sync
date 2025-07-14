@@ -22,8 +22,9 @@ export const SystemMonitor = () => {
   const checkDatabaseConnection = async () => {
     const startTime = Date.now();
     try {
+      // Use uma tabela pública que não requer autenticação
       const { error } = await supabase
-        .from('profiles')
+        .from('medicos')
         .select('id')
         .limit(1);
       
