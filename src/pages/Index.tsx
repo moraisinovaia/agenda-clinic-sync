@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useSupabaseScheduling } from '@/hooks/useSupabaseScheduling';
@@ -34,6 +34,7 @@ import { SystemMonitor } from '@/components/system/SystemMonitor';
 import { useFilaEspera } from '@/hooks/useFilaEspera';
 import { useViewMode } from '@/hooks/useViewMode';
 import { SchedulingFormData, AppointmentWithRelations } from '@/types/scheduling';
+import { setupInitialData } from '@/utils/systemSetup';
 import { Button } from '@/components/ui/button';
 import { AuthTest } from '@/components/AuthTest';
 
@@ -89,6 +90,19 @@ const Index = () => {
     }
   });
   
+  // Configurar dados iniciais do sistema
+  useEffect(() => {
+    if (user && !authLoading) {
+      setupInitialData().then((result) => {
+        if (result.success) {
+          console.log('✅ Sistema configurado com sucesso');
+        } else {
+          console.error('❌ Erro na configuração inicial:', result.error);
+        }
+      });
+    }
+  }, [user, authLoading]);
+  
   // Redirecionar para login se não autenticado
   if (!authLoading && !user) {
     return <Navigate to="/auth" replace />;
@@ -98,14 +112,21 @@ const Index = () => {
   if (authLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Verificando autenticação...</p>
+        <div className="text-center space-y-4">
+          <div className="relative">
+            <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto"></div>
+            <div className="absolute inset-0 h-12 w-12 animate-pulse rounded-full bg-primary/20 mx-auto"></div>
+          </div>
+          <div>
+            <p className="text-lg font-medium">Endogastro</p>
+            <p className="text-muted-foreground">Verificando autenticação...</p>
+          </div>
         </div>
       </div>
     );
   }
   
+  // Estados sempre inicializados na mesma ordem
   const [searchTerm, setSearchTerm] = useState('');
 
   const {
@@ -191,9 +212,18 @@ const Index = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-gray-600">Carregando dados da clínica...</p>
+        <div className="text-center space-y-4">
+          <div className="relative">
+            <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto"></div>
+            <div className="absolute inset-0 h-12 w-12 animate-pulse rounded-full bg-primary/20 mx-auto"></div>
+          </div>
+          <div>
+            <p className="text-lg font-medium">Endogastro</p>
+            <p className="text-muted-foreground">Carregando dados da clínica...</p>
+            <div className="mt-2 w-64 mx-auto bg-secondary rounded-full h-2">
+              <div className="bg-primary h-2 rounded-full animate-pulse w-3/4"></div>
+            </div>
+          </div>
         </div>
       </div>
     );

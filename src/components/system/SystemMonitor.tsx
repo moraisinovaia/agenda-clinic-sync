@@ -70,6 +70,16 @@ export const SystemMonitor = () => {
 
     // Setup periodic health checks
     const interval = setInterval(checkDatabaseConnection, 30000); // Every 30 seconds
+    
+    // Check connectivity every 5 minutes for proactive monitoring
+    const healthInterval = setInterval(async () => {
+      try {
+        const response = await fetch('https://www.google.com/favicon.ico', { mode: 'no-cors' });
+        setStatus(prev => ({ ...prev, isOnline: true }));
+      } catch {
+        setStatus(prev => ({ ...prev, isOnline: false }));
+      }
+    }, 5 * 60 * 1000);
 
     // Listen for online/offline events
     const handleOnline = () => setStatus(prev => ({ ...prev, isOnline: true }));
@@ -80,6 +90,7 @@ export const SystemMonitor = () => {
 
     return () => {
       clearInterval(interval);
+      clearInterval(healthInterval);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };

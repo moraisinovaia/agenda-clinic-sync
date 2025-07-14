@@ -37,46 +37,76 @@ export const useRealtimeUpdates = (config: RealtimeConfig) => {
   }, [config]);
 
   useEffect(() => {
-    const channel = supabase
-      .channel(`realtime-${config.table}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: config.table,
-        },
-        handleInsert
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: config.table,
-        },
-        handleUpdate
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'DELETE',
-          schema: 'public',
-          table: config.table,
-        },
-        handleDelete
-      )
-      .subscribe((status) => {
-        if (status !== 'SUBSCRIBED') {
-          console.error('Realtime subscription error:', status);
-          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-            notifySystemError('Erro na conexão em tempo real');
-          }
-        }
-      });
+    let channel: any = null;
+    let retryTimeout: NodeJS.Timeout | null = null;
+    
+    const setupRealtime = () => {
+      try {
+        channel = supabase
+          .channel(`realtime-${config.table}-${Date.now()}`) // Unique channel name
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: config.table,
+            },
+            handleInsert
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: config.table,
+            },
+            handleUpdate
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: 'DELETE',
+              schema: 'public',
+              table: config.table,
+            },
+            handleDelete
+          )
+          .subscribe((status) => {
+            console.log('Realtime status:', status);
+            
+            if (status === 'SUBSCRIBED') {
+              console.log(`✅ Realtime connected for ${config.table}`);
+            } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+              console.warn(`❌ Realtime connection issue for ${config.table}:`, status);
+              
+              // Only show error notification for critical failures, not connection retries
+              if (status === 'CHANNEL_ERROR') {
+                notifySystemError('Problema na conexão em tempo real');
+              }
+              
+              // Retry connection after 5 seconds for non-critical failures
+              if (status !== 'CLOSED') {
+                retryTimeout = setTimeout(() => {
+                  console.log(`🔄 Retrying realtime connection for ${config.table}`);
+                  setupRealtime();
+                }, 5000);
+              }
+            }
+          });
+      } catch (error) {
+        console.error('Error setting up realtime:', error);
+      }
+    };
+
+    setupRealtime();
 
     return () => {
-      supabase.removeChannel(channel);
+      if (retryTimeout) {
+        clearTimeout(retryTimeout);
+      }
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
     };
   }, [config.table, handleInsert, handleUpdate, handleDelete, notifySystemError]);
 };
