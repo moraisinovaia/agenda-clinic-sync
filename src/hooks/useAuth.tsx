@@ -64,7 +64,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         .maybeSingle();
 
       if (error) {
-        console.error('Erro ao buscar perfil:', error);
+        // Log silencioso para não poluir console em produção
+        console.warn('Perfil não encontrado ou sem permissão:', error.message);
         return null;
       }
 
