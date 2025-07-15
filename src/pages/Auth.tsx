@@ -107,8 +107,8 @@ export default function Auth() {
       await signUp(signupData.email, signupData.password, signupData.nome, signupData.username);
       
       toast({
-        title: 'Conta criada com sucesso!',
-        description: 'Você pode fazer login agora.',
+        title: 'Solicitação enviada!',
+        description: 'Sua conta foi criada e aguarda aprovação de um administrador.',
       });
     } catch (error: any) {
       const errorMessage = error.message.includes('already registered')
@@ -143,15 +143,6 @@ export default function Auth() {
             <p className="text-muted-foreground">Acesso para Recepcionistas</p>
           </div>
           
-          {/* Alerta sobre configuração do Supabase */}
-          <Alert className="text-left">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription className="text-xs">
-              <strong>Para administradores:</strong> Se há problemas na versão publicada, 
-              configure no Supabase: Authentication → URL Configuration → 
-              Site URL: <code className="text-xs bg-muted px-1 rounded">https://agenda-clinic-sync.lovable.app</code>
-            </AlertDescription>
-          </Alert>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="login" className="w-full">
@@ -285,7 +276,7 @@ export default function Auth() {
                     />
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Para validação e recuperação da conta
+                    Sua conta será enviada para aprovação
                   </p>
                 </div>
                 

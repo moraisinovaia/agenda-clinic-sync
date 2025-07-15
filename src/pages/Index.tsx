@@ -20,6 +20,7 @@ import { DoctorsView } from '@/components/dashboard/DoctorsView';
 import { DashboardActions } from '@/components/dashboard/DashboardActions';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { AlertSystem } from '@/components/alerts/AlertSystem';
+import { UserApprovalPanel } from '@/components/admin/UserApprovalPanel';
 import { 
   LazyDashboard, 
   LazySchedulingForm, 
@@ -264,6 +265,11 @@ const Index = () => {
       <div className="container mx-auto px-4 py-6">
         {viewMode === 'doctors' && (
           <div className="space-y-6">
+            {/* User Approval Panel for Admins */}
+            {profile?.role === 'admin' && profile?.status === 'aprovado' && (
+              <UserApprovalPanel />
+            )}
+            
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
               <div className="lg:col-span-3">
                 <StatsCards doctors={doctors} appointments={appointments} />

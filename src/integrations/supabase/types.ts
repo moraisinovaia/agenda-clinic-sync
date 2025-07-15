@@ -575,39 +575,63 @@ export type Database = {
       }
       profiles: {
         Row: {
+          aprovado_por: string | null
           ativo: boolean | null
           created_at: string | null
+          data_aprovacao: string | null
           email: string
           id: string
           nome: string
           role: string
+          status: string
           updated_at: string | null
           user_id: string
           username: string | null
         }
         Insert: {
+          aprovado_por?: string | null
           ativo?: boolean | null
           created_at?: string | null
+          data_aprovacao?: string | null
           email: string
           id?: string
           nome: string
           role?: string
+          status?: string
           updated_at?: string | null
           user_id: string
           username?: string | null
         }
         Update: {
+          aprovado_por?: string | null
           ativo?: boolean | null
           created_at?: string | null
+          data_aprovacao?: string | null
           email?: string
           id?: string
           nome?: string
           role?: string
+          status?: string
           updated_at?: string | null
           user_id?: string
           username?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_usuarios_pendentes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       questionario_pre_colonoscopia: {
         Row: {
@@ -765,8 +789,24 @@ export type Database = {
         }
         Relationships: []
       }
+      vw_usuarios_pendentes: {
+        Row: {
+          aprovado_por_nome: string | null
+          created_at: string | null
+          email: string | null
+          id: string | null
+          nome: string | null
+          role: string | null
+          username: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      aprovar_usuario: {
+        Args: { p_user_id: string; p_aprovador_id: string }
+        Returns: Json
+      }
       buscar_agendamentos_otimizado: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -821,6 +861,10 @@ export type Database = {
           created_at: string
           updated_at: string
         }[]
+      }
+      rejeitar_usuario: {
+        Args: { p_user_id: string; p_aprovador_id: string }
+        Returns: Json
       }
     }
     Enums: {

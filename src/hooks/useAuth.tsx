@@ -10,6 +10,7 @@ interface Profile {
   email: string;
   role: string;
   ativo: boolean;
+  status: string;
   username?: string;
   created_at: string;
   updated_at: string;
@@ -84,6 +85,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           email: currentUser.data.user?.email || '',
           role: 'recepcionista',
           ativo: true,
+          status: 'pendente',
           username: currentUser.data.user?.email?.split('@')[0] || 'usuario',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
@@ -116,6 +118,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         email: '',
         role: 'recepcionista',
         ativo: true,
+        status: 'pendente',
         username: 'usuario',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
