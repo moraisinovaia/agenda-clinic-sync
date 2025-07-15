@@ -808,6 +808,20 @@ export type Database = {
         }
         Returns: Json
       }
+      get_current_user_profile: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          user_id: string
+          nome: string
+          email: string
+          role: string
+          ativo: boolean
+          username: string
+          created_at: string
+          updated_at: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

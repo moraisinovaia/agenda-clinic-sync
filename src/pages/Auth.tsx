@@ -137,9 +137,21 @@ export default function Auth() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 to-secondary/5 p-4">
       <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">Sistema de Agendamentos</CardTitle>
-          <p className="text-muted-foreground">Acesso para Recepcionistas</p>
+        <CardHeader className="text-center space-y-4">
+          <div>
+            <CardTitle className="text-2xl font-bold">Sistema de Agendamentos</CardTitle>
+            <p className="text-muted-foreground">Acesso para Recepcionistas</p>
+          </div>
+          
+          {/* Alerta sobre configuração do Supabase */}
+          <Alert className="text-left">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="text-xs">
+              <strong>Para administradores:</strong> Se há problemas na versão publicada, 
+              configure no Supabase: Authentication → URL Configuration → 
+              Site URL: <code className="text-xs bg-muted px-1 rounded">https://agenda-clinic-sync.lovable.app</code>
+            </AlertDescription>
+          </Alert>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="login" className="w-full">
