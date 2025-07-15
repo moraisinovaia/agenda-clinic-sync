@@ -20,13 +20,11 @@ interface Shortcut {
 
 const SHORTCUTS: Shortcut[] = [
   { key: 'N', ctrlKey: true, description: 'Novo agendamento' },
-  { key: 'F', ctrlKey: true, description: 'Buscar agendamentos' },
-  { key: 'R', ctrlKey: true, description: 'Atualizar página' },
-  { key: 'Esc', description: 'Fechar modal ou cancelar ação' },
-  { key: '/', description: 'Focar na busca' },
-  { key: 'Enter', description: 'Confirmar ação' },
-  { key: 'Space', description: 'Expandir/colapsar filtros' },
-  { key: '?', shiftKey: true, description: 'Mostrar atalhos' },
+  { key: 'L', ctrlKey: true, description: 'Lista de agendamentos' },
+  { key: 'D', ctrlKey: true, description: 'Dashboard/Médicos' },
+  { key: 'A', ctrlKey: true, description: 'Alertas' },
+  { key: 'F', ctrlKey: true, shiftKey: true, description: 'Fila de espera' },
+  { key: 'Esc', description: 'Voltar/Fechar' },
 ];
 
 export const KeyboardShortcutsHelp = () => {
@@ -71,7 +69,7 @@ export const KeyboardShortcutsHelp = () => {
           ))}
         </div>
         <div className="text-xs text-muted-foreground text-center pt-4 border-t">
-          Pressione <Badge variant="outline" className="mx-1">?</Badge> a qualquer momento para ver esta ajuda
+          Atalhos funcionais para navegação rápida no sistema
         </div>
       </DialogContent>
     </Dialog>

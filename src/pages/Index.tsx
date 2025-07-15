@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useSupabaseScheduling } from '@/hooks/useSupabaseScheduling';
-import { useKeyboardShortcuts, DEFAULT_SHORTCUTS } from '@/hooks/useKeyboardShortcuts';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useNotifications } from '@/hooks/useNotifications';
 
 import { SchedulingForm } from '@/components/scheduling/SchedulingForm';
@@ -89,9 +89,8 @@ const Index = () => {
     notifyCancellation,
   } = useNotifications();
 
-  // Setup keyboard shortcuts
+  // Setup keyboard shortcuts - atalhos específicos e funcionais
   const shortcuts = [
-    ...DEFAULT_SHORTCUTS,
     {
       key: 'n',
       ctrlKey: true,
@@ -108,7 +107,29 @@ const Index = () => {
       key: 'd',
       ctrlKey: true,
       action: () => setViewMode('doctors'),
-      description: 'Ctrl+D - Dashboard'
+      description: 'Ctrl+D - Dashboard/Médicos'
+    },
+    {
+      key: 'a',
+      ctrlKey: true,
+      action: () => setViewMode('alertas'),
+      description: 'Ctrl+A - Alertas'
+    },
+    {
+      key: 'f',
+      ctrlKey: true,
+      shiftKey: true,
+      action: () => setViewMode('fila-espera'),
+      description: 'Ctrl+Shift+F - Fila de espera'
+    },
+    {
+      key: 'Escape',
+      action: () => {
+        if (viewMode !== 'doctors') {
+          goBack();
+        }
+      },
+      description: 'Esc - Voltar/Fechar'
     }
   ];
 
