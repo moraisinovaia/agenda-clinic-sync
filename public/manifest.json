@@ -1,7 +1,7 @@
 {
-  "name": "INOVAIA - Sistema de Agendamentos",
-  "short_name": "INOVAIA",
-  "description": "Sistema de Agendamentos Médicos INOVAIA",
+  "name": "Endogastro - Sistema de Agendamentos",
+  "short_name": "Endogastro",
+  "description": "Sistema de Agendamentos Médicos da Clínica Endogastro",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -11,25 +11,25 @@
   "prefer_related_applications": false,
   "icons": [
     {
-      "src": "/inovaia-logo-192.png",
+      "src": "/lovable-uploads/c7298668-23b3-4e6a-9bfc-7b24a9744d8a.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/inovaia-logo-512.png", 
+      "src": "/lovable-uploads/c7298668-23b3-4e6a-9bfc-7b24a9744d8a.png", 
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/inovaia-logo-192.png",
+      "src": "/lovable-uploads/c7298668-23b3-4e6a-9bfc-7b24a9744d8a.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/inovaia-logo-512.png",
+      "src": "/lovable-uploads/c7298668-23b3-4e6a-9bfc-7b24a9744d8a.png",
       "sizes": "512x512", 
       "type": "image/png",
       "purpose": "maskable"
