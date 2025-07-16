@@ -4,7 +4,8 @@ import {
   handleGetAppointments,
   handleCreateAppointment,
   handleUpdateAppointment,
-  handleUpdateAppointmentStatus
+  handleUpdateAppointmentStatus,
+  handleCheckAvailability
 } from './_lib/routes.ts'
 
 const corsHeaders = {
@@ -53,6 +54,11 @@ serve(async (req) => {
       const appointmentId = pathParts[1];
       const body = await req.json();
       return await handleUpdateAppointmentStatus(supabase, appointmentId, body);
+    }
+
+    // GET /scheduling-api/availability - Consultar horários vagos
+    if (method === 'GET' && pathParts.length === 2 && pathParts[1] === 'availability') {
+      return await handleCheckAvailability(supabase, url.searchParams);
     }
 
     return new Response(

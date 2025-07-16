@@ -94,6 +94,46 @@ export async function handleCreateAppointment(supabase: any, body: any) {
     );
   }
 
+  // Verificar se já existe agendamento no mesmo horário para o médico
+  const { data: existingAppointment } = await supabase
+    .from('agendamentos')
+    .select('id')
+    .eq('medico_id', medicoId)
+    .eq('data_agendamento', dataAgendamento)
+    .eq('hora_agendamento', horaAgendamento)
+    .in('status', ['agendado', 'confirmado'])
+    .maybeSingle();
+
+  if (existingAppointment) {
+    return new Response(
+      JSON.stringify({ 
+        success: false, 
+        error: 'Este horário já está ocupado para o médico selecionado' 
+      }),
+      { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  // Verificar se o paciente já tem agendamento no mesmo dia e horário
+  const { data: patientConflict } = await supabase
+    .from('agendamentos')
+    .select('id, medicos!inner(nome)')
+    .eq('data_agendamento', dataAgendamento)
+    .eq('hora_agendamento', horaAgendamento)
+    .in('status', ['agendado', 'confirmado'])
+    .or(`pacientes.nome_completo.ilike.%${nomeCompleto}%,pacientes.celular.eq.${celular}`)
+    .maybeSingle();
+
+  if (patientConflict) {
+    return new Response(
+      JSON.stringify({ 
+        success: false, 
+        error: 'Paciente já possui agendamento neste horário' 
+      }),
+      { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
   try {
     // Usar função SQL atômica para criar agendamento
     const { data: result, error } = await supabase.rpc('criar_agendamento_atomico', {
@@ -305,4 +345,176 @@ export async function handleUpdateAppointmentStatus(supabase: any, appointmentId
     JSON.stringify({ success: true, data: updatedAppointment }),
     { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   );
+}
+
+// GET /scheduling-api/availability - Consultar horários vagos
+export async function handleCheckAvailability(supabase: any, params: URLSearchParams) {
+  const medicoId = params.get('medicoId');
+  const medicoNome = params.get('medicoNome');
+  const dataInicio = params.get('dataInicio') || new Date().toISOString().split('T')[0];
+  const dataFim = params.get('dataFim') || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+  console.log(`🔍 Consultando disponibilidade - Médico: ${medicoNome || medicoId}, Período: ${dataInicio} a ${dataFim}`);
+
+  let doctorId = medicoId;
+
+  // Se foi passado nome do médico, buscar o ID
+  if (!doctorId && medicoNome) {
+    const { data: doctor } = await supabase
+      .from('medicos')
+      .select('id, nome')
+      .ilike('nome', `%${medicoNome}%`)
+      .eq('ativo', true)
+      .maybeSingle();
+
+    if (!doctor) {
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: `Médico "${medicoNome}" não encontrado ou inativo` 
+        }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    doctorId = doctor.id;
+  }
+
+  if (!doctorId) {
+    return new Response(
+      JSON.stringify({ success: false, error: 'medicoId ou medicoNome é obrigatório' }),
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  try {
+    // Buscar informações do médico
+    const { data: doctor, error: doctorError } = await supabase
+      .from('medicos')
+      .select('*')
+      .eq('id', doctorId)
+      .eq('ativo', true)
+      .single();
+
+    if (doctorError || !doctor) {
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Médico não encontrado ou inativo' 
+        }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Buscar agendamentos ocupados no período
+    const { data: occupiedSlots, error: slotsError } = await supabase
+      .from('agendamentos')
+      .select('data_agendamento, hora_agendamento')
+      .eq('medico_id', doctorId)
+      .gte('data_agendamento', dataInicio)
+      .lte('data_agendamento', dataFim)
+      .in('status', ['agendado', 'confirmado']);
+
+    if (slotsError) throw slotsError;
+
+    // Buscar bloqueios de agenda
+    const { data: blockedPeriods, error: blockError } = await supabase
+      .from('bloqueios_agenda')
+      .select('data_inicio, data_fim, motivo')
+      .eq('medico_id', doctorId)
+      .eq('status', 'ativo')
+      .or(`data_inicio.lte.${dataFim},data_fim.gte.${dataInicio}`);
+
+    if (blockError) throw blockError;
+
+    // Processar horários de atendimento do médico
+    const horarios = doctor.horarios || {};
+    const availableSlots = [];
+
+    // Gerar slots disponíveis para cada dia do período
+    const startDate = new Date(dataInicio);
+    const endDate = new Date(dataFim);
+    
+    for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
+      const dateStr = date.toISOString().split('T')[0];
+      const dayOfWeek = date.getDay(); // 0 = domingo, 1 = segunda, etc.
+      const dayNames = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
+      const dayName = dayNames[dayOfWeek];
+
+      // Verificar se não é no passado
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (date < today) continue;
+
+      // Verificar se há horários definidos para este dia
+      if (!horarios[dayName] || !horarios[dayName].ativo) continue;
+
+      // Verificar se a data não está bloqueada
+      const isBlocked = blockedPeriods.some(block => 
+        dateStr >= block.data_inicio && dateStr <= block.data_fim
+      );
+      if (isBlocked) continue;
+
+      // Gerar slots de 30 em 30 minutos nos horários de atendimento
+      const daySchedule = horarios[dayName];
+      if (daySchedule.inicio && daySchedule.fim) {
+        const [startHour, startMin] = daySchedule.inicio.split(':').map(Number);
+        const [endHour, endMin] = daySchedule.fim.split(':').map(Number);
+        
+        const startTime = startHour * 60 + startMin;
+        const endTime = endHour * 60 + endMin;
+        
+        for (let time = startTime; time < endTime; time += 30) {
+          const hour = Math.floor(time / 60);
+          const min = time % 60;
+          const timeStr = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
+          
+          // Verificar se este horário não está ocupado
+          const isOccupied = occupiedSlots.some(slot => 
+            slot.data_agendamento === dateStr && slot.hora_agendamento === timeStr
+          );
+          
+          if (!isOccupied) {
+            availableSlots.push({
+              data: dateStr,
+              hora: timeStr,
+              timestamp: `${dateStr}T${timeStr}:00`
+            });
+          }
+        }
+      }
+    }
+
+    console.log(`✅ Encontrados ${availableSlots.length} horários disponíveis para ${doctor.nome}`);
+    
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        data: {
+          medico: {
+            id: doctor.id,
+            nome: doctor.nome,
+            especialidade: doctor.especialidade
+          },
+          periodo: {
+            inicio: dataInicio,
+            fim: dataFim
+          },
+          horariosDisponiveis: availableSlots,
+          totalDisponivel: availableSlots.length
+        }
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+
+  } catch (error) {
+    console.error('❌ Erro ao consultar disponibilidade:', error);
+    return new Response(
+      JSON.stringify({ 
+        success: false, 
+        error: error.message || 'Erro interno do servidor' 
+      }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
 }
