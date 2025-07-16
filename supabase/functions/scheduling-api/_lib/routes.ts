@@ -41,7 +41,9 @@ export async function handleCreateAppointment(supabase: any, body: any) {
     atendimentoId, 
     dataAgendamento, 
     horaAgendamento, 
-    observacoes 
+    observacoes,
+    criadoPor = 'Assistente Noah (WhatsApp)',
+    usuarioResponsavel = null
   } = body;
 
   // Validações básicas
@@ -105,8 +107,8 @@ export async function handleCreateAppointment(supabase: any, body: any) {
       p_data_agendamento: dataAgendamento,
       p_hora_agendamento: horaAgendamento,
       p_observacoes: observacoes || null,
-      p_criado_por: 'n8n_agent',
-      p_criado_por_user_id: null,
+      p_criado_por: criadoPor,
+      p_criado_por_user_id: usuarioResponsavel,
     });
 
     if (error) {
