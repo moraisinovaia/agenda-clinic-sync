@@ -48,25 +48,28 @@ export default function Auth() {
     }
   }, [rememberMe, savedUsername]);
 
-  // Check for password recovery session
+  // Check for password recovery session FIRST (before any redirect logic)
+  const isRecoverySession = searchParams.get('type') === 'recovery' && 
+    (searchParams.get('access_token') || searchParams.get('refresh_token'));
+
   useEffect(() => {
     const checkPasswordRecovery = async () => {
-      // Check URL parameters for recovery tokens
-      const accessToken = searchParams.get('access_token');
-      const refreshToken = searchParams.get('refresh_token');
-      const type = searchParams.get('type');
-      
-      if (type === 'recovery' && (accessToken || refreshToken)) {
+      if (isRecoverySession) {
+        console.log('🔑 Recovery session detected, showing password reset form');
         setShowPasswordReset(true);
         
         // Verify the session is valid
         try {
           const { data: { session }, error } = await supabase.auth.getSession();
           if (error || !session) {
+            console.log('❌ Invalid recovery session:', error);
             setError('Link de recuperação inválido ou expirado');
             setShowPasswordReset(false);
+          } else {
+            console.log('✅ Valid recovery session confirmed');
           }
         } catch (error) {
+          console.log('❌ Error verifying recovery session:', error);
           setError('Erro ao verificar sessão de recuperação');
           setShowPasswordReset(false);
         }
@@ -74,10 +77,10 @@ export default function Auth() {
     };
     
     checkPasswordRecovery();
-  }, [searchParams]);
+  }, [searchParams, isRecoverySession]);
 
-  // Redirecionar se já estiver autenticado (mas não se estiver resetando senha)
-  if (user && !loading && !showPasswordReset) {
+  // Prevent automatic redirect if we're in a recovery session
+  if (user && !loading && !showPasswordReset && !isRecoverySession) {
     return <Navigate to="/" replace />;
   }
 
