@@ -934,6 +934,18 @@ export type Database = {
           updated_at: string
         }[]
       }
+      get_pending_users: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          nome: string
+          email: string
+          username: string
+          role: string
+          created_at: string
+          aprovado_por_nome: string
+        }[]
+      }
       is_admin_user: {
         Args: Record<PropertyKey, never>
         Returns: boolean

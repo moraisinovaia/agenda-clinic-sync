@@ -27,9 +27,7 @@ export function UserApprovalPanel() {
   const fetchPendingUsers = async () => {
     try {
       const { data, error } = await supabase
-        .from('vw_usuarios_pendentes')
-        .select('*')
-        .order('created_at', { ascending: true });
+        .rpc('get_pending_users');
 
       if (error) {
         console.error('Erro ao buscar usuários pendentes:', error);
