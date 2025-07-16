@@ -57,26 +57,25 @@ export default function Auth() {
     setIsLoading(true);
     
     try {
-      await signIn(loginData.emailOrUsername, loginData.password);
+      const { error } = await signIn(loginData.emailOrUsername, loginData.password);
       
-      // Save credentials if remember me is checked
-      saveCredentials(loginData.emailOrUsername, rememberMeChecked);
-      
-      toast({
-        title: 'Login realizado com sucesso!',
-        description: 'Bem-vindo ao sistema de agendamentos.',
-      });
+      if (error) {
+        // Se houve erro no login
+        const errorMessage = error.message === 'Invalid credentials' 
+          ? 'Email/usuário ou senha incorretos'
+          : 'Erro ao fazer login. Tente novamente.';
+        
+        setError(errorMessage);
+        // Não exibir toast aqui pois o useAuth já exibe
+      } else {
+        // Apenas se login foi bem-sucedido
+        saveCredentials(loginData.emailOrUsername, rememberMeChecked);
+        // Não exibir toast aqui pois o useAuth já exibe
+      }
     } catch (error: any) {
-      const errorMessage = error.message === 'Invalid credentials' 
-        ? 'Email/usuário ou senha incorretos'
-        : 'Erro ao fazer login. Tente novamente.';
-      
+      // Erro inesperado (não deveria chegar aqui normalmente)
+      const errorMessage = 'Erro inesperado ao fazer login. Tente novamente.';
       setError(errorMessage);
-      toast({
-        title: 'Erro no login',
-        description: errorMessage,
-        variant: 'destructive',
-      });
     } finally {
       setIsLoading(false);
     }
@@ -104,23 +103,31 @@ export default function Auth() {
     setIsLoading(true);
     
     try {
-      await signUp(signupData.email, signupData.password, signupData.nome, signupData.username);
+      const { error } = await signUp(signupData.email, signupData.password, signupData.nome, signupData.username);
       
-      toast({
-        title: 'Solicitação enviada!',
-        description: 'Sua conta foi criada e aguarda aprovação de um administrador.',
-      });
+      if (error) {
+        // Se houve erro no cadastro
+        const errorMessage = error.message.includes('already registered')
+          ? 'Este email já está cadastrado'
+          : 'Erro ao criar conta. Tente novamente.';
+        
+        setError(errorMessage);
+        // Não exibir toast aqui pois o useAuth já exibe
+      } else {
+        // Sucesso - não exibir toast aqui pois o useAuth já exibe
+        // Limpar formulário após sucesso
+        setSignupData({
+          nome: '',
+          username: '',
+          email: '',
+          password: '',
+          confirmPassword: ''
+        });
+      }
     } catch (error: any) {
-      const errorMessage = error.message.includes('already registered')
-        ? 'Este email já está cadastrado'
-        : 'Erro ao criar conta. Tente novamente.';
-      
+      // Erro inesperado (não deveria chegar aqui normalmente)
+      const errorMessage = 'Erro inesperado ao criar conta. Tente novamente.';
       setError(errorMessage);
-      toast({
-        title: 'Erro ao criar conta',
-        description: errorMessage,
-        variant: 'destructive',
-      });
     } finally {
       setIsLoading(false);
     }
