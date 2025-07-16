@@ -11,12 +11,14 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/hooks/useAuth';
 import { useRememberMe } from '@/hooks/useRememberMe';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function Auth() {
   const { user, loading, signIn, signUp } = useAuth();
   const { rememberMe, savedUsername, saveCredentials } = useRememberMe();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rememberMeChecked, setRememberMeChecked] = useState(false);
   
@@ -133,6 +135,58 @@ export default function Auth() {
     }
   };
 
+  const handleForgotPassword = async () => {
+    if (!loginData.emailOrUsername) {
+      setError('Digite seu email para recuperar a senha');
+      return;
+    }
+    
+    let email = loginData.emailOrUsername;
+    
+    // Se não contém @, buscar email pelo username
+    if (!loginData.emailOrUsername.includes('@')) {
+      try {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('email')
+          .eq('username', loginData.emailOrUsername)
+          .maybeSingle();
+          
+        if (profileError || !profile) {
+          setError('Nome de usuário não encontrado');
+          return;
+        }
+        
+        email = profile.email;
+      } catch (error) {
+        setError('Erro ao buscar email. Tente usar seu email diretamente.');
+        return;
+      }
+    }
+    
+    setIsResettingPassword(true);
+    setError(null);
+    
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth`
+      });
+      
+      if (error) {
+        setError('Erro ao enviar email de recuperação');
+      } else {
+        toast({
+          title: 'Email enviado!',
+          description: 'Verifique sua caixa de entrada para redefinir sua senha.',
+        });
+      }
+    } catch (error) {
+      setError('Erro inesperado ao enviar email de recuperação');
+    } finally {
+      setIsResettingPassword(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -218,9 +272,27 @@ export default function Auth() {
                       Entrando...
                     </>
                   ) : (
-                    'Entrar'
-                  )}
-                </Button>
+                     'Entrar'
+                   )}
+                 </Button>
+                 
+                 {/* Forgot Password Button */}
+                 <Button 
+                   type="button" 
+                   variant="link" 
+                   className="w-full text-sm" 
+                   onClick={handleForgotPassword}
+                   disabled={isResettingPassword}
+                 >
+                   {isResettingPassword ? (
+                     <>
+                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                       Enviando email...
+                     </>
+                   ) : (
+                     'Esqueci minha senha'
+                   )}
+                 </Button>
               </form>
             </TabsContent>
             
