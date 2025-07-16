@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { AppointmentWithRelations } from '@/types/scheduling';
 import { useToast } from '@/hooks/use-toast';
@@ -11,12 +11,11 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   const { toast } = useToast();
   const { measureApiCall } = usePerformanceMetrics();
 
-  // Usar cache otimizado para buscar agendamentos
-  const { data: appointments, loading, error, refetch } = useOptimizedQuery(
-    async () => {
-      logger.info('Iniciando busca de agendamentos', {}, 'APPOINTMENTS');
-      
-      return measureApiCall(async () => {
+  // Estabilizar a função de query para evitar loops
+  const fetchAppointments = useCallback(async () => {
+    logger.info('Iniciando busca de agendamentos', {}, 'APPOINTMENTS');
+    
+    return measureApiCall(async () => {
         // Primeiro buscar agendamentos simples
         const { data: agendamentosData, error: agendamentosError } = await supabase
           .from('agendamentos')
@@ -66,7 +65,11 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         logger.info('Agendamentos carregados com sucesso', { count: appointmentsWithRelations.length }, 'APPOINTMENTS');
         return appointmentsWithRelations;
       }, 'fetch_appointments', 'GET');
-    },
+  }, [measureApiCall]);
+
+  // Usar cache otimizado para buscar agendamentos
+  const { data: appointments, loading, error, refetch } = useOptimizedQuery<AppointmentWithRelations[]>(
+    fetchAppointments,
     [],
     { 
       cacheKey: 'appointments-list',

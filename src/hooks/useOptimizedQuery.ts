@@ -76,7 +76,7 @@ export const useOptimizedQuery = <T>(
     } finally {
       setLoading(false);
     }
-  }, [queryFn, cacheKey, cacheTime, staleTime, ...dependencies]);
+  }, [cacheKey, cacheTime, staleTime, ...dependencies]);
 
   const refetch = useCallback(() => {
     // Clear cache for this key and refetch
