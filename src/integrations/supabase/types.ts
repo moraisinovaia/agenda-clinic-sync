@@ -885,6 +885,10 @@ export type Database = {
           atendimento_tipo: string
         }[]
       }
+      confirmar_email_usuario_aprovado: {
+        Args: { p_user_email: string; p_admin_id: string }
+        Returns: Json
+      }
       criar_agendamento_atomico: {
         Args: {
           p_nome_completo: string
