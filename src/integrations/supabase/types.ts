@@ -691,6 +691,75 @@ export type Database = {
         }
         Relationships: []
       }
+      system_backups: {
+        Row: {
+          backup_type: string
+          config: Json | null
+          created_at: string | null
+          data_size: number | null
+          error_message: string | null
+          expires_at: string | null
+          id: string
+          metadata: Json | null
+          status: string
+          table_count: number | null
+        }
+        Insert: {
+          backup_type: string
+          config?: Json | null
+          created_at?: string | null
+          data_size?: number | null
+          error_message?: string | null
+          expires_at?: string | null
+          id?: string
+          metadata?: Json | null
+          status: string
+          table_count?: number | null
+        }
+        Update: {
+          backup_type?: string
+          config?: Json | null
+          created_at?: string | null
+          data_size?: number | null
+          error_message?: string | null
+          expires_at?: string | null
+          id?: string
+          metadata?: Json | null
+          status?: string
+          table_count?: number | null
+        }
+        Relationships: []
+      }
+      system_health: {
+        Row: {
+          context: Json | null
+          created_at: string | null
+          id: string
+          metric_name: string
+          metric_unit: string | null
+          metric_value: number
+          timestamp: string | null
+        }
+        Insert: {
+          context?: Json | null
+          created_at?: string | null
+          id?: string
+          metric_name: string
+          metric_unit?: string | null
+          metric_value: number
+          timestamp?: string | null
+        }
+        Update: {
+          context?: Json | null
+          created_at?: string | null
+          id?: string
+          metric_name?: string
+          metric_unit?: string | null
+          metric_value?: number
+          timestamp?: string | null
+        }
+        Relationships: []
+      }
       system_logs: {
         Row: {
           context: string | null
@@ -920,6 +989,10 @@ export type Database = {
           atendimento_nome: string
           atendimento_tipo: string
         }[]
+      }
+      cleanup_expired_backups: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       cleanup_old_logs: {
         Args: Record<PropertyKey, never>
