@@ -17,6 +17,7 @@ export type Database = {
       agendamentos: {
         Row: {
           atendimento_id: string
+          convenio: string | null
           created_at: string
           criado_por: string
           criado_por_user_id: string | null
@@ -31,6 +32,7 @@ export type Database = {
         }
         Insert: {
           atendimento_id: string
+          convenio?: string | null
           created_at?: string
           criado_por?: string
           criado_por_user_id?: string | null
@@ -45,6 +47,7 @@ export type Database = {
         }
         Update: {
           atendimento_id?: string
+          convenio?: string | null
           created_at?: string
           criado_por?: string
           criado_por_user_id?: string | null
