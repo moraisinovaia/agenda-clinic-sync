@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, User, Lock, Mail, AtSign, AlertCircle } from 'lucide-react';
+import { Loader2, User, Lock, Mail, AtSign, AlertCircle, KeyRound } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/hooks/useAuth';
 import { useRememberMe } from '@/hooks/useRememberMe';
@@ -17,10 +17,15 @@ export default function Auth() {
   const { user, loading, signIn, signUp } = useAuth();
   const { rememberMe, savedUsername, saveCredentials } = useRememberMe();
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
   const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rememberMeChecked, setRememberMeChecked] = useState(false);
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
   
   const [loginData, setLoginData] = useState({
     emailOrUsername: savedUsername || '',
@@ -43,8 +48,36 @@ export default function Auth() {
     }
   }, [rememberMe, savedUsername]);
 
-  // Redirecionar se já estiver autenticado
-  if (user && !loading) {
+  // Check for password recovery session
+  useEffect(() => {
+    const checkPasswordRecovery = async () => {
+      // Check URL parameters for recovery tokens
+      const accessToken = searchParams.get('access_token');
+      const refreshToken = searchParams.get('refresh_token');
+      const type = searchParams.get('type');
+      
+      if (type === 'recovery' && (accessToken || refreshToken)) {
+        setShowPasswordReset(true);
+        
+        // Verify the session is valid
+        try {
+          const { data: { session }, error } = await supabase.auth.getSession();
+          if (error || !session) {
+            setError('Link de recuperação inválido ou expirado');
+            setShowPasswordReset(false);
+          }
+        } catch (error) {
+          setError('Erro ao verificar sessão de recuperação');
+          setShowPasswordReset(false);
+        }
+      }
+    };
+    
+    checkPasswordRecovery();
+  }, [searchParams]);
+
+  // Redirecionar se já estiver autenticado (mas não se estiver resetando senha)
+  if (user && !loading && !showPasswordReset) {
     return <Navigate to="/" replace />;
   }
 
@@ -187,10 +220,155 @@ export default function Auth() {
     }
   };
 
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!newPassword || !confirmNewPassword) {
+      setError('Por favor, preencha todos os campos');
+      return;
+    }
+    
+    if (newPassword !== confirmNewPassword) {
+      setError('As senhas não coincidem');
+      return;
+    }
+    
+    if (newPassword.length < 6) {
+      setError('A senha deve ter pelo menos 6 caracteres');
+      return;
+    }
+    
+    setIsUpdatingPassword(true);
+    setError(null);
+    
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+      
+      if (error) {
+        setError('Erro ao atualizar senha: ' + error.message);
+      } else {
+        toast({
+          title: 'Senha atualizada!',
+          description: 'Sua senha foi alterada com sucesso. Você será redirecionado.',
+        });
+        
+        // Clear the form and redirect after success
+        setNewPassword('');
+        setConfirmNewPassword('');
+        setShowPasswordReset(false);
+        
+        // Redirect to main page after password update
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 2000);
+      }
+    } catch (error) {
+      setError('Erro inesperado ao atualizar senha');
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  // Show password reset form if in recovery mode
+  if (showPasswordReset) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 to-secondary/5 p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center space-y-4">
+            <div>
+              <CardTitle className="text-2xl font-bold flex items-center justify-center gap-2">
+                <KeyRound className="h-6 w-6" />
+                Redefinir Senha
+              </CardTitle>
+              <p className="text-muted-foreground">Digite sua nova senha</p>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {error && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            
+            <form onSubmit={handleUpdatePassword} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="new-password">Nova Senha</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="new-password"
+                    type="password"
+                    placeholder="••••••••"
+                    className="pl-10"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="confirm-new-password">Confirmar Nova Senha</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="confirm-new-password"
+                    type="password"
+                    placeholder="••••••••"
+                    className="pl-10"
+                    value={confirmNewPassword}
+                    onChange={(e) => setConfirmNewPassword(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+              
+              {newPassword && confirmNewPassword && newPassword !== confirmNewPassword && (
+                <p className="text-sm text-red-500">As senhas não coincidem</p>
+              )}
+              
+              <Button 
+                type="submit" 
+                className="w-full" 
+                disabled={isUpdatingPassword || newPassword !== confirmNewPassword || !newPassword}
+              >
+                {isUpdatingPassword ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Atualizando...
+                  </>
+                ) : (
+                  'Atualizar Senha'
+                )}
+              </Button>
+              
+              <Button 
+                type="button" 
+                variant="outline" 
+                className="w-full" 
+                onClick={() => {
+                  setShowPasswordReset(false);
+                  setNewPassword('');
+                  setConfirmNewPassword('');
+                  setError(null);
+                }}
+              >
+                Cancelar
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
       </div>
     );
   }
