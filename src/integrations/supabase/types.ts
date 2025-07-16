@@ -929,9 +929,14 @@ export type Database = {
           role: string
           ativo: boolean
           username: string
+          status: string
           created_at: string
           updated_at: string
         }[]
+      }
+      is_admin_user: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
       }
       rejeitar_usuario: {
         Args: { p_user_id: string; p_aprovador_id: string }

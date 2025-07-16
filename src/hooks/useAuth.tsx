@@ -233,22 +233,28 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       
       // Se não contém @, assume que é username e busca o email
       if (!emailOrUsername.includes('@')) {
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('email')
-          .eq('username', emailOrUsername)
-          .maybeSingle();
+        try {
+          const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('email')
+            .eq('username', emailOrUsername)
+            .maybeSingle();
+            
+          if (profileError || !profile) {
+            toast({
+              title: 'Erro no login',
+              description: 'Nome de usuário não encontrado',
+              variant: 'destructive',
+            });
+            return { error: new Error('Nome de usuário não encontrado') };
+          }
           
-        if (profileError || !profile) {
-          toast({
-            title: 'Erro no login',
-            description: 'Nome de usuário não encontrado',
-            variant: 'destructive',
-          });
-          return { error: new Error('Nome de usuário não encontrado') };
+          email = profile.email;
+        } catch (profileSearchError) {
+          // Se falhar na busca por username, tratar como email mesmo
+          console.warn('Erro ao buscar username, usando como email:', profileSearchError);
+          email = emailOrUsername;
         }
-        
-        email = profile.email;
       }
 
       const { error } = await supabase.auth.signInWithPassword({
@@ -269,15 +275,19 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           description: errorMessage,
           variant: 'destructive',
         });
-      } else {
-        toast({
-          title: 'Login realizado',
-          description: 'Bem-vindo ao sistema!',
-        });
+        
+        return { error };
       }
 
-      return { error };
+      // APENAS mostrar sucesso se não houve erro
+      toast({
+        title: 'Login realizado com sucesso!',
+        description: 'Bem-vindo ao sistema de agendamentos.',
+      });
+
+      return { error: null };
     } catch (error) {
+      console.error('Erro inesperado no login:', error);
       toast({
         title: 'Erro',
         description: 'Erro inesperado ao fazer login',
@@ -290,19 +300,24 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const signUp = async (email: string, password: string, nome: string, username: string) => {
     try {
       // Verificar se o username já existe
-      const { data: existingProfile } = await supabase
-        .from('profiles')
-        .select('username')
-        .eq('username', username)
-        .maybeSingle();
-        
-      if (existingProfile) {
-        toast({
-          title: 'Erro no cadastro',
-          description: 'Este nome de usuário já está em uso',
-          variant: 'destructive',
-        });
-        return { error: new Error('Este nome de usuário já está em uso') };
+      try {
+        const { data: existingProfile } = await supabase
+          .from('profiles')
+          .select('username')
+          .eq('username', username)
+          .maybeSingle();
+          
+        if (existingProfile) {
+          toast({
+            title: 'Erro no cadastro',
+            description: 'Este nome de usuário já está em uso',
+            variant: 'destructive',
+          });
+          return { error: new Error('Este nome de usuário já está em uso') };
+        }
+      } catch (usernameCheckError) {
+        // Se falhar na verificação de username, continuar com cadastro
+        console.warn('Erro ao verificar username, continuando:', usernameCheckError);
       }
 
       const { error } = await supabase.auth.signUp({
@@ -321,7 +336,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       if (error) {
         let errorMessage = 'Erro ao criar conta';
         if (error.message.includes('User already registered')) {
-          errorMessage = 'Este email já está cadastrado';
+          errorMessage = 'Este email já está cadastrado. Você pode fazer login.';
         } else if (error.message.includes('Password should be at least')) {
           errorMessage = 'A senha deve ter pelo menos 6 caracteres';
         }
@@ -331,15 +346,19 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           description: errorMessage,
           variant: 'destructive',
         });
-      } else {
-        toast({
-          title: 'Conta criada',
-          description: 'Verifique seu email para confirmar a conta.',
-        });
+        
+        return { error };
       }
 
-      return { error };
+      // Sucesso no cadastro
+      toast({
+        title: 'Conta criada com sucesso!',
+        description: 'Sua conta será enviada para aprovação.',
+      });
+
+      return { error: null };
     } catch (error) {
+      console.error('Erro inesperado no cadastro:', error);
       toast({
         title: 'Erro',
         description: 'Erro inesperado ao criar conta',
