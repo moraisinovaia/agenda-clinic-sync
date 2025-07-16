@@ -69,6 +69,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "agendamentos_atendimento_id_fkey"
+            columns: ["atendimento_id"]
+            isOneToOne: false
+            referencedRelation: "vw_exames_combinaveis"
+            referencedColumns: ["atendimento1_id"]
+          },
+          {
+            foreignKeyName: "agendamentos_atendimento_id_fkey"
+            columns: ["atendimento_id"]
+            isOneToOne: false
+            referencedRelation: "vw_exames_combinaveis"
+            referencedColumns: ["atendimento2_id"]
+          },
+          {
             foreignKeyName: "agendamentos_medico_id_fkey"
             columns: ["medico_id"]
             isOneToOne: false
@@ -377,6 +391,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "atendimentos"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_fila_atendimento"
+            columns: ["atendimento_id"]
+            isOneToOne: false
+            referencedRelation: "vw_exames_combinaveis"
+            referencedColumns: ["atendimento1_id"]
+          },
+          {
+            foreignKeyName: "fk_fila_atendimento"
+            columns: ["atendimento_id"]
+            isOneToOne: false
+            referencedRelation: "vw_exames_combinaveis"
+            referencedColumns: ["atendimento2_id"]
           },
           {
             foreignKeyName: "fk_fila_medico"
@@ -792,6 +820,29 @@ export type Database = {
         }
         Relationships: []
       }
+      vw_exames_combinaveis: {
+        Row: {
+          atendimento1_id: string | null
+          atendimento1_nome: string | null
+          atendimento1_tipo: string | null
+          atendimento2_id: string | null
+          atendimento2_nome: string | null
+          atendimento2_tipo: string | null
+          compativel: boolean | null
+          medico_id: string | null
+          medico_nome: string | null
+          motivo_compatibilidade: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "atendimentos_medico_id_fkey"
+            columns: ["medico_id"]
+            isOneToOne: false
+            referencedRelation: "medicos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vw_usuarios_pendentes: {
         Row: {
           aprovado_por_nome: string | null
@@ -843,6 +894,23 @@ export type Database = {
           p_celular: string
           p_medico_id: string
           p_atendimento_id: string
+          p_data_agendamento: string
+          p_hora_agendamento: string
+          p_observacoes?: string
+          p_criado_por?: string
+          p_criado_por_user_id?: string
+        }
+        Returns: Json
+      }
+      criar_agendamento_multiplo: {
+        Args: {
+          p_nome_completo: string
+          p_data_nascimento: string
+          p_convenio: string
+          p_telefone: string
+          p_celular: string
+          p_medico_id: string
+          p_atendimento_ids: string[]
           p_data_agendamento: string
           p_hora_agendamento: string
           p_observacoes?: string

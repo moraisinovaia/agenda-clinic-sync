@@ -1,7 +1,7 @@
-import { Calendar, Clock, Bell } from 'lucide-react';
+import { Calendar, Clock, Bell, CalendarPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos' | 'fila-espera' | 'nova-fila' | 'bloqueio-agenda' | 'relatorio-agenda' | 'auth-test' | 'alertas';
+type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'multiple-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos' | 'fila-espera' | 'nova-fila' | 'bloqueio-agenda' | 'relatorio-agenda' | 'auth-test' | 'alertas';
 
 interface DashboardActionsProps {
   onViewChange: (view: ViewMode) => void;
@@ -10,6 +10,15 @@ interface DashboardActionsProps {
 export const DashboardActions = ({ onViewChange }: DashboardActionsProps) => {
   return (
     <div className="flex flex-wrap gap-2 w-full overflow-x-auto pb-2">
+      <Button 
+        onClick={() => onViewChange('multiple-appointment')}
+        variant="default"
+        className="flex items-center gap-2 whitespace-nowrap"
+      >
+        <CalendarPlus className="h-4 w-4" />
+        Agendamento Múltiplo
+      </Button>
+      
       <Button 
         onClick={() => onViewChange('appointments-list')}
         variant="outline"

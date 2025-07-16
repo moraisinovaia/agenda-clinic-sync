@@ -5,7 +5,7 @@ import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { KeyboardShortcutsHelp } from '@/components/ui/keyboard-shortcuts-help';
 import endogastroLogo from '@/assets/endogastro-logo.png';
 
-type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos' | 'fila-espera' | 'nova-fila' | 'bloqueio-agenda' | 'relatorio-agenda' | 'auth-test' | 'alertas';
+type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'multiple-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos' | 'fila-espera' | 'nova-fila' | 'bloqueio-agenda' | 'relatorio-agenda' | 'auth-test' | 'alertas';
 
 interface DashboardHeaderProps {
   viewMode: ViewMode;
@@ -39,7 +39,10 @@ export const DashboardHeader = ({
                 Endogastro
               </h1>
               <p className="text-muted-foreground mt-1">
-                Sistema de Agendamentos Médicos
+                {viewMode === 'multiple-appointment' 
+                  ? 'Agendamento Múltiplo - Múltiplos Exames'
+                  : 'Sistema de Agendamentos Médicos'
+                }
               </p>
               {profileName && (
                 <p className="text-sm text-primary font-medium">

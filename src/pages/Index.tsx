@@ -6,6 +6,7 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useNotifications } from '@/hooks/useNotifications';
 
 import { SchedulingForm } from '@/components/scheduling/SchedulingForm';
+import { MultipleSchedulingForm } from '@/components/scheduling/MultipleSchedulingForm';
 import { DoctorSchedule } from '@/components/scheduling/DoctorSchedule';
 import { AppointmentsList } from '@/components/scheduling/AppointmentsList';
 import { BloqueioAgenda } from '@/components/scheduling/BloqueioAgenda';
@@ -97,6 +98,12 @@ const Index = () => {
       ctrlKey: true,
       action: () => setViewMode('new-appointment'),
       description: 'Ctrl+N - Novo agendamento'
+    },
+    {
+      key: 'm',
+      ctrlKey: true,
+      action: () => setViewMode('multiple-appointment'),
+      description: 'Ctrl+M - Agendamento múltiplo'
     },
     {
       key: 'l',
@@ -320,6 +327,18 @@ const Index = () => {
             onSubmit={handleSubmitAppointment}
             onCancel={goBack}
             getAtendimentosByDoctor={getAtendimentosByDoctor}
+            searchPatientsByBirthDate={searchPatientsByBirthDate}
+          />
+        )}
+
+        {viewMode === 'multiple-appointment' && (
+          <MultipleSchedulingForm
+            doctors={doctors}
+            atendimentos={atendimentos}
+            onSuccess={() => {
+              setViewMode('doctors');
+            }}
+            onCancel={goBack}
             searchPatientsByBirthDate={searchPatientsByBirthDate}
           />
         )}
