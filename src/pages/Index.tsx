@@ -39,6 +39,7 @@ import { SchedulingFormData, AppointmentWithRelations } from '@/types/scheduling
 import { setupInitialData } from '@/utils/systemSetup';
 import { Button } from '@/components/ui/button';
 import { AuthTest } from '@/components/AuthTest';
+import PendingApproval from '@/components/PendingApproval';
 
 const Index = () => {
   const { user, profile, loading: authLoading, signOut } = useAuth();
@@ -171,6 +172,11 @@ const Index = () => {
   // Redirecionar para login se não autenticado
   if (!authLoading && !user) {
     return <Navigate to="/auth" replace />;
+  }
+
+  // Show pending approval screen if user is not approved
+  if (!authLoading && user && profile && profile.status !== 'aprovado') {
+    return <PendingApproval profile={profile} />;
   }
   
   // Loading state durante verificação de autenticação

@@ -49,24 +49,26 @@ export default function Auth() {
   }, [rememberMe, savedUsername]);
 
   // Check for password recovery session FIRST (before any redirect logic)
-  const isRecoverySession = searchParams.get('type') === 'recovery' && 
-    (searchParams.get('access_token') || searchParams.get('refresh_token'));
+  const hasRecoveryParams = searchParams.get('type') === 'recovery' || 
+    searchParams.get('access_token') || 
+    searchParams.get('refresh_token');
 
   useEffect(() => {
     const checkPasswordRecovery = async () => {
-      if (isRecoverySession) {
-        console.log('🔑 Recovery session detected, showing password reset form');
-        setShowPasswordReset(true);
+      // Only show password reset if we have recovery parameters
+      if (hasRecoveryParams) {
+        console.log('🔑 Recovery parameters detected, checking session...');
         
-        // Verify the session is valid
         try {
           const { data: { session }, error } = await supabase.auth.getSession();
+          
           if (error || !session) {
             console.log('❌ Invalid recovery session:', error);
             setError('Link de recuperação inválido ou expirado');
             setShowPasswordReset(false);
           } else {
-            console.log('✅ Valid recovery session confirmed');
+            console.log('✅ Valid recovery session confirmed, showing password reset form');
+            setShowPasswordReset(true);
           }
         } catch (error) {
           console.log('❌ Error verifying recovery session:', error);
@@ -77,10 +79,10 @@ export default function Auth() {
     };
     
     checkPasswordRecovery();
-  }, [searchParams, isRecoverySession]);
+  }, [searchParams, hasRecoveryParams]);
 
-  // Prevent automatic redirect if we're in a recovery session
-  if (user && !loading && !showPasswordReset && !isRecoverySession) {
+  // Only redirect if user is logged in AND not in recovery mode AND not showing password reset
+  if (user && !loading && !showPasswordReset && !hasRecoveryParams) {
     return <Navigate to="/" replace />;
   }
 

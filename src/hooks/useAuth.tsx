@@ -58,11 +58,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const fetchProfile = async (userId: string): Promise<Profile | null> => {
     try {
+      console.log('🔍 Fetching profile for user:', userId);
+      
       // Primeiro, tenta usar a função SECURITY DEFINER
       const { data: functionData, error: functionError } = await supabase
         .rpc('get_current_user_profile');
 
       if (!functionError && functionData && functionData.length > 0) {
+        console.log('✅ Profile fetched via function:', functionData[0]);
         return functionData[0] as Profile;
       }
 
@@ -74,56 +77,20 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         .maybeSingle();
 
       if (error) {
-        console.warn('Erro ao buscar perfil, criando perfil básico:', error.message);
-        
-        // Se o perfil não existe ou sem permissão, criar um básico para permitir acesso
-        const currentUser = await supabase.auth.getUser();
-        const basicProfile: Profile = {
-          id: crypto.randomUUID(),
-          user_id: userId,
-          nome: currentUser.data.user?.email?.split('@')[0] || 'Usuário',
-          email: currentUser.data.user?.email || '',
-          role: 'recepcionista',
-          ativo: true,
-          status: 'pendente',
-          username: currentUser.data.user?.email?.split('@')[0] || 'usuario',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-        
-        // Tentar criar o perfil no banco silenciosamente
-        try {
-          const { data: createdProfile } = await supabase
-            .from('profiles')
-            .insert(basicProfile)
-            .select()
-            .maybeSingle();
-          
-          return createdProfile || basicProfile;
-        } catch {
-          // Se falhar na criação, retorna perfil básico mesmo assim
-          return basicProfile;
-        }
+        console.warn('⚠️ Error fetching profile:', error.message);
+        return null; // Return null instead of creating fake profile
       }
 
+      if (!data) {
+        console.warn('⚠️ No profile found for user:', userId);
+        return null;
+      }
+
+      console.log('✅ Profile fetched:', data);
       return data;
     } catch (error) {
-      console.warn('Erro ao buscar perfil, retornando perfil básico:', error);
-      
-      // Retorna perfil básico em caso de erro para permitir acesso
-      const basicProfile: Profile = {
-        id: crypto.randomUUID(),
-        user_id: userId,
-        nome: 'Usuário',
-        email: '',
-        role: 'recepcionista',
-        ativo: true,
-        status: 'pendente',
-        username: 'usuario',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      return basicProfile;
+      console.error('❌ Unexpected error fetching profile:', error);
+      return null;
     }
   };
 
@@ -157,11 +124,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         
         // Se for login/signup após inicialização
         if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && initialized) {
+          console.log('🔐 User signed in, fetching profile...');
           setSession(session);
           setUser(session?.user ?? null);
           
           if (session?.user) {
-            // Buscar perfil do usuário sem timeouts complexos
+            // Buscar perfil do usuário
             setTimeout(async () => {
               if (!isSubscribed || isLoggingOut.current) return;
               
@@ -169,6 +137,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
               if (!isLoggingOut.current) {
                 setProfile(profileData);
                 setLoading(false);
+                
+                // Check if user is approved
+                if (profileData && profileData.status !== 'aprovado') {
+                  console.log('⚠️ User not approved yet, status:', profileData.status);
+                }
               }
             }, 100);
           } else {
@@ -189,6 +162,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         if (!isSubscribed || isLoggingOut.current) return;
         
         if (session && !error) {
+          console.log('🔐 Initial session found, fetching profile...');
           setSession(session);
           setUser(session.user);
           
@@ -197,6 +171,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           
           setProfile(profileData);
           setLoading(false);
+          
+          // Check if user is approved
+          if (profileData && profileData.status !== 'aprovado') {
+            console.log('⚠️ User not approved yet, status:', profileData.status);
+          }
         } else {
           setSession(null);
           setUser(null);

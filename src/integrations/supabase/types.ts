@@ -954,6 +954,10 @@ export type Database = {
         Args: { p_user_id: string; p_aprovador_id: string }
         Returns: Json
       }
+      user_can_access_system: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
