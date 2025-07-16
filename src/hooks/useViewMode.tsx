@@ -9,6 +9,15 @@ export const useViewMode = () => {
   const [lastAppointmentDate, setLastAppointmentDate] = useState<string | null>(null);
   const [editingAppointment, setEditingAppointment] = useState<AppointmentWithRelations | null>(null);
 
+  // Função personalizada para setViewMode que limpa estados quando necessário
+  const setViewModeWithCleanup = (newViewMode: ViewMode) => {
+    // Se está saindo do modo de edição, limpa o editingAppointment
+    if (viewMode === 'edit-appointment' && newViewMode !== 'edit-appointment') {
+      setEditingAppointment(null);
+    }
+    setViewMode(newViewMode);
+  };
+
   const resetViewState = () => {
     setSelectedDoctor(null);
     setLastAppointmentDate(null);
@@ -16,8 +25,14 @@ export const useViewMode = () => {
   };
 
   const goBack = () => {
-    setViewMode('doctors');
-    resetViewState();
+    // Se estava editando, volta para a lista de agendamentos
+    if (viewMode === 'edit-appointment') {
+      setViewMode('appointments-list');
+      setEditingAppointment(null);
+    } else {
+      setViewMode('doctors');
+      resetViewState();
+    }
   };
 
   const goBackToFilaEspera = () => {
@@ -26,7 +41,7 @@ export const useViewMode = () => {
 
   return {
     viewMode,
-    setViewMode,
+    setViewMode: setViewModeWithCleanup,
     selectedDoctor,
     setSelectedDoctor,
     lastAppointmentDate,

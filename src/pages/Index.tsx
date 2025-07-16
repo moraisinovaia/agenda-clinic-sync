@@ -227,9 +227,15 @@ const Index = () => {
           formData.horaAgendamento
         );
         
-        setSelectedDoctor(doctor);
-        setLastAppointmentDate(formData.dataAgendamento);
-        setViewMode('schedule');
+        // Se estava editando, volta para lista de agendamentos
+        if (editingAppointment) {
+          setEditingAppointment(null);
+          setViewMode('appointments-list');
+        } else {
+          setSelectedDoctor(doctor);
+          setLastAppointmentDate(formData.dataAgendamento);
+          setViewMode('schedule');
+        }
       }
     } catch (error) {
       throw error;
