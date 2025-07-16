@@ -12,16 +12,16 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const { user, session, loading, profile } = useAuth();
   const [retryCount, setRetryCount] = useState(0);
 
-  // Auto-retry em caso de erro de carregamento
-  useEffect(() => {
-    if (!loading && !user && !session && retryCount < 3) {
-      const timer = setTimeout(() => {
-        setRetryCount(prev => prev + 1);
-        window.location.reload();
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [loading, user, session, retryCount]);
+  // Auto-retry em caso de erro de carregamento (DESABILITADO para evitar loops)
+  // useEffect(() => {
+  //   if (!loading && !user && !session && retryCount < 3) {
+  //     const timer = setTimeout(() => {
+  //       setRetryCount(prev => prev + 1);
+  //       window.location.reload();
+  //     }, 2000);
+  //     return () => clearTimeout(timer);
+  //   }
+  // }, [loading, user, session, retryCount]);
 
   // Loading state melhorado
   if (loading || (!user && retryCount > 0)) {
