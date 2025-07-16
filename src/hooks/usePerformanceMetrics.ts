@@ -71,20 +71,23 @@ export const usePerformanceMetrics = () => {
       });
       clsObserver.observe({ type: 'layout-shift', buffered: true });
 
+      // Page Load Time
+      const handleLoad = () => {
+        const loadTime = performance.now();
+        setMetrics(prev => ({ ...prev, pageLoadTime: loadTime }));
+        logger.performance.measure('Page Load Time', loadTime);
+      };
+      
+      window.addEventListener('load', handleLoad);
+
       return () => {
         fcpObserver.disconnect();
         lcpObserver.disconnect();
         fidObserver.disconnect();
         clsObserver.disconnect();
+        window.removeEventListener('load', handleLoad);
       };
     }
-
-    // Page Load Time
-    window.addEventListener('load', () => {
-      const loadTime = performance.now();
-      setMetrics(prev => ({ ...prev, pageLoadTime: loadTime }));
-      logger.performance.measure('Page Load Time', loadTime);
-    });
   }, []);
 
   // Interceptar requisições para medir performance de API
@@ -156,7 +159,7 @@ export const usePerformanceMetrics = () => {
     const interval = setInterval(() => {
       const stats = getApiStats();
       if (stats && stats.totalRequests > 0) {
-        logger.performance.measure('API Stats Report', stats);
+        logger.info('API Stats Report', stats, 'PERFORMANCE');
       }
     }, 60000); // A cada minuto
 

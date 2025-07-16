@@ -691,6 +691,42 @@ export type Database = {
         }
         Relationships: []
       }
+      system_logs: {
+        Row: {
+          context: string | null
+          created_at: string | null
+          data: Json | null
+          id: string
+          level: string
+          message: string
+          session_id: string | null
+          timestamp: string
+          user_id: string | null
+        }
+        Insert: {
+          context?: string | null
+          created_at?: string | null
+          data?: Json | null
+          id?: string
+          level: string
+          message: string
+          session_id?: string | null
+          timestamp: string
+          user_id?: string | null
+        }
+        Update: {
+          context?: string | null
+          created_at?: string | null
+          data?: Json | null
+          id?: string
+          level?: string
+          message?: string
+          session_id?: string | null
+          timestamp?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       valores_procedimentos: {
         Row: {
           categoria: string
@@ -884,6 +920,10 @@ export type Database = {
           atendimento_nome: string
           atendimento_tipo: string
         }[]
+      }
+      cleanup_old_logs: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       confirmar_email_usuario_aprovado: {
         Args: { p_user_email: string; p_admin_id: string }
