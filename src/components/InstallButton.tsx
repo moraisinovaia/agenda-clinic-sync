@@ -44,14 +44,7 @@ export function InstallButton() {
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
 
-    // Mostrar botão mesmo sem o evento beforeinstallprompt para debug
-    // Em navegadores que suportam PWA mas não disparam o evento
-    setTimeout(() => {
-      if (!isInstalled && !deferredPrompt) {
-        console.log('Forcing install button to show for debug');
-        setIsInstallable(true);
-      }
-    }, 2000);
+    // Remover a lógica de debug que causava logs repetidos
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);

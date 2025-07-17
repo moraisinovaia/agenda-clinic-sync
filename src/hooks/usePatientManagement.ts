@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Patient } from '@/types/scheduling';
 import { useToast } from '@/hooks/use-toast';
@@ -7,11 +7,10 @@ export function usePatientManagement() {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  // Buscar pacientes por data de nascimento
-  const searchPatientsByBirthDate = async (birthDate: string): Promise<Patient[]> => {
+  // Buscar pacientes por data de nascimento (ESTABILIZADA com useCallback)
+  const searchPatientsByBirthDate = useCallback(async (birthDate: string): Promise<Patient[]> => {
     try {
       setLoading(true);
-      console.log('🔍 Buscando pacientes por data de nascimento:', birthDate);
       
       const { data, error } = await supabase
         .from('pacientes')
@@ -36,7 +35,6 @@ export function usePatientManagement() {
         return acc;
       }, [] as typeof data) : [];
 
-      console.log('📋 Pacientes únicos encontrados:', uniquePatients);
       return uniquePatients;
     } catch (error) {
       console.error('❌ Erro ao buscar pacientes:', error);
@@ -49,7 +47,7 @@ export function usePatientManagement() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]); // Dependência estável
 
   return {
     loading,
