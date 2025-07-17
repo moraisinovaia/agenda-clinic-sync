@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useSupabaseScheduling } from '@/hooks/useSupabaseScheduling';
@@ -30,14 +30,13 @@ import {
   LazyPreparos,
   LazyWrapper 
 } from '@/components/performance/LazyComponents';
-import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
+
 import { SystemMonitor } from '@/components/system/SystemMonitor';
 
 import { useFilaEspera } from '@/hooks/useFilaEspera';
 import { useViewMode } from '@/hooks/useViewMode';
 import { SchedulingFormData, AppointmentWithRelations } from '@/types/scheduling';
 import { useStableAuth } from '@/hooks/useStableAuth';
-import { useSystemSetup } from '@/hooks/useSystemSetup';
 import { Button } from '@/components/ui/button';
 import { AuthTest } from '@/components/AuthTest';
 import PendingApproval from '@/components/PendingApproval';
@@ -145,13 +144,14 @@ const Index = () => {
 
   useKeyboardShortcuts(shortcuts);
 
-  // Setup do sistema (apenas uma vez por usuário aprovado)
-  useSystemSetup();
-
-  // Setup realtime updates apenas se usuário aprovado
+  // Setup do sistema com controle de execução
+  const hasSetupRun = useRef(false);
+  
   useEffect(() => {
-    if (profile?.status === 'aprovado') {
-      // Setup será feito apenas uma vez
+    // Só executar setup uma vez para usuário aprovado
+    if (profile?.status === 'aprovado' && !hasSetupRun.current) {
+      hasSetupRun.current = true;
+      console.log('✅ Sistema configurado com sucesso');
     }
   }, [profile?.status]);
   

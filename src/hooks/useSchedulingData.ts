@@ -55,7 +55,6 @@ export function useSchedulingData() {
   // Buscar bloqueios de agenda
   const fetchBlockedDates = async () => {
     try {
-      console.log('🔍 Buscando bloqueios de agenda...');
       const { data, error } = await supabase
         .from('bloqueios_agenda')
         .select('*')
@@ -64,7 +63,6 @@ export function useSchedulingData() {
 
       if (error) throw error;
       setBlockedDates(data || []);
-      console.log('📋 Bloqueios encontrados:', data);
     } catch (error) {
       console.error('Erro ao buscar bloqueios:', error);
       setBlockedDates([]);
