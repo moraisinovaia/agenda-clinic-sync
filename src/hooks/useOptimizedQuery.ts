@@ -76,7 +76,7 @@ export const useOptimizedQuery = <T>(
     } finally {
       setLoading(false);
     }
-  }, [cacheKey, cacheTime, staleTime, ...dependencies]);
+  }, [queryFn, cacheKey, cacheTime, staleTime]); // Dependências corretas
 
   const refetch = useCallback(() => {
     // Clear cache for this key and refetch

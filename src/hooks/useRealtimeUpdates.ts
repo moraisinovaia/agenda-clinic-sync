@@ -38,12 +38,15 @@ export const useRealtimeUpdates = (config: RealtimeConfig) => {
 
   useEffect(() => {
     let channel: any = null;
-    let retryTimeout: NodeJS.Timeout | null = null;
+    let isSubscribed = false;
     
     const setupRealtime = () => {
+      // Não criar novos canais se já estamos conectados
+      if (isSubscribed) return;
+      
       try {
         channel = supabase
-          .channel(`realtime-${config.table}-${Date.now()}`) // Unique channel name
+          .channel(`realtime-${config.table}`) // Nome fixo sem timestamp
           .on(
             'postgres_changes',
             {
@@ -72,25 +75,14 @@ export const useRealtimeUpdates = (config: RealtimeConfig) => {
             handleDelete
           )
           .subscribe((status) => {
-            console.log('Realtime status:', status);
-            
             if (status === 'SUBSCRIBED') {
               console.log(`✅ Realtime connected for ${config.table}`);
-            } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-              console.warn(`❌ Realtime connection issue for ${config.table}:`, status);
-              
-              // Only show error notification for critical failures, not connection retries
-              if (status === 'CHANNEL_ERROR') {
-                notifySystemError('Problema na conexão em tempo real');
-              }
-              
-              // Retry connection after 5 seconds for non-critical failures
-              retryTimeout = setTimeout(() => {
-                console.log(`🔄 Retrying realtime connection for ${config.table}`);
-                setupRealtime();
-              }, 5000);
+              isSubscribed = true;
+            } else if (status === 'CLOSED') {
+              isSubscribed = false;
+              console.log(`Connection closed for ${config.table}`);
             }
-            // Don't log CLOSED status as it's normal during reconnections
+            // Removida lógica de retry automático para evitar loops
           });
       } catch (error) {
         console.error('Error setting up realtime:', error);
@@ -100,12 +92,10 @@ export const useRealtimeUpdates = (config: RealtimeConfig) => {
     setupRealtime();
 
     return () => {
-      if (retryTimeout) {
-        clearTimeout(retryTimeout);
-      }
+      isSubscribed = false;
       if (channel) {
         supabase.removeChannel(channel);
       }
     };
-  }, [config.table, handleInsert, handleUpdate, handleDelete, notifySystemError]);
+  }, [config.table]); // Removidas dependências desnecessárias
 };

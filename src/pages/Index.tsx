@@ -148,17 +148,12 @@ const Index = () => {
   // Setup do sistema (apenas uma vez por usuário aprovado)
   useSystemSetup();
 
-  // Setup realtime updates (com configuração mínima)
-  useRealtimeUpdates({
-    table: 'agendamentos',
-    onInsert: (payload) => {
-      console.log('Novo agendamento em tempo real:', payload);
-      // Optionally refresh data
-    },
-    onUpdate: (payload) => {
-      console.log('Agendamento atualizado:', payload);
+  // Setup realtime updates apenas se usuário aprovado
+  useEffect(() => {
+    if (profile?.status === 'aprovado') {
+      // Setup será feito apenas uma vez
     }
-  });
+  }, [profile?.status]);
   
   
   // Redirecionar para login se não autenticado
