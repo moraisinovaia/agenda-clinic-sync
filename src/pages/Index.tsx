@@ -36,7 +36,7 @@ import { SystemMonitor } from '@/components/system/SystemMonitor';
 import { useFilaEspera } from '@/hooks/useFilaEspera';
 import { useViewMode } from '@/hooks/useViewMode';
 import { SchedulingFormData, AppointmentWithRelations } from '@/types/scheduling';
-import { setupInitialData } from '@/utils/systemSetup';
+import { useSystemSetup } from '@/hooks/useSystemSetup';
 import { Button } from '@/components/ui/button';
 import { AuthTest } from '@/components/AuthTest';
 import PendingApproval from '@/components/PendingApproval';
@@ -144,6 +144,9 @@ const Index = () => {
 
   useKeyboardShortcuts(shortcuts);
 
+  // Setup do sistema (apenas uma vez por usuário aprovado)
+  useSystemSetup();
+
   // Setup realtime updates
   useRealtimeUpdates({
     table: 'agendamentos',
@@ -156,18 +159,6 @@ const Index = () => {
     }
   });
   
-  // Configurar dados iniciais do sistema
-  useEffect(() => {
-    if (user && !authLoading) {
-      setupInitialData().then((result) => {
-        if (result.success) {
-          console.log('✅ Sistema configurado com sucesso');
-        } else {
-          console.error('❌ Erro na configuração inicial:', result.error);
-        }
-      });
-    }
-  }, [user, authLoading]);
   
   // Redirecionar para login se não autenticado
   if (!authLoading && !user) {

@@ -3,10 +3,16 @@ import { supabase } from '@/integrations/supabase/client';
 export const setupInitialData = async () => {
   try {
     // Verificar se já existem configurações de alertas
-    const { data: alertConfigs } = await supabase
+    const { data: alertConfigs, error: alertError } = await supabase
       .from('configuracoes_clinica')
       .select('*')
       .eq('categoria', 'alertas');
+
+    // Se houver erro na consulta, não tenta inserir dados
+    if (alertError) {
+      console.warn('Erro ao verificar configurações existentes:', alertError);
+      return { success: false, error: alertError };
+    }
 
     if (!alertConfigs || alertConfigs.length === 0) {
       // Inserir configurações padrão de alertas
@@ -53,10 +59,16 @@ export const setupInitialData = async () => {
     }
 
     // Verificar configurações de sistema
-    const { data: systemConfigs } = await supabase
+    const { data: systemConfigs, error: systemError } = await supabase
       .from('configuracoes_clinica')
       .select('*')
       .eq('categoria', 'sistema');
+
+    // Se houver erro na consulta, não tenta inserir dados
+    if (systemError) {
+      console.warn('Erro ao verificar configurações de sistema:', systemError);
+      return { success: false, error: systemError };
+    }
 
     if (!systemConfigs || systemConfigs.length === 0) {
       const defaultSystemConfigs = [

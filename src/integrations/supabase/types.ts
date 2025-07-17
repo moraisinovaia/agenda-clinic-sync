@@ -1067,6 +1067,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: boolean
       }
+      is_current_user_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
       rejeitar_usuario: {
         Args: { p_user_id: string; p_aprovador_id: string }
         Returns: Json
