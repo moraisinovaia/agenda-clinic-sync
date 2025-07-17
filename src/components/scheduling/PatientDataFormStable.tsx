@@ -1,0 +1,316 @@
+import React, { useState, useMemo, useCallback } from 'react';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { User, Search, UserCheck, AlertCircle, CheckCircle } from 'lucide-react';
+import { SchedulingFormData } from '@/types/scheduling';
+import { usePatientManagement } from '@/hooks/usePatientManagement';
+import { useDebounce } from '@/hooks/useDebounce';
+
+interface PatientDataFormStableProps {
+  formData: SchedulingFormData;
+  setFormData: React.Dispatch<React.SetStateAction<SchedulingFormData>>;
+  availableConvenios: string[];
+  medicoSelected: boolean;
+  selectedDoctor?: {
+    nome: string;
+    idade_minima?: number;
+    idade_maxima?: number;
+    convenios_aceitos?: string[];
+  };
+}
+
+export const PatientDataFormStable = React.memo(({ 
+  formData, 
+  setFormData, 
+  availableConvenios, 
+  medicoSelected,
+  selectedDoctor
+}: PatientDataFormStableProps) => {
+  const [foundPatients, setFoundPatients] = useState<any[]>([]);
+  const [showPatientsList, setShowPatientsList] = useState(false);
+  
+  const { loading: searchingPatients, searchPatientsByBirthDate } = usePatientManagement();
+  
+  // Debounce da data de nascimento para evitar muitas requisições
+  const debouncedBirthDate = useDebounce(formData.dataNascimento, 800);
+
+  // Calcular idade do paciente de forma estável
+  const patientAge = useMemo(() => {
+    if (!formData.dataNascimento) return null;
+    const today = new Date();
+    const birth = new Date(formData.dataNascimento);
+    let age = today.getFullYear() - birth.getFullYear();
+    const monthDiff = today.getMonth() - birth.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+      age--;
+    }
+    return age;
+  }, [formData.dataNascimento]);
+
+  // Validações de idade vs médico de forma estável
+  const ageValidation = useMemo(() => {
+    if (!selectedDoctor || !patientAge) return null;
+
+    const { idade_minima, idade_maxima } = selectedDoctor;
+    
+    if (idade_minima && patientAge < idade_minima) {
+      return {
+        type: 'error' as const,
+        message: `Idade mínima para ${selectedDoctor.nome}: ${idade_minima} anos (paciente tem ${patientAge} anos)`
+      };
+    }
+    
+    if (idade_maxima && patientAge > idade_maxima) {
+      return {
+        type: 'error' as const,
+        message: `Idade máxima para ${selectedDoctor.nome}: ${idade_maxima} anos (paciente tem ${patientAge} anos)`
+      };
+    }
+
+    if (idade_minima || idade_maxima) {
+      return {
+        type: 'success' as const,
+        message: `Idade compatível com ${selectedDoctor.nome} (${patientAge} anos)`
+      };
+    }
+
+    return null;
+  }, [selectedDoctor, patientAge]);
+
+  // Buscar pacientes de forma estável
+  const handlePatientSearch = useCallback(async () => {
+    if (debouncedBirthDate && debouncedBirthDate.length === 10) {
+      try {
+        const patients = await searchPatientsByBirthDate(debouncedBirthDate);
+        setFoundPatients(patients);
+        setShowPatientsList(patients.length > 0);
+      } catch (error) {
+        console.error('Erro ao buscar pacientes:', error);
+        setFoundPatients([]);
+        setShowPatientsList(false);
+      }
+    } else {
+      setFoundPatients([]);
+      setShowPatientsList(false);
+    }
+  }, [debouncedBirthDate, searchPatientsByBirthDate]);
+
+  // Executar busca quando a data mudar
+  React.useEffect(() => {
+    handlePatientSearch();
+  }, [handlePatientSearch]);
+
+  // Função para selecionar paciente de forma estável
+  const selectPatient = useCallback((patient: any) => {
+    setFormData(prev => ({
+      ...prev,
+      nomeCompleto: patient.nome_completo,
+      telefone: patient.telefone || '',
+      celular: patient.celular,
+      convenio: patient.convenio,
+    }));
+    setShowPatientsList(false);
+  }, [setFormData]);
+
+  // Função para criar novo paciente de forma estável
+  const createNewPatient = useCallback(() => {
+    setFormData(prev => ({
+      ...prev,
+      nomeCompleto: '',
+      telefone: '',
+      celular: '',
+      convenio: '',
+    }));
+    setShowPatientsList(false);
+  }, [setFormData]);
+
+  // Formatação de telefone estável
+  const formatPhone = useCallback((value: string) => {
+    const numbers = value.replace(/\D/g, '');
+    
+    if (numbers.length <= 10) {
+      return numbers.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3').replace(/-$/, '');
+    } else {
+      return numbers.replace(/(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3').replace(/-$/, '');
+    }
+  }, []);
+
+  const isValidPhone = useCallback((value: string) => {
+    const numbers = value.replace(/\D/g, '');
+    return numbers.length === 10 || numbers.length === 11;
+  }, []);
+
+  const handlePhoneChange = useCallback((value: string, field: 'telefone' | 'celular') => {
+    const formatted = formatPhone(value);
+    setFormData(prev => ({ ...prev, [field]: formatted }));
+  }, [formatPhone, setFormData]);
+
+  const handleInputChange = useCallback((field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  }, [setFormData]);
+
+  return (
+    <div className="space-y-4">
+      <h3 className="text-lg font-semibold flex items-center gap-2">
+        <User className="h-4 w-4" />
+        Dados do Paciente
+      </h3>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="nomeCompleto">Nome Completo *</Label>
+          <Input
+            id="nomeCompleto"
+            value={formData.nomeCompleto}
+            onChange={(e) => handleInputChange('nomeCompleto', e.target.value)}
+            placeholder="Nome completo do paciente"
+            required
+          />
+        </div>
+        
+        <div>
+          <Label htmlFor="dataNascimento">Data de Nascimento *</Label>
+          <div className="relative">
+            <Input
+              id="dataNascimento"
+              type="date"
+              value={formData.dataNascimento}
+              onChange={(e) => handleInputChange('dataNascimento', e.target.value)}
+              required
+            />
+            {searchingPatients && (
+              <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin" />
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            {searchingPatients ? 'Buscando pacientes...' : 'Ao inserir a data, buscaremos pacientes existentes'}
+          </p>
+        </div>
+      </div>
+      
+      {/* Lista de pacientes encontrados */}
+      {showPatientsList && (
+        <Card className="mt-4">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <UserCheck className="h-4 w-4 text-green-600" />
+              <h4 className="font-medium text-green-700">
+                {foundPatients.length === 1 
+                  ? 'Paciente encontrado!' 
+                  : `${foundPatients.length} pacientes encontrados`
+                }
+              </h4>
+            </div>
+            <div className="space-y-2">
+              {foundPatients.map((patient, index) => (
+                <div key={patient.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
+                  <div>
+                    <p className="font-medium">{patient.nome_completo}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {patient.convenio} • {patient.celular}
+                      {patient.telefone && ` • ${patient.telefone}`}
+                    </p>
+                  </div>
+                  <Button 
+                    size="sm" 
+                    onClick={() => selectPatient(patient)}
+                    className="ml-2"
+                  >
+                    Selecionar
+                  </Button>
+                </div>
+              ))}
+              <div className="pt-2 border-t">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={createNewPatient}
+                  className="w-full"
+                >
+                  Criar novo paciente com esta data
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Alerta de validação de idade */}
+      {ageValidation && (
+        <Alert variant={ageValidation.type === 'error' ? 'destructive' : 'default'}>
+          {ageValidation.type === 'error' ? (
+            <AlertCircle className="h-4 w-4" />
+          ) : (
+            <CheckCircle className="h-4 w-4 text-green-600" />
+          )}
+          <AlertDescription>
+            {ageValidation.message}
+          </AlertDescription>
+        </Alert>
+      )}
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="convenio">Convênio *</Label>
+          <Select 
+            value={formData.convenio} 
+            onValueChange={(value) => handleInputChange('convenio', value)}
+            disabled={!medicoSelected}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={medicoSelected ? "Selecione o convênio" : "Primeiro selecione um médico"} />
+            </SelectTrigger>
+            <SelectContent>
+              {availableConvenios.map((convenio) => (
+                <SelectItem key={convenio} value={convenio}>
+                  {convenio}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <div>
+          <Label htmlFor="telefone">Telefone</Label>
+          <Input
+            id="telefone"
+            value={formData.telefone}
+            onChange={(e) => handlePhoneChange(e.target.value, 'telefone')}
+            placeholder="(xx) xxxx-xxxx"
+            maxLength={15}
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Opcional - Formato: (11) 1234-5678
+          </p>
+        </div>
+        
+        <div>
+          <Label htmlFor="celular">Celular *</Label>
+          <Input
+            id="celular"
+            value={formData.celular}
+            onChange={(e) => handlePhoneChange(e.target.value, 'celular')}
+            placeholder="(xx) xxxxx-xxxx"
+            maxLength={15}
+            required
+            className={!isValidPhone(formData.celular) && formData.celular ? 'border-red-500' : ''}
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Obrigatório - Formato: (11) 91234-5678
+          </p>
+          {!isValidPhone(formData.celular) && formData.celular && (
+            <p className="text-xs text-red-500 mt-1">
+              Número de celular inválido
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+PatientDataFormStable.displayName = 'PatientDataFormStable';
