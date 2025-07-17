@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      access_audit: {
+        Row: {
+          action: string
+          created_at: string | null
+          details: Json | null
+          id: string
+          ip_address: unknown | null
+          resource: string
+          success: boolean | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          ip_address?: unknown | null
+          resource: string
+          success?: boolean | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          ip_address?: unknown | null
+          resource?: string
+          success?: boolean | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       agendamentos: {
         Row: {
           atendimento_id: string
@@ -868,6 +904,18 @@ export type Database = {
           informacao: string | null
           tipo: string | null
         }
+        Insert: {
+          convenio?: string | null
+          dados_extras?: Json | null
+          informacao?: never
+          tipo?: never
+        }
+        Update: {
+          convenio?: string | null
+          dados_extras?: Json | null
+          informacao?: never
+          tipo?: never
+        }
         Relationships: []
       }
       vw_agente_medicos: {
@@ -1090,6 +1138,10 @@ export type Database = {
       is_current_user_admin: {
         Args: Record<PropertyKey, never>
         Returns: boolean
+      }
+      log_access_audit: {
+        Args: { p_action: string; p_resource: string; p_details?: Json }
+        Returns: undefined
       }
       rejeitar_usuario: {
         Args: { p_user_id: string; p_aprovador_id: string }
