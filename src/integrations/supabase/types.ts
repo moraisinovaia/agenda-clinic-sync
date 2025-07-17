@@ -1063,6 +1063,26 @@ export type Database = {
           aprovado_por_nome: string
         }[]
       }
+      get_pending_users_safe: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          nome: string
+          email: string
+          username: string
+          role: string
+          created_at: string
+          aprovado_por_nome: string
+        }[]
+      }
+      get_user_role_safe: {
+        Args: { p_user_id: string }
+        Returns: string
+      }
+      is_admin_safe: {
+        Args: { p_user_id: string }
+        Returns: boolean
+      }
       is_admin_user: {
         Args: Record<PropertyKey, never>
         Returns: boolean

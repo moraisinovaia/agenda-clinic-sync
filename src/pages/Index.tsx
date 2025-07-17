@@ -36,13 +36,14 @@ import { SystemMonitor } from '@/components/system/SystemMonitor';
 import { useFilaEspera } from '@/hooks/useFilaEspera';
 import { useViewMode } from '@/hooks/useViewMode';
 import { SchedulingFormData, AppointmentWithRelations } from '@/types/scheduling';
+import { useStableAuth } from '@/hooks/useStableAuth';
 import { useSystemSetup } from '@/hooks/useSystemSetup';
 import { Button } from '@/components/ui/button';
 import { AuthTest } from '@/components/AuthTest';
 import PendingApproval from '@/components/PendingApproval';
 
 const Index = () => {
-  const { user, profile, loading: authLoading, signOut } = useAuth();
+  const { user, profile, loading: authLoading, signOut } = useStableAuth();
   
   // Estados sempre inicializados na mesma ordem (antes de qualquer return)
   const [searchTerm, setSearchTerm] = useState('');
@@ -147,7 +148,7 @@ const Index = () => {
   // Setup do sistema (apenas uma vez por usuário aprovado)
   useSystemSetup();
 
-  // Setup realtime updates
+  // Setup realtime updates (com configuração mínima)
   useRealtimeUpdates({
     table: 'agendamentos',
     onInsert: (payload) => {

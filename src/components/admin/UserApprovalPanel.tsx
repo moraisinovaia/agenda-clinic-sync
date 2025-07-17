@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, Check, X, Users, Clock, CheckCircle, XCircle, Mail, MailCheck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
+import { useStableAuth } from '@/hooks/useStableAuth';
 
 interface PendingUser {
   id: string;
@@ -36,12 +36,13 @@ export function UserApprovalPanel() {
   const [loading, setLoading] = useState(true);
   const [processingUser, setProcessingUser] = useState<string | null>(null);
   const { toast } = useToast();
-  const { profile } = useAuth();
+  const { profile, isAdmin, isApproved } = useStableAuth();
 
   const fetchPendingUsers = async () => {
     try {
+      // Usar a função segura para buscar usuários pendentes
       const { data, error } = await supabase
-        .rpc('get_pending_users');
+        .rpc('get_pending_users_safe');
 
       if (error) {
         console.error('Erro ao buscar usuários pendentes:', error);
@@ -66,15 +67,18 @@ export function UserApprovalPanel() {
 
   const fetchApprovedUsers = async () => {
     try {
-      // Buscar usuários aprovados
+      // Usar query mais segura sem dependências circulares
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
         .select('id, nome, email, username, role, status, created_at, data_aprovacao, user_id')
         .eq('status', 'aprovado')
+        .neq('user_id', (await supabase.auth.getUser()).data.user?.id || '') // Excluir próprio usuário
         .order('data_aprovacao', { ascending: false });
 
       if (profilesError) {
-        console.error('Erro ao buscar usuários aprovados:', profilesError);
+        // Não mostrar erro se for relacionado a RLS - apenas log
+        console.warn('Aviso ao buscar usuários aprovados:', profilesError);
+        setApprovedUsers([]);
         return;
       }
 
@@ -86,21 +90,39 @@ export function UserApprovalPanel() {
 
       setApprovedUsers(usersWithEmailStatus);
     } catch (error) {
-      console.error('Erro ao buscar usuários aprovados:', error);
-    } finally {
-      setLoading(false);
+      console.warn('Aviso ao buscar usuários aprovados:', error);
+      setApprovedUsers([]); // Falhar silenciosamente para evitar loops
     }
   };
 
+  // Usar useEffect mais estável que não causa loops
   useEffect(() => {
-    // Só admins podem ver este painel
-    if (profile?.role === 'admin' && profile?.status === 'aprovado') {
-      fetchPendingUsers();
-      fetchApprovedUsers();
+    let isMounted = true;
+    
+    const loadData = async () => {
+      // Só admins podem ver este painel
+      if (isAdmin && isApproved) {
+        await Promise.all([
+          fetchPendingUsers(),
+          fetchApprovedUsers()
+        ]);
+      }
+      
+      if (isMounted) {
+        setLoading(false);
+      }
+    };
+
+    if (profile) { // Só executa quando profile está definido
+      loadData();
     } else {
       setLoading(false);
     }
-  }, [profile]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAdmin, isApproved]); // Dependências estáveis
 
   const handleApproveUser = async (userId: string) => {
     if (!profile?.id) return;
