@@ -146,40 +146,13 @@ export function PatientDataFormStable({
         
         <div>
           <Label htmlFor="dataNascimento">Data de Nascimento *</Label>
-          <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "w-full justify-start text-left font-normal",
-                  !selectedDate && "text-muted-foreground"
-                )}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {selectedDate ? (
-                  format(selectedDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
-                ) : (
-                  <span>Selecione a data de nascimento</span>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={handleDateSelect}
-                disabled={(date) =>
-                  date > new Date() || date < new Date("1900-01-01")
-                }
-                initialFocus
-                locale={ptBR}
-                className="pointer-events-auto"
-              />
-            </PopoverContent>
-          </Popover>
-          <p className="text-xs text-muted-foreground mt-1">
-            Selecione a data para verificar a idade do paciente
-          </p>
+          <Input
+            id="dataNascimento"
+            type="date"
+            value={formData.dataNascimento}
+            onChange={(e) => setFormData(prev => ({ ...prev, dataNascimento: e.target.value }))}
+            required
+          />
         </div>
       </div>
 
