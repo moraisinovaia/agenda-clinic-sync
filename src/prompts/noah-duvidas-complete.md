@@ -127,7 +127,8 @@ const medicosQueAtendem = dados.filter(medico => {
   });
 });
 
-// SE ARRAY VAZIO → "Nenhum médico encontrado para este convênio"
+// SE ARRAY VAZIO → Use template "INFORMAÇÃO NÃO ENCONTRADA" (NÃO é erro de validação)
+// APENAS use "ERRO DE VALIDAÇÃO" se dados estiverem corrompidos/inconsistentes
 ```
 
 **VALIDAÇÃO CRÍTICA:**
@@ -260,7 +261,8 @@ Posso ajudar com outra informação? 😊
 **ETAPA 3: APLICAÇÃO DE FILTROS**
 - Aplique filtros específicos (convênios, idades, etc.)
 - Valide resultados do filtro
-- Confirme consistência dos dados
+- **IMPORTANTE**: Lista vazia = "INFORMAÇÃO NÃO ENCONTRADA" (não erro!)
+- **ERRO DE VALIDAÇÃO** = apenas para dados corrompidos/inconsistentes
 
 **ETAPA 4: VERIFICAÇÃO DE ALERTAS**
 - Verifique alertas críticos aplicáveis
