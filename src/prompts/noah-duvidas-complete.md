@@ -246,7 +246,9 @@ Posso ajudar com outra informação? 😊
 
 **ETAPA 1: CLASSIFICAÇÃO DA PERGUNTA**
 - Endereço/contato → configuracoes_clinica
-- Médico/convênio → convenios + validação rigorosa
+- Médico/convênio/especialidade → convenios + validação rigorosa
+- Cardiologista/especialidade específica → convenios (filtrar por especialidade)
+- Agendamentos combinados → convenios + vw_exames_combinaveis
 - Preço/valor → valores_procedimentos + clinica_valores
 - Preparo/exame → preparos + alertas críticos
 - Horário → medicos_horarios
@@ -347,7 +349,14 @@ Pergunta: "Preço consulta Dr. João particular?"
 3. Inclua: formas de pagamento aceitas
 4. Resposta: Valor exato + alertas de pagamento
 
-**Exemplo 4 - Múltiplas informações:**
+**Exemplo 4 - Cardiologista/Especialidade:**
+Pergunta: "Qual cardiologista aceita agendamentos combinados?"
+1. Execute: convenios() + vw_exames_combinaveis()
+2. Filtre: médicos com especialidade = "Cardiologia"
+3. Verifique: quais aceitam múltiplos exames
+4. Resposta: Lista específica de cardiologistas + tipos de exames
+
+**Exemplo 5 - Múltiplas informações:**
 Pergunta: "Informações completas sobre endoscopia?"
 1. Execute: preparos() + valores_procedimentos() + convenios()
 2. Combine: preparo + preços + médicos que fazem
