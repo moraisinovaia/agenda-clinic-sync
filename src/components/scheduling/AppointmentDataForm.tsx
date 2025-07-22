@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -6,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Clock, Check, ChevronsUpDown } from 'lucide-react';
+import { Clock, Check, ChevronsUpDown, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Doctor, SchedulingFormData, Atendimento } from '@/types/scheduling';
 
@@ -24,6 +25,8 @@ export function AppointmentDataForm({
   atendimentos 
 }: AppointmentDataFormProps) {
   const [openDoctorCombo, setOpenDoctorCombo] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  
   // Filtrar atendimentos baseado no médico selecionado
   const filteredAtendimentos = formData.medicoId 
     ? atendimentos.filter(atendimento => atendimento.medico_id === formData.medicoId)
@@ -57,6 +60,96 @@ export function AppointmentDataForm({
     return '07:00'; // Horário padrão de início
   };
 
+  // Função para validar campo individual
+  const validateField = (field: string, value: string) => {
+    const errors: Record<string, string> = {};
+    
+    switch (field) {
+      case 'medicoId':
+        if (!value.trim()) {
+          errors.medicoId = 'Médico é obrigatório';
+        }
+        break;
+      case 'atendimentoId':
+        if (!value.trim()) {
+          errors.atendimentoId = 'Tipo de atendimento é obrigatório';
+        } else if (formData.medicoId && !filteredAtendimentos.some(a => a.id === value)) {
+          errors.atendimentoId = 'Tipo de atendimento inválido para o médico selecionado';
+        }
+        break;
+      case 'dataAgendamento':
+        if (!value) {
+          errors.dataAgendamento = 'Data é obrigatória';
+        }
+        break;
+      case 'horaAgendamento':
+        if (!value) {
+          errors.horaAgendamento = 'Horário é obrigatório';
+        } else if (formData.dataAgendamento && !isTimeValid(formData.dataAgendamento, value)) {
+          errors.horaAgendamento = 'Não é possível agendar para um horário que já passou';
+        }
+        break;
+    }
+    
+    setValidationErrors(prev => ({
+      ...prev,
+      [field]: errors[field] || ''
+    }));
+    
+    return !errors[field];
+  };
+
+  // Função melhorada para mudança de médico
+  const handleDoctorChange = (doctorId: string) => {
+    const doctor = doctors.find(d => d.id === doctorId);
+    if (!doctor) return;
+
+    // Filtrar atendimentos para o novo médico
+    const newFilteredAtendimentos = atendimentos.filter(
+      atendimento => atendimento.medico_id === doctorId
+    );
+
+    // Auto-selecionar primeiro atendimento se houver apenas um
+    const autoSelectAtendimento = newFilteredAtendimentos.length === 1 
+      ? newFilteredAtendimentos[0].id 
+      : '';
+
+    setFormData(prev => ({
+      ...prev,
+      medicoId: doctorId,
+      atendimentoId: autoSelectAtendimento, // Não resetar se auto-selecionado
+      convenio: '' // Reset apenas convenio
+    }));
+
+    // Limpar erros relacionados
+    setValidationErrors(prev => ({
+      ...prev,
+      medicoId: '',
+      atendimentoId: autoSelectAtendimento ? '' : prev.atendimentoId
+    }));
+
+    setOpenDoctorCombo(false);
+  };
+
+  // Função para mudança de data com validação de horário
+  const handleDateChange = (date: string) => {
+    setFormData(prev => ({ 
+      ...prev, 
+      dataAgendamento: date,
+      // Reset horário apenas se a data for hoje e o horário atual for inválido
+      horaAgendamento: date === today && prev.horaAgendamento && prev.horaAgendamento <= currentTime 
+        ? '' 
+        : prev.horaAgendamento
+    }));
+    
+    validateField('dataAgendamento', date);
+    
+    // Re-validar horário se já estiver preenchido
+    if (formData.horaAgendamento) {
+      validateField('horaAgendamento', formData.horaAgendamento);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold flex items-center gap-2">
@@ -66,14 +159,19 @@ export function AppointmentDataForm({
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <Label htmlFor="medico">Médico *</Label>
+          <Label htmlFor="medico" className={validationErrors.medicoId ? 'text-destructive' : ''}>
+            Médico *
+          </Label>
           <Popover open={openDoctorCombo} onOpenChange={setOpenDoctorCombo}>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
                 role="combobox"
                 aria-expanded={openDoctorCombo}
-                className="w-full justify-between"
+                className={cn(
+                  "w-full justify-between",
+                  validationErrors.medicoId && "border-destructive"
+                )}
               >
                 {formData.medicoId
                   ? doctors.find((doctor) => doctor.id === formData.medicoId)?.nome + 
@@ -93,15 +191,7 @@ export function AppointmentDataForm({
                       <CommandItem
                         key={doctor.id}
                         value={`${doctor.nome} ${doctor.especialidade}`}
-                        onSelect={() => {
-                          setFormData(prev => ({
-                            ...prev,
-                            medicoId: doctor.id,
-                            atendimentoId: '', // Reset atendimento when doctor changes
-                            convenio: '' // Reset convenio when doctor changes
-                          }));
-                          setOpenDoctorCombo(false);
-                        }}
+                        onSelect={() => handleDoctorChange(doctor.id)}
                       >
                         <Check
                           className={cn(
@@ -117,16 +207,27 @@ export function AppointmentDataForm({
               </Command>
             </PopoverContent>
           </Popover>
+          {validationErrors.medicoId && (
+            <p className="text-sm text-destructive mt-1 flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" />
+              {validationErrors.medicoId}
+            </p>
+          )}
         </div>
 
         <div>
-          <Label htmlFor="atendimento">Tipo de Atendimento *</Label>
+          <Label htmlFor="atendimento" className={validationErrors.atendimentoId ? 'text-destructive' : ''}>
+            Tipo de Atendimento *
+          </Label>
           <Select 
             value={formData.atendimentoId} 
-            onValueChange={(value) => setFormData(prev => ({ ...prev, atendimentoId: value }))}
+            onValueChange={(value) => {
+              setFormData(prev => ({ ...prev, atendimentoId: value }));
+              validateField('atendimentoId', value);
+            }}
             disabled={!formData.medicoId}
           >
-            <SelectTrigger>
+            <SelectTrigger className={cn(validationErrors.atendimentoId && "border-destructive")}>
               <SelectValue placeholder={
                 !formData.medicoId 
                   ? "Selecione primeiro um médico" 
@@ -143,58 +244,75 @@ export function AppointmentDataForm({
               ))}
             </SelectContent>
           </Select>
+          {validationErrors.atendimentoId && (
+            <p className="text-sm text-destructive mt-1 flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" />
+              {validationErrors.atendimentoId}
+            </p>
+          )}
+          {filteredAtendimentos.length === 0 && formData.medicoId && (
+            <p className="text-sm text-muted-foreground mt-1">
+              Este médico não possui tipos de atendimento configurados
+            </p>
+          )}
         </div>
         
         <div>
-          <Label htmlFor="dataAgendamento">Data *</Label>
+          <Label htmlFor="dataAgendamento" className={validationErrors.dataAgendamento ? 'text-destructive' : ''}>
+            Data *
+          </Label>
           <Input
             id="dataAgendamento"
             type="date"
             value={formData.dataAgendamento}
-            onChange={(e) => {
-              setFormData(prev => ({ 
-                ...prev, 
-                dataAgendamento: e.target.value,
-                // Reset horário se mudar a data para evitar horários inválidos
-                horaAgendamento: e.target.value === today ? '' : prev.horaAgendamento
-              }));
-            }}
+            onChange={(e) => handleDateChange(e.target.value)}
+            onBlur={(e) => validateField('dataAgendamento', e.target.value)}
             min={today}
             required
+            className={cn(validationErrors.dataAgendamento && "border-destructive")}
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            Apenas datas futuras são permitidas
-          </p>
+          {validationErrors.dataAgendamento ? (
+            <p className="text-sm text-destructive mt-1 flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" />
+              {validationErrors.dataAgendamento}
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground mt-1">
+              Apenas datas futuras são permitidas
+            </p>
+          )}
         </div>
         
         <div>
-          <Label htmlFor="horaAgendamento">Horário *</Label>
+          <Label htmlFor="horaAgendamento" className={validationErrors.horaAgendamento ? 'text-destructive' : ''}>
+            Horário *
+          </Label>
           <Input
             id="horaAgendamento"
             type="time"
             value={formData.horaAgendamento}
-            onChange={(e) => setFormData(prev => ({ ...prev, horaAgendamento: e.target.value }))}
+            onChange={(e) => {
+              setFormData(prev => ({ ...prev, horaAgendamento: e.target.value }));
+              validateField('horaAgendamento', e.target.value);
+            }}
+            onBlur={(e) => validateField('horaAgendamento', e.target.value)}
             min={getMinTime(formData.dataAgendamento)}
             max="18:00"
             step="1800" // Intervalos de 30 minutos
             required
-            className={
-              formData.dataAgendamento && formData.horaAgendamento && 
-              !isTimeValid(formData.dataAgendamento, formData.horaAgendamento) 
-                ? 'border-red-500' 
-                : ''
-            }
+            className={cn(validationErrors.horaAgendamento && "border-destructive")}
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            {formData.dataAgendamento === today 
-              ? `Horário mínimo para hoje: ${getMinTime(formData.dataAgendamento)}`
-              : 'Horário de funcionamento: 07:00 às 18:00'
-            }
-          </p>
-          {formData.dataAgendamento && formData.horaAgendamento && 
-           !isTimeValid(formData.dataAgendamento, formData.horaAgendamento) && (
-            <p className="text-xs text-red-500 mt-1">
-              Não é possível agendar para um horário que já passou
+          {validationErrors.horaAgendamento ? (
+            <p className="text-sm text-destructive mt-1 flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" />
+              {validationErrors.horaAgendamento}
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground mt-1">
+              {formData.dataAgendamento === today 
+                ? `Horário mínimo para hoje: ${getMinTime(formData.dataAgendamento)}`
+                : 'Horário de funcionamento: 07:00 às 18:00'
+              }
             </p>
           )}
         </div>

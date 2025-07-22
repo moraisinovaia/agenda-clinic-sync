@@ -1,320 +1,238 @@
-import React, { useState, useCallback, useMemo } from 'react';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { Button } from '@/components/ui/button';
+
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Calendar } from '@/components/ui/calendar';
-import { Badge } from '@/components/ui/badge';
-import { Calendar as CalendarIcon, Clock, User } from 'lucide-react';
-import { Doctor, Atendimento, SchedulingFormData, AppointmentWithRelations } from '@/types/scheduling';
+import { Button } from '@/components/ui/button';
 import { PatientDataFormStable } from './PatientDataFormStable';
 import { AppointmentDataForm } from './AppointmentDataForm';
+import { Doctor, SchedulingFormData, Atendimento, AppointmentWithRelations } from '@/types/scheduling';
 import { useSchedulingForm } from '@/hooks/useSchedulingForm';
+import { AlertCircle, CheckCircle, X } from 'lucide-react';
 
 interface SchedulingFormStableProps {
   doctors: Doctor[];
   atendimentos: Atendimento[];
   appointments: AppointmentWithRelations[];
-  blockedDates?: any[];
-  isDateBlocked?: (doctorId: string, date: Date) => boolean;
+  blockedDates: string[];
+  isDateBlocked: (date: string, doctorId: string) => boolean;
   onSubmit: (data: SchedulingFormData) => Promise<void>;
   onCancel: () => void;
   getAtendimentosByDoctor: (doctorId: string) => Atendimento[];
   editingAppointment?: AppointmentWithRelations;
 }
 
-export const SchedulingFormStable = React.memo(({ 
-  doctors, 
-  atendimentos, 
+export function SchedulingFormStable({
+  doctors,
+  atendimentos,
   appointments,
-  blockedDates = [],
+  blockedDates,
   isDateBlocked,
-  onSubmit, 
+  onSubmit,
   onCancel,
   getAtendimentosByDoctor,
   editingAppointment
-}: SchedulingFormStableProps) => {
-  
-  // Preparar dados iniciais para edição de forma estável
-  const initialEditData = useMemo(() => {
-    if (!editingAppointment) return undefined;
-    
-    return {
-      nomeCompleto: editingAppointment.pacientes?.nome_completo || '',
-      dataNascimento: editingAppointment.pacientes?.data_nascimento || '',
-      convenio: editingAppointment.pacientes?.convenio || '',
-      telefone: editingAppointment.pacientes?.telefone || '',
-      celular: editingAppointment.pacientes?.celular || '',
-      medicoId: editingAppointment.medico_id,
-      atendimentoId: editingAppointment.atendimento_id,
-      dataAgendamento: editingAppointment.data_agendamento,
-      horaAgendamento: editingAppointment.hora_agendamento,
-      observacoes: editingAppointment.observacoes || '',
-    };
-  }, [editingAppointment]);
+}: SchedulingFormStableProps) {
+  const [step, setStep] = useState(1);
 
-  const { formData, setFormData, loading, handleSubmit } = useSchedulingForm(initialEditData);
-  const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date>(new Date());
+  // Preparar dados iniciais se estiver editando
+  const initialData = editingAppointment ? {
+    nomeCompleto: editingAppointment.pacientes?.nome_completo || '',
+    dataNascimento: editingAppointment.pacientes?.data_nascimento || '',
+    convenio: editingAppointment.pacientes?.convenio || '',
+    telefone: editingAppointment.pacientes?.telefone || '',
+    celular: editingAppointment.pacientes?.celular || '',
+    medicoId: editingAppointment.medico_id || '',
+    atendimentoId: editingAppointment.atendimento_id || '',
+    dataAgendamento: editingAppointment.data_agendamento || '',
+    horaAgendamento: editingAppointment.hora_agendamento || '',
+    observacoes: editingAppointment.observacoes || '',
+  } : undefined;
 
-  // Valores calculados de forma estável
-  const selectedDoctor = useMemo(() => 
-    doctors.find(doctor => doctor.id === formData.medicoId),
-    [doctors, formData.medicoId]
-  );
+  const {
+    formData,
+    setFormData,
+    loading,
+    error,
+    resetForm,
+    handleSubmit,
+  } = useSchedulingForm(initialData);
 
-  const availableConvenios = useMemo(() => 
-    selectedDoctor?.convenios_aceitos || [],
-    [selectedDoctor?.convenios_aceitos]
-  );
-
-  const medicoSelected = useMemo(() => 
-    !!formData.medicoId,
-    [formData.medicoId]
-  );
-
-  // Função para obter agendamentos de um médico específico em uma data
-  const getAppointmentsForDoctorAndDate = useCallback((doctorId: string, date: Date) => {
-    const dateStr = format(date, 'yyyy-MM-dd');
-    return appointments.filter(
-      appointment => 
-        appointment.medico_id === doctorId && 
-        appointment.data_agendamento === dateStr
-    );
-  }, [appointments]);
-
-  // Função para verificar se uma data tem agendamentos para o médico selecionado
-  const hasAppointmentsOnDate = useCallback((date: Date) => {
-    if (!selectedDoctor) return false;
-    return getAppointmentsForDoctorAndDate(selectedDoctor.id, date).length > 0;
-  }, [selectedDoctor, getAppointmentsForDoctorAndDate]);
-
-  // Função para verificar se uma data está bloqueada para o médico selecionado
-  const hasBlocksOnDate = useCallback((date: Date) => {
-    if (!selectedDoctor) return false;
-    if (isDateBlocked) {
-      return isDateBlocked(selectedDoctor.id, date);
+  // Reset step quando há erro
+  useEffect(() => {
+    if (error) {
+      setStep(1); // Voltar para o primeiro step para correção
     }
-    // Fallback manual se isDateBlocked não estiver disponível
-    const dateStr = date.toISOString().split('T')[0];
-    return blockedDates.some(blocked => 
-      blocked.medico_id === selectedDoctor.id &&
-      blocked.status === 'ativo' &&
-      dateStr >= blocked.data_inicio &&
-      dateStr <= blocked.data_fim
-    );
-  }, [selectedDoctor, isDateBlocked, blockedDates]);
+  }, [error]);
 
-  const selectedDateAppointments = useMemo(() => 
-    selectedDoctor 
-      ? getAppointmentsForDoctorAndDate(selectedDoctor.id, selectedCalendarDate)
-      : [],
-    [selectedDoctor, getAppointmentsForDoctorAndDate, selectedCalendarDate]
-  );
-
-  const getStatusColor = useCallback((status: string) => {
-    switch (status) {
-      case 'agendado':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'confirmado':
-        return 'bg-green-100 text-green-800 border-green-200';
-      case 'realizado':
-        return 'bg-gray-100 text-gray-800 border-gray-200';
-      case 'cancelado':
-        return 'bg-red-100 text-red-800 border-red-200';
+  const isStepValid = (stepNumber: number) => {
+    switch (stepNumber) {
+      case 1:
+        return !!(
+          formData.nomeCompleto &&
+          formData.dataNascimento &&
+          formData.convenio &&
+          formData.celular
+        );
+      case 2:
+        return !!(
+          formData.medicoId &&
+          formData.atendimentoId &&
+          formData.dataAgendamento &&
+          formData.horaAgendamento
+        );
       default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
+        return false;
     }
-  }, []);
+  };
 
-  const handleFormSubmit = useCallback((e: React.FormEvent) => {
-    handleSubmit(e, onSubmit);
-  }, [handleSubmit, onSubmit]);
+  const handleNext = () => {
+    if (isStepValid(step)) {
+      setStep(2);
+    }
+  };
 
-  const handleCalendarDateSelect = useCallback((date: Date | undefined) => {
-    if (date) setSelectedCalendarDate(date);
-  }, []);
+  const handleBack = () => {
+    setStep(1);
+  };
+
+  const handleCancel = () => {
+    resetForm();
+    onCancel();
+  };
 
   return (
-    <div className="w-full max-w-6xl mx-auto space-y-6">
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Formulário de Agendamento */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CalendarIcon className="h-5 w-5" />
+    <div className="w-full max-w-4xl mx-auto">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>
               {editingAppointment ? 'Editar Agendamento' : 'Novo Agendamento'}
-            </CardTitle>
-          </CardHeader>
-          
-          <CardContent>
-            <form onSubmit={handleFormSubmit} className="space-y-4">
+            </span>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={handleCancel}
+              disabled={loading}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        
+        <CardContent>
+          {/* Indicador de passos */}
+          <div className="flex items-center justify-center mb-6">
+            <div className="flex items-center space-x-4">
+              <div className={`flex items-center space-x-2 ${step >= 1 ? 'text-primary' : 'text-muted-foreground'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  step >= 1 ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                }`}>
+                  1
+                </div>
+                <span className="text-sm font-medium">Dados do Paciente</span>
+              </div>
+              
+              <div className={`w-8 h-1 ${step >= 2 ? 'bg-primary' : 'bg-muted'}`} />
+              
+              <div className={`flex items-center space-x-2 ${step >= 2 ? 'text-primary' : 'text-muted-foreground'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  step >= 2 ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                }`}>
+                  2
+                </div>
+                <span className="text-sm font-medium">Dados do Agendamento</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Exibir erro se houver */}
+          {error && (
+            <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <div className="flex items-center gap-2 text-destructive">
+                <AlertCircle className="h-4 w-4" />
+                <span className="font-medium">Erro ao criar agendamento</span>
+              </div>
+              <p className="text-sm text-destructive/80 mt-1">{error}</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setStep(1)}
+                className="mt-2"
+              >
+                Corrigir dados
+              </Button>
+            </div>
+          )}
+
+          <form onSubmit={(e) => handleSubmit(e, onSubmit)} className="space-y-6">
+            {step === 1 && (
               <PatientDataFormStable
                 formData={formData}
                 setFormData={setFormData}
-                availableConvenios={availableConvenios}
-                medicoSelected={medicoSelected}
-                selectedDoctor={selectedDoctor}
               />
+            )}
 
+            {step === 2 && (
               <AppointmentDataForm
                 formData={formData}
                 setFormData={setFormData}
                 doctors={doctors}
                 atendimentos={atendimentos}
               />
-
-              <div className="flex gap-2 pt-4">
-                <Button type="submit" disabled={loading} className="flex-1">
-                  {loading 
-                    ? (editingAppointment ? 'Atualizando...' : 'Agendando...') 
-                    : (editingAppointment ? 'Atualizar Agendamento' : 'Confirmar Agendamento')
-                  }
-                </Button>
-                <Button type="button" variant="outline" onClick={onCancel}>
-                  Cancelar
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-
-        {/* Calendário e Agendamentos */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CalendarIcon className="h-5 w-5" />
-              Agenda do Médico
-            </CardTitle>
-            {selectedDoctor && (
-              <div className="text-sm text-muted-foreground">
-                {selectedDoctor.nome} - {selectedDoctor.especialidade}
-              </div>
             )}
-          </CardHeader>
-          
-          <CardContent className="space-y-4">
-            {!selectedDoctor ? (
-              <div className="text-center py-8">
-                <CalendarIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h4 className="text-lg font-medium text-muted-foreground mb-2">
-                  Selecione um médico
-                </h4>
-                <p className="text-sm text-muted-foreground">
-                  Para visualizar a agenda, primeiro selecione um médico no formulário.
-                </p>
-              </div>
-            ) : (
-              <>
-                {/* Calendário */}
-                <div className="space-y-2">
-                  <h4 className="font-medium">Selecione uma data para ver agendamentos:</h4>
-                  <Calendar
-                    mode="single"
-                    selected={selectedCalendarDate}
-                    onSelect={handleCalendarDateSelect}
-                    locale={ptBR}
-                    className="rounded-md border shadow-sm bg-background p-3 pointer-events-auto"
-                    disabled={(date) => hasBlocksOnDate(date)}
-                    modifiers={{
-                      hasAppointments: (date) => hasAppointmentsOnDate(date),
-                      hasBlocks: (date) => hasBlocksOnDate(date)
-                    }}
-                    modifiersStyles={{
-                      hasAppointments: {
-                        backgroundColor: 'hsl(var(--primary))',
-                        color: 'hsl(var(--primary-foreground))',
-                        fontWeight: 'bold'
-                      },
-                      hasBlocks: {
-                        backgroundColor: 'hsl(var(--destructive))',
-                        color: 'hsl(var(--destructive-foreground))',
-                        fontWeight: 'bold',
-                        textDecoration: 'line-through'
-                      }
-                    }}
-                  />
-                  <div className="text-xs text-muted-foreground space-y-1">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-primary rounded"></div>
-                      <span>Dias com agendamentos</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-destructive rounded"></div>
-                      <span>Dias bloqueados (não disponíveis)</span>
-                    </div>
-                  </div>
-                </div>
 
-                {/* Lista de agendamentos do dia selecionado */}
-                <div className="space-y-3">
-                  <h4 className="font-medium">
-                    Agendamentos para {format(selectedCalendarDate, "dd 'de' MMMM", { locale: ptBR })}:
-                  </h4>
-                  
-                  <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                    {selectedDateAppointments.length > 0 ? (
-                      selectedDateAppointments
-                        .filter(appointment => appointment.status !== 'cancelado' && appointment.status !== 'cancelado_bloqueio')
-                        .sort((a, b) => a.hora_agendamento.localeCompare(b.hora_agendamento))
-                        .map((appointment) => (
-                          <div 
-                            key={appointment.id} 
-                            className={`p-3 border rounded-lg space-y-2 ${
-                              appointment.status === 'confirmado' 
-                                ? 'bg-green-50 border-green-200' 
-                                : 'bg-background'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <Clock className="h-4 w-4 text-primary" />
-                                <span className="font-medium">
-                                  {appointment.hora_agendamento}
-                                </span>
-                              </div>
-                              <Badge 
-                                variant="secondary" 
-                                className={`text-xs ${
-                                  appointment.status === 'confirmado'
-                                    ? 'bg-green-100 text-green-800 border-green-200'
-                                    : getStatusColor(appointment.status)
-                                }`}
-                              >
-                                {appointment.status === 'confirmado' ? 'confirmado' : appointment.status}
-                              </Badge>
-                            </div>
-                            
-                            <div className="text-sm text-muted-foreground flex items-center gap-2">
-                              <User className="h-4 w-4" />
-                              <div className="flex flex-col">
-                                <span className="font-medium text-foreground">
-                                  {appointment.pacientes?.nome_completo || 'Paciente agendado'}
-                                </span>
-                                {appointment.pacientes?.convenio && (
-                                  <span className="text-xs">
-                                    {appointment.pacientes.convenio}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ))
+            <div className="flex gap-2 pt-4">
+              {step === 1 ? (
+                <>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={handleCancel}
+                    disabled={loading}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button 
+                    type="button" 
+                    onClick={handleNext}
+                    disabled={!isStepValid(1) || loading}
+                    className="flex-1"
+                  >
+                    Próximo
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={handleBack}
+                    disabled={loading}
+                  >
+                    Voltar
+                  </Button>
+                  <Button 
+                    type="submit" 
+                    disabled={!isStepValid(2) || loading}
+                    className="flex-1"
+                  >
+                    {loading ? (
+                      <div className="flex items-center gap-2">
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                        {editingAppointment ? 'Atualizando...' : 'Criando...'}
+                      </div>
                     ) : (
-                      <div className="text-center py-4 text-sm text-muted-foreground border rounded-lg bg-muted/50">
-                        <CalendarIcon className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                        <p>Nenhum agendamento nesta data</p>
-                        <p className="text-xs">Esta data está disponível para agendamento</p>
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="h-4 w-4" />
+                        {editingAppointment ? 'Atualizar Agendamento' : 'Criar Agendamento'}
                       </div>
                     )}
-                  </div>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                  </Button>
+                </>
+              )}
+            </div>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
-});
-
-SchedulingFormStable.displayName = 'SchedulingFormStable';
+}

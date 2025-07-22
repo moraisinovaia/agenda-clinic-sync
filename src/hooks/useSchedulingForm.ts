@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { SchedulingFormData } from '@/types/scheduling';
 
@@ -20,6 +21,7 @@ export function useSchedulingForm(initialData?: Partial<SchedulingFormData>) {
     ...initialData
   }));
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const hasInitialized = useRef(false);
 
   // Garantir que os dados iniciais sejam aplicados apenas na primeira renderização
@@ -35,6 +37,8 @@ export function useSchedulingForm(initialData?: Partial<SchedulingFormData>) {
 
   const resetForm = () => {
     setFormData(initialFormData);
+    setError(null);
+    setLoading(false);
   };
 
   const handleSubmit = async (
@@ -43,14 +47,17 @@ export function useSchedulingForm(initialData?: Partial<SchedulingFormData>) {
   ) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     
     try {
       await onSubmit(formData);
       // Só resetar o formulário se não houve erro
       resetForm();
     } catch (error) {
-      // Se houver erro, NÃO resetar o formulário - manter os dados preenchidos
-      console.log('Erro capturado - mantendo dados do formulário');
+      // Capturar e definir o erro para exibição
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      setError(errorMessage);
+      console.log('Erro capturado - mantendo dados do formulário:', errorMessage);
     } finally {
       setLoading(false);
     }
@@ -60,6 +67,7 @@ export function useSchedulingForm(initialData?: Partial<SchedulingFormData>) {
     formData,
     setFormData,
     loading,
+    error,
     resetForm,
     handleSubmit,
   };
