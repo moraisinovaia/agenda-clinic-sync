@@ -1,19 +1,14 @@
-
-import { useState, useEffect } from 'react';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { CalendarIcon } from 'lucide-react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { User, Search, UserCheck, AlertCircle, CheckCircle } from 'lucide-react';
 import { SchedulingFormData } from '@/types/scheduling';
-import { cn } from '@/lib/utils';
+import { usePatientManagement } from '@/hooks/usePatientManagement';
+import { useDebounce } from '@/hooks/useDebounce';
 
 interface PatientDataFormStableProps {
   formData: SchedulingFormData;
@@ -28,67 +23,113 @@ interface PatientDataFormStableProps {
   };
 }
 
-export function PatientDataFormStable({ 
+export const PatientDataFormStable = React.memo(({ 
   formData, 
   setFormData, 
   availableConvenios, 
   medicoSelected,
   selectedDoctor
-}: PatientDataFormStableProps) {
-  const [datePickerOpen, setDatePickerOpen] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(
-    formData.dataNascimento ? new Date(formData.dataNascimento) : undefined
-  );
+}: PatientDataFormStableProps) => {
+  const [foundPatients, setFoundPatients] = useState<any[]>([]);
+  const [showPatientsList, setShowPatientsList] = useState(false);
+  
+  const { loading: searchingPatients, searchPatientsByBirthDate } = usePatientManagement();
+  
+  // Debounce da data de nascimento para evitar muitas requisições
+  const debouncedBirthDate = useDebounce(formData.dataNascimento, 800);
 
-  // Calcular idade do paciente
-  const calculateAge = (birthDate: string) => {
-    if (!birthDate) return null;
+  // Calcular idade do paciente de forma estável
+  const patientAge = useMemo(() => {
+    if (!formData.dataNascimento) return null;
     const today = new Date();
-    const birth = new Date(birthDate);
+    const birth = new Date(formData.dataNascimento);
     let age = today.getFullYear() - birth.getFullYear();
     const monthDiff = today.getMonth() - birth.getMonth();
     if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
       age--;
     }
     return age;
-  };
+  }, [formData.dataNascimento]);
 
-  const patientAge = calculateAge(formData.dataNascimento);
-
-  // Validações de idade vs médico
-  const getAgeValidation = () => {
+  // Validações de idade vs médico de forma estável
+  const ageValidation = useMemo(() => {
     if (!selectedDoctor || !patientAge) return null;
 
     const { idade_minima, idade_maxima } = selectedDoctor;
     
     if (idade_minima && patientAge < idade_minima) {
       return {
-        type: 'error',
+        type: 'error' as const,
         message: `Idade mínima para ${selectedDoctor.nome}: ${idade_minima} anos (paciente tem ${patientAge} anos)`
       };
     }
     
     if (idade_maxima && patientAge > idade_maxima) {
       return {
-        type: 'error',
+        type: 'error' as const,
         message: `Idade máxima para ${selectedDoctor.nome}: ${idade_maxima} anos (paciente tem ${patientAge} anos)`
       };
     }
 
     if (idade_minima || idade_maxima) {
       return {
-        type: 'success',
+        type: 'success' as const,
         message: `Idade compatível com ${selectedDoctor.nome} (${patientAge} anos)`
       };
     }
 
     return null;
-  };
+  }, [selectedDoctor, patientAge]);
 
-  const ageValidation = getAgeValidation();
+  // Buscar pacientes de forma estável
+  const handlePatientSearch = useCallback(async () => {
+    if (debouncedBirthDate && debouncedBirthDate.length === 10) {
+      try {
+        const patients = await searchPatientsByBirthDate(debouncedBirthDate);
+        setFoundPatients(patients);
+        setShowPatientsList(patients.length > 0);
+      } catch (error) {
+        console.error('Erro ao buscar pacientes:', error);
+        setFoundPatients([]);
+        setShowPatientsList(false);
+      }
+    } else {
+      setFoundPatients([]);
+      setShowPatientsList(false);
+    }
+  }, [debouncedBirthDate, searchPatientsByBirthDate]);
 
-  // Função para aplicar máscara de telefone
-  const formatPhone = (value: string) => {
+  // Executar busca quando a data mudar
+  React.useEffect(() => {
+    handlePatientSearch();
+  }, [handlePatientSearch]);
+
+  // Função para selecionar paciente de forma estável
+  const selectPatient = useCallback((patient: any) => {
+    setFormData(prev => ({
+      ...prev,
+      nomeCompleto: patient.nome_completo,
+      telefone: patient.telefone || '',
+      celular: patient.celular,
+      convenio: patient.convenio,
+    }));
+    setShowPatientsList(false);
+  }, [setFormData]);
+
+  // Função para criar novo paciente de forma estável
+  const createNewPatient = useCallback(() => {
+    setFormData(prev => ({
+      ...prev,
+      nomeCompleto: '',
+      telefone: '',
+      celular: '',
+      convenio: '',
+    }));
+    setShowPatientsList(false);
+  }, [setFormData]);
+
+  // Formatação de telefone estável
+  const formatPhone = useCallback((value: string) => {
     const numbers = value.replace(/\D/g, '');
     
     if (numbers.length <= 10) {
@@ -96,34 +137,21 @@ export function PatientDataFormStable({
     } else {
       return numbers.replace(/(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3').replace(/-$/, '');
     }
-  };
+  }, []);
 
-  // Função para validar se o número está completo
-  const isValidPhone = (value: string) => {
+  const isValidPhone = useCallback((value: string) => {
     const numbers = value.replace(/\D/g, '');
     return numbers.length === 10 || numbers.length === 11;
-  };
+  }, []);
 
-  const handlePhoneChange = (value: string, field: 'telefone' | 'celular') => {
+  const handlePhoneChange = useCallback((value: string, field: 'telefone' | 'celular') => {
     const formatted = formatPhone(value);
     setFormData(prev => ({ ...prev, [field]: formatted }));
-  };
+  }, [formatPhone, setFormData]);
 
-  const handleDateSelect = (date: Date | undefined) => {
-    if (date) {
-      const formattedDate = format(date, 'yyyy-MM-dd');
-      setSelectedDate(date);
-      setFormData(prev => ({ ...prev, dataNascimento: formattedDate }));
-      setDatePickerOpen(false);
-    }
-  };
-
-  // Sincronizar selectedDate com formData.dataNascimento
-  useEffect(() => {
-    if (formData.dataNascimento && !selectedDate) {
-      setSelectedDate(new Date(formData.dataNascimento));
-    }
-  }, [formData.dataNascimento, selectedDate]);
+  const handleInputChange = useCallback((field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  }, [setFormData]);
 
   return (
     <div className="space-y-4">
@@ -138,7 +166,7 @@ export function PatientDataFormStable({
           <Input
             id="nomeCompleto"
             value={formData.nomeCompleto}
-            onChange={(e) => setFormData(prev => ({ ...prev, nomeCompleto: e.target.value }))}
+            onChange={(e) => handleInputChange('nomeCompleto', e.target.value)}
             placeholder="Nome completo do paciente"
             required
           />
@@ -146,15 +174,70 @@ export function PatientDataFormStable({
         
         <div>
           <Label htmlFor="dataNascimento">Data de Nascimento *</Label>
-          <Input
-            id="dataNascimento"
-            type="date"
-            value={formData.dataNascimento}
-            onChange={(e) => setFormData(prev => ({ ...prev, dataNascimento: e.target.value }))}
-            required
-          />
+          <div className="relative">
+            <Input
+              id="dataNascimento"
+              type="date"
+              value={formData.dataNascimento}
+              onChange={(e) => handleInputChange('dataNascimento', e.target.value)}
+              required
+            />
+            {searchingPatients && (
+              <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin" />
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            {searchingPatients ? 'Buscando pacientes...' : 'Ao inserir a data, buscaremos pacientes existentes'}
+          </p>
         </div>
       </div>
+      
+      {/* Lista de pacientes encontrados */}
+      {showPatientsList && (
+        <Card className="mt-4">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <UserCheck className="h-4 w-4 text-green-600" />
+              <h4 className="font-medium text-green-700">
+                {foundPatients.length === 1 
+                  ? 'Paciente encontrado!' 
+                  : `${foundPatients.length} pacientes encontrados`
+                }
+              </h4>
+            </div>
+            <div className="space-y-2">
+              {foundPatients.map((patient, index) => (
+                <div key={patient.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
+                  <div>
+                    <p className="font-medium">{patient.nome_completo}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {patient.convenio} • {patient.celular}
+                      {patient.telefone && ` • ${patient.telefone}`}
+                    </p>
+                  </div>
+                  <Button 
+                    size="sm" 
+                    onClick={() => selectPatient(patient)}
+                    className="ml-2"
+                  >
+                    Selecionar
+                  </Button>
+                </div>
+              ))}
+              <div className="pt-2 border-t">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={createNewPatient}
+                  className="w-full"
+                >
+                  Criar novo paciente com esta data
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Alerta de validação de idade */}
       {ageValidation && (
@@ -175,7 +258,7 @@ export function PatientDataFormStable({
           <Label htmlFor="convenio">Convênio *</Label>
           <Select 
             value={formData.convenio} 
-            onValueChange={(value) => setFormData(prev => ({ ...prev, convenio: value }))}
+            onValueChange={(value) => handleInputChange('convenio', value)}
             disabled={!medicoSelected}
           >
             <SelectTrigger>
@@ -228,4 +311,6 @@ export function PatientDataFormStable({
       </div>
     </div>
   );
-}
+});
+
+PatientDataFormStable.displayName = 'PatientDataFormStable';

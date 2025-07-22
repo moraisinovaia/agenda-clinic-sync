@@ -1,19 +1,12 @@
-
 import { useState, useEffect } from 'react';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { CalendarIcon } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { User, Search, UserCheck, AlertCircle, CheckCircle } from 'lucide-react';
 import { SchedulingFormData } from '@/types/scheduling';
-import { cn } from '@/lib/utils';
 
 interface PatientDataFormProps {
   formData: SchedulingFormData;
@@ -40,10 +33,6 @@ export function PatientDataForm({
   const [foundPatients, setFoundPatients] = useState<any[]>([]);
   const [searchingPatients, setSearchingPatients] = useState(false);
   const [showPatientsList, setShowPatientsList] = useState(false);
-  const [datePickerOpen, setDatePickerOpen] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(
-    formData.dataNascimento ? new Date(formData.dataNascimento) : undefined
-  );
 
   // Calcular idade do paciente
   const calculateAge = (birthDate: string) => {
@@ -142,11 +131,15 @@ export function PatientDataForm({
 
   // Função para aplicar máscara de telefone
   const formatPhone = (value: string) => {
+    // Remove tudo que não é número
     const numbers = value.replace(/\D/g, '');
     
+    // Aplica máscara baseada no tamanho
     if (numbers.length <= 10) {
+      // Telefone fixo: (xx) xxxx-xxxx
       return numbers.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3').replace(/-$/, '');
     } else {
+      // Celular: (xx) xxxxx-xxxx
       return numbers.replace(/(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3').replace(/-$/, '');
     }
   };
@@ -161,22 +154,6 @@ export function PatientDataForm({
     const formatted = formatPhone(value);
     setFormData(prev => ({ ...prev, [field]: formatted }));
   };
-
-  const handleDateSelect = (date: Date | undefined) => {
-    if (date) {
-      const formattedDate = format(date, 'yyyy-MM-dd');
-      setSelectedDate(date);
-      setFormData(prev => ({ ...prev, dataNascimento: formattedDate }));
-      setDatePickerOpen(false);
-    }
-  };
-
-  // Sincronizar selectedDate com formData.dataNascimento
-  useEffect(() => {
-    if (formData.dataNascimento && !selectedDate) {
-      setSelectedDate(new Date(formData.dataNascimento));
-    }
-  }, [formData.dataNascimento, selectedDate]);
 
   return (
     <div className="space-y-4">
@@ -200,43 +177,19 @@ export function PatientDataForm({
         <div>
           <Label htmlFor="dataNascimento">Data de Nascimento *</Label>
           <div className="relative">
-            <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !selectedDate && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {selectedDate ? (
-                    format(selectedDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
-                  ) : (
-                    <span>Selecione a data de nascimento</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={handleDateSelect}
-                  disabled={(date) =>
-                    date > new Date() || date < new Date("1900-01-01")
-                  }
-                  initialFocus
-                  locale={ptBR}
-                  className="pointer-events-auto"
-                />
-              </PopoverContent>
-            </Popover>
+            <Input
+              id="dataNascimento"
+              type="date"
+              value={formData.dataNascimento}
+              onChange={(e) => setFormData(prev => ({ ...prev, dataNascimento: e.target.value }))}
+              required
+            />
             {searchingPatients && (
               <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin" />
             )}
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            {searchingPatients ? 'Buscando pacientes...' : 'Ao selecionar a data, buscaremos pacientes existentes'}
+            {searchingPatients ? 'Buscando pacientes...' : 'Ao inserir a data, buscaremos pacientes existentes'}
           </p>
         </div>
       </div>
@@ -303,6 +256,7 @@ export function PatientDataForm({
       )}
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        
         <div>
           <Label htmlFor="convenio">Convênio *</Label>
           <Select 
