@@ -233,6 +233,13 @@ export type Database = {
             referencedRelation: "logs_auditoria_medica"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "alertas_criticos_log_auditoria_id_fkey"
+            columns: ["log_auditoria_id"]
+            isOneToOne: false
+            referencedRelation: "vw_auditoria_critica"
+            referencedColumns: ["id"]
+          },
         ]
       }
       alimentos_teste_hidrogenio: {
@@ -1137,6 +1144,13 @@ export type Database = {
             referencedRelation: "logs_auditoria_medica"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "validacoes_detalhadas_log_auditoria_id_fkey"
+            columns: ["log_auditoria_id"]
+            isOneToOne: false
+            referencedRelation: "vw_auditoria_critica"
+            referencedColumns: ["id"]
+          },
         ]
       }
       valores_procedimentos: {
@@ -1280,6 +1294,56 @@ export type Database = {
         }
         Relationships: []
       }
+      vw_alertas_ativos: {
+        Row: {
+          categoria_original: string | null
+          erro_detectado: string | null
+          id: string | null
+          minutos_desde_criacao: number | null
+          notificado: boolean | null
+          pergunta: string | null
+          severidade: number | null
+          severidade_desc: string | null
+          timestamp: string | null
+          tipo: string | null
+          tipo_pergunta: string | null
+          usuario_afetado: string | null
+        }
+        Relationships: []
+      }
+      vw_auditoria_critica: {
+        Row: {
+          alertas_relacionados: number | null
+          categoria: string | null
+          erros_detectados: Json | null
+          hash_resposta: string | null
+          id: string | null
+          pergunta_original: string | null
+          resposta_gerada: string | null
+          status_revisao: string | null
+          sucesso: boolean | null
+          timestamp: string | null
+          tipo_pergunta: string | null
+          usuario_telefone: string | null
+          validacao_passou: boolean | null
+          validacoes_detalhes: string[] | null
+        }
+        Relationships: []
+      }
+      vw_dashboard_executivo: {
+        Row: {
+          alertas_hoje: number | null
+          interacoes_hoje: number | null
+          interacoes_mes: number | null
+          interacoes_semana: number | null
+          status_sistema: string | null
+          taxa_sucesso_hoje: number | null
+          taxa_sucesso_mes: number | null
+          taxa_sucesso_semana: number | null
+          ultima_atualizacao: string | null
+        }
+        Relationships: []
+      }
       vw_exames_combinaveis: {
         Row: {
           atendimento1_id: string | null
@@ -1302,6 +1366,49 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      vw_metricas_convenios: {
+        Row: {
+          convenio: string | null
+          perc_sem_medicos: number | null
+          taxa_acerto: number | null
+          total_com_medicos: number | null
+          total_corretas: number | null
+          total_perguntas_mes: number | null
+          total_sem_medicos: number | null
+        }
+        Relationships: []
+      }
+      vw_performance_sistema: {
+        Row: {
+          alertas_gerados: number | null
+          categoria: string | null
+          data: string | null
+          erros: number | null
+          sucessos: number | null
+          taxa_sucesso: number | null
+          tipo_pergunta: string | null
+          total_perguntas: number | null
+          validacoes_falha: number | null
+          validacoes_ok: number | null
+        }
+        Relationships: []
+      }
+      vw_relatorio_gerencial: {
+        Row: {
+          alertas_24h: number | null
+          alertas_pendentes: number | null
+          interacoes_conversacionais: number | null
+          interacoes_criticas: number | null
+          interacoes_informativas: number | null
+          periodo: string | null
+          precisao_critica: number | null
+          precisao_informativa: number | null
+          status_geral: string | null
+          tipo_mais_frequente: string | null
+          total_interacoes: number | null
+        }
+        Relationships: []
       }
       vw_usuarios_pendentes: {
         Row: {
@@ -1389,6 +1496,10 @@ export type Database = {
           p_criado_por?: string
           p_criado_por_user_id?: string
         }
+        Returns: Json
+      }
+      dashboard_tempo_real: {
+        Args: Record<PropertyKey, never>
         Returns: Json
       }
       get_current_user_profile: {
