@@ -1,14 +1,19 @@
-import React, { useState, useMemo, useCallback } from 'react';
+
+import { useState, useEffect } from 'react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { CalendarIcon } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { User, Search, UserCheck, AlertCircle, CheckCircle } from 'lucide-react';
 import { SchedulingFormData } from '@/types/scheduling';
-import { usePatientManagement } from '@/hooks/usePatientManagement';
-import { useDebounce } from '@/hooks/useDebounce';
+import { cn } from '@/lib/utils';
 
 interface PatientDataFormStableProps {
   formData: SchedulingFormData;
@@ -23,113 +28,67 @@ interface PatientDataFormStableProps {
   };
 }
 
-export const PatientDataFormStable = React.memo(({ 
+export function PatientDataFormStable({ 
   formData, 
   setFormData, 
   availableConvenios, 
   medicoSelected,
   selectedDoctor
-}: PatientDataFormStableProps) => {
-  const [foundPatients, setFoundPatients] = useState<any[]>([]);
-  const [showPatientsList, setShowPatientsList] = useState(false);
-  
-  const { loading: searchingPatients, searchPatientsByBirthDate } = usePatientManagement();
-  
-  // Debounce da data de nascimento para evitar muitas requisições
-  const debouncedBirthDate = useDebounce(formData.dataNascimento, 800);
+}: PatientDataFormStableProps) {
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(
+    formData.dataNascimento ? new Date(formData.dataNascimento) : undefined
+  );
 
-  // Calcular idade do paciente de forma estável
-  const patientAge = useMemo(() => {
-    if (!formData.dataNascimento) return null;
+  // Calcular idade do paciente
+  const calculateAge = (birthDate: string) => {
+    if (!birthDate) return null;
     const today = new Date();
-    const birth = new Date(formData.dataNascimento);
+    const birth = new Date(birthDate);
     let age = today.getFullYear() - birth.getFullYear();
     const monthDiff = today.getMonth() - birth.getMonth();
     if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
       age--;
     }
     return age;
-  }, [formData.dataNascimento]);
+  };
 
-  // Validações de idade vs médico de forma estável
-  const ageValidation = useMemo(() => {
+  const patientAge = calculateAge(formData.dataNascimento);
+
+  // Validações de idade vs médico
+  const getAgeValidation = () => {
     if (!selectedDoctor || !patientAge) return null;
 
     const { idade_minima, idade_maxima } = selectedDoctor;
     
     if (idade_minima && patientAge < idade_minima) {
       return {
-        type: 'error' as const,
+        type: 'error',
         message: `Idade mínima para ${selectedDoctor.nome}: ${idade_minima} anos (paciente tem ${patientAge} anos)`
       };
     }
     
     if (idade_maxima && patientAge > idade_maxima) {
       return {
-        type: 'error' as const,
+        type: 'error',
         message: `Idade máxima para ${selectedDoctor.nome}: ${idade_maxima} anos (paciente tem ${patientAge} anos)`
       };
     }
 
     if (idade_minima || idade_maxima) {
       return {
-        type: 'success' as const,
+        type: 'success',
         message: `Idade compatível com ${selectedDoctor.nome} (${patientAge} anos)`
       };
     }
 
     return null;
-  }, [selectedDoctor, patientAge]);
+  };
 
-  // Buscar pacientes de forma estável
-  const handlePatientSearch = useCallback(async () => {
-    if (debouncedBirthDate && debouncedBirthDate.length === 10) {
-      try {
-        const patients = await searchPatientsByBirthDate(debouncedBirthDate);
-        setFoundPatients(patients);
-        setShowPatientsList(patients.length > 0);
-      } catch (error) {
-        console.error('Erro ao buscar pacientes:', error);
-        setFoundPatients([]);
-        setShowPatientsList(false);
-      }
-    } else {
-      setFoundPatients([]);
-      setShowPatientsList(false);
-    }
-  }, [debouncedBirthDate, searchPatientsByBirthDate]);
+  const ageValidation = getAgeValidation();
 
-  // Executar busca quando a data mudar
-  React.useEffect(() => {
-    handlePatientSearch();
-  }, [handlePatientSearch]);
-
-  // Função para selecionar paciente de forma estável
-  const selectPatient = useCallback((patient: any) => {
-    setFormData(prev => ({
-      ...prev,
-      nomeCompleto: patient.nome_completo,
-      telefone: patient.telefone || '',
-      celular: patient.celular,
-      convenio: patient.convenio,
-    }));
-    setShowPatientsList(false);
-  }, [setFormData]);
-
-  // Função para criar novo paciente de forma estável
-  const createNewPatient = useCallback(() => {
-    setFormData(prev => ({
-      ...prev,
-      nomeCompleto: '',
-      telefone: '',
-      celular: '',
-      convenio: '',
-    }));
-    setShowPatientsList(false);
-  }, [setFormData]);
-
-  // Formatação de telefone estável
-  const formatPhone = useCallback((value: string) => {
+  // Função para aplicar máscara de telefone
+  const formatPhone = (value: string) => {
     const numbers = value.replace(/\D/g, '');
     
     if (numbers.length <= 10) {
@@ -137,21 +96,34 @@ export const PatientDataFormStable = React.memo(({
     } else {
       return numbers.replace(/(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3').replace(/-$/, '');
     }
-  }, []);
+  };
 
-  const isValidPhone = useCallback((value: string) => {
+  // Função para validar se o número está completo
+  const isValidPhone = (value: string) => {
     const numbers = value.replace(/\D/g, '');
     return numbers.length === 10 || numbers.length === 11;
-  }, []);
+  };
 
-  const handlePhoneChange = useCallback((value: string, field: 'telefone' | 'celular') => {
+  const handlePhoneChange = (value: string, field: 'telefone' | 'celular') => {
     const formatted = formatPhone(value);
     setFormData(prev => ({ ...prev, [field]: formatted }));
-  }, [formatPhone, setFormData]);
+  };
 
-  const handleInputChange = useCallback((field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  }, [setFormData]);
+  const handleDateSelect = (date: Date | undefined) => {
+    if (date) {
+      const formattedDate = format(date, 'yyyy-MM-dd');
+      setSelectedDate(date);
+      setFormData(prev => ({ ...prev, dataNascimento: formattedDate }));
+      setDatePickerOpen(false);
+    }
+  };
+
+  // Sincronizar selectedDate com formData.dataNascimento
+  useEffect(() => {
+    if (formData.dataNascimento && !selectedDate) {
+      setSelectedDate(new Date(formData.dataNascimento));
+    }
+  }, [formData.dataNascimento, selectedDate]);
 
   return (
     <div className="space-y-4">
@@ -166,7 +138,7 @@ export const PatientDataFormStable = React.memo(({
           <Input
             id="nomeCompleto"
             value={formData.nomeCompleto}
-            onChange={(e) => handleInputChange('nomeCompleto', e.target.value)}
+            onChange={(e) => setFormData(prev => ({ ...prev, nomeCompleto: e.target.value }))}
             placeholder="Nome completo do paciente"
             required
           />
@@ -174,70 +146,42 @@ export const PatientDataFormStable = React.memo(({
         
         <div>
           <Label htmlFor="dataNascimento">Data de Nascimento *</Label>
-          <div className="relative">
-            <Input
-              id="dataNascimento"
-              type="date"
-              value={formData.dataNascimento}
-              onChange={(e) => handleInputChange('dataNascimento', e.target.value)}
-              required
-            />
-            {searchingPatients && (
-              <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin" />
-            )}
-          </div>
+          <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-full justify-start text-left font-normal",
+                  !selectedDate && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {selectedDate ? (
+                  format(selectedDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
+                ) : (
+                  <span>Selecione a data de nascimento</span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={handleDateSelect}
+                disabled={(date) =>
+                  date > new Date() || date < new Date("1900-01-01")
+                }
+                initialFocus
+                locale={ptBR}
+                className="pointer-events-auto"
+              />
+            </PopoverContent>
+          </Popover>
           <p className="text-xs text-muted-foreground mt-1">
-            {searchingPatients ? 'Buscando pacientes...' : 'Ao inserir a data, buscaremos pacientes existentes'}
+            Selecione a data para verificar a idade do paciente
           </p>
         </div>
       </div>
-      
-      {/* Lista de pacientes encontrados */}
-      {showPatientsList && (
-        <Card className="mt-4">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <UserCheck className="h-4 w-4 text-green-600" />
-              <h4 className="font-medium text-green-700">
-                {foundPatients.length === 1 
-                  ? 'Paciente encontrado!' 
-                  : `${foundPatients.length} pacientes encontrados`
-                }
-              </h4>
-            </div>
-            <div className="space-y-2">
-              {foundPatients.map((patient, index) => (
-                <div key={patient.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
-                  <div>
-                    <p className="font-medium">{patient.nome_completo}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {patient.convenio} • {patient.celular}
-                      {patient.telefone && ` • ${patient.telefone}`}
-                    </p>
-                  </div>
-                  <Button 
-                    size="sm" 
-                    onClick={() => selectPatient(patient)}
-                    className="ml-2"
-                  >
-                    Selecionar
-                  </Button>
-                </div>
-              ))}
-              <div className="pt-2 border-t">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={createNewPatient}
-                  className="w-full"
-                >
-                  Criar novo paciente com esta data
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Alerta de validação de idade */}
       {ageValidation && (
@@ -258,7 +202,7 @@ export const PatientDataFormStable = React.memo(({
           <Label htmlFor="convenio">Convênio *</Label>
           <Select 
             value={formData.convenio} 
-            onValueChange={(value) => handleInputChange('convenio', value)}
+            onValueChange={(value) => setFormData(prev => ({ ...prev, convenio: value }))}
             disabled={!medicoSelected}
           >
             <SelectTrigger>
@@ -311,6 +255,4 @@ export const PatientDataFormStable = React.memo(({
       </div>
     </div>
   );
-});
-
-PatientDataFormStable.displayName = 'PatientDataFormStable';
+}
