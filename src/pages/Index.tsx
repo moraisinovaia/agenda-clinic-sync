@@ -5,7 +5,7 @@ import { useSupabaseScheduling } from '@/hooks/useSupabaseScheduling';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useNotifications } from '@/hooks/useNotifications';
 
-import { SchedulingFormStable } from '@/components/scheduling/SchedulingFormStable';
+import { SchedulingForm } from '@/components/scheduling/SchedulingForm';
 import { MultipleSchedulingForm } from '@/components/scheduling/MultipleSchedulingForm';
 import { DoctorSchedule } from '@/components/scheduling/DoctorSchedule';
 import { AppointmentsList } from '@/components/scheduling/AppointmentsList';
@@ -317,7 +317,7 @@ const Index = () => {
         )}
 
         {viewMode === 'new-appointment' && (
-          <SchedulingFormStable
+          <SchedulingForm
             doctors={doctors}
             atendimentos={atendimentos}
             appointments={appointments}
@@ -326,6 +326,7 @@ const Index = () => {
             onSubmit={handleSubmitAppointment}
             onCancel={goBack}
             getAtendimentosByDoctor={getAtendimentosByDoctor}
+            searchPatientsByBirthDate={searchPatientsByBirthDate}
           />
         )}
 
@@ -351,7 +352,7 @@ const Index = () => {
         )}
 
         {viewMode === 'edit-appointment' && editingAppointment && (
-          <SchedulingFormStable
+          <SchedulingForm
             doctors={doctors}
             atendimentos={atendimentos}
             appointments={appointments}
@@ -360,6 +361,7 @@ const Index = () => {
             onSubmit={handleSubmitAppointment}
             onCancel={goBack}
             getAtendimentosByDoctor={getAtendimentosByDoctor}
+            searchPatientsByBirthDate={searchPatientsByBirthDate}
             editingAppointment={editingAppointment}
           />
         )}
