@@ -170,6 +170,71 @@ export type Database = {
         }
         Relationships: []
       }
+      alertas_criticos: {
+        Row: {
+          acao_tomada: string | null
+          destinatarios: Json | null
+          erro_detectado: string | null
+          id: string
+          log_auditoria_id: string | null
+          notificado: boolean | null
+          notificado_em: string | null
+          pergunta: string | null
+          resolvido: boolean | null
+          resolvido_em: string | null
+          resolvido_por: string | null
+          resposta_problemática: string | null
+          severidade: number
+          timestamp: string | null
+          tipo: string
+          usuario_afetado: string | null
+        }
+        Insert: {
+          acao_tomada?: string | null
+          destinatarios?: Json | null
+          erro_detectado?: string | null
+          id?: string
+          log_auditoria_id?: string | null
+          notificado?: boolean | null
+          notificado_em?: string | null
+          pergunta?: string | null
+          resolvido?: boolean | null
+          resolvido_em?: string | null
+          resolvido_por?: string | null
+          resposta_problemática?: string | null
+          severidade?: number
+          timestamp?: string | null
+          tipo: string
+          usuario_afetado?: string | null
+        }
+        Update: {
+          acao_tomada?: string | null
+          destinatarios?: Json | null
+          erro_detectado?: string | null
+          id?: string
+          log_auditoria_id?: string | null
+          notificado?: boolean | null
+          notificado_em?: string | null
+          pergunta?: string | null
+          resolvido?: boolean | null
+          resolvido_em?: string | null
+          resolvido_por?: string | null
+          resposta_problemática?: string | null
+          severidade?: number
+          timestamp?: string | null
+          tipo?: string
+          usuario_afetado?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alertas_criticos_log_auditoria_id_fkey"
+            columns: ["log_auditoria_id"]
+            isOneToOne: false
+            referencedRelation: "logs_auditoria_medica"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       alimentos_teste_hidrogenio: {
         Row: {
           categoria: string | null
@@ -328,6 +393,48 @@ export type Database = {
           valor_principal?: number | null
           valor_unimed_coparticipacao_20?: number | null
           valor_unimed_coparticipacao_40?: number | null
+        }
+        Relationships: []
+      }
+      config_sistema_auditoria: {
+        Row: {
+          ativo: boolean | null
+          atualizado_em: string | null
+          atualizado_por: string | null
+          categoria: string | null
+          chave: string
+          criado_em: string | null
+          descricao: string | null
+          editavel: boolean | null
+          requer_reinicio: boolean | null
+          tipo: string | null
+          valor: string
+        }
+        Insert: {
+          ativo?: boolean | null
+          atualizado_em?: string | null
+          atualizado_por?: string | null
+          categoria?: string | null
+          chave: string
+          criado_em?: string | null
+          descricao?: string | null
+          editavel?: boolean | null
+          requer_reinicio?: boolean | null
+          tipo?: string | null
+          valor: string
+        }
+        Update: {
+          ativo?: boolean | null
+          atualizado_em?: string | null
+          atualizado_por?: string | null
+          categoria?: string | null
+          chave?: string
+          criado_em?: string | null
+          descricao?: string | null
+          editavel?: boolean | null
+          requer_reinicio?: boolean | null
+          tipo?: string | null
+          valor?: string
         }
         Relationships: []
       }
@@ -505,6 +612,87 @@ export type Database = {
           },
         ]
       }
+      logs_auditoria_medica: {
+        Row: {
+          alertas_gerados: Json | null
+          ambiente: string | null
+          auditoria_completa: Json | null
+          categoria: string
+          dados_utilizados: Json | null
+          erros_detectados: Json | null
+          fonte_dados: string | null
+          hash_resposta: string | null
+          id: string
+          pergunta_normalizada: string | null
+          pergunta_original: string
+          precisao: string | null
+          processamento: string
+          requer_revisao: boolean | null
+          resposta_gerada: string
+          revisado_em: string | null
+          revisado_por: string | null
+          sucesso: boolean | null
+          timestamp: string | null
+          tipo_pergunta: string
+          usuario_nome: string | null
+          usuario_telefone: string | null
+          validacao_passou: boolean | null
+          versao_sistema: string | null
+        }
+        Insert: {
+          alertas_gerados?: Json | null
+          ambiente?: string | null
+          auditoria_completa?: Json | null
+          categoria: string
+          dados_utilizados?: Json | null
+          erros_detectados?: Json | null
+          fonte_dados?: string | null
+          hash_resposta?: string | null
+          id?: string
+          pergunta_normalizada?: string | null
+          pergunta_original: string
+          precisao?: string | null
+          processamento: string
+          requer_revisao?: boolean | null
+          resposta_gerada: string
+          revisado_em?: string | null
+          revisado_por?: string | null
+          sucesso?: boolean | null
+          timestamp?: string | null
+          tipo_pergunta: string
+          usuario_nome?: string | null
+          usuario_telefone?: string | null
+          validacao_passou?: boolean | null
+          versao_sistema?: string | null
+        }
+        Update: {
+          alertas_gerados?: Json | null
+          ambiente?: string | null
+          auditoria_completa?: Json | null
+          categoria?: string
+          dados_utilizados?: Json | null
+          erros_detectados?: Json | null
+          fonte_dados?: string | null
+          hash_resposta?: string | null
+          id?: string
+          pergunta_normalizada?: string | null
+          pergunta_original?: string
+          precisao?: string | null
+          processamento?: string
+          requer_revisao?: boolean | null
+          resposta_gerada?: string
+          revisado_em?: string | null
+          revisado_por?: string | null
+          sucesso?: boolean | null
+          timestamp?: string | null
+          tipo_pergunta?: string
+          usuario_nome?: string | null
+          usuario_telefone?: string | null
+          validacao_passou?: boolean | null
+          versao_sistema?: string | null
+        }
+        Relationships: []
+      }
       medicos: {
         Row: {
           ativo: boolean | null
@@ -544,6 +732,69 @@ export type Database = {
           idade_minima?: number | null
           nome?: string
           observacoes?: string | null
+        }
+        Relationships: []
+      }
+      metricas_diarias: {
+        Row: {
+          alertas_criticos: number | null
+          alertas_gerados: number | null
+          atualizado_em: string | null
+          criticas_corretas: number | null
+          criticas_incorretas: number | null
+          data: string | null
+          erros: number | null
+          id: string
+          revisoes_concluidas: number | null
+          revisoes_necessarias: number | null
+          sucessos: number | null
+          taxa_sucesso: number | null
+          tempo_maximo_resposta: number | null
+          tempo_medio_resposta: number | null
+          total_conversacionais: number | null
+          total_criticas: number | null
+          total_informativas: number | null
+          total_interacoes: number | null
+        }
+        Insert: {
+          alertas_criticos?: number | null
+          alertas_gerados?: number | null
+          atualizado_em?: string | null
+          criticas_corretas?: number | null
+          criticas_incorretas?: number | null
+          data?: string | null
+          erros?: number | null
+          id?: string
+          revisoes_concluidas?: number | null
+          revisoes_necessarias?: number | null
+          sucessos?: number | null
+          taxa_sucesso?: number | null
+          tempo_maximo_resposta?: number | null
+          tempo_medio_resposta?: number | null
+          total_conversacionais?: number | null
+          total_criticas?: number | null
+          total_informativas?: number | null
+          total_interacoes?: number | null
+        }
+        Update: {
+          alertas_criticos?: number | null
+          alertas_gerados?: number | null
+          atualizado_em?: string | null
+          criticas_corretas?: number | null
+          criticas_incorretas?: number | null
+          data?: string | null
+          erros?: number | null
+          id?: string
+          revisoes_concluidas?: number | null
+          revisoes_necessarias?: number | null
+          sucessos?: number | null
+          taxa_sucesso?: number | null
+          tempo_maximo_resposta?: number | null
+          tempo_medio_resposta?: number | null
+          total_conversacionais?: number | null
+          total_criticas?: number | null
+          total_informativas?: number | null
+          total_interacoes?: number | null
         }
         Relationships: []
       }
@@ -831,6 +1082,62 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
+      }
+      validacoes_detalhadas: {
+        Row: {
+          erro_detalhado: string | null
+          fonte_referencia: string | null
+          id: string
+          log_auditoria_id: string | null
+          objeto_validado: Json | null
+          regra_aplicada: string | null
+          resultado: boolean | null
+          tempo_validacao: number | null
+          timestamp: string | null
+          tipo_validacao: string
+          validador: string | null
+          valor_encontrado: string | null
+          valor_esperado: string | null
+        }
+        Insert: {
+          erro_detalhado?: string | null
+          fonte_referencia?: string | null
+          id?: string
+          log_auditoria_id?: string | null
+          objeto_validado?: Json | null
+          regra_aplicada?: string | null
+          resultado?: boolean | null
+          tempo_validacao?: number | null
+          timestamp?: string | null
+          tipo_validacao: string
+          validador?: string | null
+          valor_encontrado?: string | null
+          valor_esperado?: string | null
+        }
+        Update: {
+          erro_detalhado?: string | null
+          fonte_referencia?: string | null
+          id?: string
+          log_auditoria_id?: string | null
+          objeto_validado?: Json | null
+          regra_aplicada?: string | null
+          resultado?: boolean | null
+          tempo_validacao?: number | null
+          timestamp?: string | null
+          tipo_validacao?: string
+          validador?: string | null
+          valor_encontrado?: string | null
+          valor_esperado?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "validacoes_detalhadas_log_auditoria_id_fkey"
+            columns: ["log_auditoria_id"]
+            isOneToOne: false
+            referencedRelation: "logs_auditoria_medica"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       valores_procedimentos: {
         Row: {
@@ -1146,6 +1453,17 @@ export type Database = {
       rejeitar_usuario: {
         Args: { p_user_id: string; p_aprovador_id: string }
         Returns: Json
+      }
+      relatorio_auditoria_periodo: {
+        Args: { data_inicio: string; data_fim: string }
+        Returns: {
+          total_interacoes: number
+          taxa_sucesso: number
+          total_alertas: number
+          perguntas_criticas: number
+          tempo_medio: number
+          erros_por_tipo: Json
+        }[]
       }
       user_can_access_system: {
         Args: Record<PropertyKey, never>
