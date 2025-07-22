@@ -308,7 +308,7 @@ const Index = () => {
             doctor={selectedDoctor}
             appointments={appointments.filter(apt => apt.medico_id === selectedDoctor.id)}
             blockedDates={blockedDates}
-            isDateBlocked={(date: string, doctorId: string) => isDateBlocked(date, doctorId)}
+            isDateBlocked={isDateBlocked}
             onCancelAppointment={cancelAppointment}
             onEditAppointment={handleEditAppointment}
             onNewAppointment={() => setViewMode('new-appointment')}
@@ -322,7 +322,7 @@ const Index = () => {
             atendimentos={atendimentos}
             appointments={appointments}
             blockedDates={blockedDates}
-            isDateBlocked={(date: string, doctorId: string) => isDateBlocked(date, doctorId)}
+            isDateBlocked={isDateBlocked}
             onSubmit={handleSubmitAppointment}
             onCancel={goBack}
             getAtendimentosByDoctor={getAtendimentosByDoctor}
@@ -356,7 +356,7 @@ const Index = () => {
             atendimentos={atendimentos}
             appointments={appointments}
             blockedDates={blockedDates}
-            isDateBlocked={(date: string, doctorId: string) => isDateBlocked(date, doctorId)}
+            isDateBlocked={isDateBlocked}
             onSubmit={handleSubmitAppointment}
             onCancel={goBack}
             getAtendimentosByDoctor={getAtendimentosByDoctor}

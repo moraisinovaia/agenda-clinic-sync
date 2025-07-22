@@ -13,7 +13,7 @@ interface SchedulingFormStableProps {
   atendimentos: Atendimento[];
   appointments: AppointmentWithRelations[];
   blockedDates: string[];
-  isDateBlocked: (date: string, doctorId: string) => boolean;
+  isDateBlocked: (doctorId: string, date: Date) => boolean;
   onSubmit: (data: SchedulingFormData) => Promise<void>;
   onCancel: () => void;
   getAtendimentosByDoctor: (doctorId: string) => Atendimento[];

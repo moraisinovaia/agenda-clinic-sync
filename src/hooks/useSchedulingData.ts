@@ -75,13 +75,14 @@ export function useSchedulingData() {
     return atendimentos.filter(atendimento => atendimento.medico_id === doctorId);
   };
 
-  // Verificar se uma data está bloqueada para um médico - CORRIGIDA A ASSINATURA
-  const isDateBlocked = (date: string, doctorId: string) => {
+  // Verificar se uma data está bloqueada para um médico
+  const isDateBlocked = (doctorId: string, date: Date) => {
+    const dateStr = date.toISOString().split('T')[0];
     return blockedDates.some(blocked => 
       blocked.medico_id === doctorId &&
       blocked.status === 'ativo' &&
-      date >= blocked.data_inicio &&
-      date <= blocked.data_fim
+      dateStr >= blocked.data_inicio &&
+      dateStr <= blocked.data_fim
     );
   };
 
