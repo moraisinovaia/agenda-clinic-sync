@@ -198,8 +198,8 @@ export type Database = {
         Row: {
           ativo: boolean | null
           codigo: string | null
-          coparticipacao_20: number | null
-          coparticipacao_40: number | null
+          coparticipacao_unimed_20: number | null
+          coparticipacao_unimed_40: number | null
           created_at: string | null
           forma_pagamento: string | null
           horarios: Json | null
@@ -214,8 +214,8 @@ export type Database = {
         Insert: {
           ativo?: boolean | null
           codigo?: string | null
-          coparticipacao_20?: number | null
-          coparticipacao_40?: number | null
+          coparticipacao_unimed_20?: number | null
+          coparticipacao_unimed_40?: number | null
           created_at?: string | null
           forma_pagamento?: string | null
           horarios?: Json | null
@@ -230,8 +230,8 @@ export type Database = {
         Update: {
           ativo?: boolean | null
           codigo?: string | null
-          coparticipacao_20?: number | null
-          coparticipacao_40?: number | null
+          coparticipacao_unimed_20?: number | null
+          coparticipacao_unimed_40?: number | null
           created_at?: string | null
           forma_pagamento?: string | null
           horarios?: Json | null
@@ -301,9 +301,9 @@ export type Database = {
           id: number
           observacoes: string | null
           procedimento: string
-          valor_20_pct: number | null
-          valor_40_pct: number | null
           valor_principal: number | null
+          valor_unimed_coparticipacao_20: number | null
+          valor_unimed_coparticipacao_40: number | null
         }
         Insert: {
           categoria: string
@@ -313,9 +313,9 @@ export type Database = {
           id?: number
           observacoes?: string | null
           procedimento: string
-          valor_20_pct?: number | null
-          valor_40_pct?: number | null
           valor_principal?: number | null
+          valor_unimed_coparticipacao_20?: number | null
+          valor_unimed_coparticipacao_40?: number | null
         }
         Update: {
           categoria?: string
@@ -325,9 +325,9 @@ export type Database = {
           id?: number
           observacoes?: string | null
           procedimento?: string
-          valor_20_pct?: number | null
-          valor_40_pct?: number | null
           valor_principal?: number | null
+          valor_unimed_coparticipacao_20?: number | null
+          valor_unimed_coparticipacao_40?: number | null
         }
         Relationships: []
       }
@@ -841,9 +841,9 @@ export type Database = {
           id: number
           observacoes: string | null
           procedimento: string
-          valor_20_pct: number | null
-          valor_40_pct: number | null
           valor_principal: number | null
+          valor_unimed_coparticipacao_20: number | null
+          valor_unimed_coparticipacao_40: number | null
         }
         Insert: {
           categoria: string
@@ -853,9 +853,9 @@ export type Database = {
           id?: number
           observacoes?: string | null
           procedimento: string
-          valor_20_pct?: number | null
-          valor_40_pct?: number | null
           valor_principal?: number | null
+          valor_unimed_coparticipacao_20?: number | null
+          valor_unimed_coparticipacao_40?: number | null
         }
         Update: {
           categoria?: string
@@ -865,9 +865,9 @@ export type Database = {
           id?: number
           observacoes?: string | null
           procedimento?: string
-          valor_20_pct?: number | null
-          valor_40_pct?: number | null
           valor_principal?: number | null
+          valor_unimed_coparticipacao_20?: number | null
+          valor_unimed_coparticipacao_40?: number | null
         }
         Relationships: []
       }
