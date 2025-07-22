@@ -63,6 +63,28 @@ export function SchedulingFormStable({
     }
   }, [error]);
 
+  // Calcular convênios disponíveis baseado no médico selecionado
+  const getAvailableConvenios = () => {
+    if (!formData.medicoId) return [];
+    
+    const selectedDoctor = doctors.find(d => d.id === formData.medicoId);
+    if (!selectedDoctor) return [];
+    
+    // Se o médico tem lista de convênios aceitos, usar essa lista
+    if (selectedDoctor.convenios_aceitos && selectedDoctor.convenios_aceitos.length > 0) {
+      return selectedDoctor.convenios_aceitos;
+    }
+    
+    // Se não tem restrição, retornar lista padrão de convênios
+    return ['Particular', 'Unimed', 'Bradesco Saúde', 'SulAmérica', 'Amil', 'Golden Cross'];
+  };
+
+  // Verificar se médico foi selecionado
+  const medicoSelected = !!formData.medicoId;
+
+  // Buscar dados do médico selecionado
+  const selectedDoctor = doctors.find(d => d.id === formData.medicoId);
+
   const isStepValid = (stepNumber: number) => {
     switch (stepNumber) {
       case 1:
@@ -168,6 +190,9 @@ export function SchedulingFormStable({
               <PatientDataFormStable
                 formData={formData}
                 setFormData={setFormData}
+                availableConvenios={getAvailableConvenios()}
+                medicoSelected={medicoSelected}
+                selectedDoctor={selectedDoctor}
               />
             )}
 
