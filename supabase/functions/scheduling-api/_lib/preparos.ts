@@ -75,7 +75,25 @@ export function montarMensagemPreparo(preparo: any, appointment: any): string {
   }
   
   if (preparo.observacoes_especiais) {
-    mensagem += `⚠️ *Observações Especiais:*\n${preparo.observacoes_especiais}\n\n`;
+  mensagem += `⚠️ *Observações Especiais:*\n${preparo.observacoes_especiais}\n\n`;
+  }
+  
+  // Adicionar informações de valor se disponíveis
+  if (preparo.valor_particular || preparo.valor_convenio) {
+    mensagem += `💰 *VALORES:*\n`;
+    if (preparo.valor_particular) {
+      mensagem += `💵 Particular: R$ ${preparo.valor_particular.toFixed(2)}\n`;
+    }
+    if (preparo.valor_convenio) {
+      mensagem += `🏥 Convênio: R$ ${preparo.valor_convenio.toFixed(2)}\n`;
+    }
+    if (preparo.forma_pagamento) {
+      mensagem += `💳 Forma de pagamento: ${preparo.forma_pagamento}\n`;
+    }
+    if (preparo.observacoes_valor) {
+      mensagem += `📝 Obs. valores: ${preparo.observacoes_valor}\n`;
+    }
+    mensagem += `\n`;
   }
   
   if (preparo.instrucoes) {

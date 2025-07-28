@@ -864,6 +864,7 @@ export type Database = {
           created_at: string | null
           dias_suspensao: number | null
           exame: string
+          forma_pagamento: string | null
           id: string
           instrucoes: Json | null
           itens_levar: string | null
@@ -871,12 +872,16 @@ export type Database = {
           medicacao_suspender: string | null
           nome: string
           observacoes_especiais: string | null
+          observacoes_valor: string | null
           restricoes_alimentares: string | null
+          valor_convenio: number | null
+          valor_particular: number | null
         }
         Insert: {
           created_at?: string | null
           dias_suspensao?: number | null
           exame: string
+          forma_pagamento?: string | null
           id?: string
           instrucoes?: Json | null
           itens_levar?: string | null
@@ -884,12 +889,16 @@ export type Database = {
           medicacao_suspender?: string | null
           nome: string
           observacoes_especiais?: string | null
+          observacoes_valor?: string | null
           restricoes_alimentares?: string | null
+          valor_convenio?: number | null
+          valor_particular?: number | null
         }
         Update: {
           created_at?: string | null
           dias_suspensao?: number | null
           exame?: string
+          forma_pagamento?: string | null
           id?: string
           instrucoes?: Json | null
           itens_levar?: string | null
@@ -897,7 +906,10 @@ export type Database = {
           medicacao_suspender?: string | null
           nome?: string
           observacoes_especiais?: string | null
+          observacoes_valor?: string | null
           restricoes_alimentares?: string | null
+          valor_convenio?: number | null
+          valor_particular?: number | null
         }
         Relationships: []
       }
