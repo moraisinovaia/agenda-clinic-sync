@@ -183,6 +183,72 @@ Digite um comando para começar! 😊`
     }
   }
 
+  // Verificar valores de procedimentos (incluindo busca por nome do médico)
+  if (texto.includes('valor') || texto.includes('preço') || texto.includes('preco') || texto.includes('custo') || texto.includes('quanto custa')) {
+    try {
+      // Detectar se mencionou nome de médico na consulta
+      const nomesPossiveisMedicos = ['dra', 'dr', 'doutor', 'doutora', 'psicóloga', 'psicologa', 'camila', 'helena'];
+      const contemNomeMedico = nomesPossiveisMedicos.some(nome => 
+        texto.toLowerCase().includes(nome)
+      );
+      
+      let query = supabase
+        .from('atendimentos')
+        .select('nome, valor_particular, coparticipacao_unimed_20, coparticipacao_unimed_40, medico_nome')
+        .not('valor_particular', 'is', null);
+      
+      // Se mencionou nome de médico, filtrar por medico_nome
+      if (contemNomeMedico) {
+        // Buscar por fragmentos do nome do médico no texto
+        if (texto.toLowerCase().includes('camila') || texto.toLowerCase().includes('helena')) {
+          query = query.ilike('medico_nome', '%Camila Helena%');
+        }
+        // Adicionar outros médicos conforme necessário
+        // Exemplo: if (texto.includes('outro_medico')) { query = query.ilike('medico_nome', '%Nome do Médico%'); }
+      }
+      
+      const { data: valores } = await query.order('nome');
+      
+      if (valores && valores.length > 0) {
+        let resposta = '';
+        
+        if (contemNomeMedico && valores[0].medico_nome) {
+          resposta = `💰 *Valores das consultas com ${valores[0].medico_nome}:*\n\n`;
+        } else {
+          resposta = '💰 *Nossos valores de consultas e exames:*\n\n';
+        }
+        
+        valores.forEach(valor => {
+          resposta += `📋 **${valor.nome}**\n`;
+          if (valor.valor_particular) {
+            resposta += `• Particular: R$ ${valor.valor_particular}\n`;
+          }
+          if (valor.coparticipacao_unimed_20) {
+            resposta += `• Unimed (20%): R$ ${valor.coparticipacao_unimed_20}\n`;
+          }
+          if (valor.coparticipacao_unimed_40) {
+            resposta += `• Unimed (40%): R$ ${valor.coparticipacao_unimed_40}\n`;
+          }
+          resposta += '\n';
+        });
+        
+        resposta += 'Posso ajudar com agendamento? 😊';
+        return { message: resposta };
+      } else if (contemNomeMedico) {
+        // Se buscou por médico específico mas não encontrou valores
+        return { 
+          message: 'No momento, não encontrei valores específicos para este médico na base de dados.\n\nPosso ajudar com outras informações ou agendamento? 😊'
+        };
+      } else {
+        return {
+          message: 'No momento, não temos valores disponíveis na consulta.\n\nPara informações sobre valores, entre em contato:\n📞 (XX) XXXX-XXXX'
+        };
+      }
+    } catch (error) {
+      return { message: '❌ Erro ao consultar valores. Tente novamente.' };
+    }
+  }
+
   // Agendar consulta
   if (texto.includes('agendar') || texto.includes('consulta') || texto.includes('marcar')) {
     // Verificar se já tem sessão ativa para agendamento

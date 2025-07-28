@@ -277,6 +277,7 @@ export type Database = {
           horarios: Json | null
           id: string
           medico_id: string | null
+          medico_nome: string | null
           nome: string
           observacoes: string | null
           restricoes: string | null
@@ -293,6 +294,7 @@ export type Database = {
           horarios?: Json | null
           id?: string
           medico_id?: string | null
+          medico_nome?: string | null
           nome: string
           observacoes?: string | null
           restricoes?: string | null
@@ -309,6 +311,7 @@ export type Database = {
           horarios?: Json | null
           id?: string
           medico_id?: string | null
+          medico_nome?: string | null
           nome?: string
           observacoes?: string | null
           restricoes?: string | null
