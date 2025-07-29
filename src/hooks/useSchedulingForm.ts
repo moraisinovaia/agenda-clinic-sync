@@ -52,13 +52,15 @@ export function useSchedulingForm(initialData?: Partial<SchedulingFormData>) {
     try {
       await onSubmit(formData);
       // Só resetar o formulário se não houve erro
+      console.log('✅ Agendamento criado com sucesso, resetando formulário...');
       resetForm();
     } catch (error) {
       // Capturar e definir o erro para exibição
       const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
       setError(errorMessage);
-      console.log('Erro capturado - mantendo dados do formulário:', errorMessage);
+      console.log('❌ Erro capturado - mantendo dados do formulário:', errorMessage);
     } finally {
+      console.log('🏁 Finalizando loading state...');
       setLoading(false);
     }
   };

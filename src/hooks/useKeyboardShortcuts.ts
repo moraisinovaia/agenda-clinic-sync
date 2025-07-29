@@ -13,6 +13,9 @@ export const useKeyboardShortcuts = (shortcuts: ShortcutConfig[]) => {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const matchedShortcut = shortcuts.find(shortcut => {
+        // Verificar se event.key e shortcut.key existem antes de usar toLowerCase
+        if (!event.key || !shortcut.key) return false;
+        
         return (
           event.key.toLowerCase() === shortcut.key.toLowerCase() &&
           !!event.ctrlKey === !!shortcut.ctrlKey &&

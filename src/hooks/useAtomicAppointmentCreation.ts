@@ -80,94 +80,101 @@ export function useAtomicAppointmentCreation() {
   const createAppointment = async (formData: SchedulingFormData): Promise<any> => {
     let lastError: Error | null = null;
 
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        setLoading(true);
-        console.log(`🚀 Tentativa ${attempt}/${MAX_RETRIES} - Criando agendamento:`, formData);
+    try {
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          setLoading(true);
+          console.log(`🚀 Tentativa ${attempt}/${MAX_RETRIES} - Criando agendamento:`, formData);
 
-        // Validações no frontend
-        validateFormData(formData);
+          // Validações no frontend
+          validateFormData(formData);
 
-        // Buscar nome do usuário logado
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('nome')
-          .eq('user_id', user?.id)
-          .single();
+          // Buscar nome do usuário logado
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('nome')
+            .eq('user_id', user?.id)
+            .single();
 
-        // Chamar função SQL atômica
-        const { data, error } = await supabase.rpc('criar_agendamento_atomico', {
-          p_nome_completo: formData.nomeCompleto,
-          p_data_nascimento: formData.dataNascimento,
-          p_convenio: formData.convenio,
-          p_telefone: formData.telefone || null,
-          p_celular: formData.celular,
-          p_medico_id: formData.medicoId,
-          p_atendimento_id: formData.atendimentoId,
-          p_data_agendamento: formData.dataAgendamento,
-          p_hora_agendamento: formData.horaAgendamento,
-          p_observacoes: formData.observacoes || null,
-          p_criado_por: profile?.nome || 'Recepcionista',
-          p_criado_por_user_id: user?.id,
-        });
+          // Chamar função SQL atômica
+          const { data, error } = await supabase.rpc('criar_agendamento_atomico', {
+            p_nome_completo: formData.nomeCompleto,
+            p_data_nascimento: formData.dataNascimento,
+            p_convenio: formData.convenio,
+            p_telefone: formData.telefone || null,
+            p_celular: formData.celular,
+            p_medico_id: formData.medicoId,
+            p_atendimento_id: formData.atendimentoId,
+            p_data_agendamento: formData.dataAgendamento,
+            p_hora_agendamento: formData.horaAgendamento,
+            p_observacoes: formData.observacoes || null,
+            p_criado_por: profile?.nome || 'Recepcionista',
+            p_criado_por_user_id: user?.id,
+          });
 
-        if (error) {
-          console.error(`❌ Erro na tentativa ${attempt}:`, error);
-          throw error;
+          if (error) {
+            console.error(`❌ Erro na tentativa ${attempt}:`, error);
+            throw error;
+          }
+
+          console.log(`✅ Resultado da tentativa ${attempt}:`, data);
+
+          // Verificar se a função retornou sucesso
+          const result = data as unknown as AtomicAppointmentResult;
+          if (!result?.success) {
+            const errorMessage = result?.error || result?.message || 'Erro desconhecido na criação do agendamento';
+            throw new Error(errorMessage);
+          }
+
+          // Sucesso!
+          toast({
+            title: 'Sucesso!',
+            description: `Agendamento criado para ${formData.dataAgendamento} às ${formData.horaAgendamento}`,
+          });
+
+          console.log(`✅ Agendamento criado com sucesso na tentativa ${attempt}:`, data);
+          return data;
+
+        } catch (error) {
+          lastError = error instanceof Error ? error : new Error('Erro desconhecido');
+          console.error(`❌ Erro na tentativa ${attempt}:`, lastError);
+
+          // Se é um erro de validação ou não é um erro de concorrência, não fazer retry
+          if (attempt === MAX_RETRIES || 
+              !lastError.message.includes('já está ocupado') ||
+              lastError.message.includes('obrigatório') ||
+              lastError.message.includes('inválido') ||
+              lastError.message.includes('não está ativo') ||
+              lastError.message.includes('bloqueada') ||
+              lastError.message.includes('idade') ||
+              lastError.message.includes('convênio')) {
+            break;
+          }
+
+          // Aguardar antes do próximo retry (backoff exponencial)
+          const delayTime = RETRY_DELAY * Math.pow(2, attempt - 1);
+          console.log(`⏳ Aguardando ${delayTime}ms antes da próxima tentativa...`);
+          await delay(delayTime);
         }
-
-        console.log(`✅ Resultado da tentativa ${attempt}:`, data);
-
-        // Verificar se a função retornou sucesso
-        const result = data as unknown as AtomicAppointmentResult;
-        if (!result?.success) {
-          const errorMessage = result?.error || result?.message || 'Erro desconhecido na criação do agendamento';
-          throw new Error(errorMessage);
-        }
-
-        // Sucesso!
-        toast({
-          title: 'Sucesso!',
-          description: `Agendamento criado para ${formData.dataAgendamento} às ${formData.horaAgendamento}`,
-        });
-
-        console.log(`✅ Agendamento criado com sucesso na tentativa ${attempt}:`, data);
-        return data;
-
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error('Erro desconhecido');
-        console.error(`❌ Erro na tentativa ${attempt}:`, lastError);
-
-        // Se é um erro de validação ou não é um erro de concorrência, não fazer retry
-        if (attempt === MAX_RETRIES || 
-            !lastError.message.includes('já está ocupado') ||
-            lastError.message.includes('obrigatório') ||
-            lastError.message.includes('inválido') ||
-            lastError.message.includes('não está ativo') ||
-            lastError.message.includes('bloqueada') ||
-            lastError.message.includes('idade') ||
-            lastError.message.includes('convênio')) {
-          break;
-        }
-
-        // Aguardar antes do próximo retry (backoff exponencial)
-        const delayTime = RETRY_DELAY * Math.pow(2, attempt - 1);
-        console.log(`⏳ Aguardando ${delayTime}ms antes da próxima tentativa...`);
-        await delay(delayTime);
       }
-    }
 
-    // Se chegou aqui, todas as tentativas falharam
-    const errorMessage = lastError?.message || 'Não foi possível criar o agendamento';
-    
-    toast({
-      title: 'Erro',
-      description: errorMessage,
-      variant: 'destructive',
-    });
-    
-    console.error(`❌ Falha após ${MAX_RETRIES} tentativas:`, lastError);
-    throw lastError;
+      // Se chegou aqui, todas as tentativas falharam
+      const errorMessage = lastError?.message || 'Não foi possível criar o agendamento';
+      
+      toast({
+        title: 'Erro',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+      
+      console.error(`❌ Falha após ${MAX_RETRIES} tentativas:`, lastError);
+      throw lastError;
+      
+    } finally {
+      // Garantir que o loading sempre seja resetado
+      console.log('🏁 Resetando loading state...');
+      setLoading(false);
+    }
   };
 
   return {
