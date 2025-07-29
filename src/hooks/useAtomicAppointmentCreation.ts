@@ -90,24 +90,13 @@ export function useAtomicAppointmentCreation() {
           validateFormData(formData);
 
           // Buscar nome do usuário logado
-          const { data: profile, error: profileError } = await supabase
+          const { data: profile } = await supabase
             .from('profiles')
-            .select('nome, user_id')
+            .select('nome')
             .eq('user_id', user?.id)
             .single();
 
-          console.log('👤 Dados do perfil encontrado:', profile);
-          console.log('🔑 User ID atual:', user?.id);
-          
-          if (profileError) {
-            console.error('❌ Erro ao buscar perfil:', profileError);
-          }
-
           // Chamar função SQL atômica
-          console.log('📦 Dados que serão enviados para RPC:', {
-            p_criado_por: profile?.nome || 'Recepcionista',
-            p_criado_por_user_id: user?.id,
-          });
 
           const { data, error } = await supabase.rpc('criar_agendamento_atomico', {
             p_nome_completo: formData.nomeCompleto,
