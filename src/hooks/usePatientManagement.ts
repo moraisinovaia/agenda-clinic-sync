@@ -9,6 +9,10 @@ export function usePatientManagement() {
 
   // Buscar pacientes por data de nascimento (ESTABILIZADA com useCallback)
   const searchPatientsByBirthDate = useCallback(async (birthDate: string): Promise<Patient[]> => {
+    if (!birthDate || birthDate.length !== 10) {
+      return [];
+    }
+    
     try {
       setLoading(true);
       

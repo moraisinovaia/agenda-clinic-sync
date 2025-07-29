@@ -97,7 +97,7 @@ export const PatientDataFormStable = React.memo(({
       setFoundPatients([]);
       setShowPatientsList(false);
     }
-  }, [debouncedBirthDate, searchPatientsByBirthDate]);
+  }, [debouncedBirthDate]); // Remover searchPatientsByBirthDate das dependências
 
   // Executar busca quando a data mudar
   React.useEffect(() => {

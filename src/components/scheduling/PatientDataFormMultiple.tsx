@@ -61,7 +61,7 @@ export function PatientDataFormMultiple({
         clearTimeout(searchTimeoutRef.current);
       }
     };
-  }, [formData.dataNascimento, searchPatientsByBirthDate]);
+  }, [formData.dataNascimento]); // Remover searchPatientsByBirthDate das dependências
 
   const handlePatientSelect = (patient: any) => {
     setFormData(prev => ({
