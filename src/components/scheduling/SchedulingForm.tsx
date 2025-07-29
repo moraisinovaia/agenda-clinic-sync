@@ -7,7 +7,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Badge } from '@/components/ui/badge';
 import { Calendar as CalendarIcon, Clock, User } from 'lucide-react';
 import { Doctor, Atendimento, SchedulingFormData, AppointmentWithRelations } from '@/types/scheduling';
-import { PatientDataForm } from './PatientDataForm';
+import { PatientDataFormFixed } from './PatientDataFormFixed';
 import { AppointmentDataForm } from './AppointmentDataForm';
 import { useSchedulingForm } from '@/hooks/useSchedulingForm';
 
@@ -122,12 +122,11 @@ export function SchedulingForm({
           
           <CardContent>
             <form onSubmit={(e) => handleSubmit(e, onSubmit)} className="space-y-4">
-              <PatientDataForm
+              <PatientDataFormFixed
                 formData={formData}
                 setFormData={setFormData}
                 availableConvenios={availableConvenios}
                 medicoSelected={medicoSelected}
-                searchPatientsByBirthDate={searchPatientsByBirthDate}
                 selectedDoctor={selectedDoctor}
               />
 
