@@ -144,13 +144,21 @@ export function AppointmentsList({ appointments, doctors, onEditAppointment, onC
                           </div>
                         )}
 
-                        <div className="text-xs text-muted-foreground">
-                          <strong>Agendado por:</strong> {
-                            appointment.criado_por_profile?.nome || 
-                            (appointment.criado_por_user_id ? 'Recepcionista' : appointment.criado_por) ||
-                            'Recepcionista'
-                          }
-                        </div>
+                         <div className="text-xs text-muted-foreground">
+                           <strong>Agendado por:</strong> {
+                             (() => {
+                               console.log('🔍 Debug Agendado por:', {
+                                 appointment_id: appointment.id,
+                                 criado_por_profile: appointment.criado_por_profile,
+                                 criado_por_user_id: appointment.criado_por_user_id,
+                                 criado_por: appointment.criado_por
+                               });
+                               return appointment.criado_por_profile?.nome || 
+                                      (appointment.criado_por_user_id ? 'Recepcionista' : appointment.criado_por) ||
+                                      'Recepcionista';
+                             })()
+                           }
+                         </div>
                       </div>
                       
                       <div className="flex flex-col gap-2">
