@@ -4,7 +4,8 @@ import { AppointmentWithRelations } from '@/types/scheduling';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Calendar, Clock, User, Phone, CheckCircle } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Calendar, Clock, User, Phone, CheckCircle, Edit, X } from 'lucide-react';
 import { AppointmentFilters } from '@/components/filters/AppointmentFilters';
 import { useAdvancedAppointmentFilters } from '@/hooks/useAdvancedAppointmentFilters';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -39,17 +40,34 @@ export function AppointmentsList({ appointments, doctors, onEditAppointment, onC
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'agendado':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
+        return 'default';
       case 'confirmado':
-        return 'bg-green-100 text-green-800 border-green-200';
+        return 'secondary';
       case 'realizado':
-        return 'bg-gray-100 text-gray-800 border-gray-200';
+        return 'outline';
       case 'cancelado':
-        return 'bg-red-100 text-red-800 border-red-200';
+        return 'destructive';
       case 'cancelado_bloqueio':
-        return 'bg-orange-100 text-orange-800 border-orange-200';
+        return 'destructive';
       default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
+        return 'outline';
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'agendado':
+        return 'Agendado';
+      case 'confirmado':
+        return 'Confirmado';
+      case 'realizado':
+        return 'Realizado';
+      case 'cancelado':
+        return 'Cancelado';
+      case 'cancelado_bloqueio':
+        return 'Cancelado (Bloqueio)';
+      default:
+        return status;
     }
   };
 
@@ -86,121 +104,127 @@ export function AppointmentsList({ appointments, doctors, onEditAppointment, onC
           </div>
         </CardHeader>
         
-        <CardContent className="space-y-4">
-
-          {/* Lista de agendamentos */}
-          <div className="space-y-3">
-            {filteredAppointments.length > 0 ? (
-              filteredAppointments.map((appointment) => (
-                <Card key={appointment.id} className="border-l-4 border-l-primary">
-                  <CardContent className="p-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">
-                            {appointment.pacientes?.nome_completo || 'Paciente não encontrado'}
-                          </span>
-                          <Badge variant="secondary" className={getStatusColor(appointment.status)}>
-                            {appointment.status}
-                          </Badge>
+        <CardContent className="p-0">
+          {filteredAppointments.length > 0 ? (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="font-semibold">Status</TableHead>
+                    <TableHead className="font-semibold">Data</TableHead>
+                    <TableHead className="font-semibold">Hora</TableHead>
+                    <TableHead className="font-semibold">Paciente</TableHead>
+                    <TableHead className="font-semibold">Telefone</TableHead>
+                    <TableHead className="font-semibold">Médico</TableHead>
+                    <TableHead className="font-semibold">Convênio</TableHead>
+                    <TableHead className="font-semibold">Tipo</TableHead>
+                    <TableHead className="font-semibold">Agendado por</TableHead>
+                    <TableHead className="font-semibold text-center">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredAppointments.map((appointment) => (
+                    <TableRow key={appointment.id} className="hover:bg-muted/30">
+                      <TableCell>
+                        <Badge variant={getStatusColor(appointment.status)} className="text-xs">
+                          {getStatusLabel(appointment.status)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {format(new Date(appointment.data_agendamento), 'dd/MM/yyyy', { locale: ptBR })}
+                      </TableCell>
+                      <TableCell className="font-mono">
+                        {appointment.hora_agendamento}
+                      </TableCell>
+                      <TableCell className="max-w-[200px]">
+                        <div className="font-medium truncate">
+                          {appointment.pacientes?.nome_completo || 'Paciente não encontrado'}
                         </div>
-                        
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-muted-foreground">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-3 w-3" />
-                            <span>
-                              {format(new Date(appointment.data_agendamento), 'dd/MM/yyyy', { locale: ptBR })}
-                            </span>
-                          </div>
-                          
-                          <div className="flex items-center gap-2">
-                            <Clock className="h-3 w-3" />
-                            <span>{appointment.hora_agendamento}</span>
-                          </div>
-                          
-                          <div className="flex items-center gap-2">
-                            <User className="h-3 w-3" />
-                            <span>Dr(a). {appointment.medicos?.nome || 'Médico não encontrado'}</span>
-                          </div>
-                          
-                          <div className="flex items-center gap-2">
-                            <Phone className="h-3 w-3" />
-                            <span>{appointment.pacientes?.telefone || 'Sem telefone'}</span>
-                          </div>
-                        </div>
-
-                        <div className="text-xs text-muted-foreground">
-                          <strong>Especialidade:</strong> {appointment.medicos?.especialidade || 'N/A'}
-                        </div>
-
-                        <div className="text-xs text-muted-foreground">
-                          <strong>Convênio:</strong> {appointment.pacientes?.convenio || 'N/A'}
-                        </div>
-
                         {appointment.observacoes && (
-                          <div className="text-xs text-muted-foreground">
-                            <strong>Observações:</strong> {appointment.observacoes}
+                          <div className="text-xs text-muted-foreground truncate mt-1">
+                            {appointment.observacoes}
                           </div>
                         )}
-
-                        <div className="text-xs text-muted-foreground">
-                          <strong>Agendado por:</strong> {
-                            appointment.criado_por_profile?.nome || 
-                            appointment.criado_por || 
-                            'Recepcionista'
-                          }
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1 text-sm">
+                          <Phone className="h-3 w-3 text-muted-foreground" />
+                          {appointment.pacientes?.telefone || appointment.pacientes?.celular || 'N/A'}
                         </div>
-                      </div>
-                      
-                      <div className="flex flex-col gap-2">
-                        <div className="flex gap-2">
+                      </TableCell>
+                      <TableCell className="max-w-[150px]">
+                        <div className="font-medium truncate">
+                          Dr(a). {appointment.medicos?.nome || 'N/A'}
+                        </div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {appointment.medicos?.especialidade || 'N/A'}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">
+                          {appointment.pacientes?.convenio || 'N/A'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="max-w-[120px]">
+                        <div className="text-sm truncate">
+                          {appointment.atendimentos?.nome || 'N/A'}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {appointment.criado_por_profile?.nome || 
+                         appointment.criado_por || 
+                         'Recepcionista'}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center justify-center gap-1">
                           <Button 
-                            variant="outline" 
+                            variant="ghost" 
                             size="sm"
                             onClick={() => onEditAppointment?.(appointment)}
+                            className="h-8 w-8 p-0"
+                            title="Editar"
                           >
-                            Editar Agendamento
+                            <Edit className="h-3 w-3" />
                           </Button>
                           {appointment.status === 'agendado' && (
-                            <Button 
-                              variant="default" 
-                              size="sm"
-                              onClick={() => onConfirmAppointment?.(appointment.id)}
-                              className="bg-green-600 hover:bg-green-700 flex items-center gap-1"
-                            >
-                              <CheckCircle className="h-3 w-3" />
-                              Confirmar
-                            </Button>
+                            <>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => onConfirmAppointment?.(appointment.id)}
+                                className="h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                title="Confirmar"
+                              >
+                                <CheckCircle className="h-3 w-3" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => onCancelAppointment?.(appointment.id)}
+                                className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                title="Cancelar"
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </>
                           )}
                         </div>
-                        <div className="flex gap-2">
-                          {appointment.status === 'agendado' && (
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => onCancelAppointment?.(appointment.id)}
-                            >
-                              Cancelar
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
-            ) : (
-              <Card className="p-8 text-center">
-                <p className="text-muted-foreground">
-                  Nenhum agendamento encontrado com os filtros aplicados
-                </p>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Total de agendamentos: {total}
-                </p>
-              </Card>
-            )}
-          </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <div className="p-8 text-center">
+              <p className="text-muted-foreground">
+                Nenhum agendamento encontrado com os filtros aplicados
+              </p>
+              <p className="text-sm text-muted-foreground mt-2">
+                Total de agendamentos: {total}
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
