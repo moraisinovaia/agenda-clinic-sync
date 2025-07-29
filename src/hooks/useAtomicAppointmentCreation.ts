@@ -5,6 +5,7 @@ import { AtomicAppointmentResult } from '@/types/atomic-scheduling';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { toZonedTime, formatInTimeZone } from 'date-fns-tz';
+import { BRAZIL_TIMEZONE } from '@/utils/timezone';
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 segundo
@@ -60,7 +61,6 @@ export function useAtomicAppointmentCreation() {
     }
 
     // Validações de negócio - usar timezone do Brasil
-    const BRAZIL_TIMEZONE = 'America/Sao_Paulo';
     const appointmentDateTime = new Date(`${formData.dataAgendamento}T${formData.horaAgendamento}`);
     
     // Obter horário atual no Brasil

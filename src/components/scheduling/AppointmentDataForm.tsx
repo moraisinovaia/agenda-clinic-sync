@@ -10,6 +10,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Clock, Check, ChevronsUpDown, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Doctor, SchedulingFormData, Atendimento } from '@/types/scheduling';
+import { toZonedTime, format } from 'date-fns-tz';
+import { BRAZIL_TIMEZONE } from '@/utils/timezone';
 
 interface AppointmentDataFormProps {
   formData: SchedulingFormData;
@@ -32,18 +34,24 @@ export function AppointmentDataForm({
     ? atendimentos.filter(atendimento => atendimento.medico_id === formData.medicoId)
     : [];
 
-  // Função para obter data/hora atual
-  const now = new Date();
-  const today = now.toISOString().split('T')[0];
-  const currentTime = now.toTimeString().slice(0, 5);
+  // Função para obter data/hora atual no timezone brasileiro
+  const getBrazilTime = () => {
+    return toZonedTime(new Date(), BRAZIL_TIMEZONE);
+  };
 
-  // Função para validar horário
+  const nowBrazil = getBrazilTime();
+  const today = format(nowBrazil, 'yyyy-MM-dd');
+  const currentTime = format(nowBrazil, 'HH:mm');
+
+  // Função para validar horário com 1 hora de antecedência
   const isTimeValid = (selectedDate: string, selectedTime: string) => {
     if (!selectedDate || !selectedTime) return true;
     
-    // Se a data selecionada for hoje, verificar se o horário não é passado
+    // Se a data selecionada for hoje, verificar se o horário respeita a antecedência de 1 hora
     if (selectedDate === today) {
-      return selectedTime > currentTime;
+      const oneHourLater = new Date(nowBrazil.getTime() + 60 * 60 * 1000);
+      const minTimeRequired = format(oneHourLater, 'HH:mm');
+      return selectedTime >= minTimeRequired;
     }
     
     // Se for data futura, qualquer horário é válido
@@ -53,9 +61,9 @@ export function AppointmentDataForm({
   // Função para obter horário mínimo baseado na data
   const getMinTime = (selectedDate: string) => {
     if (selectedDate === today) {
-      // Se for hoje, horário mínimo é a próxima hora
-      const nextHour = new Date(now.getTime() + 60 * 60 * 1000);
-      return nextHour.toTimeString().slice(0, 5);
+      // Se for hoje, horário mínimo é 1 hora após o horário atual do Brasil
+      const oneHourLater = new Date(nowBrazil.getTime() + 60 * 60 * 1000);
+      return format(oneHourLater, 'HH:mm');
     }
     return '07:00'; // Horário padrão de início
   };
@@ -86,7 +94,8 @@ export function AppointmentDataForm({
         if (!value) {
           errors.horaAgendamento = 'Horário é obrigatório';
         } else if (formData.dataAgendamento && !isTimeValid(formData.dataAgendamento, value)) {
-          errors.horaAgendamento = 'Não é possível agendar para um horário que já passou';
+          const minTime = getMinTime(formData.dataAgendamento);
+          errors.horaAgendamento = `Agendamento deve ser feito com pelo menos 1 hora de antecedência. Horário mínimo: ${minTime} (horário do Brasil)`;
         }
         break;
     }
@@ -137,7 +146,7 @@ export function AppointmentDataForm({
       ...prev, 
       dataAgendamento: date,
       // Reset horário apenas se a data for hoje e o horário atual for inválido
-      horaAgendamento: date === today && prev.horaAgendamento && prev.horaAgendamento <= currentTime 
+      horaAgendamento: date === today && prev.horaAgendamento && !isTimeValid(date, prev.horaAgendamento)
         ? '' 
         : prev.horaAgendamento
     }));
