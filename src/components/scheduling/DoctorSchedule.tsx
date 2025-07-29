@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User, Trash2, Plus, Edit } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User, Trash2, Plus, Edit, CheckCircle } from 'lucide-react';
 import { 
   AlertDialog, 
   AlertDialogAction, 
@@ -25,12 +25,13 @@ interface DoctorScheduleProps {
   blockedDates?: any[];
   isDateBlocked?: (doctorId: string, date: Date) => boolean;
   onCancelAppointment: (appointmentId: string) => Promise<void>;
+  onConfirmAppointment?: (appointmentId: string) => Promise<void>;
   onEditAppointment?: (appointment: AppointmentWithRelations) => void;
   onNewAppointment?: () => void;
   initialDate?: string; // Data inicial para posicionar o calendário
 }
 
-export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDateBlocked, onCancelAppointment, onEditAppointment, onNewAppointment, initialDate }: DoctorScheduleProps) {
+export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDateBlocked, onCancelAppointment, onConfirmAppointment, onEditAppointment, onNewAppointment, initialDate }: DoctorScheduleProps) {
   // Usar initialDate se fornecida, senão usar data atual
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     if (initialDate) {
@@ -208,7 +209,7 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                          </div>
 
                          {/* Botões de ação */}
-                         <div className="flex gap-2 pt-2">
+                         <div className="flex gap-2 pt-2 flex-wrap">
                            {onEditAppointment && (
                              <Button 
                                variant="outline" 
@@ -217,6 +218,17 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                              >
                                <Edit className="h-4 w-4 mr-1" />
                                Editar
+                             </Button>
+                           )}
+                           {appointment.status === 'agendado' && onConfirmAppointment && (
+                             <Button 
+                               variant="default" 
+                               size="sm"
+                               onClick={() => onConfirmAppointment(appointment.id)}
+                               className="bg-green-600 hover:bg-green-700"
+                             >
+                               <CheckCircle className="h-4 w-4 mr-1" />
+                               Confirmar
                              </Button>
                            )}
                            {appointment.status === 'agendado' && (

@@ -319,6 +319,7 @@ const Index = () => {
             blockedDates={blockedDates}
             isDateBlocked={isDateBlocked}
             onCancelAppointment={cancelAppointment}
+            onConfirmAppointment={handleConfirmAppointment}
             onEditAppointment={handleEditAppointment}
             onNewAppointment={() => setViewMode('new-appointment')}
             initialDate={lastAppointmentDate || undefined}
