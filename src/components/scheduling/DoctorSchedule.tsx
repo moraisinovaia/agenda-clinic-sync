@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User, Trash2, Plus, Edit, CheckCircle } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User, Trash2, Plus, Edit, CheckCircle, Phone } from 'lucide-react';
 import { 
   AlertDialog, 
   AlertDialogAction, 
@@ -72,15 +73,30 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'agendado':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
+        return 'bg-blue-500 text-white hover:bg-blue-600';
       case 'confirmado':
-        return 'bg-green-100 text-green-800 border-green-200';
+        return 'bg-green-500 text-white hover:bg-green-600';
       case 'realizado':
-        return 'bg-gray-100 text-gray-800 border-gray-200';
+        return 'bg-gray-500 text-white hover:bg-gray-600';
       case 'cancelado':
-        return 'bg-red-100 text-red-800 border-red-200';
+        return 'bg-red-500 text-white hover:bg-red-600';
       default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
+        return 'bg-gray-400 text-white hover:bg-gray-500';
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'agendado':
+        return 'Agendado';
+      case 'confirmado':
+        return 'Confirmado';
+      case 'realizado':
+        return 'Realizado';
+      case 'cancelado':
+        return 'Cancelado';
+      default:
+        return status;
     }
   };
 
@@ -109,17 +125,17 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
           </div>
         </CardHeader>
         
-        <CardContent className="space-y-6">
-          <div className="grid lg:grid-cols-2 gap-6">
-            {/* Calendário */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Selecione uma data</h3>
+        <CardContent className="p-0">
+          <div className="grid lg:grid-cols-3 h-[600px]">
+            {/* Calendário - Lado Esquerdo */}
+            <div className="border-r p-4 space-y-4">
+              <h3 className="font-semibold text-sm">Selecione uma data</h3>
               <Calendar
                 mode="single"
                 selected={selectedDate}
                 onSelect={(date) => date && setSelectedDate(date)}
                 locale={ptBR}
-                className="rounded-md border shadow-sm bg-background p-3 pointer-events-auto"
+                className="rounded-md border-none p-0"
                 modifiers={{
                   hasAppointments: (date) => hasAppointments(date),
                   hasBlocks: (date) => hasBlocks(date)
@@ -150,128 +166,154 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
               </div>
             </div>
 
-            {/* Lista de agendamentos do dia selecionado */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">
-                Agendamentos para {format(selectedDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-              </h3>
+            {/* Tabela de Agendamentos - Lado Direito */}
+            <div className="lg:col-span-2 flex flex-col">
+              <div className="p-4 border-b bg-muted/30">
+                <h3 className="font-semibold text-sm">
+                  Agendamentos para {format(selectedDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                </h3>
+              </div>
               
-              <div className="space-y-3 max-h-[400px] overflow-y-auto">
+              <div className="flex-1 overflow-y-auto">
                 {selectedDateAppointments.length > 0 ? (
-                  selectedDateAppointments
-                    .sort((a, b) => a.hora_agendamento.localeCompare(b.hora_agendamento))
-                    .map((appointment) => (
-                      <Card key={appointment.id} className="p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Clock className="h-4 w-4 text-primary" />
-                            <span className="font-semibold text-lg">
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-background">
+                      <TableRow className="bg-muted/50">
+                        <TableHead className="w-16 text-xs font-semibold">Status</TableHead>
+                        <TableHead className="w-20 text-xs font-semibold">Hora</TableHead>
+                        <TableHead className="text-xs font-semibold">Paciente</TableHead>
+                        <TableHead className="w-24 text-xs font-semibold">Telefone</TableHead>
+                        <TableHead className="w-20 text-xs font-semibold">Convênio</TableHead>
+                        <TableHead className="text-xs font-semibold">Tipo</TableHead>
+                        <TableHead className="w-24 text-xs font-semibold">Agendado por</TableHead>
+                        <TableHead className="w-32 text-xs font-semibold text-center">Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {selectedDateAppointments
+                        .sort((a, b) => a.hora_agendamento.localeCompare(b.hora_agendamento))
+                        .map((appointment) => (
+                          <TableRow key={appointment.id} className="hover:bg-muted/20 h-12">
+                            <TableCell className="p-2">
+                              <Badge 
+                                className={`text-xs px-2 py-1 ${getStatusColor(appointment.status)}`}
+                              >
+                                {getStatusLabel(appointment.status)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="p-2 font-mono text-sm font-medium">
                               {appointment.hora_agendamento}
-                            </span>
-                          </div>
-                          <Badge 
-                            variant="secondary" 
-                            className={`${getStatusColor(appointment.status)}`}
-                          >
-                            {appointment.status}
-                          </Badge>
-                         </div>
-                         
-                         <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                              <User className="h-4 w-4 text-muted-foreground" />
-                              <span className="font-medium">
-                                {appointment.pacientes?.nome_completo || 'Paciente agendado'}
-                              </span>
-                            </div>
-                            
-                            <div className="text-sm text-muted-foreground">
-                              <strong>Convênio:</strong> {appointment.pacientes?.convenio || 'Não informado'}
-                            </div>
-                            
-                             <div className="text-sm text-muted-foreground">
-                               <strong>Tipo:</strong> {appointment.atendimentos?.nome || 'Consulta/Exame'}
-                             </div>
-
-                             <div className="text-sm text-muted-foreground">
-                               <strong>Agendado por:</strong> {
-                                 appointment.criado_por_profile?.nome || 
-                                 appointment.criado_por || 
-                                 'Recepcionista'
-                               }
-                             </div>
-                            
-                            {appointment.observacoes && (
-                              <div className="text-sm text-muted-foreground">
-                                <strong>Observações:</strong> {appointment.observacoes}
+                            </TableCell>
+                            <TableCell className="p-2">
+                              <div className="text-sm font-medium">
+                                {appointment.pacientes?.nome_completo || 'Paciente não encontrado'}
                               </div>
-                            )}
-                         </div>
-
-                         {/* Botões de ação */}
-                         <div className="flex gap-2 pt-2 flex-wrap">
-                           {onEditAppointment && (
-                             <Button 
-                               variant="outline" 
-                               size="sm"
-                               onClick={() => onEditAppointment(appointment)}
-                             >
-                               <Edit className="h-4 w-4 mr-1" />
-                               Editar
-                             </Button>
-                           )}
-                           {appointment.status === 'agendado' && onConfirmAppointment && (
-                             <Button 
-                               variant="default" 
-                               size="sm"
-                               onClick={() => onConfirmAppointment(appointment.id)}
-                               className="bg-green-600 hover:bg-green-700"
-                             >
-                               <CheckCircle className="h-4 w-4 mr-1" />
-                               Confirmar
-                             </Button>
-                           )}
-                           {appointment.status === 'agendado' && (
-                             <AlertDialog>
-                               <AlertDialogTrigger asChild>
-                                 <Button variant="destructive" size="sm">
-                                   <Trash2 className="h-4 w-4 mr-1" />
-                                   Cancelar
-                                 </Button>
-                               </AlertDialogTrigger>
-                               <AlertDialogContent>
-                                 <AlertDialogHeader>
-                                   <AlertDialogTitle>Cancelar Agendamento</AlertDialogTitle>
-                                   <AlertDialogDescription>
-                                     Tem certeza que deseja cancelar este agendamento para {format(selectedDate, "dd/MM/yyyy")} às {appointment.hora_agendamento}? 
-                                     Esta ação não pode ser desfeita.
-                                   </AlertDialogDescription>
-                                 </AlertDialogHeader>
-                                 <AlertDialogFooter>
-                                   <AlertDialogCancel>Não cancelar</AlertDialogCancel>
-                                   <AlertDialogAction
-                                     onClick={() => onCancelAppointment(appointment.id)}
-                                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                   >
-                                     Sim, cancelar
-                                   </AlertDialogAction>
-                                 </AlertDialogFooter>
-                               </AlertDialogContent>
-                             </AlertDialog>
-                           )}
-                         </div>
-                      </Card>
-                    ))
+                              {appointment.observacoes && (
+                                <div className="text-xs text-muted-foreground truncate">
+                                  {appointment.observacoes}
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell className="p-2">
+                              <div className="text-xs">
+                                {appointment.pacientes?.telefone || appointment.pacientes?.celular || 'N/A'}
+                              </div>
+                            </TableCell>
+                            <TableCell className="p-2">
+                              <Badge variant="outline" className="text-xs">
+                                {appointment.pacientes?.convenio || 'N/A'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="p-2">
+                              <div className="text-xs">
+                                {appointment.atendimentos?.nome || 'Consulta'}
+                              </div>
+                            </TableCell>
+                            <TableCell className="p-2 text-xs">
+                              {appointment.criado_por_profile?.nome || 
+                               appointment.criado_por || 
+                               'Recepcionista'}
+                            </TableCell>
+                            <TableCell className="p-2">
+                              <div className="flex items-center justify-center gap-1">
+                                {onEditAppointment && (
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm"
+                                    onClick={() => onEditAppointment(appointment)}
+                                    className="h-6 w-6 p-0"
+                                    title="Editar"
+                                  >
+                                    <Edit className="h-3 w-3" />
+                                  </Button>
+                                )}
+                                {appointment.status === 'agendado' && onConfirmAppointment && (
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm"
+                                    onClick={() => onConfirmAppointment(appointment.id)}
+                                    className="h-6 w-6 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                    title="Confirmar"
+                                  >
+                                    <CheckCircle className="h-3 w-3" />
+                                  </Button>
+                                )}
+                                {appointment.status === 'agendado' && (
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <Button 
+                                        variant="ghost" 
+                                        size="sm"
+                                        className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                        title="Cancelar"
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>Cancelar Agendamento</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          Tem certeza que deseja cancelar este agendamento para {format(selectedDate, "dd/MM/yyyy")} às {appointment.hora_agendamento}? 
+                                          Esta ação não pode ser desfeita.
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>Não cancelar</AlertDialogCancel>
+                                        <AlertDialogAction
+                                          onClick={() => onCancelAppointment(appointment.id)}
+                                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                        >
+                                          Sim, cancelar
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                    </TableBody>
+                  </Table>
                 ) : (
-                  <Card className="p-8 text-center">
-                    <CalendarIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <h4 className="text-lg font-medium text-muted-foreground mb-2">
-                      Nenhum agendamento
-                    </h4>
-                    <p className="text-sm text-muted-foreground">
-                      Não há agendamentos para esta data.
-                    </p>
-                  </Card>
+                  <div className="flex-1 flex items-center justify-center p-8">
+                    <div className="text-center">
+                      <CalendarIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <h4 className="text-lg font-medium text-muted-foreground mb-2">
+                        Nenhum agendamento
+                      </h4>
+                      <p className="text-sm text-muted-foreground">
+                        Não há agendamentos para esta data.
+                      </p>
+                      {onNewAppointment && (
+                        <Button onClick={onNewAppointment} className="mt-4" size="sm">
+                          <Plus className="h-4 w-4 mr-2" />
+                          Novo Agendamento
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
