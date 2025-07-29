@@ -1591,6 +1591,14 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Json
       }
+      get_backup_cron_status: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          job_name: string
+          schedule: string
+          active: boolean
+        }[]
+      }
       get_current_user_profile: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -1672,6 +1680,10 @@ export type Database = {
           tempo_medio: number
           erros_por_tipo: Json
         }[]
+      }
+      toggle_backup_cron: {
+        Args: { enable_cron: boolean }
+        Returns: boolean
       }
       user_can_access_system: {
         Args: Record<PropertyKey, never>
