@@ -103,7 +103,7 @@ export function PatientDataForm({
 
     const timeoutId = setTimeout(searchPatients, 500); // Debounce de 500ms
     return () => clearTimeout(timeoutId);
-  }, [formData.dataNascimento, searchPatientsByBirthDate]);
+  }, [formData.dataNascimento]); // Remover searchPatientsByBirthDate das dependências
 
   // Função para selecionar um paciente encontrado
   const selectPatient = (patient: any) => {
