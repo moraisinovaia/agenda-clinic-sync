@@ -4,6 +4,7 @@ import { SchedulingFormData } from '@/types/scheduling';
 import { AtomicAppointmentResult } from '@/types/atomic-scheduling';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { toZonedTime, formatInTimeZone } from 'date-fns-tz';
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 segundo
@@ -58,18 +59,26 @@ export function useAtomicAppointmentCreation() {
       throw new Error('Usuário não está autenticado');
     }
 
-    // Validações de negócio
+    // Validações de negócio - usar timezone do Brasil
+    const BRAZIL_TIMEZONE = 'America/Sao_Paulo';
     const appointmentDateTime = new Date(`${formData.dataAgendamento}T${formData.horaAgendamento}`);
-    const now = new Date();
-    const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
     
-    if (appointmentDateTime <= oneHourFromNow) {
-      throw new Error('Agendamento deve ser feito com pelo menos 1 hora de antecedência');
+    // Obter horário atual no Brasil
+    const nowBrazil = toZonedTime(new Date(), BRAZIL_TIMEZONE);
+    const oneHourFromNowBrazil = new Date(nowBrazil.getTime() + 60 * 60 * 1000);
+    
+    // Converter horário do agendamento para o timezone do Brasil
+    const appointmentDateTimeBrazil = toZonedTime(appointmentDateTime, BRAZIL_TIMEZONE);
+    
+    if (appointmentDateTimeBrazil <= oneHourFromNowBrazil) {
+      const currentTimeFormatted = formatInTimeZone(nowBrazil, BRAZIL_TIMEZONE, 'dd/MM/yyyy HH:mm');
+      const requestedTimeFormatted = formatInTimeZone(appointmentDateTimeBrazil, BRAZIL_TIMEZONE, 'dd/MM/yyyy HH:mm');
+      throw new Error(`Agendamento deve ser feito com pelo menos 1 hora de antecedência. Horário atual do Brasil: ${currentTimeFormatted} - Agendamento solicitado: ${requestedTimeFormatted}`);
     }
 
     // Validar idade do paciente
     const birthDate = new Date(formData.dataNascimento);
-    const age = Math.floor((now.getTime() - birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+    const age = Math.floor((nowBrazil.getTime() - birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
     
     if (age < 0 || age > 120) {
       throw new Error('Data de nascimento inválida');
