@@ -125,17 +125,35 @@ export function UserApprovalPanel() {
   }, [isAdmin, isApproved]); // Dependências estáveis
 
   const handleApproveUser = async (userId: string) => {
-    if (!profile?.id) return;
+    if (!profile?.id) {
+      console.error('❌ Profile ID não encontrado:', profile);
+      toast({
+        title: 'Erro de autenticação',
+        description: 'Não foi possível identificar o administrador. Tente fazer login novamente.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
+    console.log('🔄 Iniciando aprovação de usuário:', { userId, aprovadorId: profile.id });
     setProcessingUser(userId);
+    
     try {
       const { data, error } = await supabase.rpc('aprovar_usuario', {
         p_user_id: userId,
         p_aprovador_id: profile.id
       });
 
-      if (error || !(data as any)?.success) {
-        throw new Error((data as any)?.error || 'Erro ao aprovar usuário');
+      console.log('📡 Resposta da função aprovar_usuario:', { data, error });
+
+      if (error) {
+        console.error('❌ Erro na função RPC:', error);
+        throw new Error(`Erro na função: ${error.message}`);
+      }
+
+      if (!(data as any)?.success) {
+        console.error('❌ Função retornou sucesso=false:', data);
+        throw new Error((data as any)?.error || 'A função retornou erro sem descrição');
       }
 
       toast({
