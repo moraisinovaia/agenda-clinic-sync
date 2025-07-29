@@ -131,7 +131,10 @@ export function FilaEsperaForm({
                     />
                     <Button 
                       type="button" 
-                      onClick={handleSearchPatient}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleSearchPatient();
+                      }}
                       disabled={!pacienteData.dataNascimento || searchingPatient}
                       variant="outline"
                     >
