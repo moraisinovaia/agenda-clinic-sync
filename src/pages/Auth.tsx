@@ -7,7 +7,7 @@ import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, User, Lock, Mail, AtSign, AlertCircle, KeyRound } from 'lucide-react';
+import { Loader2, User, Lock, Mail, AtSign, AlertCircle, KeyRound, Wrench } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/hooks/useAuth';
 import { useRememberMe } from '@/hooks/useRememberMe';
@@ -22,6 +22,7 @@ export default function Auth() {
   const [isLoading, setIsLoading] = useState(false);
   const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [isFixingEmails, setIsFixingEmails] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rememberMeChecked, setRememberMeChecked] = useState(false);
   const [showPasswordReset, setShowPasswordReset] = useState(false);
@@ -277,6 +278,45 @@ export default function Auth() {
     }
   };
 
+  const handleFixApprovedUsersEmails = async () => {
+    setIsFixingEmails(true);
+    setError(null);
+    
+    try {
+      console.log('🔧 Executando correção de emails confirmados...');
+      
+      const { data, error } = await supabase.functions.invoke('fix-approved-users-emails', {
+        body: { adminUserId: user?.id }
+      });
+      
+      if (error) {
+        console.error('❌ Erro na função:', error);
+        setError('Erro ao corrigir emails: ' + error.message);
+        toast({
+          title: 'Erro',
+          description: 'Falha ao corrigir emails de usuários aprovados',
+          variant: 'destructive'
+        });
+      } else {
+        console.log('✅ Resultado da correção:', data);
+        toast({
+          title: 'Correção executada!',
+          description: `${data.fixed} emails corrigidos de ${data.fixed + data.errors} usuários processados`,
+        });
+      }
+    } catch (error: any) {
+      console.error('❌ Erro crítico:', error);
+      setError('Erro inesperado ao corrigir emails');
+      toast({
+        title: 'Erro crítico',
+        description: 'Falha na comunicação com o servidor',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsFixingEmails(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -400,6 +440,40 @@ export default function Auth() {
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
+              )}
+              
+              {/* Botão de emergência para corrigir emails */}
+              {error && error.includes('Email não confirmado') && (
+                <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Wrench className="h-4 w-4 text-yellow-600" />
+                    <p className="text-sm font-medium text-yellow-800">
+                      Correção de Emergência
+                    </p>
+                  </div>
+                  <p className="text-xs text-yellow-700 mb-3">
+                    Se você foi aprovado mas ainda não consegue entrar, clique no botão abaixo para corrigir automaticamente todos os emails não confirmados.
+                  </p>
+                  <Button 
+                    variant="outline"
+                    size="sm"
+                    onClick={handleFixApprovedUsersEmails}
+                    disabled={isFixingEmails}
+                    className="w-full border-yellow-300 text-yellow-700 hover:bg-yellow-100"
+                  >
+                    {isFixingEmails ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Corrigindo emails...
+                      </>
+                    ) : (
+                      <>
+                        <Wrench className="mr-2 h-4 w-4" />
+                        Corrigir Emails Não Confirmados
+                      </>
+                    )}
+                  </Button>
+                </div>
               )}
               
               <form onSubmit={handleLogin} className="space-y-4">
