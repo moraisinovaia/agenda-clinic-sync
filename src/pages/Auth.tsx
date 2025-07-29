@@ -3,6 +3,7 @@ import { Navigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -311,9 +312,8 @@ export default function Auth() {
                 <Label htmlFor="new-password">Nova Senha</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
+                  <PasswordInput
                     id="new-password"
-                    type="password"
                     placeholder="••••••••"
                     className="pl-10"
                     value={newPassword}
@@ -327,9 +327,8 @@ export default function Auth() {
                 <Label htmlFor="confirm-new-password">Confirmar Nova Senha</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
+                  <PasswordInput
                     id="confirm-new-password"
-                    type="password"
                     placeholder="••••••••"
                     className="pl-10"
                     value={confirmNewPassword}
@@ -424,9 +423,8 @@ export default function Auth() {
                   <Label htmlFor="login-password">Senha</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
+                    <PasswordInput
                       id="login-password"
-                      type="password"
                       placeholder="••••••••"
                       className="pl-10"
                       value={loginData.password}
@@ -546,9 +544,8 @@ export default function Auth() {
                   <Label htmlFor="signup-password">Senha</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
+                    <PasswordInput
                       id="signup-password"
-                      type="password"
                       placeholder="••••••••"
                       className="pl-10"
                       value={signupData.password}
@@ -562,9 +559,8 @@ export default function Auth() {
                   <Label htmlFor="signup-confirm">Confirmar Senha</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
+                    <PasswordInput
                       id="signup-confirm"
-                      type="password"
                       placeholder="••••••••"
                       className="pl-10"
                       value={signupData.confirmPassword}
