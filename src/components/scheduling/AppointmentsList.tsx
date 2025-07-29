@@ -4,7 +4,7 @@ import { AppointmentWithRelations } from '@/types/scheduling';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Calendar, Clock, User, Phone } from 'lucide-react';
+import { Calendar, Clock, User, Phone, CheckCircle } from 'lucide-react';
 import { AppointmentFilters } from '@/components/filters/AppointmentFilters';
 import { useAdvancedAppointmentFilters } from '@/hooks/useAdvancedAppointmentFilters';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -14,9 +14,10 @@ interface AppointmentsListProps {
   doctors: any[];
   onEditAppointment?: (appointment: AppointmentWithRelations) => void;
   onCancelAppointment?: (appointmentId: string) => void;
+  onConfirmAppointment?: (appointmentId: string) => void;
 }
 
-export function AppointmentsList({ appointments, doctors, onEditAppointment, onCancelAppointment }: AppointmentsListProps) {
+export function AppointmentsList({ appointments, doctors, onEditAppointment, onCancelAppointment, onConfirmAppointment }: AppointmentsListProps) {
   const {
     searchTerm,
     statusFilter,
@@ -152,23 +153,38 @@ export function AppointmentsList({ appointments, doctors, onEditAppointment, onC
                         </div>
                       </div>
                       
-                      <div className="flex gap-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => onEditAppointment?.(appointment)}
-                        >
-                          Editar
-                        </Button>
-                        {appointment.status === 'agendado' && (
+                      <div className="flex flex-col gap-2">
+                        <div className="flex gap-2">
                           <Button 
                             variant="outline" 
                             size="sm"
-                            onClick={() => onCancelAppointment?.(appointment.id)}
+                            onClick={() => onEditAppointment?.(appointment)}
                           >
-                            Cancelar
+                            Editar Agendamento
                           </Button>
-                        )}
+                          {appointment.status === 'agendado' && (
+                            <Button 
+                              variant="default" 
+                              size="sm"
+                              onClick={() => onConfirmAppointment?.(appointment.id)}
+                              className="bg-green-600 hover:bg-green-700 flex items-center gap-1"
+                            >
+                              <CheckCircle className="h-3 w-3" />
+                              Confirmar
+                            </Button>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          {appointment.status === 'agendado' && (
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => onCancelAppointment?.(appointment.id)}
+                            >
+                              Cancelar
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </CardContent>

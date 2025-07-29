@@ -68,6 +68,7 @@ const Index = () => {
     loading,
     createAppointment,
     cancelAppointment,
+    confirmAppointment,
     searchPatientsByBirthDate,
     getAtendimentosByDoctor,
     getAppointmentsByDoctorAndDate,
@@ -238,6 +239,14 @@ const Index = () => {
     }
   };
 
+  const handleConfirmAppointment = async (appointmentId: string) => {
+    try {
+      await confirmAppointment(appointmentId);
+    } catch (error) {
+      console.error('Erro ao confirmar agendamento:', error);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -348,6 +357,7 @@ const Index = () => {
             doctors={doctors}
             onEditAppointment={handleEditAppointment}
             onCancelAppointment={cancelAppointment}
+            onConfirmAppointment={handleConfirmAppointment}
           />
         )}
 

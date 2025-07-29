@@ -139,11 +139,50 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     }
   };
 
+  // Confirmar agendamento
+  const confirmAppointment = async (appointmentId: string) => {
+    try {
+      logger.info('Confirmando agendamento', { appointmentId }, 'APPOINTMENTS');
+
+      await measureApiCall(async () => {
+        const { error } = await supabase
+          .from('agendamentos')
+          .update({ status: 'confirmado' })
+          .eq('id', appointmentId);
+
+        if (error) {
+          logger.error('Erro ao confirmar agendamento', error, 'APPOINTMENTS');
+          throw error;
+        }
+
+        return null;
+      }, 'confirm_appointment', 'PUT');
+
+      toast({
+        title: 'Agendamento confirmado',
+        description: 'O agendamento foi confirmado com sucesso',
+      });
+
+      // Invalidar cache e recarregar
+      refetch();
+      logger.info('Agendamento confirmado com sucesso', { appointmentId }, 'APPOINTMENTS');
+    } catch (error) {
+      logger.error('Erro ao confirmar agendamento', error, 'APPOINTMENTS');
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível confirmar o agendamento',
+        variant: 'destructive',
+      });
+      throw error;
+    }
+  };
+
   return {
     appointments: appointments || [],
     loading,
     getAppointmentsByDoctorAndDate,
     cancelAppointment,
+    confirmAppointment,
     refetch,
     pagination,
     error

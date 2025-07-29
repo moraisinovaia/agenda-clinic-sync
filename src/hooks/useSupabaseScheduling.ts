@@ -42,6 +42,16 @@ export function useSupabaseScheduling() {
     }
   };
 
+  // Envolver confirmAppointment para usar a funcionalidade existente
+  const confirmAppointment = async (appointmentId: string) => {
+    try {
+      await appointmentsList.confirmAppointment(appointmentId);
+      // O refetch já é feito automaticamente no useAppointmentsList
+    } catch (error) {
+      throw error;
+    }
+  };
+
   return {
     // Dados
     doctors: schedulingData.doctors,
@@ -55,6 +65,7 @@ export function useSupabaseScheduling() {
     // Operações
     createAppointment,
     cancelAppointment,
+    confirmAppointment,
     searchPatientsByBirthDate: patientManagement.searchPatientsByBirthDate,
     
     // Utilitários
