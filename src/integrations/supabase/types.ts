@@ -53,6 +53,12 @@ export type Database = {
       agendamentos: {
         Row: {
           atendimento_id: string
+          cancelado_em: string | null
+          cancelado_por: string | null
+          cancelado_por_user_id: string | null
+          confirmado_em: string | null
+          confirmado_por: string | null
+          confirmado_por_user_id: string | null
           convenio: string | null
           created_at: string
           criado_por: string
@@ -68,6 +74,12 @@ export type Database = {
         }
         Insert: {
           atendimento_id: string
+          cancelado_em?: string | null
+          cancelado_por?: string | null
+          cancelado_por_user_id?: string | null
+          confirmado_em?: string | null
+          confirmado_por?: string | null
+          confirmado_por_user_id?: string | null
           convenio?: string | null
           created_at?: string
           criado_por?: string
@@ -83,6 +95,12 @@ export type Database = {
         }
         Update: {
           atendimento_id?: string
+          cancelado_em?: string | null
+          cancelado_por?: string | null
+          cancelado_por_user_id?: string | null
+          confirmado_em?: string | null
+          confirmado_por?: string | null
+          confirmado_por_user_id?: string | null
           convenio?: string | null
           created_at?: string
           criado_por?: string
@@ -1467,6 +1485,14 @@ export type Database = {
           atendimento_tipo: string
         }[]
       }
+      cancelar_agendamento_soft: {
+        Args: {
+          p_agendamento_id: string
+          p_cancelado_por: string
+          p_cancelado_por_user_id?: string
+        }
+        Returns: Json
+      }
       cleanup_expired_backups: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -1474,6 +1500,14 @@ export type Database = {
       cleanup_old_logs: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      confirmar_agendamento: {
+        Args: {
+          p_agendamento_id: string
+          p_confirmado_por: string
+          p_confirmado_por_user_id?: string
+        }
+        Returns: Json
       }
       confirmar_email_usuario_aprovado: {
         Args: { p_user_email: string; p_admin_id: string }

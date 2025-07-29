@@ -107,17 +107,32 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       logger.info('Cancelando agendamento', { appointmentId }, 'APPOINTMENTS');
 
       await measureApiCall(async () => {
-        const { error } = await supabase
-          .from('agendamentos')
-          .update({ status: 'cancelado' })
-          .eq('id', appointmentId);
+        // Buscar perfil do usuário atual
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('nome, user_id')
+          .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+          .single();
+
+        // Usar função de cancelamento com auditoria
+        const { data, error } = await supabase.rpc('cancelar_agendamento_soft', {
+          p_agendamento_id: appointmentId,
+          p_cancelado_por: profile?.nome || 'Usuário',
+          p_cancelado_por_user_id: profile?.user_id || null
+        });
 
         if (error) {
           logger.error('Erro ao cancelar agendamento', error, 'APPOINTMENTS');
           throw error;
         }
 
-        return null;
+        if (!(data as any)?.success) {
+          const errorMessage = (data as any)?.error || 'Erro ao cancelar agendamento';
+          logger.error('Erro no cancelamento', { error: errorMessage }, 'APPOINTMENTS');
+          throw new Error(errorMessage);
+        }
+
+        return data;
       }, 'cancel_appointment', 'PUT');
 
       toast({
@@ -132,7 +147,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       logger.error('Erro ao cancelar agendamento', error, 'APPOINTMENTS');
       toast({
         title: 'Erro',
-        description: 'Não foi possível cancelar o agendamento',
+        description: error instanceof Error ? error.message : 'Não foi possível cancelar o agendamento',
         variant: 'destructive',
       });
       throw error;
@@ -145,17 +160,32 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       logger.info('Confirmando agendamento', { appointmentId }, 'APPOINTMENTS');
 
       await measureApiCall(async () => {
-        const { error } = await supabase
-          .from('agendamentos')
-          .update({ status: 'confirmado' })
-          .eq('id', appointmentId);
+        // Buscar perfil do usuário atual
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('nome, user_id')
+          .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+          .single();
+
+        // Usar função de confirmação com auditoria
+        const { data, error } = await supabase.rpc('confirmar_agendamento', {
+          p_agendamento_id: appointmentId,
+          p_confirmado_por: profile?.nome || 'Usuário',
+          p_confirmado_por_user_id: profile?.user_id || null
+        });
 
         if (error) {
           logger.error('Erro ao confirmar agendamento', error, 'APPOINTMENTS');
           throw error;
         }
 
-        return null;
+        if (!(data as any)?.success) {
+          const errorMessage = (data as any)?.error || 'Erro ao confirmar agendamento';
+          logger.error('Erro na confirmação', { error: errorMessage }, 'APPOINTMENTS');
+          throw new Error(errorMessage);
+        }
+
+        return data;
       }, 'confirm_appointment', 'PUT');
 
       toast({
@@ -170,7 +200,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       logger.error('Erro ao confirmar agendamento', error, 'APPOINTMENTS');
       toast({
         title: 'Erro',
-        description: 'Não foi possível confirmar o agendamento',
+        description: error instanceof Error ? error.message : 'Não foi possível confirmar o agendamento',
         variant: 'destructive',
       });
       throw error;

@@ -88,6 +88,13 @@ export function useAtomicAppointmentCreation() {
         // Validações no frontend
         validateFormData(formData);
 
+        // Buscar nome do usuário logado
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('nome')
+          .eq('user_id', user?.id)
+          .single();
+
         // Chamar função SQL atômica
         const { data, error } = await supabase.rpc('criar_agendamento_atomico', {
           p_nome_completo: formData.nomeCompleto,
@@ -100,7 +107,7 @@ export function useAtomicAppointmentCreation() {
           p_data_agendamento: formData.dataAgendamento,
           p_hora_agendamento: formData.horaAgendamento,
           p_observacoes: formData.observacoes || null,
-          p_criado_por: 'recepcionista',
+          p_criado_por: profile?.nome || 'Recepcionista',
           p_criado_por_user_id: user?.id,
         });
 
