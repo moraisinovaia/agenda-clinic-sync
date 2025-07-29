@@ -1123,6 +1123,42 @@ export type Database = {
         }
         Relationships: []
       }
+      system_settings: {
+        Row: {
+          category: string | null
+          created_at: string | null
+          description: string | null
+          editable: boolean | null
+          id: string
+          key: string
+          type: string | null
+          updated_at: string | null
+          value: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          editable?: boolean | null
+          id?: string
+          key: string
+          type?: string | null
+          updated_at?: string | null
+          value: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          editable?: boolean | null
+          id?: string
+          key?: string
+          type?: string | null
+          updated_at?: string | null
+          value?: string
+        }
+        Relationships: []
+      }
       validacoes_detalhadas: {
         Row: {
           erro_detalhado: string | null
@@ -1494,6 +1530,10 @@ export type Database = {
         Returns: Json
       }
       cleanup_expired_backups: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      cleanup_old_backups_auto: {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
