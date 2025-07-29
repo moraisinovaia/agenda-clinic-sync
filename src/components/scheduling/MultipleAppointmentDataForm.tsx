@@ -240,6 +240,7 @@ export function MultipleAppointmentDataForm({
             type="time"
             value={formData.horaAgendamento}
             onChange={(e) => setFormData(prev => ({ ...prev, horaAgendamento: e.target.value }))}
+            step="60" // Intervalos de 1 minuto
             required
           />
         </div>

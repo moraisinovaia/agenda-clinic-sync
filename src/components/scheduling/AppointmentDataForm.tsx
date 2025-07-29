@@ -298,7 +298,7 @@ export function AppointmentDataForm({
             onBlur={(e) => validateField('horaAgendamento', e.target.value)}
             min={getMinTime(formData.dataAgendamento)}
             max="18:00"
-            step="1800" // Intervalos de 30 minutos
+            step="60" // Intervalos de 1 minuto
             required
             className={cn(validationErrors.horaAgendamento && "border-destructive")}
           />

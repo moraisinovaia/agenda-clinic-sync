@@ -197,6 +197,7 @@ export function RelatorioAgenda({ doctors, appointments, onBack }: RelatorioAgen
                   type="time"
                   value={horaInicio}
                   onChange={(e) => setHoraInicio(e.target.value)}
+                  step="60" // Intervalos de 1 minuto
                 />
               </div>
 
@@ -207,6 +208,7 @@ export function RelatorioAgenda({ doctors, appointments, onBack }: RelatorioAgen
                   type="time"
                   value={horaFim}
                   onChange={(e) => setHoraFim(e.target.value)}
+                  step="60" // Intervalos de 1 minuto
                 />
               </div>
             </div>
