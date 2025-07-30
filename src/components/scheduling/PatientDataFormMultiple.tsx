@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -27,73 +27,34 @@ export function PatientDataFormMultiple({
   selectedDoctor
 }: PatientDataFormMultipleProps) {
   
-  // Estado para busca de pacientes - SEPARADO do formData
+  // Estado para busca de pacientes
   const [foundPatients, setFoundPatients] = useState<any[]>([]);
   const [searchingPatients, setSearchingPatients] = useState(false);
   const [showPatientsList, setShowPatientsList] = useState(false);
-  
-  // Refs para evitar re-renders desnecessários
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const lastSearchDateRef = useRef<string>('');
-  
-  // Debug logs para identificar o problema
-  console.log('🔍 PatientDataFormMultiple render:', {
-    dataNascimento: formData.dataNascimento,
-    nomeCompleto: formData.nomeCompleto,
-    convenio: formData.convenio,
-    foundPatientsCount: foundPatients.length
-  });
 
-  // Função de busca estabilizada com useCallback
-  const stableSearchPatients = useCallback(async (birthDate: string) => {
-    if (!birthDate || birthDate.length !== 10) {
-      setFoundPatients([]);
-      setShowPatientsList(false);
-      return;
-    }
-    
-    // Evitar busca duplicada
-    if (lastSearchDateRef.current === birthDate) {
-      return;
-    }
-    
-    lastSearchDateRef.current = birthDate;
-    console.log('🔍 Iniciando busca para data:', birthDate);
-    
-    setSearchingPatients(true);
-    try {
-      const patients = await searchPatientsByBirthDate(birthDate);
-      console.log('✅ Pacientes encontrados:', patients.length);
-      setFoundPatients(patients);
-      setShowPatientsList(patients.length > 0);
-    } catch (error) {
-      console.error('❌ Erro ao buscar pacientes:', error);
-      setFoundPatients([]);
-      setShowPatientsList(false);
-    } finally {
-      setSearchingPatients(false);
-    }
-  }, [searchPatientsByBirthDate]);
-
-  // useEffect com timeout interno para debounce
+  // Buscar pacientes quando a data de nascimento for alterada
   useEffect(() => {
-    // Limpar timeout anterior
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-    
-    // Configurar novo timeout
-    searchTimeoutRef.current = setTimeout(() => {
-      stableSearchPatients(formData.dataNascimento);
-    }, 500);
-    
-    // Cleanup
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
+    const searchPatients = async () => {
+      if (formData.dataNascimento && formData.dataNascimento.length === 10) {
+        setSearchingPatients(true);
+        try {
+          const patients = await searchPatientsByBirthDate(formData.dataNascimento);
+          setFoundPatients(patients);
+          setShowPatientsList(patients.length > 0);
+        } catch (error) {
+          console.error('Erro ao buscar pacientes:', error);
+        } finally {
+          setSearchingPatients(false);
+        }
+      } else {
+        setFoundPatients([]);
+        setShowPatientsList(false);
       }
     };
-  }, [formData.dataNascimento, stableSearchPatients]);
+
+    const timeoutId = setTimeout(searchPatients, 500); // Debounce de 500ms
+    return () => clearTimeout(timeoutId);
+  }, [formData.dataNascimento]); // Não incluir searchPatientsByBirthDate nas dependências
 
   // Função para selecionar um paciente encontrado - COM PROTEÇÃO
   const selectPatient = (patient: any) => {
