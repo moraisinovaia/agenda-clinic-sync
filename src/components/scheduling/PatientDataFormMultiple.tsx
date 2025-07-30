@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -27,40 +27,77 @@ export function PatientDataFormMultiple({
   selectedDoctor
 }: PatientDataFormMultipleProps) {
   
-  // Estado para busca de pacientes - IGUAL ao PatientDataForm.tsx
+  // Estado para busca de pacientes - SEPARADO do formData
   const [foundPatients, setFoundPatients] = useState<any[]>([]);
   const [searchingPatients, setSearchingPatients] = useState(false);
   const [showPatientsList, setShowPatientsList] = useState(false);
+  
+  // Refs para evitar re-renders desnecessários
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSearchDateRef = useRef<string>('');
+  
+  // Debug logs para identificar o problema
+  console.log('🔍 PatientDataFormMultiple render:', {
+    dataNascimento: formData.dataNascimento,
+    nomeCompleto: formData.nomeCompleto,
+    convenio: formData.convenio,
+    foundPatientsCount: foundPatients.length
+  });
 
-  // Buscar pacientes quando a data de nascimento for alterada - MESMA LÓGICA do PatientDataForm.tsx
+  // Função de busca estabilizada com useCallback
+  const stableSearchPatients = useCallback(async (birthDate: string) => {
+    if (!birthDate || birthDate.length !== 10) {
+      setFoundPatients([]);
+      setShowPatientsList(false);
+      return;
+    }
+    
+    // Evitar busca duplicada
+    if (lastSearchDateRef.current === birthDate) {
+      return;
+    }
+    
+    lastSearchDateRef.current = birthDate;
+    console.log('🔍 Iniciando busca para data:', birthDate);
+    
+    setSearchingPatients(true);
+    try {
+      const patients = await searchPatientsByBirthDate(birthDate);
+      console.log('✅ Pacientes encontrados:', patients.length);
+      setFoundPatients(patients);
+      setShowPatientsList(patients.length > 0);
+    } catch (error) {
+      console.error('❌ Erro ao buscar pacientes:', error);
+      setFoundPatients([]);
+      setShowPatientsList(false);
+    } finally {
+      setSearchingPatients(false);
+    }
+  }, [searchPatientsByBirthDate]);
+
+  // useEffect com timeout interno para debounce
   useEffect(() => {
-    const searchPatients = async () => {
-      if (formData.dataNascimento && formData.dataNascimento.length === 10) {
-        setSearchingPatients(true);
-        try {
-          const patients = await searchPatientsByBirthDate(formData.dataNascimento);
-          setFoundPatients(patients);
-          setShowPatientsList(patients.length > 0);
-        } catch (error) {
-          console.error('Erro ao buscar pacientes:', error);
-          // NÃO limpar formData - apenas resetar busca
-          setFoundPatients([]);
-          setShowPatientsList(false);
-        } finally {
-          setSearchingPatients(false);
-        }
-      } else {
-        setFoundPatients([]);
-        setShowPatientsList(false);
+    // Limpar timeout anterior
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    
+    // Configurar novo timeout
+    searchTimeoutRef.current = setTimeout(() => {
+      stableSearchPatients(formData.dataNascimento);
+    }, 500);
+    
+    // Cleanup
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
       }
     };
+  }, [formData.dataNascimento, stableSearchPatients]);
 
-    const timeoutId = setTimeout(searchPatients, 500); // Debounce de 500ms
-    return () => clearTimeout(timeoutId);
-  }, [formData.dataNascimento]); // Remover searchPatientsByBirthDate das dependências
-
-  // Função para selecionar um paciente encontrado - IGUAL ao PatientDataForm.tsx
+  // Função para selecionar um paciente encontrado - COM PROTEÇÃO
   const selectPatient = (patient: any) => {
+    console.log('👤 Selecionando paciente:', patient.nome_completo);
     setFormData(prev => ({
       ...prev,
       nomeCompleto: patient.nome_completo,
@@ -71,14 +108,16 @@ export function PatientDataFormMultiple({
     setShowPatientsList(false);
   };
 
-  // Função para criar novo paciente (limpar seleção) - IGUAL ao PatientDataForm.tsx
+  // Função para criar novo paciente (apenas limpar campos específicos)
   const createNewPatient = () => {
+    console.log('🆕 Criando novo paciente - preservando data:', formData.dataNascimento);
     setFormData(prev => ({
       ...prev,
       nomeCompleto: '',
       telefone: '',
       celular: '',
       convenio: '',
+      // PRESERVAR: dataNascimento, medicoId, atendimentoIds, dataAgendamento, etc.
     }));
     setShowPatientsList(false);
   };
@@ -106,11 +145,13 @@ export function PatientDataFormMultiple({
 
   const handlePhoneChange = (value: string, field: 'telefone' | 'celular') => {
     const formatted = formatPhone(value);
+    console.log(`📞 Atualizando ${field}:`, formatted);
     setFormData(prev => ({ ...prev, [field]: formatted }));
   };
 
   // Função para seleção de convênio via badge
   const selectConvenio = (convenio: string) => {
+    console.log('💳 Selecionando convênio:', convenio);
     setFormData(prev => ({ ...prev, convenio }));
   };
 
@@ -123,7 +164,10 @@ export function PatientDataFormMultiple({
           id="nomeCompleto"
           type="text"
           value={formData.nomeCompleto}
-          onChange={(e) => setFormData(prev => ({ ...prev, nomeCompleto: e.target.value }))}
+            onChange={(e) => {
+              console.log('✏️ Alterando nome:', e.target.value);
+              setFormData(prev => ({ ...prev, nomeCompleto: e.target.value }));
+            }}
           placeholder="Digite o nome completo do paciente"
           required
         />
@@ -137,7 +181,10 @@ export function PatientDataFormMultiple({
             id="dataNascimento"
             type="date"
             value={formData.dataNascimento}
-            onChange={(e) => setFormData(prev => ({ ...prev, dataNascimento: e.target.value }))}
+            onChange={(e) => {
+              console.log('📅 Alterando data nascimento:', e.target.value);
+              setFormData(prev => ({ ...prev, dataNascimento: e.target.value }));
+            }}
             required
           />
           {searchingPatients && (
@@ -205,7 +252,10 @@ export function PatientDataFormMultiple({
           id="convenio"
           type="text"
           value={formData.convenio}
-          onChange={(e) => setFormData(prev => ({ ...prev, convenio: e.target.value }))}
+          onChange={(e) => {
+            console.log('💳 Alterando convênio:', e.target.value);
+            setFormData(prev => ({ ...prev, convenio: e.target.value }));
+          }}
           placeholder="Digite o nome do convênio"
           required
         />
