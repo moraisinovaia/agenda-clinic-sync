@@ -1,3 +1,4 @@
+import { useCallback, useMemo } from 'react';
 import { useSchedulingData } from './useSchedulingData';
 import { useAppointmentsList } from './useAppointmentsList';
 import { usePatientManagement } from './usePatientManagement';
@@ -10,16 +11,16 @@ export function useSupabaseScheduling() {
   const patientManagement = usePatientManagement();
   const appointmentCreation = useAtomicAppointmentCreation();
 
-  // Função de recarregamento consolidada
-  const refetch = async () => {
+  // ✅ ESTABILIZAR: Função de recarregamento consolidada
+  const refetch = useCallback(async () => {
     await Promise.all([
       schedulingData.refetch(),
       appointmentsList.refetch(),
     ]);
-  };
+  }, [schedulingData.refetch, appointmentsList.refetch]);
 
-  // Envolver createAppointment para recarregar dados após sucesso
-  const createAppointment = async (formData: any) => {
+  // ✅ ESTABILIZAR: Envolver createAppointment para recarregar dados após sucesso
+  const createAppointment = useCallback(async (formData: any) => {
     try {
       const result = await appointmentCreation.createAppointment(formData);
       
@@ -30,29 +31,30 @@ export function useSupabaseScheduling() {
     } catch (error) {
       throw error; // Repassar erro para manter o formulário
     }
-  };
+  }, [appointmentCreation.createAppointment, refetch]);
 
-  // Envolver cancelAppointment para usar a funcionalidade existente
-  const cancelAppointment = async (appointmentId: string) => {
+  // ✅ ESTABILIZAR: Envolver cancelAppointment para usar a funcionalidade existente
+  const cancelAppointment = useCallback(async (appointmentId: string) => {
     try {
       await appointmentsList.cancelAppointment(appointmentId);
       // O refetch já é feito automaticamente no useAppointmentsList
     } catch (error) {
       throw error;
     }
-  };
+  }, [appointmentsList.cancelAppointment]);
 
-  // Envolver confirmAppointment para usar a funcionalidade existente
-  const confirmAppointment = async (appointmentId: string) => {
+  // ✅ ESTABILIZAR: Envolver confirmAppointment para usar a funcionalidade existente
+  const confirmAppointment = useCallback(async (appointmentId: string) => {
     try {
       await appointmentsList.confirmAppointment(appointmentId);
       // O refetch já é feito automaticamente no useAppointmentsList
     } catch (error) {
       throw error;
     }
-  };
+  }, [appointmentsList.confirmAppointment]);
 
-  return {
+  // ✅ MEMOIZAR: O objeto retornado para garantir referências estáveis
+  return useMemo(() => ({
     // Dados
     doctors: schedulingData.doctors,
     atendimentos: schedulingData.atendimentos,
@@ -62,11 +64,11 @@ export function useSupabaseScheduling() {
     // Estados de loading - apenas dos dados essenciais
     loading: schedulingData.loading || patientManagement.loading || appointmentCreation.loading,
     
-    // Operações
+    // Operações - AGORA TODAS ESTÁVEIS
     createAppointment,
     cancelAppointment,
     confirmAppointment,
-    searchPatientsByBirthDate: patientManagement.searchPatientsByBirthDate,
+    searchPatientsByBirthDate: patientManagement.searchPatientsByBirthDate, // ✅ JÁ ESTÁVEL
     
     // Utilitários
     getAtendimentosByDoctor: schedulingData.getAtendimentosByDoctor,
@@ -76,5 +78,25 @@ export function useSupabaseScheduling() {
     
     // Recarregamento
     refetch,
-  };
+  }), [
+    // Dados
+    schedulingData.doctors,
+    schedulingData.atendimentos,
+    appointmentsList.appointments,
+    schedulingData.blockedDates,
+    // Estados
+    schedulingData.loading,
+    patientManagement.loading,
+    appointmentCreation.loading,
+    // Funções estáveis
+    createAppointment,
+    cancelAppointment,
+    confirmAppointment,
+    patientManagement.searchPatientsByBirthDate,
+    schedulingData.getAtendimentosByDoctor,
+    appointmentsList.getAppointmentsByDoctorAndDate,
+    schedulingData.isDateBlocked,
+    schedulingData.getBlockedDatesByDoctor,
+    refetch,
+  ]);
 }
