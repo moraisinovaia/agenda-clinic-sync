@@ -183,23 +183,23 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
 
             {/* Lista de Agendamentos - Lado Direito */}
             <div className="lg:col-span-2 flex flex-col">
-              <div className="p-3 border-b bg-muted/30 flex-shrink-0">
-                <h3 className="font-medium text-sm">
-                  {format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}
+              <div className="p-4 border-b bg-muted/30 flex-shrink-0">
+                <h3 className="font-semibold text-base">
+                  {format(selectedDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
                 </h3>
-                <p className="text-xs text-muted-foreground">
-                  {selectedDateAppointments.length} agendamento(s)
+                <p className="text-sm text-muted-foreground">
+                  {selectedDateAppointments.length} agendamento(s) encontrado(s)
                 </p>
               </div>
               
               {/* Header da tabela */}
-              <div className="grid grid-cols-12 gap-2 p-2 text-xs font-medium text-muted-foreground border-b bg-muted/10 flex-shrink-0">
-                <div className="col-span-1">Hora</div>
+              <div className="grid grid-cols-12 gap-2 p-3 text-xs font-semibold text-foreground border-b bg-muted/20 flex-shrink-0">
                 <div className="col-span-1">Status</div>
+                <div className="col-span-1">Hora</div>
                 <div className="col-span-3">Paciente</div>
                 <div className="col-span-2">Telefone</div>
                 <div className="col-span-2">Convênio</div>
-                <div className="col-span-2">Procedimento</div>
+                <div className="col-span-2">Tipo</div>
                 <div className="col-span-1">Ações</div>
               </div>
               
@@ -212,25 +212,30 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                       .map((appointment) => {
                         const StatusIcon = getStatusIcon(appointment.status);
                         return (
-                          <div key={appointment.id} className="grid grid-cols-12 gap-2 p-2 text-xs hover:bg-muted/20 transition-colors">
+                          <div key={appointment.id} className="grid grid-cols-12 gap-2 p-3 text-xs hover:bg-muted/20 transition-colors border-b border-border/50">
+                            {/* Status */}
+                            <div className="col-span-1">
+                              <Badge className={`text-xs px-2 py-1 ${getStatusColor(appointment.status)}`}>
+                                <StatusIcon className="h-3 w-3 mr-1" />
+                                {getStatusLabel(appointment.status)}
+                              </Badge>
+                            </div>
+                            
                             {/* Hora */}
                             <div className="col-span-1 font-mono font-semibold text-sm">
                               {appointment.hora_agendamento}
                             </div>
                             
-                            {/* Status */}
-                            <div className="col-span-1">
-                              <Badge className={`text-xs px-1 py-0 ${getStatusColor(appointment.status)}`}>
-                                <StatusIcon className="h-2 w-2 mr-1" />
-                                {appointment.status === 'agendado' ? 'Agend.' : 
-                                 appointment.status === 'confirmado' ? 'Conf.' :
-                                 appointment.status === 'realizado' ? 'Real.' : 'Canc.'}
-                              </Badge>
-                            </div>
-                            
                             {/* Paciente */}
-                            <div className="col-span-3 font-medium text-sm truncate">
-                              {appointment.pacientes?.nome_completo || 'Paciente não encontrado'}
+                            <div className="col-span-3">
+                              <div className="font-medium text-sm truncate">
+                                {appointment.pacientes?.nome_completo || 'Paciente não encontrado'}
+                              </div>
+                              {appointment.criado_por_profile && (
+                                <div className="text-xs text-muted-foreground">
+                                  Agd por {appointment.criado_por_profile.nome} em {format(new Date(appointment.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                                </div>
+                              )}
                             </div>
                             
                             {/* Telefone */}
@@ -247,9 +252,9 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                               ) : '-'}
                             </div>
                             
-                            {/* Procedimento */}
+                            {/* Tipo */}
                             <div className="col-span-2 text-xs truncate">
-                              {appointment.atendimentos?.nome || '-'}
+                              {appointment.atendimentos?.tipo || '-'}
                             </div>
                             
                             {/* Ações */}
