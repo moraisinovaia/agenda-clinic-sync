@@ -9,6 +9,41 @@ export function useMultipleScheduling() {
   const { user } = useAuth();
   const { toast } = useToast();
 
+  // Função para verificar último agendamento (mais de 30 dias)
+  const checkLastAppointment = async (nomeCompleto: string, dataNascimento: string): Promise<boolean> => {
+    try {
+      const { data, error } = await supabase
+        .from('agendamentos')
+        .select(`
+          data_agendamento,
+          pacientes!inner(nome_completo, data_nascimento)
+        `)
+        .eq('pacientes.nome_completo', nomeCompleto)
+        .eq('pacientes.data_nascimento', dataNascimento)
+        .in('status', ['realizado', 'confirmado'])
+        .order('data_agendamento', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.error('Erro ao verificar último agendamento:', error);
+        return false;
+      }
+
+      if (data && data.length > 0) {
+        const lastAppointment = new Date(data[0].data_agendamento);
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        
+        return lastAppointment < thirtyDaysAgo;
+      }
+      
+      return false; // Primeiro agendamento
+    } catch (error) {
+      console.error('Erro ao verificar último agendamento:', error);
+      return false;
+    }
+  };
+
   const createMultipleAppointment = async (formData: MultipleSchedulingFormData): Promise<MultipleAppointmentResult> => {
     console.log('🔄 Iniciando agendamento múltiplo com dados:', formData);
     
@@ -113,6 +148,7 @@ export function useMultipleScheduling() {
   return {
     loading,
     createMultipleAppointment,
-    getCompatibleExams
+    getCompatibleExams,
+    checkLastAppointment
   };
 }

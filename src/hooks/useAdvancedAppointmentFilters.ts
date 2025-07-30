@@ -18,7 +18,15 @@ export const useAdvancedAppointmentFilters = (appointments: AppointmentWithRelat
   const [convenioFilter, setConvenioFilter] = useState('all');
 
   const filteredAppointments = useMemo(() => {
-    return appointments.filter(appointment => {
+    // Separar agendamentos cancelados por padrão
+    const baseFilter = statusFilter === 'cancelado' || statusFilter === 'cancelado_bloqueio' 
+      ? appointments 
+      : appointments.filter(appointment => 
+          appointment.status !== 'cancelado' && 
+          appointment.status !== 'cancelado_bloqueio'
+        );
+    
+    return baseFilter.filter(appointment => {
       // Search filter
       const matchesSearch = !searchTerm || 
         appointment.pacientes?.nome_completo?.toLowerCase().includes(searchTerm.toLowerCase()) ||

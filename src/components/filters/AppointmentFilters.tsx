@@ -114,6 +114,29 @@ export const AppointmentFilters = ({
         
         <CollapsibleContent>
           <CardContent className="pt-0">
+            {/* Botões de Acesso Rápido */}
+            <div className="flex flex-wrap gap-2 mb-4 pb-4 border-b">
+              <Button
+                variant={statusFilter === 'cancelado' ? "default" : "outline"}
+                size="sm"
+                onClick={() => onStatusChange(statusFilter === 'cancelado' ? 'all' : 'cancelado')}
+              >
+                {statusFilter === 'cancelado' ? 'Ocultar' : 'Ver'} Cancelados
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  // Filtrar pacientes menores de idade
+                  const today = new Date();
+                  const eighteenYearsAgo = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate());
+                  onSearchChange('menor');
+                }}
+              >
+                Agendamentos de Menores
+              </Button>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* Search Input */}
               <div className="space-y-2">

@@ -6,7 +6,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
 import { Doctor } from '@/types/scheduling';
 import { MultipleSchedulingFormData } from '@/types/multiple-scheduling';
-import { OptimizedPatientSearch } from './OptimizedPatientSearch';
+import { EnhancedPatientSearch } from './EnhancedPatientSearch';
 
 interface PatientDataFormMultipleProps {
   formData: MultipleSchedulingFormData;
@@ -28,6 +28,7 @@ export function PatientDataFormMultiple({
   
   // Função estabilizada para seleção de paciente
   const handlePatientSelect = useCallback((patient: any) => {
+    console.log('👤 Selecionando paciente:', patient);
     setFormData(prev => ({
       ...prev,
       nomeCompleto: patient.nome_completo,
@@ -47,6 +48,7 @@ export function PatientDataFormMultiple({
   // Função estabilizada para onChange dos campos
   const updateField = useCallback((field: keyof MultipleSchedulingFormData) => {
     return (e: React.ChangeEvent<HTMLInputElement>) => {
+      console.log(`📝 Atualizando campo ${field}:`, e.target.value);
       setFormData(prev => ({ ...prev, [field]: e.target.value }));
     };
   }, [setFormData]);
@@ -82,8 +84,8 @@ export function PatientDataFormMultiple({
           required
         />
         
-        {/* Componente de busca otimizado */}
-        <OptimizedPatientSearch
+        {/* Componente de busca melhorado */}
+        <EnhancedPatientSearch
           birthDate={formData.dataNascimento}
           onPatientSelect={handlePatientSelect}
           searchPatientsByBirthDate={searchPatientsByBirthDate}

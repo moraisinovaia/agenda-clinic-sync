@@ -61,7 +61,7 @@ export function StableMultipleSchedulingForm({
     [atendimentos, formData.atendimentoIds]
   );
 
-  // Handler de submit estabilizado
+  // Handler de submit estabilizado - PRESERVA DADOS EM CASO DE ERRO
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     console.log('📝 Submit do formulário múltiplo:', formData);
@@ -69,17 +69,18 @@ export function StableMultipleSchedulingForm({
     if (formData.atendimentoIds.length === 0) {
       console.error('❌ Nenhum atendimento selecionado no submit');
       alert('Selecione pelo menos um exame/procedimento');
-      return;
+      return; // NÃO limpar dados
     }
 
     console.log('✅ Validação básica OK, iniciando criação...');
 
     try {
       await createMultipleAppointment(formData);
-      onSuccess();
+      onSuccess(); // Só chamar em caso de sucesso
     } catch (error) {
-      // Erro já tratado no hook
-      console.error('Erro no formulário:', error);
+      // Em caso de erro, PRESERVAR todos os dados do formulário
+      console.error('Erro no formulário múltiplo:', error);
+      // NÃO chamar onSuccess() - mantém o formulário com os dados
     }
   }, [formData, createMultipleAppointment, onSuccess]);
 
