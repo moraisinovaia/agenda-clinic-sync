@@ -6,7 +6,7 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useNotifications } from '@/hooks/useNotifications';
 
 import { SchedulingForm } from '@/components/scheduling/SchedulingForm';
-import { MultipleSchedulingForm } from '@/components/scheduling/MultipleSchedulingForm';
+import { StableMultipleSchedulingForm } from '@/components/scheduling/StableMultipleSchedulingForm';
 import { DoctorSchedule } from '@/components/scheduling/DoctorSchedule';
 import { AppointmentsList } from '@/components/scheduling/AppointmentsList';
 import { BloqueioAgenda } from '@/components/scheduling/BloqueioAgenda';
@@ -341,7 +341,7 @@ const Index = () => {
         )}
 
         {viewMode === 'multiple-appointment' && (
-          <MultipleSchedulingForm
+          <StableMultipleSchedulingForm
             doctors={doctors}
             atendimentos={atendimentos}
             onSuccess={() => {

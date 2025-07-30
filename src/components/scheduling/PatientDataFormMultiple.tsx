@@ -1,13 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import { useCallback } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
-import { Search, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { Doctor } from '@/types/scheduling';
 import { MultipleSchedulingFormData } from '@/types/multiple-scheduling';
+import { OptimizedPatientSearch } from './OptimizedPatientSearch';
 
 interface PatientDataFormMultipleProps {
   formData: MultipleSchedulingFormData;
@@ -26,44 +25,9 @@ export function PatientDataFormMultiple({
   searchPatientsByBirthDate,
   selectedDoctor
 }: PatientDataFormMultipleProps) {
-  const [foundPatients, setFoundPatients] = useState<any[]>([]);
-  const [searchingPatients, setSearchingPatients] = useState(false);
-  const [showPatientSuggestions, setShowPatientSuggestions] = useState(false);
-  const searchTimeoutRef = useRef<NodeJS.Timeout>();
-
-  // Buscar pacientes quando a data de nascimento muda
-  useEffect(() => {
-    if (formData.dataNascimento && formData.dataNascimento.length === 10) {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-      
-      searchTimeoutRef.current = setTimeout(async () => {
-        setSearchingPatients(true);
-        try {
-          const patients = await searchPatientsByBirthDate(formData.dataNascimento);
-          setFoundPatients(patients || []);
-          setShowPatientSuggestions(patients && patients.length > 0);
-        } catch (error) {
-          console.error('Erro ao buscar pacientes:', error);
-          setFoundPatients([]);
-        } finally {
-          setSearchingPatients(false);
-        }
-      }, 500);
-    } else {
-      setFoundPatients([]);
-      setShowPatientSuggestions(false);
-    }
-
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-    };
-  }, [formData.dataNascimento]); // Remover searchPatientsByBirthDate das dependências
-
-  const handlePatientSelect = (patient: any) => {
+  
+  // Função estabilizada para seleção de paciente
+  const handlePatientSelect = useCallback((patient: any) => {
     setFormData(prev => ({
       ...prev,
       nomeCompleto: patient.nome_completo,
@@ -72,13 +36,25 @@ export function PatientDataFormMultiple({
       telefone: patient.telefone || '',
       celular: patient.celular || ''
     }));
-    setShowPatientSuggestions(false);
-  };
+  }, [setFormData]);
 
-  const isConvenioCompatible = (convenio: string) => {
+  // Verificação de compatibilidade do convênio
+  const isConvenioCompatible = useCallback((convenio: string) => {
     if (!selectedDoctor || !selectedDoctor.convenios_aceitos) return true;
     return selectedDoctor.convenios_aceitos.includes(convenio);
-  };
+  }, [selectedDoctor]);
+
+  // Função estabilizada para onChange dos campos
+  const updateField = useCallback((field: keyof MultipleSchedulingFormData) => {
+    return (e: React.ChangeEvent<HTMLInputElement>) => {
+      setFormData(prev => ({ ...prev, [field]: e.target.value }));
+    };
+  }, [setFormData]);
+
+  // Função para seleção de convênio via badge
+  const selectConvenio = useCallback((convenio: string) => {
+    setFormData(prev => ({ ...prev, convenio }));
+  }, [setFormData]);
 
   return (
     <div className="space-y-4">
@@ -89,7 +65,7 @@ export function PatientDataFormMultiple({
           id="nomeCompleto"
           type="text"
           value={formData.nomeCompleto}
-          onChange={(e) => setFormData(prev => ({ ...prev, nomeCompleto: e.target.value }))}
+          onChange={updateField('nomeCompleto')}
           placeholder="Digite o nome completo do paciente"
           required
         />
@@ -98,50 +74,20 @@ export function PatientDataFormMultiple({
       {/* Data de Nascimento */}
       <div className="space-y-2">
         <Label htmlFor="dataNascimento">Data de Nascimento *</Label>
-        <div className="relative">
-          <Input
-            id="dataNascimento"
-            type="date"
-            value={formData.dataNascimento}
-            onChange={(e) => setFormData(prev => ({ ...prev, dataNascimento: e.target.value }))}
-            required
-          />
-          {searchingPatients && (
-            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-              <Search className="h-4 w-4 animate-spin" />
-            </div>
-          )}
-        </div>
+        <Input
+          id="dataNascimento"
+          type="date"
+          value={formData.dataNascimento}
+          onChange={updateField('dataNascimento')}
+          required
+        />
         
-        {/* Sugestões de pacientes encontrados */}
-        {showPatientSuggestions && foundPatients.length > 0 && (
-          <div className="border rounded-md bg-background shadow-sm">
-            <div className="p-2 text-sm font-medium border-b bg-muted">
-              Pacientes encontrados:
-            </div>
-            <div className="max-h-48 overflow-y-auto">
-              {foundPatients.map((patient, index) => (
-                <div
-                  key={index}
-                  className="p-3 hover:bg-muted cursor-pointer border-b last:border-b-0"
-                  onClick={() => handlePatientSelect(patient)}
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="font-medium">{patient.nome_completo}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {patient.convenio} | {patient.celular || patient.telefone || 'Sem telefone'}
-                      </div>
-                    </div>
-                    <Button variant="ghost" size="sm">
-                      Selecionar
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Componente de busca otimizado */}
+        <OptimizedPatientSearch
+          birthDate={formData.dataNascimento}
+          onPatientSelect={handlePatientSelect}
+          searchPatientsByBirthDate={searchPatientsByBirthDate}
+        />
       </div>
 
       {/* Convênio */}
@@ -151,7 +97,7 @@ export function PatientDataFormMultiple({
           id="convenio"
           type="text"
           value={formData.convenio}
-          onChange={(e) => setFormData(prev => ({ ...prev, convenio: e.target.value }))}
+          onChange={updateField('convenio')}
           placeholder="Digite o nome do convênio"
           required
         />
@@ -180,8 +126,8 @@ export function PatientDataFormMultiple({
                 <Badge 
                   key={convenio}
                   variant="outline" 
-                  className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
-                  onClick={() => setFormData(prev => ({ ...prev, convenio }))}
+                  className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors"
+                  onClick={() => selectConvenio(convenio)}
                 >
                   {convenio}
                 </Badge>
@@ -199,7 +145,7 @@ export function PatientDataFormMultiple({
             id="telefone"
             type="tel"
             value={formData.telefone}
-            onChange={(e) => setFormData(prev => ({ ...prev, telefone: e.target.value }))}
+            onChange={updateField('telefone')}
             placeholder="(00) 0000-0000"
           />
         </div>
@@ -210,7 +156,7 @@ export function PatientDataFormMultiple({
             id="celular"
             type="tel"
             value={formData.celular}
-            onChange={(e) => setFormData(prev => ({ ...prev, celular: e.target.value }))}
+            onChange={updateField('celular')}
             placeholder="(00) 00000-0000"
           />
         </div>

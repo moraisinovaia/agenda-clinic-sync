@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
@@ -43,24 +43,32 @@ export function MultipleAppointmentDataForm({
       // Buscar exames compatíveis
       getCompatibleExams(formData.medicoId).then(setCompatibleExams);
       
-      // Limpar seleções anteriores se médico mudou
-      setFormData(prev => ({ ...prev, atendimentoIds: [] }));
+      // Só limpar seleções se realmente mudou de médico (e não foi apenas re-render)
+      setFormData(prev => {
+        // Se já havia um médico diferente selecionado, limpar as seleções
+        if (prev.medicoId && prev.medicoId !== formData.medicoId) {
+          return { ...prev, atendimentoIds: [] };
+        }
+        // Se é o primeiro médico sendo selecionado e não há seleções, não alterar
+        return prev;
+      });
     } else {
       setAvailableAtendimentos([]);
       setCompatibleExams([]);
     }
-  }, [formData.medicoId, atendimentos, getCompatibleExams]);
+  }, [formData.medicoId, atendimentos, getCompatibleExams, setFormData]);
 
-  const handleAtendimentoToggle = (atendimentoId: string, checked: boolean) => {
+  // Funções estabilizadas com useCallback
+  const handleAtendimentoToggle = useCallback((atendimentoId: string, checked: boolean) => {
     setFormData(prev => ({
       ...prev,
       atendimentoIds: checked 
         ? [...prev.atendimentoIds, atendimentoId]
         : prev.atendimentoIds.filter(id => id !== atendimentoId)
     }));
-  };
+  }, [setFormData]);
 
-  const getCompatibilityInfo = (atendimentoId: string) => {
+  const getCompatibilityInfo = useCallback((atendimentoId: string) => {
     if (formData.atendimentoIds.length <= 1) return null;
     
     const otherSelectedIds = formData.atendimentoIds.filter(id => id !== atendimentoId);
@@ -70,9 +78,9 @@ export function MultipleAppointmentDataForm({
     );
     
     return compatibilities.length > 0 ? compatibilities[0] : null;
-  };
+  }, [formData.atendimentoIds, compatibleExams]);
 
-  const hasIncompatibleCombination = () => {
+  const hasIncompatibleCombination = useCallback(() => {
     if (formData.atendimentoIds.length <= 1) return false;
     
     for (let i = 0; i < formData.atendimentoIds.length; i++) {
@@ -86,7 +94,25 @@ export function MultipleAppointmentDataForm({
       }
     }
     return false;
-  };
+  }, [formData.atendimentoIds, compatibleExams]);
+
+  // Função estabilizada para mudanças de seleção
+  const handleMedicoChange = useCallback((value: string) => {
+    setFormData(prev => ({ ...prev, medicoId: value }));
+  }, [setFormData]);
+
+  // Funções estabilizadas para campos de data/hora/observações
+  const updateDataAgendamento = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData(prev => ({ ...prev, dataAgendamento: e.target.value }));
+  }, [setFormData]);
+
+  const updateHoraAgendamento = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData(prev => ({ ...prev, horaAgendamento: e.target.value }));
+  }, [setFormData]);
+
+  const updateObservacoes = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setFormData(prev => ({ ...prev, observacoes: e.target.value }));
+  }, [setFormData]);
 
   return (
     <div className="space-y-4">
@@ -95,7 +121,7 @@ export function MultipleAppointmentDataForm({
         <Label htmlFor="medico">Médico *</Label>
         <Select 
           value={formData.medicoId} 
-          onValueChange={(value) => setFormData(prev => ({ ...prev, medicoId: value }))}
+          onValueChange={handleMedicoChange}
         >
           <SelectTrigger>
             <SelectValue placeholder="Selecione o médico" />
@@ -227,7 +253,7 @@ export function MultipleAppointmentDataForm({
             id="dataAgendamento"
             type="date"
             value={formData.dataAgendamento}
-            onChange={(e) => setFormData(prev => ({ ...prev, dataAgendamento: e.target.value }))}
+            onChange={updateDataAgendamento}
             min={new Date().toISOString().split('T')[0]}
             required
           />
@@ -239,7 +265,7 @@ export function MultipleAppointmentDataForm({
             id="horaAgendamento"
             type="time"
             value={formData.horaAgendamento}
-            onChange={(e) => setFormData(prev => ({ ...prev, horaAgendamento: e.target.value }))}
+            onChange={updateHoraAgendamento}
             step="60" // Intervalos de 1 minuto
             required
           />
@@ -253,7 +279,7 @@ export function MultipleAppointmentDataForm({
           id="observacoes"
           placeholder="Observações adicionais..."
           value={formData.observacoes || ''}
-          onChange={(e) => setFormData(prev => ({ ...prev, observacoes: e.target.value }))}
+          onChange={updateObservacoes}
           rows={3}
         />
       </div>
