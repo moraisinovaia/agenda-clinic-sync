@@ -42,21 +42,12 @@ export function MultipleAppointmentDataForm({
       
       // Buscar exames compatíveis
       getCompatibleExams(formData.medicoId).then(setCompatibleExams);
-      
-      // Só limpar seleções se realmente mudou de médico (e não foi apenas re-render)
-      setFormData(prev => {
-        // Se já havia um médico diferente selecionado, limpar as seleções
-        if (prev.medicoId && prev.medicoId !== formData.medicoId) {
-          return { ...prev, atendimentoIds: [] };
-        }
-        // Se é o primeiro médico sendo selecionado e não há seleções, não alterar
-        return prev;
-      });
     } else {
       setAvailableAtendimentos([]);
       setCompatibleExams([]);
     }
-  }, [formData.medicoId, atendimentos, getCompatibleExams, setFormData]);
+    // REMOVIDO: Limpeza automática dos atendimentoIds que estava causando o problema
+  }, [formData.medicoId, atendimentos, getCompatibleExams]);
 
   // Funções estabilizadas com useCallback
   const handleAtendimentoToggle = useCallback((atendimentoId: string, checked: boolean) => {

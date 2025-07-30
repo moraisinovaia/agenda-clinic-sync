@@ -10,11 +10,31 @@ export function useMultipleScheduling() {
   const { toast } = useToast();
 
   const createMultipleAppointment = async (formData: MultipleSchedulingFormData): Promise<MultipleAppointmentResult> => {
+    console.log('🔄 Iniciando agendamento múltiplo com dados:', formData);
+    
     if (!user) {
+      console.error('❌ Usuário não autenticado');
       throw new Error('Usuário não autenticado');
     }
 
+    // Validações básicas
+    if (!formData.nomeCompleto || !formData.dataNascimento || !formData.convenio) {
+      console.error('❌ Dados do paciente incompletos');
+      throw new Error('Dados do paciente são obrigatórios');
+    }
+
+    if (!formData.medicoId || !formData.dataAgendamento || !formData.horaAgendamento) {
+      console.error('❌ Dados do agendamento incompletos');
+      throw new Error('Dados do agendamento são obrigatórios');
+    }
+
+    if (!formData.atendimentoIds || formData.atendimentoIds.length === 0) {
+      console.error('❌ Nenhum atendimento selecionado');
+      throw new Error('Selecione pelo menos um exame/procedimento');
+    }
+
     setLoading(true);
+    console.log('🔄 Chamando RPC criar_agendamento_multiplo...');
     
     try {
       const { data, error } = await supabase.rpc('criar_agendamento_multiplo', {

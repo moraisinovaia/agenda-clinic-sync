@@ -64,11 +64,15 @@ export function StableMultipleSchedulingForm({
   // Handler de submit estabilizado
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('📝 Submit do formulário múltiplo:', formData);
     
     if (formData.atendimentoIds.length === 0) {
+      console.error('❌ Nenhum atendimento selecionado no submit');
       alert('Selecione pelo menos um exame/procedimento');
       return;
     }
+
+    console.log('✅ Validação básica OK, iniciando criação...');
 
     try {
       await createMultipleAppointment(formData);
