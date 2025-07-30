@@ -127,16 +127,16 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
         </CardHeader>
         
         <CardContent className="p-0">
-          <div className="grid lg:grid-cols-3 h-[600px]">
+          <div className="grid lg:grid-cols-3 h-[400px]">
             {/* Calendário - Lado Esquerdo */}
-            <div className="border-r p-4 space-y-4">
-              <h3 className="font-semibold text-sm">Selecione uma data</h3>
+            <div className="border-r p-3 space-y-3">
+              <h3 className="font-semibold text-xs">Selecione uma data</h3>
               <Calendar
                 mode="single"
                 selected={selectedDate}
                 onSelect={(date) => date && setSelectedDate(date)}
                 locale={ptBR}
-                className="rounded-md border-none p-0"
+                className="rounded-md border-none p-0 scale-90"
                 modifiers={{
                   hasAppointments: (date) => hasAppointments(date),
                   hasBlocks: (date) => hasBlocks(date)
@@ -156,109 +156,109 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                 }}
               />
               <div className="text-xs text-muted-foreground space-y-1">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-primary rounded"></div>
-                  <span>Dias com agendamentos</span>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-primary rounded"></div>
+                  <span>Com agendamentos</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-destructive rounded"></div>
-                  <span>Dias bloqueados</span>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-destructive rounded"></div>
+                  <span>Bloqueados</span>
                 </div>
               </div>
             </div>
 
             {/* Tabela de Agendamentos - Lado Direito */}
             <div className="lg:col-span-2 flex flex-col">
-              <div className="p-4 border-b bg-muted/30">
-                <h3 className="font-semibold text-sm">
+              <div className="p-3 border-b bg-muted/30">
+                <h3 className="font-semibold text-xs">
                   Agendamentos para {format(selectedDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
                 </h3>
               </div>
               
               <div className="flex-1 relative">
                 {selectedDateAppointments.length > 0 ? (
-                <ScrollArea className="h-[450px] w-full rounded-md border-none">
-                  <div className="min-w-[900px]">
+                <ScrollArea className="h-[300px] w-full">
+                  <div className="min-w-[700px] w-full">
                     <Table>
                       <TableHeader className="bg-muted/50 sticky top-0 z-10">
-                        <TableRow>
-                          <TableHead className="w-[100px]">Status</TableHead>
-                          <TableHead className="w-[80px]">Hora</TableHead>
-                          <TableHead className="w-[250px]">Paciente</TableHead>
-                          <TableHead className="w-[120px]">Telefone</TableHead>
-                          <TableHead className="w-[120px]">Convênio</TableHead>
-                          <TableHead className="w-[120px]">Tipo</TableHead>
-                          <TableHead className="w-[140px]">Agendado por</TableHead>
-                          <TableHead className="w-[100px] text-center">Ações</TableHead>
+                        <TableRow className="text-xs">
+                          <TableHead className="w-[80px] px-2 py-1 text-xs">Status/Hora</TableHead>
+                          <TableHead className="w-[200px] px-2 py-1 text-xs">Paciente</TableHead>
+                          <TableHead className="w-[100px] px-2 py-1 text-xs">Telefone</TableHead>
+                          <TableHead className="w-[80px] px-2 py-1 text-xs">Convênio</TableHead>
+                          <TableHead className="w-[100px] px-2 py-1 text-xs">Tipo</TableHead>
+                          <TableHead className="w-[120px] px-2 py-1 text-xs">Agendado por</TableHead>
+                          <TableHead className="w-[80px] px-2 py-1 text-xs text-center">Ações</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {selectedDateAppointments
                           .sort((a, b) => a.hora_agendamento.localeCompare(b.hora_agendamento))
                           .map((appointment) => (
-                            <TableRow key={appointment.id} className="hover:bg-muted/20">
-                              <TableCell>
-                                <Badge 
-                                  className={`text-xs px-2 py-1 ${getStatusColor(appointment.status)}`}
-                                >
-                                  {getStatusLabel(appointment.status)}
-                                </Badge>
-                              </TableCell>
-                              
-                              <TableCell className="font-mono text-sm font-medium">
-                                {appointment.hora_agendamento}
-                              </TableCell>
-                              
-                              <TableCell>
+                            <TableRow key={appointment.id} className="hover:bg-muted/20 text-xs">
+                              <TableCell className="px-2 py-2">
                                 <div className="space-y-1">
-                                  <div className="text-sm font-medium">
+                                  <Badge 
+                                    className={`text-[10px] px-1 py-0 ${getStatusColor(appointment.status)}`}
+                                  >
+                                    {getStatusLabel(appointment.status)}
+                                  </Badge>
+                                  <div className="font-mono text-[10px] font-medium">
+                                    {appointment.hora_agendamento}
+                                  </div>
+                                </div>
+                              </TableCell>
+                              
+                              <TableCell className="px-2 py-2">
+                                <div className="space-y-1">
+                                  <div className="text-xs font-medium leading-tight">
                                     {appointment.pacientes?.nome_completo || 'Paciente não encontrado'}
                                   </div>
                                   {appointment.observacoes && (
-                                    <div className="text-xs text-muted-foreground">
+                                    <div className="text-[10px] text-muted-foreground truncate">
                                       {appointment.observacoes}
                                     </div>
                                   )}
                                 </div>
                               </TableCell>
                               
-                              <TableCell>
-                                <div className="text-xs">
+                              <TableCell className="px-2 py-2">
+                                <div className="text-[10px]">
                                   {appointment.pacientes?.telefone || appointment.pacientes?.celular || 'N/A'}
                                 </div>
                               </TableCell>
                               
-                              <TableCell>
-                                <Badge variant="outline" className="text-xs">
+                              <TableCell className="px-2 py-2">
+                                <Badge variant="outline" className="text-[10px] px-1 py-0">
                                   {appointment.pacientes?.convenio || 'N/A'}
                                 </Badge>
                               </TableCell>
                               
-                              <TableCell>
-                                <div className="text-xs text-muted-foreground">
+                              <TableCell className="px-2 py-2">
+                                <div className="text-[10px] text-muted-foreground">
                                   {appointment.atendimentos?.nome || 'Consulta'}
                                 </div>
                               </TableCell>
                               
-                              <TableCell>
-                                <div className="text-xs">
+                              <TableCell className="px-2 py-2">
+                                <div className="text-[10px]">
                                   {appointment.criado_por_profile?.nome || 
                                    appointment.criado_por || 
                                    'Recepcionista'}
                                 </div>
                               </TableCell>
                               
-                              <TableCell className="text-center">
+                              <TableCell className="px-2 py-2 text-center">
                                 <div className="flex items-center justify-center gap-1">
                                   {onEditAppointment && (
                                     <Button 
                                       variant="ghost" 
                                       size="sm"
                                       onClick={() => onEditAppointment(appointment)}
-                                      className="h-6 w-6 p-0"
+                                      className="h-5 w-5 p-0"
                                       title="Editar"
                                     >
-                                      <Edit className="h-3 w-3" />
+                                      <Edit className="h-2.5 w-2.5" />
                                     </Button>
                                   )}
                                   {appointment.status === 'agendado' && onConfirmAppointment && (
@@ -266,10 +266,10 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                                       variant="ghost" 
                                       size="sm"
                                       onClick={() => onConfirmAppointment(appointment.id)}
-                                      className="h-6 w-6 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                      className="h-5 w-5 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
                                       title="Confirmar"
                                     >
-                                      <CheckCircle className="h-3 w-3" />
+                                      <CheckCircle className="h-2.5 w-2.5" />
                                     </Button>
                                   )}
                                   {appointment.status === 'agendado' && (
@@ -278,10 +278,10 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                                         <Button 
                                           variant="ghost" 
                                           size="sm"
-                                          className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                          className="h-5 w-5 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
                                           title="Cancelar"
                                         >
-                                          <Trash2 className="h-3 w-3" />
+                                          <Trash2 className="h-2.5 w-2.5" />
                                         </Button>
                                       </AlertDialogTrigger>
                                       <AlertDialogContent>
