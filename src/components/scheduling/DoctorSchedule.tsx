@@ -183,172 +183,141 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
 
             {/* Lista de Agendamentos - Lado Direito */}
             <div className="lg:col-span-2 flex flex-col">
-              <div className="p-4 border-b bg-muted/30 flex-shrink-0">
-                <h3 className="font-semibold text-base">
-                  {format(selectedDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+              <div className="p-3 border-b bg-muted/30 flex-shrink-0">
+                <h3 className="font-medium text-sm">
+                  {format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}
                 </h3>
-                <p className="text-sm text-muted-foreground">
-                  {selectedDateAppointments.length} agendamento(s) encontrado(s)
+                <p className="text-xs text-muted-foreground">
+                  {selectedDateAppointments.length} agendamento(s)
                 </p>
               </div>
               
-              {/* Tabela com scroll horizontal */}
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[800px]">
-                  <thead>
-                    <tr className="border-b bg-muted/20">
-                      <th className="text-left p-3 text-xs font-semibold w-80">Paciente</th>
-                      <th className="text-left p-3 text-xs font-semibold w-32">Telefone</th>
-                      <th className="text-left p-3 text-xs font-semibold w-28">Convênio</th>
-                      <th className="text-left p-3 text-xs font-semibold w-40">Tipo</th>
-                      <th className="text-left p-3 text-xs font-semibold w-48">Agendado por</th>
-                      <th className="text-left p-3 text-xs font-semibold w-24">Ações</th>
-                    </tr>
-                  </thead>
-                </table>
+              {/* Header da tabela */}
+              <div className="grid grid-cols-12 gap-2 p-2 text-xs font-medium text-muted-foreground border-b bg-muted/10 flex-shrink-0">
+                <div className="col-span-1">Hora</div>
+                <div className="col-span-1">Status</div>
+                <div className="col-span-3">Paciente</div>
+                <div className="col-span-2">Telefone</div>
+                <div className="col-span-2">Convênio</div>
+                <div className="col-span-2">Procedimento</div>
+                <div className="col-span-1">Ações</div>
               </div>
               
               {/* Lista de agendamentos com scroll */}
               <ScrollArea className="flex-1 max-h-[400px]">
                 {selectedDateAppointments.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[800px]">
-                      <tbody>
-                        {selectedDateAppointments
-                          .sort((a, b) => a.hora_agendamento.localeCompare(b.hora_agendamento))
-                          .map((appointment) => {
-                            const StatusIcon = getStatusIcon(appointment.status);
-                            return (
-                              <tr key={appointment.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors">
-                                {/* Paciente - coluna principal */}
-                                <td className="p-3 w-80">
-                                  <div className="space-y-1">
-                                    <div className="flex items-center gap-2">
-                                      <div className="font-medium text-sm">
-                                        {appointment.pacientes?.nome_completo || 'Paciente não encontrado'}
-                                      </div>
-                                      <Badge className={`text-xs px-1.5 py-0.5 ${getStatusColor(appointment.status)}`}>
-                                        <StatusIcon className="h-3 w-3 mr-1" />
-                                        {getStatusLabel(appointment.status)}
-                                      </Badge>
-                                    </div>
-                                    <div className="font-mono font-semibold text-primary text-sm">
-                                      {appointment.hora_agendamento}
-                                    </div>
-                                  </div>
-                                </td>
-                                
-                                {/* Telefone */}
-                                <td className="p-3 w-32 text-sm">
-                                  {appointment.pacientes?.telefone || appointment.pacientes?.celular || '-'}
-                                </td>
-                                
-                                {/* Convênio */}
-                                <td className="p-3 w-28">
-                                  {appointment.pacientes?.convenio ? (
-                                    <Badge variant="outline" className="text-xs px-1 py-0">
-                                      {appointment.pacientes.convenio}
-                                    </Badge>
-                                  ) : '-'}
-                                </td>
-                                
-                                {/* Tipo */}
-                                <td className="p-3 w-40 text-sm">
-                                  {appointment.atendimentos?.tipo || '-'}
-                                </td>
-                                
-                                {/* Agendado por */}
-                                <td className="p-3 w-48">
-                                  {appointment.criado_por_profile ? (
-                                    <div className="space-y-0.5">
-                                      <div className="text-sm font-medium">
-                                        {appointment.criado_por_profile.nome}
-                                      </div>
-                                      <div className="text-xs text-muted-foreground">
-                                        {format(new Date(appointment.created_at), "dd/MM 'às' HH:mm", { locale: ptBR })}
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <span className="text-muted-foreground text-sm">-</span>
-                                  )}
-                                </td>
-                                
-                                {/* Ações */}
-                                <td className="p-3 w-24">
-                                  <div className="flex gap-1">
-                                    {onEditAppointment && (
-                                      <Button 
-                                        variant="outline" 
-                                        size="sm"
-                                        onClick={() => onEditAppointment(appointment)}
-                                        className="h-7 w-7 p-0"
-                                      >
-                                        <Edit className="h-3 w-3" />
-                                      </Button>
-                                    )}
-                                    
-                                    {appointment.status === 'agendado' && onConfirmAppointment && (
-                                      <Button 
-                                        variant="default" 
-                                        size="sm"
-                                        onClick={() => onConfirmAppointment(appointment.id)}
-                                        className="h-7 w-7 p-0 bg-green-600 hover:bg-green-700"
-                                      >
-                                        <CheckCircle className="h-3 w-3" />
-                                      </Button>
-                                    )}
-                                    
-                                    {appointment.status === 'agendado' && (
-                                      <AlertDialog>
-                                        <AlertDialogTrigger asChild>
-                                          <Button 
-                                            variant="destructive" 
-                                            size="sm"
-                                            className="h-7 w-7 p-0"
-                                          >
-                                            <Trash2 className="h-3 w-3" />
-                                          </Button>
-                                        </AlertDialogTrigger>
-                                        <AlertDialogContent>
-                                          <AlertDialogHeader>
-                                            <AlertDialogTitle>Cancelar Agendamento</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                              Tem certeza que deseja cancelar este agendamento para {format(selectedDate, "dd/MM/yyyy")} às {appointment.hora_agendamento}? 
-                                              Esta ação não pode ser desfeita.
-                                            </AlertDialogDescription>
-                                          </AlertDialogHeader>
-                                          <AlertDialogFooter>
-                                            <AlertDialogCancel>Não cancelar</AlertDialogCancel>
-                                            <AlertDialogAction
-                                              onClick={() => onCancelAppointment(appointment.id)}
-                                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                            >
-                                              Sim, cancelar
-                                            </AlertDialogAction>
-                                          </AlertDialogFooter>
-                                        </AlertDialogContent>
-                                      </AlertDialog>
-                                    )}
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                      </tbody>
-                    </table>
-                    
-                    {/* Observações em linhas separadas */}
-                    {selectedDateAppointments.some(apt => apt.observacoes) && (
-                      <div className="mt-4 space-y-2">
-                        {selectedDateAppointments
-                          .filter(apt => apt.observacoes)
-                          .map((appointment) => (
-                            <div key={`obs-${appointment.id}`} className="bg-muted/30 p-2 rounded text-xs">
-                              <span className="font-medium">{appointment.pacientes?.nome_completo} - Obs:</span> {appointment.observacoes}
+                  <div className="divide-y">
+                    {selectedDateAppointments
+                      .sort((a, b) => a.hora_agendamento.localeCompare(b.hora_agendamento))
+                      .map((appointment) => {
+                        const StatusIcon = getStatusIcon(appointment.status);
+                        return (
+                          <div key={appointment.id} className="grid grid-cols-12 gap-2 p-2 text-xs hover:bg-muted/20 transition-colors">
+                            {/* Hora */}
+                            <div className="col-span-1 font-mono font-semibold text-sm">
+                              {appointment.hora_agendamento}
                             </div>
-                          ))}
-                      </div>
-                    )}
+                            
+                            {/* Status */}
+                            <div className="col-span-1">
+                              <Badge className={`text-xs px-1 py-0 ${getStatusColor(appointment.status)}`}>
+                                <StatusIcon className="h-2 w-2 mr-1" />
+                                {appointment.status === 'agendado' ? 'Agend.' : 
+                                 appointment.status === 'confirmado' ? 'Conf.' :
+                                 appointment.status === 'realizado' ? 'Real.' : 'Canc.'}
+                              </Badge>
+                            </div>
+                            
+                            {/* Paciente */}
+                            <div className="col-span-3 font-medium text-sm truncate">
+                              {appointment.pacientes?.nome_completo || 'Paciente não encontrado'}
+                            </div>
+                            
+                            {/* Telefone */}
+                            <div className="col-span-2 text-xs">
+                              {appointment.pacientes?.telefone || appointment.pacientes?.celular || '-'}
+                            </div>
+                            
+                            {/* Convênio */}
+                            <div className="col-span-2">
+                              {appointment.pacientes?.convenio ? (
+                                <Badge variant="outline" className="text-xs px-1 py-0">
+                                  {appointment.pacientes.convenio}
+                                </Badge>
+                              ) : '-'}
+                            </div>
+                            
+                            {/* Procedimento */}
+                            <div className="col-span-2 text-xs truncate">
+                              {appointment.atendimentos?.nome || '-'}
+                            </div>
+                            
+                            {/* Ações */}
+                            <div className="col-span-1 flex gap-1">
+                              {onEditAppointment && (
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => onEditAppointment(appointment)}
+                                  className="h-6 w-6 p-0"
+                                >
+                                  <Edit className="h-3 w-3" />
+                                </Button>
+                              )}
+                              
+                              {appointment.status === 'agendado' && onConfirmAppointment && (
+                                <Button 
+                                  variant="default" 
+                                  size="sm"
+                                  onClick={() => onConfirmAppointment(appointment.id)}
+                                  className="h-6 w-6 p-0 bg-green-600 hover:bg-green-700"
+                                >
+                                  <CheckCircle className="h-3 w-3" />
+                                </Button>
+                              )}
+                              
+                              {appointment.status === 'agendado' && (
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button 
+                                      variant="destructive" 
+                                      size="sm"
+                                      className="h-6 w-6 p-0"
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Cancelar Agendamento</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Tem certeza que deseja cancelar este agendamento para {format(selectedDate, "dd/MM/yyyy")} às {appointment.hora_agendamento}? 
+                                        Esta ação não pode ser desfeita.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Não cancelar</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => onCancelAppointment(appointment.id)}
+                                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                      >
+                                        Sim, cancelar
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              )}
+                            </div>
+                            
+                            {/* Observações (linha separada se existir) */}
+                            {appointment.observacoes && (
+                              <div className="col-span-12 text-xs text-muted-foreground bg-muted/30 p-1 rounded -mt-1">
+                                <span className="font-medium">Obs:</span> {appointment.observacoes}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                   </div>
                 ) : (
                   <div className="flex items-center justify-center py-8">
