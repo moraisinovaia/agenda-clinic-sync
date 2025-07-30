@@ -11,6 +11,13 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 
+// Função para formatar data sem conversão de timezone
+const formatDateForDisplay = (dateString: string): string => {
+  if (!dateString) return '';
+  const [year, month, day] = dateString.split('-');
+  return `${day}/${month}/${year}`;
+};
+
 interface Medico {
   id: string;
   nome: string;
@@ -293,7 +300,7 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack }) => {
               </h4>
               <ul className="text-sm text-muted-foreground space-y-1">
                 <li>• Agenda de <strong>{medicoSelecionado.nome}</strong> será bloqueada</li>
-                <li>• Período: <strong>{new Date(dataInicio).toLocaleDateString('pt-BR')}</strong> até <strong>{new Date(dataFim).toLocaleDateString('pt-BR')}</strong></li>
+                <li>• Período: <strong>{formatDateForDisplay(dataInicio)}</strong> até <strong>{formatDateForDisplay(dataFim)}</strong></li>
                 <li>• Todos os agendamentos neste período serão <strong>cancelados automaticamente</strong></li>
                 <li>• Pacientes serão <strong>notificados via WhatsApp</strong> sobre o cancelamento</li>
               </ul>
@@ -340,7 +347,7 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack }) => {
               </p>
               <ul className="text-sm space-y-1">
                 <li>• Médico: <strong>{medicoSelecionado?.nome}</strong></li>
-                <li>• Período: <strong>{new Date(dataInicio).toLocaleDateString('pt-BR')}</strong> até <strong>{new Date(dataFim).toLocaleDateString('pt-BR')}</strong></li>
+                <li>• Período: <strong>{formatDateForDisplay(dataInicio)}</strong> até <strong>{formatDateForDisplay(dataFim)}</strong></li>
                 <li>• Todos os agendamentos serão cancelados</li>
                 <li>• Pacientes serão notificados via WhatsApp</li>
               </ul>
