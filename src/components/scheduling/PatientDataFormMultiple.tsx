@@ -1,12 +1,14 @@
-import { useCallback } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Search, UserCheck } from 'lucide-react';
 import { Doctor } from '@/types/scheduling';
 import { MultipleSchedulingFormData } from '@/types/multiple-scheduling';
-import { EnhancedPatientSearch } from './EnhancedPatientSearch';
+import { useDebounce } from '@/hooks/useDebounce';
 
 interface PatientDataFormMultipleProps {
   formData: MultipleSchedulingFormData;
@@ -26,6 +28,40 @@ export function PatientDataFormMultiple({
   selectedDoctor
 }: PatientDataFormMultipleProps) {
   
+  // Estado para busca de pacientes
+  const [foundPatients, setFoundPatients] = useState<any[]>([]);
+  const [searchingPatients, setSearchingPatients] = useState(false);
+  const [showPatientsList, setShowPatientsList] = useState(false);
+  
+  // Debounce da data de nascimento para evitar muitas requisições
+  const debouncedBirthDate = useDebounce(formData.dataNascimento, 800);
+
+  // Busca automática de pacientes
+  useEffect(() => {
+    const searchPatients = async () => {
+      if (debouncedBirthDate && debouncedBirthDate.length === 10) {
+        setSearchingPatients(true);
+        try {
+          const patients = await searchPatientsByBirthDate(debouncedBirthDate);
+          setFoundPatients(patients);
+          setShowPatientsList(patients.length > 0);
+          console.log('📋 Pacientes encontrados:', patients);
+        } catch (error) {
+          console.error('❌ Erro ao buscar pacientes:', error);
+          setFoundPatients([]);
+          setShowPatientsList(false);
+        } finally {
+          setSearchingPatients(false);
+        }
+      } else {
+        setFoundPatients([]);
+        setShowPatientsList(false);
+      }
+    };
+
+    searchPatients();
+  }, [debouncedBirthDate, searchPatientsByBirthDate]);
+  
   // Função estabilizada para seleção de paciente
   const handlePatientSelect = useCallback((patient: any) => {
     console.log('👤 Selecionando paciente:', patient);
@@ -37,6 +73,19 @@ export function PatientDataFormMultiple({
       telefone: patient.telefone || '',
       celular: patient.celular || ''
     }));
+    setShowPatientsList(false);
+  }, [setFormData]);
+
+  // Função para criar novo paciente
+  const createNewPatient = useCallback(() => {
+    setFormData(prev => ({
+      ...prev,
+      nomeCompleto: '',
+      telefone: '',
+      celular: '',
+      convenio: ''
+    }));
+    setShowPatientsList(false);
   }, [setFormData]);
 
   // Verificação de compatibilidade do convênio
@@ -76,21 +125,69 @@ export function PatientDataFormMultiple({
       {/* Data de Nascimento */}
       <div className="space-y-2">
         <Label htmlFor="dataNascimento">Data de Nascimento *</Label>
-        <Input
-          id="dataNascimento"
-          type="date"
-          value={formData.dataNascimento}
-          onChange={updateField('dataNascimento')}
-          required
-        />
-        
-        {/* Componente de busca melhorado */}
-        <EnhancedPatientSearch
-          birthDate={formData.dataNascimento}
-          onPatientSelect={handlePatientSelect}
-          searchPatientsByBirthDate={searchPatientsByBirthDate}
-        />
+        <div className="relative">
+          <Input
+            id="dataNascimento"
+            type="date"
+            value={formData.dataNascimento}
+            onChange={updateField('dataNascimento')}
+            required
+          />
+          {searchingPatients && (
+            <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin" />
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">
+          {searchingPatients ? 'Buscando pacientes...' : 'Ao inserir a data, buscaremos pacientes existentes'}
+        </p>
       </div>
+
+      {/* Lista de pacientes encontrados */}
+      {showPatientsList && (
+        <Card className="mt-4">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <UserCheck className="h-4 w-4 text-green-600" />
+              <h4 className="font-medium text-green-700">
+                {foundPatients.length === 1 
+                  ? 'Paciente encontrado!' 
+                  : `${foundPatients.length} pacientes encontrados`
+                }
+              </h4>
+            </div>
+            <div className="space-y-2">
+              {foundPatients.map((patient) => (
+                <div key={patient.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
+                  <div>
+                    <p className="font-medium">{patient.nome_completo}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {patient.convenio} • {patient.celular}
+                      {patient.telefone && ` • ${patient.telefone}`}
+                    </p>
+                  </div>
+                  <Button 
+                    size="sm" 
+                    onClick={() => handlePatientSelect(patient)}
+                    className="ml-2"
+                  >
+                    Selecionar
+                  </Button>
+                </div>
+              ))}
+              <div className="pt-2 border-t">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={createNewPatient}
+                  className="w-full"
+                >
+                  Criar novo paciente com esta data
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Convênio */}
       <div className="space-y-2">
