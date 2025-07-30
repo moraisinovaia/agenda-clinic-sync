@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User, Trash2, Plus, Edit, CheckCircle, Phone } from 'lucide-react';
 import { 
   AlertDialog, 
@@ -310,6 +310,7 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                           ))}
                       </TableBody>
                     </Table>
+                    <ScrollBar orientation="horizontal" />
                   </ScrollArea>
                 ) : (
                   <div className="flex-1 flex items-center justify-center p-8">
