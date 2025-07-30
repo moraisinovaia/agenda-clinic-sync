@@ -1,16 +1,21 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Patient } from '@/types/scheduling';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from '@/components/ui/use-toast';
 
 export function usePatientManagement() {
   const [loading, setLoading] = useState(false);
-  const { toast } = useToast();
+  const cacheRef = useRef<{ [key: string]: Patient[] }>({});
 
-  // Buscar pacientes por data de nascimento (ESTABILIZADA com useCallback)
+  // Buscar pacientes por data de nascimento (ESTABILIZADA - SEM dependências instáveis)
   const searchPatientsByBirthDate = useCallback(async (birthDate: string): Promise<Patient[]> => {
     if (!birthDate || birthDate.length !== 10) {
       return [];
+    }
+    
+    // Verificar cache para evitar buscas duplicadas
+    if (cacheRef.current[birthDate]) {
+      return cacheRef.current[birthDate];
     }
     
     try {
@@ -39,9 +44,13 @@ export function usePatientManagement() {
         return acc;
       }, [] as typeof data) : [];
 
+      // Armazenar no cache
+      cacheRef.current[birthDate] = uniquePatients;
+      
       return uniquePatients;
     } catch (error) {
       console.error('❌ Erro ao buscar pacientes:', error);
+      // Usar toast diretamente sem colocar nas dependências
       toast({
         title: 'Erro',
         description: 'Não foi possível buscar os pacientes',
@@ -51,7 +60,7 @@ export function usePatientManagement() {
     } finally {
       setLoading(false);
     }
-  }, [toast]); // Dependência estável
+  }, []); // SEM dependências - função completamente estável
 
   return {
     loading,
