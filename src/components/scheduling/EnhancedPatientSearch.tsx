@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -27,6 +27,13 @@ export function EnhancedPatientSearch({
   const [isSearching, setIsSearching] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+
+  // Reset estado quando data de nascimento muda
+  useEffect(() => {
+    setHasSearched(false);
+    setFoundPatients([]);
+    setShowSuggestions(false);
+  }, [birthDate]);
 
   // Função de busca manual (evita debounce automático)
   const searchPatients = useCallback(async () => {
@@ -58,7 +65,7 @@ export function EnhancedPatientSearch({
   return (
     <>
       {/* Botão para buscar pacientes */}
-      {birthDate && birthDate.length === 10 && !hasSearched && (
+      {birthDate && birthDate.length === 10 && (
         <div className="mt-2">
           <Button 
             type="button" 
@@ -68,7 +75,7 @@ export function EnhancedPatientSearch({
             disabled={isSearching}
           >
             <Search className="h-4 w-4 mr-2" />
-            Buscar pacientes com esta data
+            {hasSearched ? 'Buscar novamente' : 'Buscar pacientes com esta data'}
           </Button>
         </div>
       )}
