@@ -9,6 +9,8 @@ import { Calendar, Clock, User, Phone, CheckCircle, Edit, X } from 'lucide-react
 import { AppointmentFilters } from '@/components/filters/AppointmentFilters';
 import { useAdvancedAppointmentFilters } from '@/hooks/useAdvancedAppointmentFilters';
 import { useDebounce } from '@/hooks/useDebounce';
+import { usePagination } from '@/hooks/usePagination';
+import { PaginationControls } from '@/components/ui/pagination-controls';
 
 interface AppointmentsListProps {
   appointments: AppointmentWithRelations[];
@@ -36,6 +38,22 @@ export function AppointmentsList({ appointments, doctors, onEditAppointment, onC
 
   // Debounce search to improve performance
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
+
+  // Implement pagination with 15 items per page
+  const {
+    currentPage,
+    totalPages,
+    paginatedItems: paginatedAppointments,
+    goToPage,
+    goToNextPage,
+    goToPreviousPage,
+    goToFirstPage,
+    goToLastPage,
+    hasNextPage,
+    hasPreviousPage,
+    totalItems,
+    itemsPerPage
+  } = usePagination(filteredAppointments, { itemsPerPage: 15 });
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -106,24 +124,25 @@ export function AppointmentsList({ appointments, doctors, onEditAppointment, onC
         
         <CardContent className="p-0">
           {filteredAppointments.length > 0 ? (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/50">
-                    <TableHead className="font-semibold">Status</TableHead>
-                    <TableHead className="font-semibold">Data</TableHead>
-                    <TableHead className="font-semibold">Hora</TableHead>
-                    <TableHead className="font-semibold">Paciente</TableHead>
-                    <TableHead className="font-semibold">Telefone</TableHead>
-                    <TableHead className="font-semibold">Médico</TableHead>
-                    <TableHead className="font-semibold">Convênio</TableHead>
-                    <TableHead className="font-semibold">Tipo</TableHead>
-                    <TableHead className="font-semibold">Agendado por</TableHead>
-                    <TableHead className="font-semibold text-center">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredAppointments.map((appointment) => (
+            <>
+              <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-background z-10">
+                    <TableRow className="bg-muted/50 border-b-2">
+                      <TableHead className="font-semibold min-w-[100px]">Status</TableHead>
+                      <TableHead className="font-semibold min-w-[100px]">Data</TableHead>
+                      <TableHead className="font-semibold min-w-[80px]">Hora</TableHead>
+                      <TableHead className="font-semibold min-w-[200px]">Paciente</TableHead>
+                      <TableHead className="font-semibold min-w-[120px]">Telefone</TableHead>
+                      <TableHead className="font-semibold min-w-[150px]">Médico</TableHead>
+                      <TableHead className="font-semibold min-w-[100px]">Convênio</TableHead>
+                      <TableHead className="font-semibold min-w-[120px]">Tipo</TableHead>
+                      <TableHead className="font-semibold min-w-[120px]">Agendado por</TableHead>
+                      <TableHead className="font-semibold text-center min-w-[120px] sticky right-0 bg-muted/50">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedAppointments.map((appointment) => (
                     <TableRow key={appointment.id} className="hover:bg-muted/30">
                       <TableCell>
                         <Badge variant={getStatusColor(appointment.status)} className="text-xs">
@@ -175,7 +194,7 @@ export function AppointmentsList({ appointments, doctors, onEditAppointment, onC
                          appointment.criado_por || 
                          'Recepcionista'}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="sticky right-0 bg-background/95 backdrop-blur-sm">
                         <div className="flex items-center justify-center gap-1">
                           <Button 
                             variant="ghost" 
@@ -212,9 +231,30 @@ export function AppointmentsList({ appointments, doctors, onEditAppointment, onC
                       </TableCell>
                     </TableRow>
                   ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableBody>
+                </Table>
+              </div>
+              
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="border-t bg-muted/20 p-4">
+                  <PaginationControls
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={goToPage}
+                    hasNextPage={hasNextPage}
+                    hasPreviousPage={hasPreviousPage}
+                    onFirstPage={goToFirstPage}
+                    onLastPage={goToLastPage}
+                    onNextPage={goToNextPage}
+                    onPreviousPage={goToPreviousPage}
+                    showInfo={true}
+                    totalItems={totalItems}
+                    itemsPerPage={itemsPerPage}
+                  />
+                </div>
+              )}
+            </>
           ) : (
             <div className="p-8 text-center">
               <p className="text-muted-foreground">
