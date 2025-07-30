@@ -11,7 +11,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   const { toast } = useToast();
   const { measureApiCall } = usePerformanceMetrics();
 
-  // Estabilizar a função de query para evitar loops
+  // ✅ ESTABILIZAR: Função de query totalmente estável
   const fetchAppointments = useCallback(async () => {
     logger.info('Iniciando busca de agendamentos', {}, 'APPOINTMENTS');
     
@@ -81,7 +81,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   // Paginação
   const pagination = usePagination(appointments || [], { itemsPerPage });
 
-  // Exibir erros
+  // ✅ ESTABILIZAR: Exibir erros sem colocar toast nas dependências  
   useEffect(() => {
     if (error) {
       toast({
@@ -90,7 +90,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         variant: 'destructive',
       });
     }
-  }, [error, toast]);
+  }, [error]); // ✅ REMOVER toast das dependências
 
   // Buscar agendamentos por médico e data
   const getAppointmentsByDoctorAndDate = (doctorId: string, date: string) => {

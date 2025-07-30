@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { SchedulingFormData } from '@/types/scheduling';
 import { AtomicAppointmentResult } from '@/types/atomic-scheduling';
@@ -85,8 +85,8 @@ export function useAtomicAppointmentCreation() {
     }
   };
 
-  // Criar agendamento com função atômica e retry automático
-  const createAppointment = async (formData: SchedulingFormData): Promise<any> => {
+  // ✅ ESTABILIZAR: Criar agendamento com função atômica e retry automático
+  const createAppointment = useCallback(async (formData: SchedulingFormData): Promise<any> => {
     let lastError: Error | null = null;
 
     try {
@@ -185,7 +185,7 @@ export function useAtomicAppointmentCreation() {
       console.log('🏁 Resetando loading state...');
       setLoading(false);
     }
-  };
+  }, [user?.id]); // ✅ ESTABILIZAR: Apenas user?.id como dependência
 
   return {
     loading,
