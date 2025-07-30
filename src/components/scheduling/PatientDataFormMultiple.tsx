@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -8,7 +8,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, Search, UserCheck } from 'lucide-react';
 import { Doctor } from '@/types/scheduling';
 import { MultipleSchedulingFormData } from '@/types/multiple-scheduling';
-import { useDebounce } from '@/hooks/useDebounce';
 
 interface PatientDataFormMultipleProps {
   formData: MultipleSchedulingFormData;
@@ -28,118 +27,92 @@ export function PatientDataFormMultiple({
   selectedDoctor
 }: PatientDataFormMultipleProps) {
   
-  // Estado para busca de pacientes
+  // Estado para busca de pacientes - IGUAL ao PatientDataForm.tsx
   const [foundPatients, setFoundPatients] = useState<any[]>([]);
   const [searchingPatients, setSearchingPatients] = useState(false);
   const [showPatientsList, setShowPatientsList] = useState(false);
-  
-  // Debounce da data de nascimento (500ms como no agendamento normal)
-  const debouncedBirthDate = useDebounce(formData.dataNascimento, 500);
 
-  // Debug logs para rastreamento
-  useEffect(() => {
-    console.log('🔍 PatientDataFormMultiple - formData alterado:', {
-      nomeCompleto: formData.nomeCompleto,
-      dataNascimento: formData.dataNascimento,
-      convenio: formData.convenio,
-      telefone: formData.telefone,
-      celular: formData.celular
-    });
-  }, [formData]);
-
-  // Busca automática de pacientes com proteção contra erros
+  // Buscar pacientes quando a data de nascimento for alterada - MESMA LÓGICA do PatientDataForm.tsx
   useEffect(() => {
     const searchPatients = async () => {
-      console.log('🔍 Iniciando busca por data:', debouncedBirthDate);
-      
-      if (debouncedBirthDate && debouncedBirthDate.length === 10) {
+      if (formData.dataNascimento && formData.dataNascimento.length === 10) {
         setSearchingPatients(true);
         try {
-          console.log('📞 Chamando searchPatientsByBirthDate...');
-          const patients = await searchPatientsByBirthDate(debouncedBirthDate);
-          console.log('✅ Pacientes encontrados:', patients);
-          
-          setFoundPatients(patients || []);
-          setShowPatientsList((patients || []).length > 0);
+          const patients = await searchPatientsByBirthDate(formData.dataNascimento);
+          setFoundPatients(patients);
+          setShowPatientsList(patients.length > 0);
         } catch (error) {
-          console.error('❌ Erro ao buscar pacientes:', error);
-          // NÃO limpar formData em caso de erro - apenas resetar a busca
+          console.error('Erro ao buscar pacientes:', error);
+          // NÃO limpar formData - apenas resetar busca
           setFoundPatients([]);
           setShowPatientsList(false);
         } finally {
           setSearchingPatients(false);
         }
       } else {
-        console.log('🚫 Data inválida, resetando busca');
         setFoundPatients([]);
         setShowPatientsList(false);
       }
     };
 
-    searchPatients();
-  }, [debouncedBirthDate, searchPatientsByBirthDate]);
-  
-  // Função estabilizada para seleção de paciente com proteção
-  const handlePatientSelect = useCallback((patient: any) => {
-    console.log('👤 Selecionando paciente:', patient);
-    console.log('📝 Estado anterior do formData:', formData);
-    
-    // Preservar dados que não devem ser alterados
-    setFormData(prev => {
-      const newData = {
-        ...prev,
-        nomeCompleto: patient.nome_completo || prev.nomeCompleto,
-        dataNascimento: patient.data_nascimento || prev.dataNascimento,
-        convenio: patient.convenio || prev.convenio,
-        telefone: patient.telefone || prev.telefone || '',
-        celular: patient.celular || prev.celular || ''
-      };
-      console.log('📝 Novo estado do formData:', newData);
-      return newData;
-    });
-    setShowPatientsList(false);
-  }, [setFormData, formData]);
+    const timeoutId = setTimeout(searchPatients, 500); // Debounce de 500ms
+    return () => clearTimeout(timeoutId);
+  }, [formData.dataNascimento]); // Remover searchPatientsByBirthDate das dependências
 
-  // Função para criar novo paciente (preservar dataNascimento)
-  const createNewPatient = useCallback(() => {
-    console.log('✨ Criando novo paciente, preservando data de nascimento');
+  // Função para selecionar um paciente encontrado - IGUAL ao PatientDataForm.tsx
+  const selectPatient = (patient: any) => {
+    setFormData(prev => ({
+      ...prev,
+      nomeCompleto: patient.nome_completo,
+      telefone: patient.telefone || '',
+      celular: patient.celular,
+      convenio: patient.convenio,
+    }));
+    setShowPatientsList(false);
+  };
+
+  // Função para criar novo paciente (limpar seleção) - IGUAL ao PatientDataForm.tsx
+  const createNewPatient = () => {
     setFormData(prev => ({
       ...prev,
       nomeCompleto: '',
       telefone: '',
       celular: '',
-      convenio: ''
-      // NÃO limpar dataNascimento para manter a busca ativa
+      convenio: '',
     }));
     setShowPatientsList(false);
-  }, [setFormData]);
+  };
 
   // Verificação de compatibilidade do convênio
-  const isConvenioCompatible = useCallback((convenio: string) => {
+  const isConvenioCompatible = (convenio: string) => {
     if (!selectedDoctor || !selectedDoctor.convenios_aceitos) return true;
     return selectedDoctor.convenios_aceitos.includes(convenio);
-  }, [selectedDoctor]);
+  };
 
-  // Função estabilizada para onChange dos campos com proteção
-  const updateField = useCallback((field: keyof MultipleSchedulingFormData) => {
-    return (e: React.ChangeEvent<HTMLInputElement>) => {
-      const newValue = e.target.value;
-      console.log(`📝 Atualizando campo ${field}:`, newValue);
-      console.log('📋 Estado atual antes da atualização:', formData);
-      
-      setFormData(prev => {
-        const newData = { ...prev, [field]: newValue };
-        console.log('📋 Novo estado após atualização:', newData);
-        return newData;
-      });
-    };
-  }, [setFormData, formData]);
+  // Função para formatação de telefone - IGUAL ao PatientDataForm.tsx
+  const formatPhone = (value: string) => {
+    const numbers = value.replace(/\D/g, '');
+    if (numbers.length <= 10) {
+      return numbers.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3').replace(/-$/, '');
+    } else {
+      return numbers.replace(/(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3').replace(/-$/, '');
+    }
+  };
+
+  const isValidPhone = (value: string) => {
+    const numbers = value.replace(/\D/g, '');
+    return numbers.length === 10 || numbers.length === 11;
+  };
+
+  const handlePhoneChange = (value: string, field: 'telefone' | 'celular') => {
+    const formatted = formatPhone(value);
+    setFormData(prev => ({ ...prev, [field]: formatted }));
+  };
 
   // Função para seleção de convênio via badge
-  const selectConvenio = useCallback((convenio: string) => {
-    console.log('💳 Selecionando convênio:', convenio);
+  const selectConvenio = (convenio: string) => {
     setFormData(prev => ({ ...prev, convenio }));
-  }, [setFormData]);
+  };
 
   return (
     <div className="space-y-4">
@@ -150,7 +123,7 @@ export function PatientDataFormMultiple({
           id="nomeCompleto"
           type="text"
           value={formData.nomeCompleto}
-          onChange={updateField('nomeCompleto')}
+          onChange={(e) => setFormData(prev => ({ ...prev, nomeCompleto: e.target.value }))}
           placeholder="Digite o nome completo do paciente"
           required
         />
@@ -164,7 +137,7 @@ export function PatientDataFormMultiple({
             id="dataNascimento"
             type="date"
             value={formData.dataNascimento}
-            onChange={updateField('dataNascimento')}
+            onChange={(e) => setFormData(prev => ({ ...prev, dataNascimento: e.target.value }))}
             required
           />
           {searchingPatients && (
@@ -202,11 +175,7 @@ export function PatientDataFormMultiple({
                   <Button 
                     type="button"
                     size="sm" 
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      handlePatientSelect(patient);
-                    }}
+                    onClick={() => selectPatient(patient)}
                     className="ml-2"
                   >
                     Selecionar
@@ -218,11 +187,7 @@ export function PatientDataFormMultiple({
                   type="button"
                   variant="outline" 
                   size="sm" 
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    createNewPatient();
-                  }}
+                  onClick={createNewPatient}
                   className="w-full"
                 >
                   Criar novo paciente com esta data
@@ -240,7 +205,7 @@ export function PatientDataFormMultiple({
           id="convenio"
           type="text"
           value={formData.convenio}
-          onChange={updateField('convenio')}
+          onChange={(e) => setFormData(prev => ({ ...prev, convenio: e.target.value }))}
           placeholder="Digite o nome do convênio"
           required
         />
@@ -270,11 +235,7 @@ export function PatientDataFormMultiple({
                   key={convenio}
                   variant="outline" 
                   className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    selectConvenio(convenio);
-                  }}
+                  onClick={() => selectConvenio(convenio)}
                 >
                   {convenio}
                 </Badge>
@@ -292,20 +253,35 @@ export function PatientDataFormMultiple({
             id="telefone"
             type="tel"
             value={formData.telefone}
-            onChange={updateField('telefone')}
+            onChange={(e) => handlePhoneChange(e.target.value, 'telefone')}
             placeholder="(00) 0000-0000"
+            maxLength={15}
           />
+          <p className="text-xs text-muted-foreground mt-1">
+            Opcional - Formato: (11) 1234-5678
+          </p>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="celular">Celular</Label>
+          <Label htmlFor="celular">Celular *</Label>
           <Input
             id="celular"
             type="tel"
             value={formData.celular}
-            onChange={updateField('celular')}
+            onChange={(e) => handlePhoneChange(e.target.value, 'celular')}
             placeholder="(00) 00000-0000"
+            maxLength={15}
+            required
+            className={!isValidPhone(formData.celular) && formData.celular ? 'border-red-500' : ''}
           />
+          <p className="text-xs text-muted-foreground mt-1">
+            Obrigatório - Formato: (11) 91234-5678
+          </p>
+          {!isValidPhone(formData.celular) && formData.celular && (
+            <p className="text-xs text-red-500 mt-1">
+              Número de celular inválido
+            </p>
+          )}
         </div>
       </div>
     </div>
