@@ -51,12 +51,17 @@ export function MultipleAppointmentDataForm({
 
   // Funções estabilizadas com useCallback
   const handleAtendimentoToggle = useCallback((atendimentoId: string, checked: boolean) => {
-    setFormData(prev => ({
-      ...prev,
-      atendimentoIds: checked 
+    console.log('🔘 Toggle atendimento:', atendimentoId, 'checked:', checked);
+    setFormData(prev => {
+      const newIds = checked 
         ? [...prev.atendimentoIds, atendimentoId]
-        : prev.atendimentoIds.filter(id => id !== atendimentoId)
-    }));
+        : prev.atendimentoIds.filter(id => id !== atendimentoId);
+      console.log('📝 Novos atendimentoIds:', newIds);
+      return {
+        ...prev,
+        atendimentoIds: newIds
+      };
+    });
   }, [setFormData]);
 
   const getCompatibilityInfo = useCallback((atendimentoId: string) => {
@@ -89,6 +94,7 @@ export function MultipleAppointmentDataForm({
 
   // Função estabilizada para mudanças de seleção
   const handleMedicoChange = useCallback((value: string) => {
+    console.log('👨‍⚕️ Selecionando médico:', value);
     setFormData(prev => ({ ...prev, medicoId: value }));
   }, [setFormData]);
 

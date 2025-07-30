@@ -188,6 +188,7 @@ export function StableMultipleSchedulingForm({
                 type="submit" 
                 disabled={loading || formData.atendimentoIds.length === 0} 
                 className="flex-1"
+                onClick={() => console.log('🚀 BOTÃO CLICADO! FormData atual:', formData)}
               >
                 {loading ? 'Agendando...' : `Confirmar Agendamento (${selectedAtendimentos.length} exames)`}
               </Button>
