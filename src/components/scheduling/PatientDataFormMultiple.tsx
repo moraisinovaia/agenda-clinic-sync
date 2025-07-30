@@ -33,27 +33,44 @@ export function PatientDataFormMultiple({
   const [searchingPatients, setSearchingPatients] = useState(false);
   const [showPatientsList, setShowPatientsList] = useState(false);
   
-  // Debounce da data de nascimento para evitar muitas requisições
-  const debouncedBirthDate = useDebounce(formData.dataNascimento, 800);
+  // Debounce da data de nascimento (500ms como no agendamento normal)
+  const debouncedBirthDate = useDebounce(formData.dataNascimento, 500);
 
-  // Busca automática de pacientes
+  // Debug logs para rastreamento
+  useEffect(() => {
+    console.log('🔍 PatientDataFormMultiple - formData alterado:', {
+      nomeCompleto: formData.nomeCompleto,
+      dataNascimento: formData.dataNascimento,
+      convenio: formData.convenio,
+      telefone: formData.telefone,
+      celular: formData.celular
+    });
+  }, [formData]);
+
+  // Busca automática de pacientes com proteção contra erros
   useEffect(() => {
     const searchPatients = async () => {
+      console.log('🔍 Iniciando busca por data:', debouncedBirthDate);
+      
       if (debouncedBirthDate && debouncedBirthDate.length === 10) {
         setSearchingPatients(true);
         try {
+          console.log('📞 Chamando searchPatientsByBirthDate...');
           const patients = await searchPatientsByBirthDate(debouncedBirthDate);
-          setFoundPatients(patients);
-          setShowPatientsList(patients.length > 0);
-          console.log('📋 Pacientes encontrados:', patients);
+          console.log('✅ Pacientes encontrados:', patients);
+          
+          setFoundPatients(patients || []);
+          setShowPatientsList((patients || []).length > 0);
         } catch (error) {
           console.error('❌ Erro ao buscar pacientes:', error);
+          // NÃO limpar formData em caso de erro - apenas resetar a busca
           setFoundPatients([]);
           setShowPatientsList(false);
         } finally {
           setSearchingPatients(false);
         }
       } else {
+        console.log('🚫 Data inválida, resetando busca');
         setFoundPatients([]);
         setShowPatientsList(false);
       }
@@ -62,28 +79,37 @@ export function PatientDataFormMultiple({
     searchPatients();
   }, [debouncedBirthDate, searchPatientsByBirthDate]);
   
-  // Função estabilizada para seleção de paciente
+  // Função estabilizada para seleção de paciente com proteção
   const handlePatientSelect = useCallback((patient: any) => {
     console.log('👤 Selecionando paciente:', patient);
-    setFormData(prev => ({
-      ...prev,
-      nomeCompleto: patient.nome_completo,
-      dataNascimento: patient.data_nascimento,
-      convenio: patient.convenio,
-      telefone: patient.telefone || '',
-      celular: patient.celular || ''
-    }));
+    console.log('📝 Estado anterior do formData:', formData);
+    
+    // Preservar dados que não devem ser alterados
+    setFormData(prev => {
+      const newData = {
+        ...prev,
+        nomeCompleto: patient.nome_completo || prev.nomeCompleto,
+        dataNascimento: patient.data_nascimento || prev.dataNascimento,
+        convenio: patient.convenio || prev.convenio,
+        telefone: patient.telefone || prev.telefone || '',
+        celular: patient.celular || prev.celular || ''
+      };
+      console.log('📝 Novo estado do formData:', newData);
+      return newData;
+    });
     setShowPatientsList(false);
-  }, [setFormData]);
+  }, [setFormData, formData]);
 
-  // Função para criar novo paciente
+  // Função para criar novo paciente (preservar dataNascimento)
   const createNewPatient = useCallback(() => {
+    console.log('✨ Criando novo paciente, preservando data de nascimento');
     setFormData(prev => ({
       ...prev,
       nomeCompleto: '',
       telefone: '',
       celular: '',
       convenio: ''
+      // NÃO limpar dataNascimento para manter a busca ativa
     }));
     setShowPatientsList(false);
   }, [setFormData]);
@@ -94,16 +120,24 @@ export function PatientDataFormMultiple({
     return selectedDoctor.convenios_aceitos.includes(convenio);
   }, [selectedDoctor]);
 
-  // Função estabilizada para onChange dos campos
+  // Função estabilizada para onChange dos campos com proteção
   const updateField = useCallback((field: keyof MultipleSchedulingFormData) => {
     return (e: React.ChangeEvent<HTMLInputElement>) => {
-      console.log(`📝 Atualizando campo ${field}:`, e.target.value);
-      setFormData(prev => ({ ...prev, [field]: e.target.value }));
+      const newValue = e.target.value;
+      console.log(`📝 Atualizando campo ${field}:`, newValue);
+      console.log('📋 Estado atual antes da atualização:', formData);
+      
+      setFormData(prev => {
+        const newData = { ...prev, [field]: newValue };
+        console.log('📋 Novo estado após atualização:', newData);
+        return newData;
+      });
     };
-  }, [setFormData]);
+  }, [setFormData, formData]);
 
   // Função para seleção de convênio via badge
   const selectConvenio = useCallback((convenio: string) => {
+    console.log('💳 Selecionando convênio:', convenio);
     setFormData(prev => ({ ...prev, convenio }));
   }, [setFormData]);
 
@@ -166,8 +200,13 @@ export function PatientDataFormMultiple({
                     </p>
                   </div>
                   <Button 
+                    type="button"
                     size="sm" 
-                    onClick={() => handlePatientSelect(patient)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handlePatientSelect(patient);
+                    }}
                     className="ml-2"
                   >
                     Selecionar
@@ -176,9 +215,14 @@ export function PatientDataFormMultiple({
               ))}
               <div className="pt-2 border-t">
                 <Button 
+                  type="button"
                   variant="outline" 
                   size="sm" 
-                  onClick={createNewPatient}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    createNewPatient();
+                  }}
                   className="w-full"
                 >
                   Criar novo paciente com esta data
@@ -226,7 +270,11 @@ export function PatientDataFormMultiple({
                   key={convenio}
                   variant="outline" 
                   className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors"
-                  onClick={() => selectConvenio(convenio)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    selectConvenio(convenio);
+                  }}
                 >
                   {convenio}
                 </Badge>
