@@ -192,128 +192,130 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                 </p>
               </div>
               
-              <ScrollArea className="flex-1 p-3">
+              {/* Header da tabela */}
+              <div className="grid grid-cols-12 gap-2 p-2 text-xs font-medium text-muted-foreground border-b bg-muted/10 flex-shrink-0">
+                <div className="col-span-1">Hora</div>
+                <div className="col-span-1">Status</div>
+                <div className="col-span-3">Paciente</div>
+                <div className="col-span-2">Telefone</div>
+                <div className="col-span-2">Convênio</div>
+                <div className="col-span-2">Procedimento</div>
+                <div className="col-span-1">Ações</div>
+              </div>
+              
+              {/* Lista de agendamentos com scroll */}
+              <ScrollArea className="flex-1 max-h-[400px]">
                 {selectedDateAppointments.length > 0 ? (
-                  <div className="space-y-2">
+                  <div className="divide-y">
                     {selectedDateAppointments
                       .sort((a, b) => a.hora_agendamento.localeCompare(b.hora_agendamento))
                       .map((appointment) => {
                         const StatusIcon = getStatusIcon(appointment.status);
                         return (
-                          <Card key={appointment.id} className="hover:shadow-sm transition-all duration-200 border-l-2 border-l-primary/30">
-                            <CardContent className="p-3">
-                              <div className="flex items-start justify-between gap-3">
-                                {/* Informações principais */}
-                                <div className="flex-1 space-y-2">
-                                  {/* Header compacto */}
-                                  <div className="flex items-center gap-2">
-                                    <Clock className="h-3 w-3 text-primary" />
-                                    <span className="font-mono text-base font-semibold">
-                                      {appointment.hora_agendamento}
-                                    </span>
-                                    <Badge className={`text-xs px-1.5 py-0.5 ${getStatusColor(appointment.status)}`}>
-                                      <StatusIcon className="h-2.5 w-2.5 mr-1" />
-                                      {getStatusLabel(appointment.status)}
-                                    </Badge>
-                                  </div>
-
-                                  {/* Nome do paciente */}
-                                  <div className="flex items-center gap-2">
-                                    <User className="h-3 w-3 text-muted-foreground" />
-                                    <span className="font-medium text-sm">
-                                      {appointment.pacientes?.nome_completo || 'Paciente não encontrado'}
-                                    </span>
-                                  </div>
-                                  
-                                  {/* Informações compactas em linha */}
-                                  <div className="flex flex-wrap gap-2 text-xs">
-                                    {(appointment.pacientes?.telefone || appointment.pacientes?.celular) && (
-                                      <div className="flex items-center gap-1">
-                                        <Phone className="h-2.5 w-2.5 text-muted-foreground" />
-                                        <span>{appointment.pacientes?.telefone || appointment.pacientes?.celular}</span>
-                                      </div>
-                                    )}
-                                    
-                                    {appointment.pacientes?.convenio && (
-                                      <Badge variant="outline" className="text-xs px-1 py-0">
-                                        {appointment.pacientes.convenio}
-                                      </Badge>
-                                    )}
-                                    
-                                    {appointment.atendimentos?.nome && (
-                                      <div className="flex items-center gap-1">
-                                        <FileText className="h-2.5 w-2.5 text-muted-foreground" />
-                                        <span className="truncate max-w-[120px]">{appointment.atendimentos.nome}</span>
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  {appointment.observacoes && (
-                                    <div className="p-1.5 bg-muted/50 rounded text-xs">
-                                      <span className="font-medium">Obs:</span> {appointment.observacoes}
-                                    </div>
-                                  )}
-                                </div>
-
-                                {/* Ações compactas */}
-                                <div className="flex flex-col gap-1">
-                                  {onEditAppointment && (
+                          <div key={appointment.id} className="grid grid-cols-12 gap-2 p-2 text-xs hover:bg-muted/20 transition-colors">
+                            {/* Hora */}
+                            <div className="col-span-1 font-mono font-semibold text-sm">
+                              {appointment.hora_agendamento}
+                            </div>
+                            
+                            {/* Status */}
+                            <div className="col-span-1">
+                              <Badge className={`text-xs px-1 py-0 ${getStatusColor(appointment.status)}`}>
+                                <StatusIcon className="h-2 w-2 mr-1" />
+                                {appointment.status === 'agendado' ? 'Agend.' : 
+                                 appointment.status === 'confirmado' ? 'Conf.' :
+                                 appointment.status === 'realizado' ? 'Real.' : 'Canc.'}
+                              </Badge>
+                            </div>
+                            
+                            {/* Paciente */}
+                            <div className="col-span-3 font-medium text-sm truncate">
+                              {appointment.pacientes?.nome_completo || 'Paciente não encontrado'}
+                            </div>
+                            
+                            {/* Telefone */}
+                            <div className="col-span-2 text-xs">
+                              {appointment.pacientes?.telefone || appointment.pacientes?.celular || '-'}
+                            </div>
+                            
+                            {/* Convênio */}
+                            <div className="col-span-2">
+                              {appointment.pacientes?.convenio ? (
+                                <Badge variant="outline" className="text-xs px-1 py-0">
+                                  {appointment.pacientes.convenio}
+                                </Badge>
+                              ) : '-'}
+                            </div>
+                            
+                            {/* Procedimento */}
+                            <div className="col-span-2 text-xs truncate">
+                              {appointment.atendimentos?.nome || '-'}
+                            </div>
+                            
+                            {/* Ações */}
+                            <div className="col-span-1 flex gap-1">
+                              {onEditAppointment && (
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => onEditAppointment(appointment)}
+                                  className="h-6 w-6 p-0"
+                                >
+                                  <Edit className="h-3 w-3" />
+                                </Button>
+                              )}
+                              
+                              {appointment.status === 'agendado' && onConfirmAppointment && (
+                                <Button 
+                                  variant="default" 
+                                  size="sm"
+                                  onClick={() => onConfirmAppointment(appointment.id)}
+                                  className="h-6 w-6 p-0 bg-green-600 hover:bg-green-700"
+                                >
+                                  <CheckCircle className="h-3 w-3" />
+                                </Button>
+                              )}
+                              
+                              {appointment.status === 'agendado' && (
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
                                     <Button 
-                                      variant="outline" 
+                                      variant="destructive" 
                                       size="sm"
-                                      onClick={() => onEditAppointment(appointment)}
-                                      className="h-7 px-2 text-xs"
+                                      className="h-6 w-6 p-0"
                                     >
-                                      <Edit className="h-2.5 w-2.5" />
+                                      <Trash2 className="h-3 w-3" />
                                     </Button>
-                                  )}
-                                  
-                                  {appointment.status === 'agendado' && onConfirmAppointment && (
-                                    <Button 
-                                      variant="default" 
-                                      size="sm"
-                                      onClick={() => onConfirmAppointment(appointment.id)}
-                                      className="h-7 px-2 text-xs bg-green-600 hover:bg-green-700"
-                                    >
-                                      <CheckCircle className="h-2.5 w-2.5" />
-                                    </Button>
-                                  )}
-                                  
-                                  {appointment.status === 'agendado' && (
-                                    <AlertDialog>
-                                      <AlertDialogTrigger asChild>
-                                        <Button 
-                                          variant="destructive" 
-                                          size="sm"
-                                          className="h-7 px-2 text-xs"
-                                        >
-                                          <Trash2 className="h-2.5 w-2.5" />
-                                        </Button>
-                                      </AlertDialogTrigger>
-                                      <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                          <AlertDialogTitle>Cancelar Agendamento</AlertDialogTitle>
-                                          <AlertDialogDescription>
-                                            Tem certeza que deseja cancelar este agendamento para {format(selectedDate, "dd/MM/yyyy")} às {appointment.hora_agendamento}? 
-                                            Esta ação não pode ser desfeita.
-                                          </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                          <AlertDialogCancel>Não cancelar</AlertDialogCancel>
-                                          <AlertDialogAction
-                                            onClick={() => onCancelAppointment(appointment.id)}
-                                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                          >
-                                            Sim, cancelar
-                                          </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                      </AlertDialogContent>
-                                    </AlertDialog>
-                                  )}
-                                </div>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Cancelar Agendamento</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Tem certeza que deseja cancelar este agendamento para {format(selectedDate, "dd/MM/yyyy")} às {appointment.hora_agendamento}? 
+                                        Esta ação não pode ser desfeita.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Não cancelar</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => onCancelAppointment(appointment.id)}
+                                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                      >
+                                        Sim, cancelar
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              )}
+                            </div>
+                            
+                            {/* Observações (linha separada se existir) */}
+                            {appointment.observacoes && (
+                              <div className="col-span-12 text-xs text-muted-foreground bg-muted/30 p-1 rounded -mt-1">
+                                <span className="font-medium">Obs:</span> {appointment.observacoes}
                               </div>
-                            </CardContent>
-                          </Card>
+                            )}
+                          </div>
                         );
                       })}
                   </div>
