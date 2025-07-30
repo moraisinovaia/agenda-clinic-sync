@@ -1,10 +1,8 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Search, AlertTriangle, Clock } from 'lucide-react';
-import { useDebouncedCallback } from '@/hooks/useDebounce';
-import { useMultipleScheduling } from '@/hooks/useMultipleScheduling';
+import { Search, Clock } from 'lucide-react';
 
 interface Patient {
   nome_completo: string;
@@ -28,52 +26,29 @@ export function EnhancedPatientSearch({
   const [foundPatients, setFoundPatients] = useState<Patient[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [lastAppointmentWarning, setLastAppointmentWarning] = useState<string>('');
-  
-  const { checkLastAppointment } = useMultipleScheduling();
+  const [hasSearched, setHasSearched] = useState(false);
 
-  // Função de busca isolada e estabilizada
-  const performSearch = useCallback(async (searchDate: string) => {
-    if (!searchDate || searchDate.length !== 10) {
-      setFoundPatients([]);
-      setShowSuggestions(false);
-      setLastAppointmentWarning('');
+  // Função de busca manual (evita debounce automático)
+  const searchPatients = useCallback(async () => {
+    if (!birthDate || birthDate.length !== 10) {
       return;
     }
 
     setIsSearching(true);
+    setHasSearched(true);
+    
     try {
-      const patients = await searchPatientsByBirthDate(searchDate);
+      const patients = await searchPatientsByBirthDate(birthDate);
       setFoundPatients(patients || []);
       setShowSuggestions(patients && patients.length > 0);
-      
-      // Verificar último agendamento para cada paciente
-      if (patients && patients.length > 0) {
-        for (const patient of patients) {
-          const hasOldAppointment = await checkLastAppointment(patient.nome_completo, patient.data_nascimento);
-          if (hasOldAppointment) {
-            setLastAppointmentWarning(`⚠️ ${patient.nome_completo} - último agendamento há mais de 30 dias`);
-            break;
-          }
-        }
-      }
     } catch (error) {
       console.error('Erro ao buscar pacientes:', error);
       setFoundPatients([]);
       setShowSuggestions(false);
-      setLastAppointmentWarning('');
     } finally {
       setIsSearching(false);
     }
-  }, [searchPatientsByBirthDate, checkLastAppointment]);
-
-  // Debounce para evitar chamadas excessivas
-  const debouncedSearch = useDebouncedCallback(performSearch, 600);
-
-  // Realizar busca quando birthDate muda
-  useEffect(() => {
-    debouncedSearch(birthDate);
-  }, [birthDate, debouncedSearch]);
+  }, [birthDate, searchPatientsByBirthDate]);
 
   const handlePatientSelect = useCallback((patient: Patient) => {
     onPatientSelect(patient);
@@ -82,14 +57,20 @@ export function EnhancedPatientSearch({
 
   return (
     <>
-      {/* Alerta de último agendamento */}
-      {lastAppointmentWarning && (
-        <Alert className="mt-2">
-          <Clock className="h-4 w-4" />
-          <AlertDescription>
-            {lastAppointmentWarning}
-          </AlertDescription>
-        </Alert>
+      {/* Botão para buscar pacientes */}
+      {birthDate && birthDate.length === 10 && !hasSearched && (
+        <div className="mt-2">
+          <Button 
+            type="button" 
+            variant="outline" 
+            size="sm" 
+            onClick={searchPatients}
+            disabled={isSearching}
+          >
+            <Search className="h-4 w-4 mr-2" />
+            Buscar pacientes com esta data
+          </Button>
+        </div>
       )}
 
       {isSearching && (

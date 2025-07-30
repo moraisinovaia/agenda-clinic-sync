@@ -2,14 +2,13 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Doctor, Atendimento } from '@/types/scheduling';
-import { useToast } from '@/hooks/use-toast';
 
 export function useSchedulingData() {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [atendimentos, setAtendimentos] = useState<Atendimento[]>([]);
   const [blockedDates, setBlockedDates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const { toast } = useToast();
+  const [error, setError] = useState<string | null>(null);
 
   // Buscar médicos ativos
   const fetchDoctors = async () => {
@@ -22,13 +21,11 @@ export function useSchedulingData() {
 
       if (error) throw error;
       setDoctors(data || []);
+      setError(null);
     } catch (error) {
       console.error('Erro ao buscar médicos:', error);
-      toast({
-        title: 'Erro',
-        description: 'Não foi possível carregar os médicos',
-        variant: 'destructive',
-      });
+      setError('Erro ao carregar médicos');
+      setDoctors([]);
     }
   };
 
@@ -45,11 +42,7 @@ export function useSchedulingData() {
       setAtendimentos(data || []);
     } catch (error) {
       console.error('Erro ao buscar atendimentos:', error);
-      toast({
-        title: 'Erro',
-        description: 'Não foi possível carregar os tipos de atendimento',
-        variant: 'destructive',
-      });
+      setAtendimentos([]);
     }
   };
 
@@ -115,6 +108,7 @@ export function useSchedulingData() {
     atendimentos,
     blockedDates,
     loading,
+    error,
     getAtendimentosByDoctor,
     isDateBlocked,
     getBlockedDatesByDoctor,
