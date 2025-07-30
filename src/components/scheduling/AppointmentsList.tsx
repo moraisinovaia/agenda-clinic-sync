@@ -123,121 +123,127 @@ export function AppointmentsList({ appointments, doctors, onEditAppointment, onC
         </CardHeader>
         
         <CardContent className="p-0">
-          {filteredAppointments.length > 0 ? (
-            <>
-              <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
-                <Table>
-                  <TableHeader className="sticky top-0 bg-background z-10">
-                    <TableRow className="bg-muted/50 border-b-2">
-                      <TableHead className="font-semibold min-w-[100px]">Status</TableHead>
-                      <TableHead className="font-semibold min-w-[100px]">Data</TableHead>
-                      <TableHead className="font-semibold min-w-[80px]">Hora</TableHead>
-                      <TableHead className="font-semibold min-w-[200px]">Paciente</TableHead>
-                      <TableHead className="font-semibold min-w-[120px]">Telefone</TableHead>
-                      <TableHead className="font-semibold min-w-[150px]">Médico</TableHead>
-                      <TableHead className="font-semibold min-w-[100px]">Convênio</TableHead>
-                      <TableHead className="font-semibold min-w-[120px]">Tipo</TableHead>
-                      <TableHead className="font-semibold min-w-[120px]">Agendado por</TableHead>
-                      <TableHead className="font-semibold text-center min-w-[120px] sticky right-0 bg-muted/50">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paginatedAppointments.map((appointment) => (
-                    <TableRow key={appointment.id} className="hover:bg-muted/30">
-                      <TableCell>
-                        <Badge variant={getStatusColor(appointment.status)} className="text-xs">
-                          {getStatusLabel(appointment.status)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {format(new Date(appointment.data_agendamento), 'dd/MM/yyyy', { locale: ptBR })}
-                      </TableCell>
-                      <TableCell className="font-mono">
-                        {appointment.hora_agendamento}
-                      </TableCell>
-                      <TableCell className="max-w-[200px]">
-                        <div className="font-medium truncate">
-                          {appointment.pacientes?.nome_completo || 'Paciente não encontrado'}
-                        </div>
-                        {appointment.observacoes && (
-                          <div className="text-xs text-muted-foreground truncate mt-1">
-                            {appointment.observacoes}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1 text-sm">
-                          <Phone className="h-3 w-3 text-muted-foreground" />
-                          {appointment.pacientes?.telefone || appointment.pacientes?.celular || 'N/A'}
-                        </div>
-                      </TableCell>
-                      <TableCell className="max-w-[150px]">
-                        <div className="font-medium truncate">
-                          Dr(a). {appointment.medicos?.nome || 'N/A'}
-                        </div>
-                        <div className="text-xs text-muted-foreground truncate">
-                          {appointment.medicos?.especialidade || 'N/A'}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-xs">
-                          {appointment.pacientes?.convenio || 'N/A'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="max-w-[120px]">
-                        <div className="text-sm truncate">
-                          {appointment.atendimentos?.nome || 'N/A'}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {appointment.criado_por_profile?.nome || 
-                         appointment.criado_por || 
-                         'Recepcionista'}
-                      </TableCell>
-                      <TableCell className="sticky right-0 bg-background/95 backdrop-blur-sm">
-                        <div className="flex items-center justify-center gap-1">
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => onEditAppointment?.(appointment)}
-                            className="h-8 w-8 p-0"
-                            title="Editar"
-                          >
-                            <Edit className="h-3 w-3" />
-                          </Button>
-                          {appointment.status === 'agendado' && (
-                            <>
+          {paginatedAppointments.length > 0 ? (
+            <div className="space-y-0">
+              <div className="relative">
+                <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-background/95 backdrop-blur-sm z-20 border-b">
+                      <TableRow className="bg-muted/30">
+                        <TableHead className="font-semibold w-[100px] px-2">Status</TableHead>
+                        <TableHead className="font-semibold w-[100px] px-2">Data</TableHead>
+                        <TableHead className="font-semibold w-[80px] px-2">Hora</TableHead>
+                        <TableHead className="font-semibold w-[220px] px-2">Paciente</TableHead>
+                        <TableHead className="font-semibold w-[120px] px-2">Telefone</TableHead>
+                        <TableHead className="font-semibold w-[160px] px-2">Médico</TableHead>
+                        <TableHead className="font-semibold w-[100px] px-2">Convênio</TableHead>
+                        <TableHead className="font-semibold w-[120px] px-2">Tipo</TableHead>
+                        <TableHead className="font-semibold w-[120px] px-2">Agendado por</TableHead>
+                        <TableHead className="font-semibold text-center w-[120px] px-2 sticky right-0 bg-muted/30 border-l">Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paginatedAppointments.map((appointment) => (
+                        <TableRow key={appointment.id} className="hover:bg-muted/20 border-b">
+                          <TableCell className="px-2 py-3">
+                            <Badge variant={getStatusColor(appointment.status)} className="text-xs whitespace-nowrap">
+                              {getStatusLabel(appointment.status)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="font-medium px-2 py-3">
+                            {format(new Date(appointment.data_agendamento), 'dd/MM/yyyy', { locale: ptBR })}
+                          </TableCell>
+                          <TableCell className="font-mono px-2 py-3">
+                            {appointment.hora_agendamento}
+                          </TableCell>
+                          <TableCell className="px-2 py-3">
+                            <div className="font-medium truncate max-w-[200px]">
+                              {appointment.pacientes?.nome_completo || 'Paciente não encontrado'}
+                            </div>
+                            {appointment.observacoes && (
+                              <div className="text-xs text-muted-foreground truncate mt-1 max-w-[200px]">
+                                {appointment.observacoes}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="px-2 py-3">
+                            <div className="flex items-center gap-1 text-sm">
+                              <Phone className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                              <span className="truncate">
+                                {appointment.pacientes?.telefone || appointment.pacientes?.celular || 'N/A'}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="px-2 py-3">
+                            <div className="font-medium truncate max-w-[140px]">
+                              Dr(a). {appointment.medicos?.nome || 'N/A'}
+                            </div>
+                            <div className="text-xs text-muted-foreground truncate max-w-[140px]">
+                              {appointment.medicos?.especialidade || 'N/A'}
+                            </div>
+                          </TableCell>
+                          <TableCell className="px-2 py-3">
+                            <Badge variant="outline" className="text-xs whitespace-nowrap">
+                              {appointment.pacientes?.convenio || 'N/A'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="px-2 py-3">
+                            <div className="text-sm truncate max-w-[100px]">
+                              {appointment.atendimentos?.nome || 'N/A'}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm px-2 py-3">
+                            <div className="truncate max-w-[100px]">
+                              {appointment.criado_por_profile?.nome || 
+                               appointment.criado_por || 
+                               'Recepcionista'}
+                            </div>
+                          </TableCell>
+                          <TableCell className="sticky right-0 bg-background/95 backdrop-blur-sm border-l px-2 py-3">
+                            <div className="flex items-center justify-center gap-1">
                               <Button 
                                 variant="ghost" 
                                 size="sm"
-                                onClick={() => onConfirmAppointment?.(appointment.id)}
-                                className="h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
-                                title="Confirmar"
+                                onClick={() => onEditAppointment?.(appointment)}
+                                className="h-7 w-7 p-0"
+                                title="Editar"
                               >
-                                <CheckCircle className="h-3 w-3" />
+                                <Edit className="h-3 w-3" />
                               </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                onClick={() => onCancelAppointment?.(appointment.id)}
-                                className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                title="Cancelar"
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  </TableBody>
-                </Table>
+                              {appointment.status === 'agendado' && (
+                                <>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm"
+                                    onClick={() => onConfirmAppointment?.(appointment.id)}
+                                    className="h-7 w-7 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                    title="Confirmar"
+                                  >
+                                    <CheckCircle className="h-3 w-3" />
+                                  </Button>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm"
+                                    onClick={() => onCancelAppointment?.(appointment.id)}
+                                    className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    title="Cancelar"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </div>
               
               {/* Pagination Controls */}
               {totalPages > 1 && (
-                <div className="border-t bg-muted/20 p-4">
+                <div className="border-t bg-muted/10 p-4">
                   <PaginationControls
                     currentPage={currentPage}
                     totalPages={totalPages}
@@ -254,7 +260,7 @@ export function AppointmentsList({ appointments, doctors, onEditAppointment, onC
                   />
                 </div>
               )}
-            </>
+            </div>
           ) : (
             <div className="p-8 text-center">
               <p className="text-muted-foreground">
