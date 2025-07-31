@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useSupabaseScheduling } from '@/hooks/useSupabaseScheduling';
@@ -6,7 +6,7 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useNotifications } from '@/hooks/useNotifications';
 
 import { ImprovedSchedulingForm } from '@/components/scheduling/ImprovedSchedulingForm';
-import { StableMultipleSchedulingForm } from '@/components/scheduling/StableMultipleSchedulingForm';
+
 import { DoctorSchedule } from '@/components/scheduling/DoctorSchedule';
 import { AppointmentsList } from '@/components/scheduling/AppointmentsList';
 import { BloqueioAgenda } from '@/components/scheduling/BloqueioAgenda';
@@ -100,12 +100,6 @@ const Index = () => {
       ctrlKey: true,
       action: () => setViewMode('new-appointment'),
       description: 'Ctrl+N - Novo agendamento'
-    },
-    {
-      key: 'm',
-      ctrlKey: true,
-      action: () => setViewMode('multiple-appointment'),
-      description: 'Ctrl+M - Agendamento múltiplo'
     },
     {
       key: 'l',
@@ -247,10 +241,6 @@ const Index = () => {
     }
   };
 
-  // ✅ CORREÇÃO DEFINITIVA: Função estável para sucesso do agendamento múltiplo
-  const handleMultipleAppointmentSuccess = useCallback(() => {
-    setViewMode('doctors');
-  }, [setViewMode]);
 
   if (loading) {
     return (
@@ -350,15 +340,6 @@ const Index = () => {
           />
         )}
 
-        {viewMode === 'multiple-appointment' && (
-          <StableMultipleSchedulingForm
-            doctors={doctors}
-            atendimentos={atendimentos}
-            onSuccess={handleMultipleAppointmentSuccess}
-            onCancel={goBack}
-            searchPatientsByBirthDate={searchPatientsByBirthDate}
-          />
-        )}
 
         {viewMode === 'appointments-list' && (
           <AppointmentsList 

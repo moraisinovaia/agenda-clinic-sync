@@ -45,6 +45,3 @@ export interface SchedulingFormData {
   horaAgendamento: string;
   observacoes?: string;
 }
-
-// Re-export dos tipos de agendamento múltiplo
-export type { MultipleSchedulingFormData, ExamCompatibility, MultipleAppointmentResult } from './multiple-scheduling';

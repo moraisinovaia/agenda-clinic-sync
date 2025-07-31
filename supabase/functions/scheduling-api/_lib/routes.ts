@@ -39,17 +39,12 @@ export async function handleCreateAppointment(supabase: any, body: any) {
     celular,
     medicoId, 
     atendimentoId,
-    atendimentoIds, // Para agendamentos múltiplos
     dataAgendamento, 
     horaAgendamento, 
     observacoes,
     criadoPor = 'Assistente Noah (WhatsApp)',
     usuarioResponsavel = null
   } = body;
-
-  // Detectar se é agendamento múltiplo
-  const isMultiple = Array.isArray(atendimentoIds) && atendimentoIds.length > 1;
-  const finalAtendimentoIds = isMultiple ? atendimentoIds : [atendimentoId];
 
   // Validações básicas
   if (!nomeCompleto || !dataNascimento || !convenio || !celular || !medicoId || !dataAgendamento || !horaAgendamento) {
@@ -62,12 +57,12 @@ export async function handleCreateAppointment(supabase: any, body: any) {
     );
   }
 
-  // Validar atendimentos
-  if (!atendimentoId && (!atendimentoIds || atendimentoIds.length === 0)) {
+  // Validar atendimento
+  if (!atendimentoId) {
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: 'É necessário especificar atendimentoId ou atendimentoIds com pelo menos um item' 
+        error: 'É necessário especificar atendimentoId' 
       }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -151,37 +146,21 @@ export async function handleCreateAppointment(supabase: any, body: any) {
   }
 
   try {
-    // Escolher função baseada no tipo de agendamento
-    const functionName = isMultiple ? 'criar_agendamento_multiplo' : 'criar_agendamento_atomico';
-    const functionParams = isMultiple ? {
+    // Usar sempre função atômica para agendamento simples
+    const { data: result, error } = await supabase.rpc('criar_agendamento_atomico', {
       p_nome_completo: nomeCompleto,
       p_data_nascimento: dataNascimento,
       p_convenio: convenio,
       p_telefone: telefone || null,
       p_celular: celular,
       p_medico_id: medicoId,
-      p_atendimento_ids: finalAtendimentoIds,
+      p_atendimento_id: atendimentoId,
       p_data_agendamento: dataAgendamento,
       p_hora_agendamento: horaAgendamento,
       p_observacoes: observacoes || null,
       p_criado_por: criadoPor,
       p_criado_por_user_id: usuarioResponsavel,
-    } : {
-      p_nome_completo: nomeCompleto,
-      p_data_nascimento: dataNascimento,
-      p_convenio: convenio,
-      p_telefone: telefone || null,
-      p_celular: celular,
-      p_medico_id: medicoId,
-      p_atendimento_id: finalAtendimentoIds[0],
-      p_data_agendamento: dataAgendamento,
-      p_hora_agendamento: horaAgendamento,
-      p_observacoes: observacoes || null,
-      p_criado_por: criadoPor,
-      p_criado_por_user_id: usuarioResponsavel,
-    };
-
-    const { data: result, error } = await supabase.rpc(functionName, functionParams);
+    });
 
     if (error) {
       console.error('❌ Erro na função atômica:', error);
@@ -217,50 +196,40 @@ export async function handleCreateAppointment(supabase: any, body: any) {
       );
     }
 
-    // Buscar dados completos dos agendamentos criados para envio de preparos
-    const agendamentoIds = isMultiple ? result.agendamento_ids : [result.agendamento_id];
-    
-    for (const agendamentoId of agendamentoIds) {
-      const { data: appointment, error: fetchError } = await supabase
-        .from('agendamentos')
-        .select(`
-          *,
-          pacientes:paciente_id(*),
-          medicos:medico_id(*),
-          atendimentos:atendimento_id(*)
-        `)
-        .eq('id', agendamentoId)
-        .single();
+    // Buscar dados completos do agendamento criado para envio de preparos
+    const { data: appointment, error: fetchError } = await supabase
+      .from('agendamentos')
+      .select(`
+        *,
+        pacientes:paciente_id(*),
+        medicos:medico_id(*),
+        atendimentos:atendimento_id(*)
+      `)
+      .eq('id', result.agendamento_id)
+      .single();
 
-      if (fetchError) {
-        console.error('❌ Erro ao buscar dados do agendamento:', fetchError);
+    if (fetchError) {
+      console.error('❌ Erro ao buscar dados do agendamento:', fetchError);
+      // Não falhar por causa disso, apenas logar
+    } else {
+      // Enviar preparos automáticos se necessário
+      try {
+        await enviarPreparosAutomaticos(appointment);
+      } catch (preparosError) {
+        console.error('❌ Erro ao enviar preparos automáticos:', preparosError);
         // Não falhar por causa disso, apenas logar
-      } else {
-        // Enviar preparos automáticos se necessário
-        try {
-          await enviarPreparosAutomaticos(appointment);
-        } catch (preparosError) {
-          console.error('❌ Erro ao enviar preparos automáticos:', preparosError);
-          // Não falhar por causa disso, apenas logar
-        }
       }
     }
 
-    const logMessage = isMultiple ? 
-      `✅ Agendamento múltiplo N8N criado com sucesso: ${agendamentoIds.join(', ')}` :
-      `✅ Agendamento N8N criado com sucesso: ${result.agendamento_id}`;
-    console.log(logMessage);
+    console.log(`✅ Agendamento N8N criado com sucesso: ${result.agendamento_id}`);
     
     return new Response(
       JSON.stringify({ 
         success: true, 
         data: {
-          ids: agendamentoIds,
-          id: result.agendamento_id || agendamentoIds[0], // Para compatibilidade
+          id: result.agendamento_id,
           paciente_id: result.paciente_id,
-          message: result.message,
-          total_agendamentos: isMultiple ? result.total_agendamentos : 1,
-          atendimentos: isMultiple ? result.atendimentos : undefined
+          message: result.message
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
