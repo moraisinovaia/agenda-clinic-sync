@@ -36,9 +36,10 @@ interface Bloqueio {
 
 interface BloqueioAgendaProps {
   onBack?: () => void;
+  onRefresh?: () => void;
 }
 
-export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack }) => {
+export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefresh }) => {
   const [loading, setLoading] = useState(false);
   const [loadingMedicos, setLoadingMedicos] = useState(true);
   const [medicos, setMedicos] = useState<Medico[]>([]);
@@ -159,6 +160,11 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack }) => {
       setDataFim('');
       setMotivo('');
 
+      // ✅ ATUALIZAR CALENDÁRIO após bloqueio
+      if (onRefresh) {
+        onRefresh();
+      }
+
       console.log('✅ Bloqueio realizado:', data.data);
 
     } catch (error) {
@@ -259,6 +265,11 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack }) => {
       // Recarregar lista de bloqueios
       if (selectedDoctorAbrir) {
         carregarBloqueios(selectedDoctorAbrir);
+      }
+      
+      // ✅ ATUALIZAR CALENDÁRIO após remoção
+      if (onRefresh) {
+        onRefresh();
       }
       
       setBloqueioParaRemover(null);

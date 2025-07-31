@@ -75,7 +75,8 @@ const Index = () => {
     getAtendimentosByDoctor,
     getAppointmentsByDoctorAndDate,
     isDateBlocked,
-    getBlockedDatesByDoctor
+    getBlockedDatesByDoctor,
+    refetch
   } = useSupabaseScheduling();
 
   const {
@@ -490,7 +491,7 @@ const Index = () => {
         )}
 
         {viewMode === 'bloqueio-agenda' && (
-          <BloqueioAgenda onBack={goBack} />
+          <BloqueioAgenda onBack={goBack} onRefresh={refetch} />
         )}
 
         {viewMode === 'auth-test' && (

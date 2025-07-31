@@ -76,7 +76,7 @@ export function useSupabaseScheduling() {
     isDateBlocked: schedulingData.isDateBlocked,
     getBlockedDatesByDoctor: schedulingData.getBlockedDatesByDoctor,
     
-    // Recarregamento
+    // Recarregamento - ✅ EXPOR PARA COMPONENTES EXTERNOS
     refetch,
   }), [
     // Dados
