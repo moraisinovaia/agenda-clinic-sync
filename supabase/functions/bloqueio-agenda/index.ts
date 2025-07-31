@@ -7,7 +7,7 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  console.log('🚀 BLOQUEIO AGENDA - VERSÃO SIMPLES');
+  console.log('🚀 BLOQUEIO AGENDA - VERSÃO EXPANDIDA');
   console.log('📅 Timestamp:', new Date().toISOString());
   console.log('🌐 Método:', req.method);
   console.log('🔗 URL:', req.url);
@@ -55,7 +55,119 @@ serve(async (req) => {
     const body = await req.json();
     console.log('📋 Dados recebidos:', body);
 
-    const { medicoId, dataInicio, dataFim, motivo } = body;
+    const { action, medicoId, dataInicio, dataFim, motivo, bloqueioId } = body;
+
+    // Determinar ação padrão se não especificada
+    const acao = action || 'create';
+    console.log('🎯 Ação solicitada:', acao);
+
+    // Rota para listar bloqueios ativos
+    if (acao === 'list') {
+      if (!medicoId) {
+        console.log('❌ ID do médico obrigatório para listagem');
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'ID do médico é obrigatório para listagem' 
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log('📋 Listando bloqueios ativos para médico:', medicoId);
+      
+      const { data: bloqueios, error: bloqueiosError } = await supabase
+        .from('bloqueios_agenda')
+        .select(`
+          id,
+          data_inicio,
+          data_fim,
+          motivo,
+          created_at,
+          criado_por
+        `)
+        .eq('medico_id', medicoId)
+        .eq('status', 'ativo')
+        .order('data_inicio', { ascending: true });
+
+      if (bloqueiosError) {
+        console.log('❌ Erro ao listar bloqueios:', bloqueiosError);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Erro ao listar bloqueios' 
+          }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log(`✅ ${bloqueios?.length || 0} bloqueios encontrados`);
+      
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          data: bloqueios || []
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Rota para remover bloqueio
+    if (acao === 'remove') {
+      if (!bloqueioId) {
+        console.log('❌ ID do bloqueio obrigatório para remoção');
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'ID do bloqueio é obrigatório para remoção' 
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log('🗑️ Removendo bloqueio:', bloqueioId);
+      
+      const { data: bloqueio, error: removeError } = await supabase
+        .from('bloqueios_agenda')
+        .update({ status: 'inativo' })
+        .eq('id', bloqueioId)
+        .eq('status', 'ativo')
+        .select()
+        .single();
+
+      if (removeError) {
+        console.log('❌ Erro ao remover bloqueio:', removeError);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Erro ao remover bloqueio' 
+          }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (!bloqueio) {
+        console.log('❌ Bloqueio não encontrado ou já foi removido');
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Bloqueio não encontrado ou já foi removido' 
+          }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log('✅ Bloqueio removido com sucesso');
+      
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          message: 'Bloqueio removido com sucesso',
+          data: bloqueio
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Validações básicas
     if (!medicoId || !dataInicio || !dataFim || !motivo) {
