@@ -5,7 +5,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { CalendarDays, X } from "lucide-react";
 import { PatientDataFormFixed } from './PatientDataFormFixed';
-import { AppointmentDataForm } from './AppointmentDataForm';
+import { AppointmentDataFormMultiple } from './AppointmentDataFormMultiple';
 import { ExamSelectionForm } from './ExamSelectionForm';
 import { MultipleAppointmentPreview } from './MultipleAppointmentPreview';
 import { useMultipleAppointments } from '@/hooks/useMultipleAppointments';
@@ -109,7 +109,7 @@ export function MultipleSchedulingModal({
       telefone: '',
       celular: '',
       medicoId: '',
-      atendimentoId: '',
+      atendimentoId: '', // Mantido para compatibilidade, mas não será usado
       dataAgendamento: '',
       horaAgendamento: '',
       observacoes: ''
@@ -149,11 +149,10 @@ export function MultipleSchedulingModal({
           <Separator />
 
           {/* Seção 2: Dados do Agendamento */}
-          <AppointmentDataForm
+          <AppointmentDataFormMultiple
             formData={formData}
             setFormData={setFormData}
             doctors={doctors}
-            atendimentos={atendimentos}
           />
 
           {/* Seção 3: Seleção de Múltiplos Exames */}
