@@ -391,6 +391,26 @@ const Index = () => {
           />
         )}
 
+        {viewMode === 'canceled-appointments' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold">Agendamentos Cancelados</h2>
+                <p className="text-muted-foreground mt-1">
+                  Visualize todos os agendamentos cancelados
+                </p>
+              </div>
+            </div>
+            <AppointmentsList 
+              appointments={appointments.filter(apt => apt.status === 'cancelado')}
+              doctors={doctors}
+              onEditAppointment={handleEditAppointment}
+              onCancelAppointment={cancelAppointment}
+              onConfirmAppointment={handleConfirmAppointment}
+            />
+          </div>
+        )}
+
         {viewMode === 'edit-appointment' && editingAppointment && (
           <ImprovedSchedulingForm
             doctors={doctors}

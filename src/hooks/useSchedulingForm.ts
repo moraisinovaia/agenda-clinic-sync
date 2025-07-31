@@ -57,8 +57,16 @@ export function useSchedulingForm(initialData?: Partial<SchedulingFormData>) {
     } catch (error) {
       // Capturar e definir o erro para exibição
       const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
-      setError(errorMessage);
-      console.log('❌ Erro capturado - mantendo dados do formulário:', errorMessage);
+      
+      // Se for erro de conflito de horário, manter dados do formulário
+      if (errorMessage.includes('já está ocupado')) {
+        setError(errorMessage);
+        console.log('❌ Conflito de horário detectado - mantendo dados do formulário:', errorMessage);
+      } else {
+        // Para outros erros, também manter dados para permitir correção
+        setError(errorMessage);
+        console.log('❌ Erro capturado - mantendo dados do formulário:', errorMessage);
+      }
     } finally {
       console.log('🏁 Finalizando loading state...');
       setLoading(false);

@@ -1,7 +1,7 @@
 import { Calendar, Clock, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos' | 'fila-espera' | 'nova-fila' | 'bloqueio-agenda' | 'relatorio-agenda' | 'auth-test' | 'alertas' | 'multiple-appointment';
+type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos' | 'fila-espera' | 'nova-fila' | 'bloqueio-agenda' | 'relatorio-agenda' | 'auth-test' | 'alertas' | 'multiple-appointment' | 'canceled-appointments';
 
 interface DashboardActionsProps {
   onViewChange: (view: ViewMode) => void;
@@ -34,6 +34,14 @@ export const DashboardActions = ({ onViewChange }: DashboardActionsProps) => {
       >
         <Calendar className="h-4 w-4" />
         Ver Todos os Agendamentos
+      </Button>
+      
+      <Button 
+        onClick={() => onViewChange('canceled-appointments')}
+        variant="outline"
+        className="flex items-center gap-2 whitespace-nowrap"
+      >
+        ❌ Ver Cancelados
       </Button>
       
       <Button 

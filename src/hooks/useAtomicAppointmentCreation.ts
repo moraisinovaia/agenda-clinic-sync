@@ -149,9 +149,15 @@ export function useAtomicAppointmentCreation() {
           lastError = error instanceof Error ? error : new Error('Erro desconhecido');
           console.error(`❌ Erro na tentativa ${attempt}:`, lastError);
 
-          // Se é um erro de validação ou não é um erro de concorrência, não fazer retry
+          // Se é erro de conflito de horário, não mostrar toast nem fazer retry
+          if (lastError.message.includes('já está ocupado')) {
+            console.log('❌ Erro de conflito de horário detectado - não fazer retry');
+            // Não mostrar toast aqui, deixar o componente tratar
+            throw new Error(lastError.message);
+          }
+
+          // Se é um erro de validação ou outros tipos, não fazer retry
           if (attempt === MAX_RETRIES || 
-              !lastError.message.includes('já está ocupado') ||
               lastError.message.includes('obrigatório') ||
               lastError.message.includes('inválido') ||
               lastError.message.includes('não está ativo') ||

@@ -72,37 +72,61 @@ export function useImprovedScheduling() {
     try {
       console.log('🔄 Editando agendamento:', appointmentId, formData);
 
-      // Primeiro, buscar o paciente ou criar se não existir
-      let pacienteId;
-      
-      const { data: existingPatient } = await supabase
-        .from('pacientes')
-        .select('id')
-        .eq('nome_completo', formData.nomeCompleto)
-        .eq('data_nascimento', formData.dataNascimento)
-        .eq('convenio', formData.convenio)
+      // Buscar dados atuais do agendamento para comparar
+      const { data: currentAppointment } = await supabase
+        .from('agendamentos')
+        .select(`
+          paciente_id,
+          pacientes!inner(nome_completo, data_nascimento, convenio, telefone, celular)
+        `)
+        .eq('id', appointmentId)
         .single();
 
-      if (existingPatient) {
-        pacienteId = existingPatient.id;
-      } else {
-        const { data: newPatient, error: patientError } = await supabase
+      if (!currentAppointment) {
+        throw new Error('Agendamento não encontrado');
+      }
+
+      const currentPatient = currentAppointment.pacientes;
+      let pacienteId = currentAppointment.paciente_id;
+
+      // Verificar se dados do paciente mudaram
+      const patientDataChanged = 
+        currentPatient.nome_completo !== formData.nomeCompleto ||
+        currentPatient.data_nascimento !== formData.dataNascimento ||
+        currentPatient.convenio !== formData.convenio ||
+        currentPatient.telefone !== (formData.telefone || '') ||
+        currentPatient.celular !== (formData.celular || '');
+
+      if (patientDataChanged) {
+        // Dados mudaram, buscar se já existe um paciente com os novos dados
+        const { data: existingPatient } = await supabase
           .from('pacientes')
-          .insert({
-            nome_completo: formData.nomeCompleto,
-            data_nascimento: formData.dataNascimento,
-            convenio: formData.convenio,
-            telefone: formData.telefone || '',
-            celular: formData.celular || ''
-          })
           .select('id')
+          .eq('nome_completo', formData.nomeCompleto)
+          .eq('data_nascimento', formData.dataNascimento)
+          .eq('convenio', formData.convenio)
           .single();
 
-        if (patientError) {
-          throw new Error(`Erro ao criar paciente: ${patientError.message}`);
+        if (existingPatient) {
+          // Usar paciente existente
+          pacienteId = existingPatient.id;
+        } else {
+          // Atualizar dados do paciente atual (não criar novo)
+          const { error: updatePatientError } = await supabase
+            .from('pacientes')
+            .update({
+              nome_completo: formData.nomeCompleto,
+              data_nascimento: formData.dataNascimento,
+              convenio: formData.convenio,
+              telefone: formData.telefone || '',
+              celular: formData.celular || ''
+            })
+            .eq('id', pacienteId);
+
+          if (updatePatientError) {
+            throw new Error(`Erro ao atualizar dados do paciente: ${updatePatientError.message}`);
+          }
         }
-        
-        pacienteId = newPatient.id;
       }
 
       // Atualizar o agendamento
