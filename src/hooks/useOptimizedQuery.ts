@@ -81,12 +81,42 @@ export const useOptimizedQuery = <T>(
   const refetch = useCallback(() => {
     // Clear cache for this key and refetch
     queryCache.delete(cacheKey);
+    console.log(`🔄 Cache invalidated and refetching: ${cacheKey}`);
     return executeQuery();
   }, [cacheKey, executeQuery]);
 
   const invalidateCache = useCallback(() => {
     queryCache.delete(cacheKey);
+    console.log(`🗑️ Cache invalidated: ${cacheKey}`);
   }, [cacheKey]);
+
+  const forceRefetch = useCallback(async () => {
+    // Force fresh data from server, bypassing cache completely
+    queryCache.delete(cacheKey);
+    console.log(`🚀 Force refetching: ${cacheKey}`);
+    
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const result = await queryFn();
+      const now = Date.now();
+      
+      queryCache.set(cacheKey, {
+        data: result,
+        timestamp: now,
+        isStale: false
+      });
+      
+      setData(result);
+      console.log(`✅ Fresh data loaded: ${cacheKey}`, result);
+    } catch (err) {
+      setError(err as Error);
+      console.error(`❌ Force refetch error for ${cacheKey}:`, err);
+    } finally {
+      setLoading(false);
+    }
+  }, [cacheKey, queryFn]);
 
   useEffect(() => {
     if (refetchOnMount) {
@@ -99,7 +129,8 @@ export const useOptimizedQuery = <T>(
     loading,
     error,
     refetch,
-    invalidateCache
+    invalidateCache,
+    forceRefetch
   };
 };
 

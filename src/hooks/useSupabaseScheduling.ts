@@ -24,14 +24,22 @@ export function useSupabaseScheduling() {
     try {
       const result = await appointmentCreation.createAppointment(formData, editingAppointmentId);
       
-      // Recarregar dados após sucesso
-      await refetch();
+      // Invalidar cache específico e forçar atualização
+      appointmentsList.invalidateCache?.();
+      schedulingData.refetch();
+      
+      // Aguardar um pouco e forçar refetch completo para garantir dados frescos
+      setTimeout(() => {
+        appointmentsList.forceRefetch?.();
+      }, 100);
+      
+      console.log('🔄 Cache invalidated after appointment edit/creation');
       
       return result;
     } catch (error) {
       throw error; // Repassar erro para manter o formulário
     }
-  }, [appointmentCreation.createAppointment, refetch]);
+  }, [appointmentCreation.createAppointment, appointmentsList, schedulingData]);
 
   // ✅ ESTABILIZAR: Envolver cancelAppointment para usar a funcionalidade existente
   const cancelAppointment = useCallback(async (appointmentId: string) => {

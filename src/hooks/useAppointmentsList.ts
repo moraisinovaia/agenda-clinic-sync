@@ -99,7 +99,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   }, [measureApiCall]);
 
   // Usar cache otimizado para buscar agendamentos
-  const { data: appointments, loading, error, refetch } = useOptimizedQuery<AppointmentWithRelations[]>(
+  const { data: appointments, loading, error, refetch, invalidateCache, forceRefetch } = useOptimizedQuery<AppointmentWithRelations[]>(
     fetchAppointments,
     [],
     { 
@@ -299,6 +299,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     confirmAppointment,
     unconfirmAppointment,
     refetch,
+    invalidateCache,
+    forceRefetch,
     pagination,
     error
   };
