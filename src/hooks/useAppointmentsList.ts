@@ -219,13 +219,25 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         return data;
       }, 'confirm_appointment', 'PUT');
 
+      // ⚡ INVALIDAÇÃO AGRESSIVA DE CACHE APÓS CONFIRMAÇÃO
+      console.log('🧹 Iniciando invalidação agressiva de cache após confirmação...');
+      
+      // 1. Invalidar cache imediatamente
+      invalidateCache();
+      
+      // 2. Aguardar um pouco para garantir que mudança foi persistida no banco
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // 3. Forçar refetch completo, ignorando qualquer cache
+      await forceRefetch();
+      
+      console.log('✅ Cache invalidado e dados recarregados após confirmação');
+
       toast({
         title: 'Agendamento confirmado',
         description: 'O agendamento foi confirmado com sucesso',
       });
 
-      // Invalidar cache e recarregar
-      refetch();
       logger.info('Agendamento confirmado com sucesso', { appointmentId }, 'APPOINTMENTS');
     } catch (error) {
       logger.error('Erro ao confirmar agendamento', error, 'APPOINTMENTS');
