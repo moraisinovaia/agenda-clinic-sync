@@ -29,7 +29,7 @@ interface DoctorScheduleProps {
   onCancelAppointment: (appointmentId: string) => Promise<void>;
   onConfirmAppointment?: (appointmentId: string) => Promise<void>;
   onEditAppointment?: (appointment: AppointmentWithRelations) => void;
-  onNewAppointment?: () => void;
+  onNewAppointment?: (selectedDate?: string) => void;
   initialDate?: string; // Data inicial para posicionar o calendário
 }
 
@@ -118,7 +118,7 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
               </div>
             </div>
             {onNewAppointment && (
-              <Button onClick={onNewAppointment} className="flex items-center gap-2">
+              <Button onClick={() => onNewAppointment(format(selectedDate, 'yyyy-MM-dd'))} className="flex items-center gap-2">
                 <Plus className="h-4 w-4" />
                 Novo Agendamento
               </Button>
@@ -323,7 +323,7 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                         Não há agendamentos para esta data.
                       </p>
                       {onNewAppointment && (
-                        <Button onClick={onNewAppointment} className="mt-4" size="sm">
+                        <Button onClick={() => onNewAppointment(format(selectedDate, 'yyyy-MM-dd'))} className="mt-4" size="sm">
                           <Plus className="h-4 w-4 mr-2" />
                           Novo Agendamento
                         </Button>

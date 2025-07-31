@@ -15,25 +15,30 @@ const initialFormData: SchedulingFormData = {
   observacoes: '',
 };
 
-export function useSchedulingForm(initialData?: Partial<SchedulingFormData>) {
-  const [formData, setFormData] = useState<SchedulingFormData>(() => ({
-    ...initialFormData,
-    ...initialData
-  }));
+interface UseSchedulingFormProps {
+  initialData?: Partial<SchedulingFormData>;
+  preSelectedDoctor?: string;
+  preSelectedDate?: string;
+}
+
+export function useSchedulingForm(props?: UseSchedulingFormProps) {
+  const [formData, setFormData] = useState<SchedulingFormData>(initialFormData);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const hasInitialized = useRef(false);
 
-  // Garantir que os dados iniciais sejam aplicados apenas na primeira renderização
+  // Aplicar dados iniciais e pré-seleções apenas na primeira renderização
   useEffect(() => {
-    if (initialData && !hasInitialized.current) {
+    if (!hasInitialized.current) {
+      hasInitialized.current = true;
       setFormData(prev => ({
         ...initialFormData,
-        ...initialData
+        ...props?.initialData,
+        ...(props?.preSelectedDoctor && { medicoId: props.preSelectedDoctor }),
+        ...(props?.preSelectedDate && { dataAgendamento: props.preSelectedDate })
       }));
-      hasInitialized.current = true;
     }
-  }, [initialData]);
+  }, [props?.initialData, props?.preSelectedDoctor, props?.preSelectedDate]);
 
   const resetForm = () => {
     setFormData(initialFormData);

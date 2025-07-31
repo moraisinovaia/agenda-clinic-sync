@@ -54,7 +54,7 @@ export function SchedulingFormStable({
     error,
     resetForm,
     handleSubmit,
-  } = useSchedulingForm(initialData);
+  } = useSchedulingForm({ initialData });
 
   // Reset step quando há erro
   useEffect(() => {

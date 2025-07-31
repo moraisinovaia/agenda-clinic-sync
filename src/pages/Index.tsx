@@ -56,6 +56,8 @@ const Index = () => {
     setSelectedDoctor,
     lastAppointmentDate,
     setLastAppointmentDate,
+    selectedAppointmentDate,
+    setSelectedAppointmentDate,
     editingAppointment,
     setEditingAppointment,
     goBack,
@@ -368,7 +370,12 @@ const Index = () => {
             onCancelAppointment={cancelAppointment}
             onConfirmAppointment={handleConfirmAppointment}
             onEditAppointment={handleEditAppointment}
-            onNewAppointment={() => setViewMode('new-appointment')}
+            onNewAppointment={(selectedDate) => {
+              if (selectedDate) {
+                setSelectedAppointmentDate(selectedDate);
+              }
+              setViewMode('new-appointment');
+            }}
             initialDate={lastAppointmentDate || undefined}
           />
         )}
@@ -381,6 +388,8 @@ const Index = () => {
             onCancel={goBack}
             getAtendimentosByDoctor={getAtendimentosByDoctor}
             searchPatientsByBirthDate={searchPatientsByBirthDate}
+            preSelectedDoctor={selectedDoctor?.id}
+            preSelectedDate={selectedAppointmentDate || undefined}
             isTimeSlotOccupied={(doctorId, date, time) => {
               return appointments.some(apt => 
                 apt.medico_id === doctorId && 

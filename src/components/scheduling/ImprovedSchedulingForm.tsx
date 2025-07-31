@@ -18,17 +18,21 @@ interface ImprovedSchedulingFormProps {
   searchPatientsByBirthDate: (birthDate: string) => Promise<any[]>;
   editingAppointment?: any;
   isTimeSlotOccupied?: (doctorId: string, date: string, time: string) => boolean;
+  preSelectedDoctor?: string;
+  preSelectedDate?: string;
 }
 
-export function ImprovedSchedulingForm({
-  doctors,
-  atendimentos,
-  onSubmit,
-  onCancel,
+export function ImprovedSchedulingForm({ 
+  doctors, 
+  atendimentos, 
+  onSubmit, 
+  onCancel, 
   getAtendimentosByDoctor,
   searchPatientsByBirthDate,
   editingAppointment,
-  isTimeSlotOccupied
+  isTimeSlotOccupied,
+  preSelectedDoctor,
+  preSelectedDate
 }: ImprovedSchedulingFormProps) {
   const [conflictWarning, setConflictWarning] = useState<string>('');
   const { toast } = useToast();
@@ -47,7 +51,11 @@ export function ImprovedSchedulingForm({
     observacoes: editingAppointment.observacoes || '',
   } : undefined;
 
-  const { formData, setFormData, loading, handleSubmit } = useSchedulingForm(initialEditData);
+  const { formData, setFormData, loading, handleSubmit } = useSchedulingForm({
+    initialData: initialEditData,
+    preSelectedDoctor,
+    preSelectedDate
+  });
 
   // Verificar conflitos de horário
   const checkTimeConflict = useCallback(() => {

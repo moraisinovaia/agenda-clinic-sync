@@ -50,7 +50,9 @@ export function SchedulingForm({
     observacoes: editingAppointment.observacoes || '',
   } : undefined;
 
-  const { formData, setFormData, loading, handleSubmit } = useSchedulingForm(initialEditData);
+  const { formData, setFormData, loading, handleSubmit } = useSchedulingForm({
+    initialData: initialEditData
+  });
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date>(new Date());
 
   const selectedDoctor = doctors.find(doctor => doctor.id === formData.medicoId);
