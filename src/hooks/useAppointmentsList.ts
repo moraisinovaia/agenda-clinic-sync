@@ -16,54 +16,85 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     logger.info('Iniciando busca de agendamentos', {}, 'APPOINTMENTS');
     
     return measureApiCall(async () => {
-        // Primeiro buscar agendamentos simples
-        const { data: agendamentosData, error: agendamentosError } = await supabase
-          .from('agendamentos')
-          .select('*')
-          .order('data_agendamento', { ascending: true })
-          .order('hora_agendamento', { ascending: true });
+        // Usar função RPC otimizada que já filtra cancelados e inclui relacionamentos
+        const { data: appointmentsWithRelations, error } = await supabase
+          .rpc('buscar_agendamentos_otimizado');
 
-        if (agendamentosError) {
-          logger.error('Erro na consulta de agendamentos', agendamentosError, 'APPOINTMENTS');
-          throw agendamentosError;
+        if (error) {
+          logger.error('Erro na consulta de agendamentos otimizada', error, 'APPOINTMENTS');
+          throw error;
         }
 
-        // Se não há agendamentos, retornar array vazio
-        if (!agendamentosData || agendamentosData.length === 0) {
-          return [];
-        }
-
-        // Buscar dados relacionados separadamente
-        const pacienteIds = [...new Set(agendamentosData.map(a => a.paciente_id))];
-        const medicoIds = [...new Set(agendamentosData.map(a => a.medico_id))];
-        const atendimentoIds = [...new Set(agendamentosData.map(a => a.atendimento_id))];
-        const criadoPorUserIds = [...new Set(agendamentosData.map(a => a.criado_por_user_id).filter(Boolean))];
-
-        const [pacientesResult, medicosResult, atendimentosResult, profilesResult] = await Promise.all([
-          supabase.from('pacientes').select('*').in('id', pacienteIds),
-          supabase.from('medicos').select('*').in('id', medicoIds),
-          supabase.from('atendimentos').select('*').in('id', atendimentoIds),
-          criadoPorUserIds.length > 0 
-            ? supabase.from('profiles').select('*').in('user_id', criadoPorUserIds)
-            : Promise.resolve({ data: [] })
-        ]);
-
-        const pacientesMap = new Map((pacientesResult.data || []).map(p => [p.id, p]));
-        const medicosMap = new Map((medicosResult.data || []).map(m => [m.id, m]));
-        const atendimentosMap = new Map((atendimentosResult.data || []).map(a => [a.id, a]));
-        const profilesMap = new Map((profilesResult.data || []).map(p => [p.user_id, p]));
-
-        // Combinar dados
-        const appointmentsWithRelations = agendamentosData.map(agendamento => ({
-          ...agendamento,
-          pacientes: pacientesMap.get(agendamento.paciente_id) || null,
-          medicos: medicosMap.get(agendamento.medico_id) || null,
-          atendimentos: atendimentosMap.get(agendamento.atendimento_id) || null,
-          criado_por_profile: agendamento.criado_por_user_id ? profilesMap.get(agendamento.criado_por_user_id) || null : null,
+        // Transformar para o formato esperado
+        const transformedAppointments = (appointmentsWithRelations || []).map(apt => ({
+          id: apt.id,
+          paciente_id: apt.paciente_id,
+          medico_id: apt.medico_id,
+          atendimento_id: apt.atendimento_id,
+          data_agendamento: apt.data_agendamento,
+          hora_agendamento: apt.hora_agendamento,
+          status: apt.status,
+          observacoes: apt.observacoes,
+          created_at: apt.created_at,
+          updated_at: apt.updated_at,
+          criado_por: apt.criado_por,
+          criado_por_user_id: apt.criado_por_user_id,
+          // Campos adicionais para cancelamento e confirmação
+          cancelado_em: null,
+          cancelado_por: null,
+          cancelado_por_user_id: null,
+          confirmado_em: null,
+          confirmado_por: null,
+          confirmado_por_user_id: null,
+          convenio: apt.paciente_convenio,
+          pacientes: {
+            id: apt.paciente_id,
+            nome_completo: apt.paciente_nome,
+            convenio: apt.paciente_convenio,
+            celular: apt.paciente_celular,
+            telefone: '',
+            data_nascimento: '',
+            created_at: '',
+            updated_at: ''
+          },
+          medicos: {
+            id: apt.medico_id,
+            nome: apt.medico_nome,
+            especialidade: apt.medico_especialidade,
+            ativo: true,
+            crm: '',
+            created_at: '',
+            updated_at: '',
+            convenios_aceitos: [],
+            convenios_restricoes: null,
+            horarios: null,
+            idade_maxima: null,
+            idade_minima: null,
+            observacoes: ''
+          },
+          atendimentos: {
+            id: apt.atendimento_id,
+            nome: apt.atendimento_nome,
+            tipo: apt.atendimento_tipo,
+            ativo: true,
+            medico_id: apt.medico_id,
+            medico_nome: apt.medico_nome,
+            created_at: '',
+            updated_at: '',
+            codigo: '',
+            coparticipacao_unimed_20: 0,
+            coparticipacao_unimed_40: 0,
+            forma_pagamento: 'convenio',
+            horarios: null,
+            observacoes: '',
+            valor_convenio: 0,
+            valor_particular: 0,
+            restricoes: null
+          }
         }));
 
-        logger.info('Agendamentos carregados com sucesso', { count: appointmentsWithRelations.length }, 'APPOINTMENTS');
-        return appointmentsWithRelations;
+        logger.info('Agendamentos carregados com sucesso via RPC', { count: transformedAppointments.length }, 'APPOINTMENTS');
+        return transformedAppointments;
       }, 'fetch_appointments', 'GET');
   }, [measureApiCall]);
 
