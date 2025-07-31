@@ -86,7 +86,7 @@ export function useAtomicAppointmentCreation() {
   };
 
   // ✅ ESTABILIZAR: Criar agendamento com função atômica e retry automático
-  const createAppointment = useCallback(async (formData: SchedulingFormData): Promise<any> => {
+  const createAppointment = useCallback(async (formData: SchedulingFormData, editingAppointmentId?: string): Promise<any> => {
     let lastError: Error | null = null;
 
     try {
@@ -120,6 +120,8 @@ export function useAtomicAppointmentCreation() {
             p_observacoes: formData.observacoes || null,
             p_criado_por: profile?.nome || 'Recepcionista',
             p_criado_por_user_id: user?.id,
+            p_agendamento_id_edicao: editingAppointmentId || null,
+            p_force_update_patient: !!editingAppointmentId,
           });
 
           if (error) {
@@ -137,9 +139,12 @@ export function useAtomicAppointmentCreation() {
           }
 
           // Sucesso!
+          const isEditing = !!editingAppointmentId;
           toast({
             title: 'Sucesso!',
-            description: `Agendamento criado para ${formData.dataAgendamento} às ${formData.horaAgendamento}`,
+            description: isEditing ? 
+              `Agendamento atualizado para ${formData.dataAgendamento} às ${formData.horaAgendamento}` :
+              `Agendamento criado para ${formData.dataAgendamento} às ${formData.horaAgendamento}`,
           });
 
           console.log(`✅ Agendamento criado com sucesso na tentativa ${attempt}:`, data);

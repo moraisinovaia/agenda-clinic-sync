@@ -239,16 +239,18 @@ const Index = () => {
 
   const handleSubmitAppointment = async (formData: SchedulingFormData) => {
     try {
-      await createAppointment(formData);
+      await createAppointment(formData, editingAppointment?.id);
       
       const doctor = doctors.find(d => d.id === formData.medicoId);
       if (doctor) {
-        // Send notification for new appointment
-        notifyNewAppointment(
-          formData.nomeCompleto,
-          doctor.nome,
-          formData.horaAgendamento
-        );
+        // Send notification for new appointment (only if not editing)
+        if (!editingAppointment) {
+          notifyNewAppointment(
+            formData.nomeCompleto,
+            doctor.nome,
+            formData.horaAgendamento
+          );
+        }
         
         // Se estava editando, volta para lista de agendamentos
         if (editingAppointment) {

@@ -1497,6 +1497,17 @@ export type Database = {
         Args: { p_user_id: string; p_aprovador_id: string }
         Returns: Json
       }
+      atualizar_dados_paciente: {
+        Args: {
+          p_paciente_id: string
+          p_nome_completo: string
+          p_data_nascimento: string
+          p_convenio: string
+          p_telefone?: string
+          p_celular?: string
+        }
+        Returns: Json
+      }
       buscar_agendamentos_otimizado: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -1554,20 +1565,37 @@ export type Database = {
         Returns: Json
       }
       criar_agendamento_atomico: {
-        Args: {
-          p_nome_completo: string
-          p_data_nascimento: string
-          p_convenio: string
-          p_telefone: string
-          p_celular: string
-          p_medico_id: string
-          p_atendimento_id: string
-          p_data_agendamento: string
-          p_hora_agendamento: string
-          p_observacoes?: string
-          p_criado_por?: string
-          p_criado_por_user_id?: string
-        }
+        Args:
+          | {
+              p_nome_completo: string
+              p_data_nascimento: string
+              p_convenio: string
+              p_telefone: string
+              p_celular: string
+              p_medico_id: string
+              p_atendimento_id: string
+              p_data_agendamento: string
+              p_hora_agendamento: string
+              p_observacoes?: string
+              p_criado_por?: string
+              p_criado_por_user_id?: string
+            }
+          | {
+              p_nome_completo: string
+              p_data_nascimento: string
+              p_convenio: string
+              p_telefone: string
+              p_celular: string
+              p_medico_id: string
+              p_atendimento_id: string
+              p_data_agendamento: string
+              p_hora_agendamento: string
+              p_observacoes?: string
+              p_criado_por?: string
+              p_criado_por_user_id?: string
+              p_agendamento_id_edicao?: string
+              p_force_update_patient?: boolean
+            }
         Returns: Json
       }
       criar_agendamento_multiplo: {

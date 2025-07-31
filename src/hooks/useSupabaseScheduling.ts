@@ -20,9 +20,9 @@ export function useSupabaseScheduling() {
   }, [schedulingData.refetch, appointmentsList.refetch]);
 
   // ✅ ESTABILIZAR: Envolver createAppointment para recarregar dados após sucesso
-  const createAppointment = useCallback(async (formData: any) => {
+  const createAppointment = useCallback(async (formData: any, editingAppointmentId?: string) => {
     try {
-      const result = await appointmentCreation.createAppointment(formData);
+      const result = await appointmentCreation.createAppointment(formData, editingAppointmentId);
       
       // Recarregar dados após sucesso
       await refetch();
