@@ -71,6 +71,7 @@ const Index = () => {
     createAppointment,
     cancelAppointment,
     confirmAppointment,
+    unconfirmAppointment,
     searchPatientsByBirthDate,
     getAtendimentosByDoctor,
     getAppointmentsByDoctorAndDate,
@@ -284,6 +285,14 @@ const Index = () => {
     }
   };
 
+  const handleUnconfirmAppointment = async (appointmentId: string) => {
+    try {
+      await unconfirmAppointment(appointmentId);
+    } catch (error) {
+      console.error('Erro ao desconfirmar agendamento:', error);
+    }
+  };
+
 
   if (loading) {
     return (
@@ -391,6 +400,7 @@ const Index = () => {
             onEditAppointment={handleEditAppointment}
             onCancelAppointment={cancelAppointment}
             onConfirmAppointment={handleConfirmAppointment}
+            onUnconfirmAppointment={handleUnconfirmAppointment}
           />
         )}
 
@@ -410,6 +420,7 @@ const Index = () => {
               onEditAppointment={handleEditAppointment}
               onCancelAppointment={cancelAppointment}
               onConfirmAppointment={handleConfirmAppointment}
+              onUnconfirmAppointment={handleUnconfirmAppointment}
             />
           </div>
         )}

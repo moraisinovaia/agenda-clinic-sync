@@ -53,6 +53,16 @@ export function useSupabaseScheduling() {
     }
   }, [appointmentsList.confirmAppointment]);
 
+  // ✅ ESTABILIZAR: Envolver unconfirmAppointment para usar a funcionalidade existente
+  const unconfirmAppointment = useCallback(async (appointmentId: string) => {
+    try {
+      await appointmentsList.unconfirmAppointment(appointmentId);
+      // O refetch já é feito automaticamente no useAppointmentsList
+    } catch (error) {
+      throw error;
+    }
+  }, [appointmentsList.unconfirmAppointment]);
+
   // ✅ MEMOIZAR: O objeto retornado para garantir referências estáveis
   return useMemo(() => ({
     // Dados
@@ -68,6 +78,7 @@ export function useSupabaseScheduling() {
     createAppointment,
     cancelAppointment,
     confirmAppointment,
+    unconfirmAppointment,
     searchPatientsByBirthDate: patientManagement.searchPatientsByBirthDate, // ✅ JÁ ESTÁVEL
     
     // Utilitários
@@ -92,6 +103,7 @@ export function useSupabaseScheduling() {
     createAppointment,
     cancelAppointment,
     confirmAppointment,
+    unconfirmAppointment,
     patientManagement.searchPatientsByBirthDate,
     schedulingData.getAtendimentosByDoctor,
     appointmentsList.getAppointmentsByDoctorAndDate,

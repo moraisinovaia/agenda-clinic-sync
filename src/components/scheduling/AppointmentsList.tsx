@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Calendar, Clock, User, Phone, CheckCircle, Edit, X } from 'lucide-react';
+import { Calendar, Clock, User, Phone, CheckCircle, Edit, X, RotateCcw } from 'lucide-react';
 import { AppointmentFilters } from '@/components/filters/AppointmentFilters';
 import { useAdvancedAppointmentFilters } from '@/hooks/useAdvancedAppointmentFilters';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -20,9 +20,10 @@ interface AppointmentsListProps {
   onEditAppointment?: (appointment: AppointmentWithRelations) => void;
   onCancelAppointment?: (appointmentId: string) => void;
   onConfirmAppointment?: (appointmentId: string) => void;
+  onUnconfirmAppointment?: (appointmentId: string) => void;
 }
 
-export function AppointmentsList({ appointments, doctors, onEditAppointment, onCancelAppointment, onConfirmAppointment }: AppointmentsListProps) {
+export function AppointmentsList({ appointments, doctors, onEditAppointment, onCancelAppointment, onConfirmAppointment, onUnconfirmAppointment }: AppointmentsListProps) {
   const {
     searchTerm,
     statusFilter,
@@ -217,6 +218,28 @@ export function AppointmentsList({ appointments, doctors, onEditAppointment, onC
                                 title="Confirmar"
                               >
                                 <CheckCircle className="h-3 w-3" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => onCancelAppointment?.(appointment.id)}
+                                className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                title="Cancelar"
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </>
+                          )}
+                          {appointment.status === 'confirmado' && (
+                            <>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => onUnconfirmAppointment?.(appointment.id)}
+                                className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                title="Desconfirmar"
+                              >
+                                <RotateCcw className="h-3 w-3" />
                               </Button>
                               <Button 
                                 variant="ghost" 

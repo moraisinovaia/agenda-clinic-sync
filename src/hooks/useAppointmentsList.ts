@@ -238,12 +238,66 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     }
   };
 
+  // Desconfirmar agendamento
+  const unconfirmAppointment = async (appointmentId: string) => {
+    try {
+      logger.info('Desconfirmando agendamento', { appointmentId }, 'APPOINTMENTS');
+
+      await measureApiCall(async () => {
+        // Buscar perfil do usuário atual
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('nome, user_id')
+          .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+          .single();
+
+        // Usar função de desconfirmação com auditoria
+        const { data, error } = await supabase.rpc('desconfirmar_agendamento', {
+          p_agendamento_id: appointmentId,
+          p_desconfirmado_por: profile?.nome || 'Usuário',
+          p_desconfirmado_por_user_id: profile?.user_id || null
+        });
+
+        if (error) {
+          logger.error('Erro ao desconfirmar agendamento', error, 'APPOINTMENTS');
+          throw error;
+        }
+
+        if (!(data as any)?.success) {
+          const errorMessage = (data as any)?.error || 'Erro ao desconfirmar agendamento';
+          logger.error('Erro na desconfirmação', { error: errorMessage }, 'APPOINTMENTS');
+          throw new Error(errorMessage);
+        }
+
+        return data;
+      }, 'unconfirm_appointment', 'PUT');
+
+      toast({
+        title: 'Agendamento desconfirmado',
+        description: 'O agendamento foi desconfirmado com sucesso',
+      });
+
+      // Invalidar cache e recarregar
+      refetch();
+      logger.info('Agendamento desconfirmado com sucesso', { appointmentId }, 'APPOINTMENTS');
+    } catch (error) {
+      logger.error('Erro ao desconfirmar agendamento', error, 'APPOINTMENTS');
+      toast({
+        title: 'Erro',
+        description: error instanceof Error ? error.message : 'Não foi possível desconfirmar o agendamento',
+        variant: 'destructive',
+      });
+      throw error;
+    }
+  };
+
   return {
     appointments: appointments || [],
     loading,
     getAppointmentsByDoctorAndDate,
     cancelAppointment,
     confirmAppointment,
+    unconfirmAppointment,
     refetch,
     pagination,
     error

@@ -1621,6 +1621,14 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Json
       }
+      desconfirmar_agendamento: {
+        Args: {
+          p_agendamento_id: string
+          p_desconfirmado_por: string
+          p_desconfirmado_por_user_id?: string
+        }
+        Returns: Json
+      }
       get_backup_cron_status: {
         Args: Record<PropertyKey, never>
         Returns: {
