@@ -15,6 +15,21 @@ export function useMultipleAppointments() {
     setLoading(true);
     
     try {
+      console.log('🔍 Dados enviados para criar_agendamento_multiplo:', {
+        p_nome_completo: formData.nomeCompleto,
+        p_data_nascimento: formData.dataNascimento,
+        p_convenio: formData.convenio,
+        p_telefone: formData.telefone || '',
+        p_celular: formData.celular || '',
+        p_medico_id: formData.medicoId,
+        p_atendimento_ids: formData.atendimentoIds,
+        p_data_agendamento: formData.dataAgendamento,
+        p_hora_agendamento: formData.horaAgendamento,
+        p_observacoes: formData.observacoes || null,
+        p_criado_por: 'Recepcionista',
+        p_criado_por_user_id: null
+      });
+
       const { data, error } = await supabase.rpc('criar_agendamento_multiplo', {
         p_nome_completo: formData.nomeCompleto,
         p_data_nascimento: formData.dataNascimento,
@@ -29,6 +44,8 @@ export function useMultipleAppointments() {
         p_criado_por: 'Recepcionista',
         p_criado_por_user_id: null
       });
+
+      console.log('📥 Resposta da função criar_agendamento_multiplo:', { data, error });
 
       if (error) {
         throw error;
