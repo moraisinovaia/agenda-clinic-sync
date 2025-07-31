@@ -5,6 +5,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { CalendarDays, X } from "lucide-react";
 import { PatientDataFormFixed } from './PatientDataFormFixed';
+import { AppointmentDataForm } from './AppointmentDataForm';
 import { ExamSelectionForm } from './ExamSelectionForm';
 import { MultipleAppointmentPreview } from './MultipleAppointmentPreview';
 import { useMultipleAppointments } from '@/hooks/useMultipleAppointments';
@@ -135,67 +136,78 @@ export function MultipleSchedulingModal({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Formulário Principal */}
-          <div className="space-y-6">
-            <PatientDataFormFixed
-              formData={formData}
-              setFormData={setFormData}
-              availableConvenios={availableConvenios}
-              medicoSelected={!!formData.medicoId}
-              selectedDoctor={selectedDoctor}
-            />
+        <div className="space-y-6">
+          {/* Seção 1: Dados do Paciente */}
+          <PatientDataFormFixed
+            formData={formData}
+            setFormData={setFormData}
+            availableConvenios={availableConvenios}
+            medicoSelected={!!formData.medicoId}
+            selectedDoctor={selectedDoctor}
+          />
 
-            {formData.medicoId && (
-              <>
-                <Separator />
+          <Separator />
+
+          {/* Seção 2: Dados do Agendamento */}
+          <AppointmentDataForm
+            formData={formData}
+            setFormData={setFormData}
+            doctors={doctors}
+            atendimentos={atendimentos}
+          />
+
+          {/* Seção 3: Seleção de Múltiplos Exames */}
+          {formData.medicoId && (
+            <>
+              <Separator />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <ExamSelectionForm
                   availableExams={availableExams}
                   selectedExams={selectedExams}
                   onExamChange={handleExamChange}
                 />
-              </>
-            )}
-          </div>
 
-          {/* Preview e Resumo */}
-          <div className="space-y-6">
-            {/* Exames Selecionados (Header) */}
-            {selectedExams.length > 0 && (
-              <div className="space-y-2">
-                <div className="text-sm font-medium">
-                  Exames selecionados ({selectedExams.length}):
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {selectedExams.map((exam) => (
-                    <Badge 
-                      key={exam.id} 
-                      variant="secondary" 
-                      className="flex items-center gap-1"
-                    >
-                      {exam.nome}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-4 w-4 p-0 hover:bg-destructive hover:text-destructive-foreground"
-                        onClick={() => handleRemoveExam(exam.id)}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </Badge>
-                  ))}
+                <div className="space-y-4">
+                  {/* Exames Selecionados */}
+                  {selectedExams.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="text-sm font-medium">
+                        Exames selecionados ({selectedExams.length}):
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedExams.map((exam) => (
+                          <Badge 
+                            key={exam.id} 
+                            variant="secondary" 
+                            className="flex items-center gap-1"
+                          >
+                            {exam.nome}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-4 w-4 p-0 hover:bg-destructive hover:text-destructive-foreground"
+                              onClick={() => handleRemoveExam(exam.id)}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Preview do Agendamento */}
+                  <MultipleAppointmentPreview
+                    selectedExams={selectedExams}
+                    selectedDoctor={selectedDoctor}
+                    patientName={formData.nomeCompleto}
+                    appointmentDate={formData.dataAgendamento}
+                    appointmentTime={formData.horaAgendamento}
+                  />
                 </div>
               </div>
-            )}
-
-            <MultipleAppointmentPreview
-              selectedExams={selectedExams}
-              selectedDoctor={selectedDoctor}
-              patientName={formData.nomeCompleto}
-              appointmentDate={formData.dataAgendamento}
-              appointmentTime={formData.horaAgendamento}
-            />
-          </div>
+            </>
+          )}
         </div>
 
         {/* Botões de Ação */}
