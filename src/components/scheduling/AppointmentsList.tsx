@@ -1,5 +1,7 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { formatInTimeZone } from 'date-fns-tz';
+import { BRAZIL_TIMEZONE } from '@/utils/timezone';
 import { AppointmentWithRelations } from '@/types/scheduling';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -150,7 +152,7 @@ export function AppointmentsList({ appointments, doctors, onEditAppointment, onC
                         </Badge>
                       </TableCell>
                       <TableCell className="font-medium">
-                        {format(new Date(appointment.data_agendamento), 'dd/MM/yyyy', { locale: ptBR })}
+                        {formatInTimeZone(new Date(appointment.data_agendamento + 'T00:00:00'), BRAZIL_TIMEZONE, 'dd/MM/yyyy', { locale: ptBR })}
                       </TableCell>
                       <TableCell className="font-mono">
                         {appointment.hora_agendamento}
