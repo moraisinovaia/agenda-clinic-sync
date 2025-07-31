@@ -255,7 +255,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     try {
       logger.info('Desconfirmando agendamento', { appointmentId }, 'APPOINTMENTS');
 
-      await measureApiCall(async () => {
+      const result = await measureApiCall(async () => {
         // Buscar perfil do usuário atual
         const { data: profile } = await supabase
           .from('profiles')
@@ -270,27 +270,45 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           p_desconfirmado_por_user_id: profile?.user_id || null
         });
 
+        // 🐛 DEBUG: Log da resposta completa para debug
+        console.log('🔍 Resposta completa da desconfirmação:', { data, error });
+
         if (error) {
-          logger.error('Erro ao desconfirmar agendamento', error, 'APPOINTMENTS');
+          logger.error('Erro RPC ao desconfirmar agendamento', error, 'APPOINTMENTS');
           throw error;
         }
 
-        if (!(data as any)?.success) {
-          const errorMessage = (data as any)?.error || 'Erro ao desconfirmar agendamento';
-          logger.error('Erro na desconfirmação', { error: errorMessage }, 'APPOINTMENTS');
+        // ✅ CORREÇÃO: Melhorar validação da resposta
+        const response = data as { success?: boolean; error?: string; message?: string };
+        
+        if (!response || response.success === false) {
+          const errorMessage = response?.error || response?.message || 'Erro ao desconfirmar agendamento';
+          logger.error('Erro na validação da desconfirmação', { response, errorMessage }, 'APPOINTMENTS');
           throw new Error(errorMessage);
         }
 
         return data;
       }, 'unconfirm_appointment', 'PUT');
 
+      // ⚡ INVALIDAÇÃO AGRESSIVA DE CACHE APÓS DESCONFIRMAÇÃO
+      console.log('🧹 Iniciando invalidação agressiva de cache após desconfirmação...');
+      
+      // 1. Invalidar cache imediatamente
+      invalidateCache();
+      
+      // 2. Aguardar um pouco para garantir que mudança foi persistida no banco
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // 3. Forçar refetch completo, ignorando qualquer cache
+      await forceRefetch();
+      
+      console.log('✅ Cache invalidado e dados recarregados após desconfirmação');
+
       toast({
         title: 'Agendamento desconfirmado',
         description: 'O agendamento foi desconfirmado com sucesso',
       });
 
-      // Invalidar cache e recarregar
-      refetch();
       logger.info('Agendamento desconfirmado com sucesso', { appointmentId }, 'APPOINTMENTS');
     } catch (error) {
       logger.error('Erro ao desconfirmar agendamento', error, 'APPOINTMENTS');
