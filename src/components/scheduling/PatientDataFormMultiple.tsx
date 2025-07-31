@@ -14,8 +14,14 @@ interface PatientDataFormMultipleProps {
   setFormData: (data: MultipleSchedulingFormData | ((prev: MultipleSchedulingFormData) => MultipleSchedulingFormData)) => void;
   availableConvenios: string[];
   medicoSelected: boolean;
-  searchPatientsByBirthDate: (birthDate: string) => Promise<any[]>;
   selectedDoctor?: Doctor;
+  // ✅ CORREÇÃO DEFINITIVA: Estados vindos do componente pai
+  foundPatients: any[];
+  searchingPatients: boolean;
+  showPatientsList: boolean;
+  onSearchPatients: (birthDate: string) => Promise<void>;
+  onSelectPatient: (patient: any) => void;
+  onCreateNewPatient: () => void;
 }
 
 export function PatientDataFormMultiple({
@@ -23,100 +29,35 @@ export function PatientDataFormMultiple({
   setFormData,
   availableConvenios,
   medicoSelected,
-  searchPatientsByBirthDate,
-  selectedDoctor
+  selectedDoctor,
+  // ✅ CORREÇÃO DEFINITIVA: Estados e funções vindos do componente pai
+  foundPatients,
+  searchingPatients,
+  showPatientsList,
+  onSearchPatients,
+  onSelectPatient,
+  onCreateNewPatient
 }: PatientDataFormMultipleProps) {
   
-  // ✅ CORREÇÃO DEFINITIVA: Estado para busca de pacientes
-  const [foundPatients, setFoundPatients] = useState<any[]>([]);
-  const [searchingPatients, setSearchingPatients] = useState(false);
-  const [showPatientsList, setShowPatientsList] = useState(false);
-
-  // ✅ CORREÇÃO DEFINITIVA: useRef para estabilizar a função de busca
-  const searchFunctionRef = useRef(searchPatientsByBirthDate);
-  const lastSearchDateRef = useRef<string>('');
-  const cacheResultsRef = useRef<{ [key: string]: any[] }>({});
-
-  // ✅ CORREÇÃO DEFINITIVA: Atualizar a referência da função apenas quando necessário
-  searchFunctionRef.current = searchPatientsByBirthDate;
-
-  // ✅ CORREÇÃO DEFINITIVA: Buscar pacientes com proteção total contra re-renders
+  // ✅ CORREÇÃO DEFINITIVA: Estados agora vêm do componente pai - sem useEffect local
   useEffect(() => {
-    const searchPatients = async () => {
-      const currentDate = formData.dataNascimento;
-      
-      // Evitar busca duplicada
-      if (lastSearchDateRef.current === currentDate) {
-        return;
+    // Dispara a busca de pacientes quando a data muda
+    const timeoutId = setTimeout(() => {
+      if (formData.dataNascimento) {
+        onSearchPatients(formData.dataNascimento);
       }
-      
-      if (currentDate && currentDate.length === 10) {
-        // Verificar cache primeiro
-        if (cacheResultsRef.current[currentDate]) {
-          console.log('📦 Usando resultado do cache para:', currentDate);
-          setFoundPatients(cacheResultsRef.current[currentDate]);
-          setShowPatientsList(cacheResultsRef.current[currentDate].length > 0);
-          lastSearchDateRef.current = currentDate;
-          return;
-        }
-        
-        setSearchingPatients(true);
-        try {
-          console.log('🔍 Buscando pacientes para data:', currentDate);
-          // Usar a referência estável da função
-          const patients = await searchFunctionRef.current(currentDate);
-          
-          // Armazenar no cache
-          cacheResultsRef.current[currentDate] = patients;
-          
-          setFoundPatients(patients);
-          setShowPatientsList(patients.length > 0);
-          lastSearchDateRef.current = currentDate;
-          console.log('✅ Busca concluída:', patients.length, 'pacientes encontrados');
-        } catch (error) {
-          console.error('❌ Erro ao buscar pacientes:', error);
-          setFoundPatients([]);
-          setShowPatientsList(false);
-        } finally {
-          setSearchingPatients(false);
-        }
-      } else {
-        console.log('🧹 Limpando resultados - data incompleta');
-        setFoundPatients([]);
-        setShowPatientsList(false);
-        lastSearchDateRef.current = '';
-      }
-    };
-
-    const timeoutId = setTimeout(searchPatients, 300); // Debounce reduzido para melhor responsividade
+    }, 300); // Debounce de 300ms
+    
     return () => clearTimeout(timeoutId);
-  }, [formData.dataNascimento]); // ✅ CORREÇÃO DEFINITIVA: Apenas formData.dataNascimento como dependência
+  }, [formData.dataNascimento, onSearchPatients]);
 
-  // Função para selecionar um paciente encontrado - COM PROTEÇÃO
+  // ✅ CORREÇÃO DEFINITIVA: Usar as funções do componente pai
   const selectPatient = (patient: any) => {
-    console.log('👤 Selecionando paciente:', patient.nome_completo);
-    setFormData(prev => ({
-      ...prev,
-      nomeCompleto: patient.nome_completo,
-      telefone: patient.telefone || '',
-      celular: patient.celular,
-      convenio: patient.convenio,
-    }));
-    setShowPatientsList(false);
+    onSelectPatient(patient);
   };
 
-  // Função para criar novo paciente (apenas limpar campos específicos)
   const createNewPatient = () => {
-    console.log('🆕 Criando novo paciente - preservando data:', formData.dataNascimento);
-    setFormData(prev => ({
-      ...prev,
-      nomeCompleto: '',
-      telefone: '',
-      celular: '',
-      convenio: '',
-      // PRESERVAR: dataNascimento, medicoId, atendimentoIds, dataAgendamento, etc.
-    }));
-    setShowPatientsList(false);
+    onCreateNewPatient();
   };
 
   // Verificação de compatibilidade do convênio

@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -40,6 +40,15 @@ export function StableMultipleSchedulingForm({
   const [formData, setFormData] = useState<MultipleSchedulingFormData>(initialFormData);
   const { loading, createMultipleAppointment } = useMultipleScheduling();
 
+  // ✅ CORREÇÃO DEFINITIVA: Estados de busca de pacientes movidos para o componente pai
+  const [foundPatients, setFoundPatients] = useState<any[]>([]);
+  const [searchingPatients, setSearchingPatients] = useState(false);
+  const [showPatientsList, setShowPatientsList] = useState(false);
+  
+  // Cache e controle de busca
+  const lastSearchDateRef = useRef<string>('');
+  const cacheResultsRef = useRef<{ [key: string]: any[] }>({});
+
   // Calcular valores derivados de forma estável
   const selectedDoctor = useMemo(() => 
     doctors.find(doctor => doctor.id === formData.medicoId), 
@@ -60,6 +69,75 @@ export function StableMultipleSchedulingForm({
     atendimentos.filter(a => formData.atendimentoIds.includes(a.id)),
     [atendimentos, formData.atendimentoIds]
   );
+
+  // ✅ CORREÇÃO DEFINITIVA: Função de busca de pacientes estabilizada
+  const handleSearchPatients = useCallback(async (birthDate: string) => {
+    // Evitar busca duplicada
+    if (lastSearchDateRef.current === birthDate) {
+      return;
+    }
+    
+    if (birthDate && birthDate.length === 10) {
+      // Verificar cache primeiro
+      if (cacheResultsRef.current[birthDate]) {
+        console.log('📦 Usando resultado do cache para:', birthDate);
+        setFoundPatients(cacheResultsRef.current[birthDate]);
+        setShowPatientsList(cacheResultsRef.current[birthDate].length > 0);
+        lastSearchDateRef.current = birthDate;
+        return;
+      }
+      
+      setSearchingPatients(true);
+      try {
+        console.log('🔍 Buscando pacientes para data:', birthDate);
+        const patients = await searchPatientsByBirthDate(birthDate);
+        
+        // Armazenar no cache
+        cacheResultsRef.current[birthDate] = patients;
+        
+        setFoundPatients(patients);
+        setShowPatientsList(patients.length > 0);
+        lastSearchDateRef.current = birthDate;
+        console.log('✅ Busca concluída:', patients.length, 'pacientes encontrados');
+      } catch (error) {
+        console.error('❌ Erro ao buscar pacientes:', error);
+        setFoundPatients([]);
+        setShowPatientsList(false);
+      } finally {
+        setSearchingPatients(false);
+      }
+    } else {
+      console.log('🧹 Limpando resultados - data incompleta');
+      setFoundPatients([]);
+      setShowPatientsList(false);
+      lastSearchDateRef.current = '';
+    }
+  }, [searchPatientsByBirthDate]);
+
+  // ✅ CORREÇÃO DEFINITIVA: Funções para controle da lista de pacientes
+  const handleSelectPatient = useCallback((patient: any) => {
+    console.log('👤 Selecionando paciente:', patient);
+    setFormData(prev => ({
+      ...prev,
+      nomeCompleto: patient.nome_completo || '',
+      convenio: patient.convenio || '',
+      telefone: patient.telefone || '',
+      celular: patient.celular || '',
+    }));
+    setShowPatientsList(false);
+  }, []);
+
+  const handleCreateNewPatient = useCallback(() => {
+    console.log('➕ Criando novo paciente');
+    setFormData(prev => ({
+      ...prev,
+      nomeCompleto: '',
+      convenio: '',
+      telefone: '',
+      celular: '',
+    }));
+    setShowPatientsList(false);
+  }, []);
 
   // Handler de submit estabilizado - PRESERVA DADOS EM CASO DE ERRO
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
@@ -110,8 +188,14 @@ export function StableMultipleSchedulingForm({
                   setFormData={setFormData}
                   availableConvenios={availableConvenios}
                   medicoSelected={medicoSelected}
-                  searchPatientsByBirthDate={searchPatientsByBirthDate}
                   selectedDoctor={selectedDoctor}
+                  // ✅ CORREÇÃO DEFINITIVA: Estados e funções vindos do componente pai
+                  foundPatients={foundPatients}
+                  searchingPatients={searchingPatients}
+                  showPatientsList={showPatientsList}
+                  onSearchPatients={handleSearchPatients}
+                  onSelectPatient={handleSelectPatient}
+                  onCreateNewPatient={handleCreateNewPatient}
                 />
               </CardContent>
             </Card>

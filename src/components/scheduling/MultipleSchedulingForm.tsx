@@ -88,8 +88,13 @@ export function MultipleSchedulingForm({
                   setFormData={setFormData}
                   availableConvenios={availableConvenios}
                   medicoSelected={medicoSelected}
-                  searchPatientsByBirthDate={searchPatientsByBirthDate}
                   selectedDoctor={selectedDoctor}
+                  foundPatients={[]}
+                  searchingPatients={false}
+                  showPatientsList={false}
+                  onSearchPatients={async () => {}}
+                  onSelectPatient={() => {}}
+                  onCreateNewPatient={() => {}}
                 />
               </CardContent>
             </Card>
