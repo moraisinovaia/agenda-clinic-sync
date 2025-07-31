@@ -6,6 +6,7 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useNotifications } from '@/hooks/useNotifications';
 
 import { ImprovedSchedulingForm } from '@/components/scheduling/ImprovedSchedulingForm';
+import { MultipleSchedulingModal } from '@/components/scheduling/MultipleSchedulingModal';
 
 import { DoctorSchedule } from '@/components/scheduling/DoctorSchedule';
 import { AppointmentsList } from '@/components/scheduling/AppointmentsList';
@@ -46,6 +47,7 @@ const Index = () => {
   
   // Estados sempre inicializados na mesma ordem (antes de qualquer return)
   const [searchTerm, setSearchTerm] = useState('');
+  const [multipleSchedulingOpen, setMultipleSchedulingOpen] = useState(false);
   
   const {
     viewMode,
@@ -102,6 +104,12 @@ const Index = () => {
       description: 'Ctrl+N - Novo agendamento'
     },
     {
+      key: 'm',
+      ctrlKey: true,
+      action: () => setViewMode('multiple-appointment'),
+      description: 'Ctrl+M - Agendamento múltiplo'
+    },
+    {
       key: 'l',
       ctrlKey: true,
       action: () => setViewMode('appointments-list'),
@@ -149,6 +157,38 @@ const Index = () => {
       console.log('✅ Sistema configurado com sucesso');
     }
   }, [profile?.status]);
+
+  // Efeito para abrir modal de agendamento múltiplo
+  useEffect(() => {
+    if (viewMode === 'multiple-appointment') {
+      setMultipleSchedulingOpen(true);
+    }
+  }, [viewMode]);
+
+  // Handlers de sucesso
+  const handleAppointmentSuccess = async () => {
+    await fetchFilaEspera(true);
+    setViewMode('doctors');
+  };
+
+  const handleMultipleAppointmentSuccess = async () => {
+    await fetchFilaEspera(true);
+    setMultipleSchedulingOpen(false);
+    setViewMode('doctors');
+  };
+
+  // Controlar fechamento do modal múltiplo
+  const handleMultipleSchedulingClose = (open: boolean) => {
+    setMultipleSchedulingOpen(open);
+    if (!open && viewMode === 'multiple-appointment') {
+      setViewMode('doctors');
+    }
+  };
+
+  // Convênios únicos disponíveis
+  const uniqueConvenios = Array.from(new Set(
+    doctors.flatMap(doctor => doctor.convenios_aceitos || [])
+  )).filter(Boolean);
   
   
   // Redirecionar para login se não autenticado
@@ -453,6 +493,16 @@ const Index = () => {
           <AlertSystem />
         )}
       </div>
+
+      {/* Modal de Agendamento Múltiplo */}
+      <MultipleSchedulingModal
+        open={multipleSchedulingOpen}
+        onOpenChange={handleMultipleSchedulingClose}
+        doctors={doctors}
+        atendimentos={atendimentos}
+        availableConvenios={uniqueConvenios}
+        onSuccess={handleMultipleAppointmentSuccess}
+      />
     </div>
   );
 };

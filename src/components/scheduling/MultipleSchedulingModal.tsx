@@ -1,0 +1,218 @@
+import { useState, useEffect } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
+import { CalendarDays, X } from "lucide-react";
+import { PatientDataFormFixed } from './PatientDataFormFixed';
+import { ExamSelectionForm } from './ExamSelectionForm';
+import { MultipleAppointmentPreview } from './MultipleAppointmentPreview';
+import { useMultipleAppointments } from '@/hooks/useMultipleAppointments';
+import { SchedulingFormData, Doctor, Atendimento } from '@/types/scheduling';
+import { SelectedExam, MultipleAppointmentData } from '@/types/multiple-appointments';
+
+interface MultipleSchedulingModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  doctors: Doctor[];
+  atendimentos: Atendimento[];
+  availableConvenios: string[];
+  onSuccess: () => void;
+}
+
+export function MultipleSchedulingModal({
+  open,
+  onOpenChange,
+  doctors,
+  atendimentos,
+  availableConvenios,
+  onSuccess
+}: MultipleSchedulingModalProps) {
+  const { createMultipleAppointments, loading } = useMultipleAppointments();
+  
+  const [formData, setFormData] = useState<SchedulingFormData>({
+    nomeCompleto: '',
+    dataNascimento: '',
+    convenio: '',
+    telefone: '',
+    celular: '',
+    medicoId: '',
+    atendimentoId: '',
+    dataAgendamento: '',
+    horaAgendamento: '',
+    observacoes: ''
+  });
+  
+  const [selectedExams, setSelectedExams] = useState<SelectedExam[]>([]);
+
+  const selectedDoctor = doctors.find(d => d.id === formData.medicoId) || null;
+  const availableExams = selectedDoctor ? 
+    atendimentos.filter(a => a.medico_id === selectedDoctor.id && a.ativo) : 
+    [];
+
+  const handleExamChange = (exam: Atendimento, checked: boolean) => {
+    setSelectedExams(prev => {
+      if (checked) {
+        return [...prev, { id: exam.id, nome: exam.nome, tipo: exam.tipo }];
+      } else {
+        return prev.filter(selected => selected.id !== exam.id);
+      }
+    });
+  };
+
+  const handleRemoveExam = (examId: string) => {
+    setSelectedExams(prev => prev.filter(exam => exam.id !== examId));
+  };
+
+  const handleDoctorChange = () => {
+    // Limpar exames selecionados quando trocar de médico
+    setSelectedExams([]);
+  };
+
+  useEffect(() => {
+    handleDoctorChange();
+  }, [formData.medicoId]);
+
+  const handleSubmit = async () => {
+    if (selectedExams.length === 0) {
+      return;
+    }
+
+    try {
+      const multipleData: MultipleAppointmentData = {
+        nomeCompleto: formData.nomeCompleto,
+        dataNascimento: formData.dataNascimento,
+        convenio: formData.convenio,
+        telefone: formData.telefone,
+        celular: formData.celular,
+        medicoId: formData.medicoId,
+        atendimentoIds: selectedExams.map(exam => exam.id),
+        dataAgendamento: formData.dataAgendamento,
+        horaAgendamento: formData.horaAgendamento,
+        observacoes: formData.observacoes
+      };
+
+      await createMultipleAppointments(multipleData);
+      onSuccess();
+      handleClose();
+    } catch (error) {
+      // Erro já tratado no hook
+    }
+  };
+
+  const handleClose = () => {
+    setFormData({
+      nomeCompleto: '',
+      dataNascimento: '',
+      convenio: '',
+      telefone: '',
+      celular: '',
+      medicoId: '',
+      atendimentoId: '',
+      dataAgendamento: '',
+      horaAgendamento: '',
+      observacoes: ''
+    });
+    setSelectedExams([]);
+    onOpenChange(false);
+  };
+
+  const isFormValid = formData.nomeCompleto && 
+                     formData.dataNascimento && 
+                     formData.convenio && 
+                     formData.medicoId && 
+                     formData.dataAgendamento && 
+                     formData.horaAgendamento && 
+                     selectedExams.length > 0;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <CalendarDays className="h-5 w-5" />
+            Agendar Múltiplos Exames
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Formulário Principal */}
+          <div className="space-y-6">
+            <PatientDataFormFixed
+              formData={formData}
+              setFormData={setFormData}
+              availableConvenios={availableConvenios}
+              medicoSelected={!!formData.medicoId}
+              selectedDoctor={selectedDoctor}
+            />
+
+            {formData.medicoId && (
+              <>
+                <Separator />
+                <ExamSelectionForm
+                  availableExams={availableExams}
+                  selectedExams={selectedExams}
+                  onExamChange={handleExamChange}
+                />
+              </>
+            )}
+          </div>
+
+          {/* Preview e Resumo */}
+          <div className="space-y-6">
+            {/* Exames Selecionados (Header) */}
+            {selectedExams.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-sm font-medium">
+                  Exames selecionados ({selectedExams.length}):
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {selectedExams.map((exam) => (
+                    <Badge 
+                      key={exam.id} 
+                      variant="secondary" 
+                      className="flex items-center gap-1"
+                    >
+                      {exam.nome}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-4 w-4 p-0 hover:bg-destructive hover:text-destructive-foreground"
+                        onClick={() => handleRemoveExam(exam.id)}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <MultipleAppointmentPreview
+              selectedExams={selectedExams}
+              selectedDoctor={selectedDoctor}
+              patientName={formData.nomeCompleto}
+              appointmentDate={formData.dataAgendamento}
+              appointmentTime={formData.horaAgendamento}
+            />
+          </div>
+        </div>
+
+        {/* Botões de Ação */}
+        <div className="flex justify-between pt-6 border-t">
+          <Button variant="outline" onClick={handleClose}>
+            Cancelar
+          </Button>
+          
+          <Button 
+            onClick={handleSubmit}
+            disabled={!isFormValid || loading}
+            className="min-w-[140px]"
+          >
+            {loading ? 'Agendando...' : `Agendar ${selectedExams.length} exames`}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
