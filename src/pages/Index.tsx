@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useSupabaseScheduling } from '@/hooks/useSupabaseScheduling';
@@ -247,6 +247,11 @@ const Index = () => {
     }
   };
 
+  // ✅ CORREÇÃO DEFINITIVA: Função estável para sucesso do agendamento múltiplo
+  const handleMultipleAppointmentSuccess = useCallback(() => {
+    setViewMode('doctors');
+  }, [setViewMode]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -349,9 +354,7 @@ const Index = () => {
           <StableMultipleSchedulingForm
             doctors={doctors}
             atendimentos={atendimentos}
-            onSuccess={() => {
-              setViewMode('doctors');
-            }}
+            onSuccess={handleMultipleAppointmentSuccess}
             onCancel={goBack}
             searchPatientsByBirthDate={searchPatientsByBirthDate}
           />
