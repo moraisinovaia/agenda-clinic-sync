@@ -169,17 +169,19 @@ serve(async (req) => {
       );
     }
 
-    // Validações básicas
-    if (!medicoId || !dataInicio || !dataFim || !motivo) {
-      console.log('❌ Dados obrigatórios ausentes');
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Todos os campos são obrigatórios' 
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    // Rota para criar bloqueio (ação padrão)
+    if (acao === 'create') {
+      // Validações básicas para criação
+      if (!medicoId || !dataInicio || !dataFim || !motivo) {
+        console.log('❌ Dados obrigatórios ausentes para criação');
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Todos os campos são obrigatórios para criar bloqueio' 
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
 
     console.log('🔍 Verificando médico...');
     
@@ -272,6 +274,17 @@ serve(async (req) => {
         }
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+    }
+
+    // Ação não reconhecida
+    console.log('❌ Ação não reconhecida:', acao);
+    return new Response(
+      JSON.stringify({ 
+        success: false, 
+        error: `Ação não reconhecida: ${acao}. Use 'create', 'list' ou 'remove'` 
+      }),
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
