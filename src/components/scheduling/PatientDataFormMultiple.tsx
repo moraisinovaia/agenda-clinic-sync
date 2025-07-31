@@ -39,7 +39,7 @@ export function PatientDataFormMultiple({
   onCreateNewPatient
 }: PatientDataFormMultipleProps) {
   
-  // ✅ CORREÇÃO DEFINITIVA: Estados agora vêm do componente pai - sem useEffect local
+  // ✅ CORREÇÃO DEFINITIVA: useEffect sem dependência instável
   useEffect(() => {
     // Dispara a busca de pacientes quando a data muda
     const timeoutId = setTimeout(() => {
@@ -49,7 +49,7 @@ export function PatientDataFormMultiple({
     }, 300); // Debounce de 300ms
     
     return () => clearTimeout(timeoutId);
-  }, [formData.dataNascimento, onSearchPatients]);
+  }, [formData.dataNascimento]); // ⚡ REMOVIDO onSearchPatients das dependências
 
   // ✅ CORREÇÃO DEFINITIVA: Usar as funções do componente pai
   const selectPatient = (patient: any) => {
