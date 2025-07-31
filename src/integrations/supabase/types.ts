@@ -1526,6 +1526,8 @@ export type Database = {
           paciente_nome: string
           paciente_convenio: string
           paciente_celular: string
+          paciente_data_nascimento: string
+          paciente_telefone: string
           medico_nome: string
           medico_especialidade: string
           atendimento_nome: string

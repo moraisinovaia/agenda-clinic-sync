@@ -52,8 +52,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
             nome_completo: apt.paciente_nome,
             convenio: apt.paciente_convenio,
             celular: apt.paciente_celular,
-            telefone: '',
-            data_nascimento: '',
+            telefone: apt.paciente_telefone || '',
+            data_nascimento: apt.paciente_data_nascimento || '',
             created_at: '',
             updated_at: ''
           },
