@@ -59,15 +59,15 @@ export const PatientDataFormStable = React.memo(({
     
     if (idade_minima && patientAge < idade_minima) {
       return {
-        type: 'error' as const,
-        message: `Idade mínima para ${selectedDoctor.nome}: ${idade_minima} anos (paciente tem ${patientAge} anos)`
+        type: 'warning' as const,
+        message: `ATENÇÃO: Paciente com ${patientAge} anos está abaixo da idade mínima (${idade_minima} anos) para ${selectedDoctor.nome}`
       };
     }
     
     if (idade_maxima && patientAge > idade_maxima) {
       return {
-        type: 'error' as const,
-        message: `Idade máxima para ${selectedDoctor.nome}: ${idade_maxima} anos (paciente tem ${patientAge} anos)`
+        type: 'warning' as const,
+        message: `ATENÇÃO: Paciente com ${patientAge} anos está acima da idade máxima (${idade_maxima} anos) para ${selectedDoctor.nome}`
       };
     }
 
@@ -241,11 +241,13 @@ export const PatientDataFormStable = React.memo(({
 
       {/* Alerta de validação de idade */}
       {ageValidation && (
-        <Alert variant={ageValidation.type === 'error' ? 'destructive' : 'default'}>
-          {ageValidation.type === 'error' ? (
-            <AlertCircle className="h-4 w-4" />
-          ) : (
+        <Alert variant={ageValidation.type === 'warning' ? 'default' : ageValidation.type === 'success' ? 'default' : 'destructive'}>
+          {ageValidation.type === 'warning' ? (
+            <AlertCircle className="h-4 w-4 text-yellow-600" />
+          ) : ageValidation.type === 'success' ? (
             <CheckCircle className="h-4 w-4 text-green-600" />
+          ) : (
+            <AlertCircle className="h-4 w-4" />
           )}
           <AlertDescription>
             {ageValidation.message}

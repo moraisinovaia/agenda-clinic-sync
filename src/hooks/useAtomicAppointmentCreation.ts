@@ -140,12 +140,24 @@ export function useAtomicAppointmentCreation() {
 
           // Sucesso!
           const isEditing = !!editingAppointmentId;
-          toast({
-            title: 'Sucesso!',
-            description: isEditing ? 
-              `Agendamento atualizado para ${formData.dataAgendamento} às ${formData.horaAgendamento}` :
-              `Agendamento criado para ${formData.dataAgendamento} às ${formData.horaAgendamento}`,
-          });
+          
+          // Verificar se há warnings
+          if (result.warnings && result.warnings.length > 0) {
+            // Mostrar toast com warnings
+            toast({
+              title: 'Agendamento criado com atenções!',
+              description: `${isEditing ? 'Agendamento atualizado' : 'Agendamento criado'} para ${formData.dataAgendamento} às ${formData.horaAgendamento}. ${result.warnings.join('. ')}`,
+              variant: 'default',
+            });
+          } else {
+            // Toast normal de sucesso
+            toast({
+              title: 'Sucesso!',
+              description: isEditing ? 
+                `Agendamento atualizado para ${formData.dataAgendamento} às ${formData.horaAgendamento}` :
+                `Agendamento criado para ${formData.dataAgendamento} às ${formData.horaAgendamento}`,
+            });
+          }
 
           console.log(`✅ Agendamento criado com sucesso na tentativa ${attempt}:`, data);
           return data;

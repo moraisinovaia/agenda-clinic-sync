@@ -6,6 +6,9 @@ export interface AtomicAppointmentResult {
   paciente_id?: string;
   message?: string;
   error?: string;
+  warnings?: string[];
+  is_editing?: boolean;
+  criado_por_usado?: string;
 }
 
 export interface AtomicAppointmentParams {
