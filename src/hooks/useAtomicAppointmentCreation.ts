@@ -207,18 +207,27 @@ export function useAtomicAppointmentCreation() {
       // Se chegou aqui, todas as tentativas falharam
       const errorMessage = lastError?.message || 'Não foi possível criar o agendamento';
       
-      // CRITICAL: Só mostrar toast para erros que não são de validação/conflito
-      if (!errorMessage.includes('já está ocupado') &&
-          !errorMessage.includes('bloqueada') &&
-          !errorMessage.includes('idade') &&
-          !errorMessage.includes('convênio') &&
-          !errorMessage.includes('obrigatório') &&
-          !errorMessage.includes('inválido')) {
+      // CRITICAL: Identificar tipos de erro para melhor UX
+      const isConflictError = errorMessage.includes('já está ocupado') || 
+                             errorMessage.includes('Este horário já está ocupado');
+      const isValidationError = errorMessage.includes('bloqueada') ||
+                               errorMessage.includes('idade') ||
+                               errorMessage.includes('convênio') ||
+                               errorMessage.includes('obrigatório') ||
+                               errorMessage.includes('inválido');
+      
+      // Só mostrar toast para erros que não são de validação/conflito
+      if (!isConflictError && !isValidationError) {
         toast({
           title: 'Erro',
           description: errorMessage,
           variant: 'destructive',
         });
+      }
+      
+      // Para conflitos, garantir mensagem padronizada
+      if (isConflictError) {
+        console.log('⚠️ Conflito de horário detectado - formulário será mantido preenchido');
       }
       
       console.error(`❌ Falha após ${MAX_RETRIES} tentativas:`, lastError);

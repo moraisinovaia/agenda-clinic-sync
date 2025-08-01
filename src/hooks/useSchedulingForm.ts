@@ -60,31 +60,23 @@ export function useSchedulingForm(props?: UseSchedulingFormProps) {
     try {
       console.log('🎯 useSchedulingForm: Iniciando handleSubmit com dados:', formData);
       
-      // CRITICAL: Aguardar o resultado do onSubmit e verificar se realmente foi bem-sucedido
-      const result = await onSubmit(formData);
+      // CRITICAL: Aguardar o resultado do onSubmit
+      await onSubmit(formData);
       
-      console.log('🔍 useSchedulingForm: onSubmit completado, resultado:', result);
       console.log('✅ useSchedulingForm: Agendamento criado com sucesso, resetando formulário...');
       
-      // CRITICAL: Só resetar se não houve erro
+      // CRITICAL: Só resetar se chegou até aqui sem erro
       resetForm();
     } catch (error) {
-      // CRITICAL: Capturar QUALQUER erro para evitar propagação não controlada
+      // CRITICAL: Capturar erro e manter formulário preenchido
       const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
       
-      console.log('❌ useSchedulingForm: Erro capturado e setado no estado:', errorMessage);
-      console.log('🔒 useSchedulingForm: Formulário mantido com dados:', formData);
+      console.log('❌ useSchedulingForm: Erro capturado:', errorMessage);
+      console.log('🔒 useSchedulingForm: Mantendo dados do formulário para correção');
       
       setError(errorMessage);
       
-      // CRITICAL: NÃO resetar o formulário em caso de erro
-      // CRITICAL: Prevenir qualquer possível reload da página
-      if (typeof window !== 'undefined') {
-        window.addEventListener('beforeunload', (e) => {
-          e.preventDefault();
-          e.returnValue = '';
-        }, { once: true });
-      }
+      // CRITICAL: NÃO resetar o formulário em caso de erro - manter dados para correção
     } finally {
       console.log('🏁 useSchedulingForm: Finalizando loading state...');
       setLoading(false);

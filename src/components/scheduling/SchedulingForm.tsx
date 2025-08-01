@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar } from '@/components/ui/calendar';
 import { Badge } from '@/components/ui/badge';
-import { Calendar as CalendarIcon, Clock, User } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, User, AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Doctor, Atendimento, SchedulingFormData, AppointmentWithRelations } from '@/types/scheduling';
 import { PatientDataFormFixed } from './PatientDataFormFixed';
 import { AppointmentDataForm } from './AppointmentDataForm';
@@ -54,7 +55,7 @@ export function SchedulingForm({
     observacoes: editingAppointment.observacoes || '',
   } : undefined;
 
-  const { formData, setFormData, loading, handleSubmit } = useSchedulingForm({
+  const { formData, setFormData, loading, error, handleSubmit } = useSchedulingForm({
     initialData: initialEditData,
     preSelectedDoctor,
     preSelectedDate
@@ -144,6 +145,15 @@ export function SchedulingForm({
                 doctors={doctors}
                 atendimentos={atendimentos}
               />
+
+              {error && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    {error}
+                  </AlertDescription>
+                </Alert>
+              )}
 
               <div className="flex gap-2 pt-4">
                 <Button type="submit" disabled={loading} className="flex-1">
