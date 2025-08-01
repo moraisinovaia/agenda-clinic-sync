@@ -4,7 +4,6 @@ import { Separator } from "@/components/ui/separator";
 import { Calendar, Clock, User, Stethoscope } from "lucide-react";
 import { SelectedExam } from "@/types/multiple-appointments";
 import { Doctor } from "@/types/scheduling";
-import { format } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import { ptBR } from "date-fns/locale";
 import { BRAZIL_TIMEZONE } from "@/utils/timezone";
@@ -36,9 +35,19 @@ export function MultipleAppointmentPreview({
     );
   }
 
-  const formattedDate = appointmentDate ? 
-    formatInTimeZone(new Date(appointmentDate + 'T00:00:00'), BRAZIL_TIMEZONE, "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : 
-    '';
+  const getFormattedDate = () => {
+    if (!appointmentDate) return '';
+    
+    try {
+      const dateObj = new Date(appointmentDate + 'T00:00:00');
+      return formatInTimeZone(dateObj, BRAZIL_TIMEZONE, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+    } catch (error) {
+      console.error('Erro ao formatar data:', error);
+      return appointmentDate; // fallback para a data original
+    }
+  };
+
+  const formattedDate = getFormattedDate();
 
   return (
     <Card>
