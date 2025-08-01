@@ -6,6 +6,7 @@ import { PatientDataFormStable } from './PatientDataFormStable';
 import { AppointmentDataForm } from './AppointmentDataForm';
 import { Doctor, SchedulingFormData, Atendimento, AppointmentWithRelations } from '@/types/scheduling';
 import { useSchedulingForm } from '@/hooks/useSchedulingForm';
+import { useDebounce } from '@/hooks/useDebounce';
 import { AlertCircle, CheckCircle, X } from 'lucide-react';
 
 interface SchedulingFormStableProps {
@@ -32,6 +33,7 @@ export function SchedulingFormStable({
   editingAppointment
 }: SchedulingFormStableProps) {
   const [step, setStep] = useState(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Preparar dados iniciais se estiver editando
   const initialData = editingAppointment ? {
@@ -55,6 +57,9 @@ export function SchedulingFormStable({
     resetForm,
     handleSubmit,
   } = useSchedulingForm({ initialData });
+
+  // Debounce para prevenir múltiplas submissões
+  const debouncedIsSubmitting = useDebounce(isSubmitting, 300);
 
   // Determinar step apropriado quando há erro
   useEffect(() => {
@@ -124,6 +129,20 @@ export function SchedulingFormStable({
   const handleCancel = () => {
     resetForm();
     onCancel();
+  };
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    if (isSubmitting || debouncedIsSubmitting) {
+      console.log('🛑 SchedulingFormStable: Submissão em andamento, ignorando...');
+      return;
+    }
+    
+    setIsSubmitting(true);
+    try {
+      await handleSubmit(e, onSubmit);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -200,11 +219,7 @@ export function SchedulingFormStable({
             </div>
           )}
 
-          <form onSubmit={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            handleSubmit(e, onSubmit);
-          }} className="space-y-6">
+          <form onSubmit={handleFormSubmit} className="space-y-6">
             {step === 1 && (
               <PatientDataFormStable
                 formData={formData}
@@ -256,10 +271,10 @@ export function SchedulingFormStable({
                   </Button>
                   <Button 
                     type="submit" 
-                    disabled={!isStepValid(2) || loading}
+                    disabled={!isStepValid(2) || loading || isSubmitting || debouncedIsSubmitting}
                     className="flex-1"
                   >
-                    {loading ? (
+                    {(loading || isSubmitting || debouncedIsSubmitting) ? (
                       <div className="flex items-center gap-2">
                         <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
                         {editingAppointment ? 'Atualizando...' : 'Criando...'}

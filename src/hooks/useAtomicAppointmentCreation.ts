@@ -165,9 +165,8 @@ export function useAtomicAppointmentCreation() {
       const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
       console.error('❌ Erro na criação do agendamento:', errorMessage);
 
-      // CRITICAL: Para erros de validação/conflito, não mostrar toast
-      // O componente irá capturar e exibir adequadamente
-      const isValidationConflictError = errorMessage.includes('já está ocupado') ||
+      // Para erros de validação/conflito, NÃO mostrar toast - deixar o componente mostrar
+      const isValidationError = errorMessage.includes('já está ocupado') ||
           errorMessage.includes('bloqueada') ||
           errorMessage.includes('idade') ||
           errorMessage.includes('convênio') ||
@@ -175,19 +174,16 @@ export function useAtomicAppointmentCreation() {
           errorMessage.includes('inválido') ||
           errorMessage.includes('não está ativo');
 
-      if (!isValidationConflictError) {
-        // Só mostrar toast para erros que não são de validação/conflito
+      if (!isValidationError) {
         toast({
-          title: 'Erro',
+          title: 'Erro no Agendamento',
           description: errorMessage,
           variant: 'destructive',
         });
-      } else {
-        console.log('⚠️ Erro de validação/conflito detectado - formulário será mantido preenchido');
       }
       
-      // Re-throw error para o componente tratar
-      throw error;
+      // Throw error imediatamente para ser capturado pelo useSchedulingForm
+      throw new Error(errorMessage);
       
     } finally {
       // Garantir que o loading sempre seja resetado
