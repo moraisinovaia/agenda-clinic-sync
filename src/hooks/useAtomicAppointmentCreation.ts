@@ -85,160 +85,116 @@ export function useAtomicAppointmentCreation() {
     }
   };
 
-  // ✅ ESTABILIZAR: Criar agendamento com função atômica e retry automático
+  // ✅ DEFINITIVO: Criar agendamento com função atômica com locks
   const createAppointment = useCallback(async (formData: SchedulingFormData, editingAppointmentId?: string): Promise<any> => {
-    let lastError: Error | null = null;
-
     try {
-      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-        try {
-          setLoading(true);
-          console.log(`🚀 Tentativa ${attempt}/${MAX_RETRIES} - Criando agendamento:`, formData);
+      setLoading(true);
+      console.log('🎯 useAtomicAppointmentCreation: Criando agendamento com função atômica definitiva');
 
-          // Validações no frontend
-          validateFormData(formData);
+      // Validações no frontend
+      validateFormData(formData);
 
-          // Buscar nome do usuário logado
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('nome')
-            .eq('user_id', user?.id)
-            .single();
+      // Buscar nome do usuário logado
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('nome')
+        .eq('user_id', user?.id)
+        .single();
 
-          // Chamar função SQL atômica
+      // Chamar função SQL atômica COM LOCKS (uma única tentativa)
+      const { data, error } = await supabase.rpc('criar_agendamento_atomico', {
+        p_nome_completo: formData.nomeCompleto,
+        p_data_nascimento: formData.dataNascimento,
+        p_convenio: formData.convenio,
+        p_telefone: formData.telefone || null,
+        p_celular: formData.celular,
+        p_medico_id: formData.medicoId,
+        p_atendimento_id: formData.atendimentoId,
+        p_data_agendamento: formData.dataAgendamento,
+        p_hora_agendamento: formData.horaAgendamento,
+        p_observacoes: formData.observacoes || null,
+        p_criado_por: profile?.nome || 'Recepcionista',
+        p_criado_por_user_id: user?.id,
+        p_agendamento_id_edicao: editingAppointmentId || null,
+        p_force_update_patient: !!editingAppointmentId,
+      });
 
-          const { data, error } = await supabase.rpc('criar_agendamento_atomico', {
-            p_nome_completo: formData.nomeCompleto,
-            p_data_nascimento: formData.dataNascimento,
-            p_convenio: formData.convenio,
-            p_telefone: formData.telefone || null,
-            p_celular: formData.celular,
-            p_medico_id: formData.medicoId,
-            p_atendimento_id: formData.atendimentoId,
-            p_data_agendamento: formData.dataAgendamento,
-            p_hora_agendamento: formData.horaAgendamento,
-            p_observacoes: formData.observacoes || null,
-            p_criado_por: profile?.nome || 'Recepcionista',
-            p_criado_por_user_id: user?.id,
-            p_agendamento_id_edicao: editingAppointmentId || null,
-            p_force_update_patient: !!editingAppointmentId,
-          });
-
-          if (error) {
-            console.error(`❌ Erro na tentativa ${attempt}:`, error);
-            throw error;
-          }
-
-          console.log(`✅ Resultado da tentativa ${attempt}:`, data);
-
-          // Verificar se a função retornou sucesso
-          const result = data as unknown as AtomicAppointmentResult;
-          if (!result?.success) {
-            const errorMessage = result?.error || result?.message || 'Erro desconhecido na criação do agendamento';
-            console.log('❌ Função SQL retornou erro:', errorMessage);
-            
-            // CRITICAL: Não fazer toast aqui para erros de conflito
-            // Deixar o componente tratar o erro
-            if (errorMessage.includes('já está ocupado') || 
-                errorMessage.includes('bloqueada') ||
-                errorMessage.includes('idade') ||
-                errorMessage.includes('convênio')) {
-              console.log('❌ Erro de validação/conflito - lançando exceção sem toast');
-              throw new Error(errorMessage);
-            }
-            
-            throw new Error(errorMessage);
-          }
-
-          // Sucesso!
-          const isEditing = !!editingAppointmentId;
-          
-          // Verificar se há warnings
-          if (result.warnings && result.warnings.length > 0) {
-            // Mostrar toast com warnings
-            toast({
-              title: 'Agendamento criado com atenções!',
-              description: `${isEditing ? 'Agendamento atualizado' : 'Agendamento criado'} para ${formData.dataAgendamento} às ${formData.horaAgendamento}. ${result.warnings.join('. ')}`,
-              variant: 'default',
-            });
-          } else {
-            // Toast normal de sucesso
-            toast({
-              title: 'Sucesso!',
-              description: isEditing ? 
-                `Agendamento atualizado para ${formData.dataAgendamento} às ${formData.horaAgendamento}` :
-                `Agendamento criado para ${formData.dataAgendamento} às ${formData.horaAgendamento}`,
-            });
-          }
-
-          console.log(`✅ Agendamento criado com sucesso na tentativa ${attempt}:`, data);
-          return data;
-
-        } catch (error) {
-          lastError = error instanceof Error ? error : new Error('Erro desconhecido');
-          console.error(`❌ Erro na tentativa ${attempt}:`, lastError);
-
-          // CRITICAL: Para erros de validação/conflito, não fazer retry e não mostrar toast
-          if (lastError.message.includes('já está ocupado') ||
-              lastError.message.includes('bloqueada') ||
-              lastError.message.includes('idade') ||
-              lastError.message.includes('convênio') ||
-              lastError.message.includes('obrigatório') ||
-              lastError.message.includes('inválido') ||
-              lastError.message.includes('não está ativo')) {
-            console.log('❌ Erro de validação/conflito detectado - não fazer retry nem toast');
-            // CRITICAL: Lançar erro imediatamente sem toast
-            // O componente irá capturar e exibir adequadamente
-            throw new Error(lastError.message);
-          }
-
-          // Para outros erros, verificar se deve fazer retry
-          if (attempt === MAX_RETRIES) {
-            break;
-          }
-
-          // Aguardar antes do próximo retry (backoff exponencial)
-          const delayTime = RETRY_DELAY * Math.pow(2, attempt - 1);
-          console.log(`⏳ Aguardando ${delayTime}ms antes da próxima tentativa...`);
-          await delay(delayTime);
-        }
+      if (error) {
+        console.error('❌ Erro na chamada da função:', error);
+        throw error;
       }
 
-      // Se chegou aqui, todas as tentativas falharam
-      const errorMessage = lastError?.message || 'Não foi possível criar o agendamento';
+      console.log('✅ Resultado da função:', data);
+
+      // Verificar se a função retornou sucesso
+      const result = data as unknown as AtomicAppointmentResult;
+      if (!result?.success) {
+        const errorMessage = result?.error || result?.message || 'Erro desconhecido na criação do agendamento';
+        console.log('❌ Função SQL retornou erro:', errorMessage);
+        
+        // CRITICAL: Não fazer toast aqui para erros de conflito
+        // Deixar o componente tratar o erro
+        throw new Error(errorMessage);
+      }
+
+      // Sucesso!
+      const isEditing = !!editingAppointmentId;
       
-      // CRITICAL: Identificar tipos de erro para melhor UX
-      const isConflictError = errorMessage.includes('já está ocupado') || 
-                             errorMessage.includes('Este horário já está ocupado');
-      const isValidationError = errorMessage.includes('bloqueada') ||
-                               errorMessage.includes('idade') ||
-                               errorMessage.includes('convênio') ||
-                               errorMessage.includes('obrigatório') ||
-                               errorMessage.includes('inválido');
-      
-      // Só mostrar toast para erros que não são de validação/conflito
-      if (!isConflictError && !isValidationError) {
+      // Verificar se há warnings
+      if (result.warnings && result.warnings.length > 0) {
+        // Mostrar toast com warnings
+        toast({
+          title: 'Agendamento criado com atenções!',
+          description: `${isEditing ? 'Agendamento atualizado' : 'Agendamento criado'} para ${formData.dataAgendamento} às ${formData.horaAgendamento}. ${result.warnings.join('. ')}`,
+          variant: 'default',
+        });
+      } else {
+        // Toast normal de sucesso
+        toast({
+          title: 'Sucesso!',
+          description: isEditing ? 
+            `Agendamento atualizado para ${formData.dataAgendamento} às ${formData.horaAgendamento}` :
+            `Agendamento criado para ${formData.dataAgendamento} às ${formData.horaAgendamento}`,
+        });
+      }
+
+      console.log('✅ Agendamento criado com sucesso:', data);
+      return data;
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      console.error('❌ Erro na criação do agendamento:', errorMessage);
+
+      // CRITICAL: Para erros de validação/conflito, não mostrar toast
+      // O componente irá capturar e exibir adequadamente
+      const isValidationConflictError = errorMessage.includes('já está ocupado') ||
+          errorMessage.includes('bloqueada') ||
+          errorMessage.includes('idade') ||
+          errorMessage.includes('convênio') ||
+          errorMessage.includes('obrigatório') ||
+          errorMessage.includes('inválido') ||
+          errorMessage.includes('não está ativo');
+
+      if (!isValidationConflictError) {
+        // Só mostrar toast para erros que não são de validação/conflito
         toast({
           title: 'Erro',
           description: errorMessage,
           variant: 'destructive',
         });
+      } else {
+        console.log('⚠️ Erro de validação/conflito detectado - formulário será mantido preenchido');
       }
       
-      // Para conflitos, garantir mensagem padronizada
-      if (isConflictError) {
-        console.log('⚠️ Conflito de horário detectado - formulário será mantido preenchido');
-      }
-      
-      console.error(`❌ Falha após ${MAX_RETRIES} tentativas:`, lastError);
-      throw lastError;
+      // Re-throw error para o componente tratar
+      throw error;
       
     } finally {
       // Garantir que o loading sempre seja resetado
       console.log('🏁 Resetando loading state...');
       setLoading(false);
     }
-  }, [user?.id]); // ✅ ESTABILIZAR: Apenas user?.id como dependência
+  }, [user?.id, toast]); // ✅ DEFINITIVO: Dependências estáveis
 
   return {
     loading,
