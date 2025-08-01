@@ -269,12 +269,11 @@ const Index = () => {
         }
       }
     } catch (error) {
-      // CRITICAL: NÃO fazer nada aqui que possa causar reload
-      // O erro já foi tratado no useAtomicAppointmentCreation
-      // e será mostrado no formulário via useSchedulingForm
-      console.error('❌ Index.tsx: Erro capturado em handleSubmitAppointment:', error);
-      // Não fazer throw - deixar o useSchedulingForm tratar o erro
-      // Isso evita mudança de estado e mantém os dados do formulário
+      console.error('❌ Index.handleSubmitAppointment: Erro capturado:', error);
+      
+      // CRITICAL: Re-throw para que o useSchedulingForm possa capturar corretamente
+      // e exibir o erro sem resetar o formulário
+      throw error;
     }
   };
 
