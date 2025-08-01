@@ -266,7 +266,9 @@ const Index = () => {
         }
       }
     } catch (error) {
-      throw error;
+      // Não fazer throw - deixar o useSchedulingForm tratar o erro
+      // Isso evita mudança de estado e mantém os dados do formulário
+      console.error('❌ Erro no agendamento:', error);
     }
   };
 
