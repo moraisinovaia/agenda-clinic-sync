@@ -135,6 +135,18 @@ export function useAtomicAppointmentCreation() {
           const result = data as unknown as AtomicAppointmentResult;
           if (!result?.success) {
             const errorMessage = result?.error || result?.message || 'Erro desconhecido na criação do agendamento';
+            console.log('❌ Função SQL retornou erro:', errorMessage);
+            
+            // CRITICAL: Não fazer toast aqui para erros de conflito
+            // Deixar o componente tratar o erro
+            if (errorMessage.includes('já está ocupado') || 
+                errorMessage.includes('bloqueada') ||
+                errorMessage.includes('idade') ||
+                errorMessage.includes('convênio')) {
+              console.log('❌ Erro de validação/conflito - lançando exceção sem toast');
+              throw new Error(errorMessage);
+            }
+            
             throw new Error(errorMessage);
           }
 
@@ -166,21 +178,22 @@ export function useAtomicAppointmentCreation() {
           lastError = error instanceof Error ? error : new Error('Erro desconhecido');
           console.error(`❌ Erro na tentativa ${attempt}:`, lastError);
 
-          // Se é erro de conflito de horário, não mostrar toast nem fazer retry
-          if (lastError.message.includes('já está ocupado')) {
-            console.log('❌ Erro de conflito de horário detectado - não fazer retry');
-            // Não mostrar toast aqui, deixar o componente tratar
+          // CRITICAL: Para erros de validação/conflito, não fazer retry e não mostrar toast
+          if (lastError.message.includes('já está ocupado') ||
+              lastError.message.includes('bloqueada') ||
+              lastError.message.includes('idade') ||
+              lastError.message.includes('convênio') ||
+              lastError.message.includes('obrigatório') ||
+              lastError.message.includes('inválido') ||
+              lastError.message.includes('não está ativo')) {
+            console.log('❌ Erro de validação/conflito detectado - não fazer retry nem toast');
+            // CRITICAL: Lançar erro imediatamente sem toast
+            // O componente irá capturar e exibir adequadamente
             throw new Error(lastError.message);
           }
 
-          // Se é um erro de validação ou outros tipos, não fazer retry
-          if (attempt === MAX_RETRIES || 
-              lastError.message.includes('obrigatório') ||
-              lastError.message.includes('inválido') ||
-              lastError.message.includes('não está ativo') ||
-              lastError.message.includes('bloqueada') ||
-              lastError.message.includes('idade') ||
-              lastError.message.includes('convênio')) {
+          // Para outros erros, verificar se deve fazer retry
+          if (attempt === MAX_RETRIES) {
             break;
           }
 
@@ -194,11 +207,19 @@ export function useAtomicAppointmentCreation() {
       // Se chegou aqui, todas as tentativas falharam
       const errorMessage = lastError?.message || 'Não foi possível criar o agendamento';
       
-      toast({
-        title: 'Erro',
-        description: errorMessage,
-        variant: 'destructive',
-      });
+      // CRITICAL: Só mostrar toast para erros que não são de validação/conflito
+      if (!errorMessage.includes('já está ocupado') &&
+          !errorMessage.includes('bloqueada') &&
+          !errorMessage.includes('idade') &&
+          !errorMessage.includes('convênio') &&
+          !errorMessage.includes('obrigatório') &&
+          !errorMessage.includes('inválido')) {
+        toast({
+          title: 'Erro',
+          description: errorMessage,
+          variant: 'destructive',
+        });
+      }
       
       console.error(`❌ Falha após ${MAX_RETRIES} tentativas:`, lastError);
       throw lastError;

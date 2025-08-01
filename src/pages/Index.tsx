@@ -33,6 +33,7 @@ import {
 } from '@/components/performance/LazyComponents';
 
 import { SystemMonitor } from '@/components/system/SystemMonitor';
+import { SchedulingErrorBoundary } from '@/components/error/SchedulingErrorBoundary';
 
 import { useFilaEspera } from '@/hooks/useFilaEspera';
 import { useViewMode } from '@/hooks/useViewMode';
@@ -242,7 +243,9 @@ const Index = () => {
 
   const handleSubmitAppointment = async (formData: SchedulingFormData) => {
     try {
+      console.log('🎯 Index.tsx: Iniciando handleSubmitAppointment');
       await createAppointment(formData, editingAppointment?.id);
+      console.log('✅ Index.tsx: Agendamento criado/editado com sucesso');
       
       const doctor = doctors.find(d => d.id === formData.medicoId);
       if (doctor) {
@@ -266,9 +269,12 @@ const Index = () => {
         }
       }
     } catch (error) {
+      // CRITICAL: NÃO fazer nada aqui que possa causar reload
+      // O erro já foi tratado no useAtomicAppointmentCreation
+      // e será mostrado no formulário via useSchedulingForm
+      console.error('❌ Index.tsx: Erro capturado em handleSubmitAppointment:', error);
       // Não fazer throw - deixar o useSchedulingForm tratar o erro
       // Isso evita mudança de estado e mantém os dados do formulário
-      console.error('❌ Erro no agendamento:', error);
     }
   };
 
@@ -383,19 +389,26 @@ const Index = () => {
         )}
 
         {viewMode === 'new-appointment' && (
-          <SchedulingForm
-            doctors={doctors}
-            atendimentos={atendimentos}
-            appointments={appointments}
-            blockedDates={blockedDates}
-            isDateBlocked={isDateBlocked}
-            onSubmit={handleSubmitAppointment}
-            onCancel={goBack}
-            getAtendimentosByDoctor={getAtendimentosByDoctor}
-            searchPatientsByBirthDate={searchPatientsByBirthDate}
-            preSelectedDoctor={selectedDoctor?.id}
-            preSelectedDate={selectedAppointmentDate || undefined}
-          />
+          <SchedulingErrorBoundary 
+            onRetry={() => {
+              console.log('🔄 Retry do SchedulingErrorBoundary - new appointment');
+              setViewMode('doctors');
+            }}
+          >
+            <SchedulingForm
+              doctors={doctors}
+              atendimentos={atendimentos}
+              appointments={appointments}
+              blockedDates={blockedDates}
+              isDateBlocked={isDateBlocked}
+              onSubmit={handleSubmitAppointment}
+              onCancel={goBack}
+              getAtendimentosByDoctor={getAtendimentosByDoctor}
+              searchPatientsByBirthDate={searchPatientsByBirthDate}
+              preSelectedDoctor={selectedDoctor?.id}
+              preSelectedDate={selectedAppointmentDate || undefined}
+            />
+          </SchedulingErrorBoundary>
         )}
 
 
@@ -432,18 +445,26 @@ const Index = () => {
         )}
 
         {viewMode === 'edit-appointment' && editingAppointment && (
-          <SchedulingForm
-            doctors={doctors}
-            atendimentos={atendimentos}
-            appointments={appointments}
-            blockedDates={blockedDates}
-            isDateBlocked={isDateBlocked}
-            onSubmit={handleSubmitAppointment}
-            onCancel={goBack}
-            getAtendimentosByDoctor={getAtendimentosByDoctor}
-            searchPatientsByBirthDate={searchPatientsByBirthDate}
-            editingAppointment={editingAppointment}
-          />
+          <SchedulingErrorBoundary 
+            onRetry={() => {
+              console.log('🔄 Retry do SchedulingErrorBoundary - edit appointment');
+              setEditingAppointment(null);
+              setViewMode('appointments-list');
+            }}
+          >
+            <SchedulingForm
+              doctors={doctors}
+              atendimentos={atendimentos}
+              appointments={appointments}
+              blockedDates={blockedDates}
+              isDateBlocked={isDateBlocked}
+              onSubmit={handleSubmitAppointment}
+              onCancel={goBack}
+              getAtendimentosByDoctor={getAtendimentosByDoctor}
+              searchPatientsByBirthDate={searchPatientsByBirthDate}
+              editingAppointment={editingAppointment}
+            />
+          </SchedulingErrorBoundary>
         )}
 
         {viewMode === 'preparos' && (
