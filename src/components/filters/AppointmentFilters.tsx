@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CalendarDays, Filter, X } from 'lucide-react';
+import { CalendarDays, Filter, X, Stethoscope, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { DoctorSearchField } from './DoctorSearchField';
 
 interface AppointmentFiltersProps {
   searchTerm: string;
@@ -138,11 +139,25 @@ export const AppointmentFilters = ({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* Advanced Doctor Search */}
+              <div className="md:col-span-2 lg:col-span-1">
+                <DoctorSearchField
+                  doctors={doctors}
+                  appointments={appointments}
+                  selectedDoctorId={doctorFilter === 'all' ? undefined : doctorFilter}
+                  onDoctorSelect={onDoctorFilterChange}
+                  placeholder="Buscar médico por nome ou especialidade..."
+                />
+              </div>
+
               {/* Search Input */}
               <div className="space-y-2">
-                <label className="text-sm font-medium">Buscar</label>
+                <label className="text-sm font-medium flex items-center gap-2">
+                  <Search className="h-4 w-4" />
+                  Buscar Paciente
+                </label>
                 <Input
-                  placeholder="Nome do paciente..."
+                  placeholder="Nome do paciente, exame..."
                   value={searchTerm}
                   onChange={(e) => onSearchChange(e.target.value)}
                 />
@@ -185,9 +200,8 @@ export const AppointmentFilters = ({
                 </Select>
               </div>
 
-              {/* Doctor Filter */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Médico</label>
+              {/* Legacy Doctor Filter - Hidden as we now use DoctorSearchField */}
+              <div className="hidden">
                 <Select value={doctorFilter} onValueChange={onDoctorFilterChange}>
                   <SelectTrigger>
                     <SelectValue />
@@ -196,9 +210,10 @@ export const AppointmentFilters = ({
                     <SelectItem value="all">Todos os Médicos</SelectItem>
                     {doctors
                       .filter(doctor => doctor.ativo)
+                      .sort((a, b) => a.nome.localeCompare(b.nome))
                       .map(doctor => (
                         <SelectItem key={doctor.id} value={doctor.id}>
-                          Dr(a). {doctor.nome}
+                          Dr(a). {doctor.nome} - {doctor.especialidade}
                         </SelectItem>
                       ))}
                   </SelectContent>
@@ -257,7 +272,8 @@ export const AppointmentFilters = ({
                 )}
                 {doctorFilter !== 'all' && (
                   <Badge variant="outline" className="gap-1">
-                    Médico: {doctors.find(d => d.id === doctorFilter)?.nome}
+                    <Stethoscope className="h-3 w-3" />
+                    Dr(a). {doctors.find(d => d.id === doctorFilter)?.nome}
                     <X 
                       className="h-3 w-3 cursor-pointer" 
                       onClick={() => onDoctorFilterChange('all')}
