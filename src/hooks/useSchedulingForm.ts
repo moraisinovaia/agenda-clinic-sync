@@ -68,10 +68,10 @@ export function useSchedulingForm(props?: UseSchedulingFormProps) {
     setLoading(true);
     setError(null);
     
+    console.log('🎯 useSchedulingForm: Iniciando handleSubmit com dados:', formData);
+    console.log('🔐 useSchedulingForm: Mutex ativado - submissão protegida');
+    
     try {
-      console.log('🎯 useSchedulingForm: Iniciando handleSubmit com dados:', formData);
-      console.log('🔐 useSchedulingForm: Mutex ativado - submissão protegida');
-      
       // CRITICAL: Aguardar o resultado do onSubmit
       await onSubmit(formData);
       
@@ -86,14 +86,24 @@ export function useSchedulingForm(props?: UseSchedulingFormProps) {
       // CRITICAL: Marcar flag de erro para prevenir reset
       hasError.current = true;
       
-      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido ao criar agendamento';
       
       console.log('❌ useSchedulingForm: Erro capturado:', errorMessage);
       console.log('🔒 useSchedulingForm: Flag de erro ativada - formulário preservado');
       
+      // CRITICAL: Garantir que o erro seja sempre exibido
       setError(errorMessage);
       
+      // CRITICAL: Force re-render para garantir que o erro apareça
+      setTimeout(() => {
+        if (hasError.current) {
+          console.log('🔄 useSchedulingForm: Forçando atualização de erro para exibição');
+          setError(errorMessage);
+        }
+      }, 100);
+      
       // CRITICAL: NÃO resetar o formulário em caso de erro - manter dados para correção
+      // CRITICAL: NÃO re-throw o erro para evitar que chegue ao ErrorBoundary
     } finally {
       console.log('🏁 useSchedulingForm: Finalizando submissão...');
       isSubmitting.current = false;

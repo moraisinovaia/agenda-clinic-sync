@@ -60,6 +60,21 @@ export function SchedulingForm({
     preSelectedDoctor,
     preSelectedDate
   });
+
+  // Handler específico para prevenir reload e garantir exibição de erro
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    console.log('🎯 SchedulingForm: Iniciando handleFormSubmit');
+    
+    try {
+      await handleSubmit(e, onSubmit);
+    } catch (error) {
+      console.error('❌ SchedulingForm: Erro final capturado:', error);
+      // Erro já deve estar sendo exibido pelo useSchedulingForm
+    }
+  };
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date>(new Date());
 
   const selectedDoctor = doctors.find(doctor => doctor.id === formData.medicoId);
@@ -130,7 +145,11 @@ export function SchedulingForm({
           </CardHeader>
           
           <CardContent>
-            <form onSubmit={(e) => handleSubmit(e, onSubmit)} className="space-y-4">
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              handleSubmit(e, onSubmit);
+            }} className="space-y-4">
               <PatientDataFormFixed
                 formData={formData}
                 setFormData={setFormData}
@@ -146,10 +165,11 @@ export function SchedulingForm({
                 atendimentos={atendimentos}
               />
 
+              {/* CRITICAL: Exibir erro SEMPRE que existir, com destaque máximo */}
               {error && (
-                <Alert variant="destructive">
+                <Alert variant="destructive" className="border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>
+                  <AlertDescription className="font-medium">
                     {error}
                   </AlertDescription>
                 </Alert>

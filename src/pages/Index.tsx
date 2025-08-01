@@ -242,8 +242,9 @@ const Index = () => {
   };
 
   const handleSubmitAppointment = async (formData: SchedulingFormData) => {
+    console.log('🎯 Index.tsx: Iniciando handleSubmitAppointment');
+    
     try {
-      console.log('🎯 Index.tsx: Iniciando handleSubmitAppointment');
       await createAppointment(formData, editingAppointment?.id);
       console.log('✅ Index.tsx: Agendamento criado/editado com sucesso');
       
@@ -269,10 +270,9 @@ const Index = () => {
         }
       }
     } catch (error) {
-      console.error('❌ Index.handleSubmitAppointment: Erro capturado:', error);
+      console.error('❌ Index.handleSubmitAppointment: Erro capturado e re-lançado:', error);
       
-      // CRITICAL: Re-throw para que o useSchedulingForm possa capturar corretamente
-      // e exibir o erro sem resetar o formulário
+      // CRITICAL: Re-throw para que o useSchedulingForm possa capturar e exibir
       throw error;
     }
   };

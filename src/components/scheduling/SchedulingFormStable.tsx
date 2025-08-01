@@ -200,7 +200,11 @@ export function SchedulingFormStable({
             </div>
           )}
 
-          <form onSubmit={(e) => handleSubmit(e, onSubmit)} className="space-y-6">
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleSubmit(e, onSubmit);
+          }} className="space-y-6">
             {step === 1 && (
               <PatientDataFormStable
                 formData={formData}
