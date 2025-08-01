@@ -20,11 +20,39 @@ export class SchedulingErrorBoundary extends Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): State {
+    // CRITICAL: Não interceptar erros de validação/conflito
+    // Estes devem ser tratados pelo próprio formulário
+    const errorMessage = error.message.toLowerCase();
+    
+    if (errorMessage.includes('já está ocupado') || 
+        errorMessage.includes('bloqueada') ||
+        errorMessage.includes('idade') ||
+        errorMessage.includes('convênio') ||
+        errorMessage.includes('obrigatório') ||
+        errorMessage.includes('inválido') ||
+        errorMessage.includes('conflito')) {
+      console.log('🔄 SchedulingErrorBoundary: Erro de validação ignorado - deixando formulário tratar');
+      return { hasError: false, error: null };
+    }
+    
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('🚨 SchedulingErrorBoundary capturou erro:', error, errorInfo);
+    
+    // Verificar se é erro de validação
+    const errorMessage = error.message.toLowerCase();
+    if (errorMessage.includes('já está ocupado') || 
+        errorMessage.includes('bloqueada') ||
+        errorMessage.includes('idade') ||
+        errorMessage.includes('convênio') ||
+        errorMessage.includes('obrigatório') ||
+        errorMessage.includes('inválido') ||
+        errorMessage.includes('conflito')) {
+      console.log('🔄 SchedulingErrorBoundary: Ignorando erro de validação');
+      return;
+    }
     
     // Prevenir qualquer possível reload da página
     if (typeof window !== 'undefined') {
