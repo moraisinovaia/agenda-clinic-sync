@@ -5,7 +5,7 @@ import { useSupabaseScheduling } from '@/hooks/useSupabaseScheduling';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useNotifications } from '@/hooks/useNotifications';
 
-import { ImprovedSchedulingForm } from '@/components/scheduling/ImprovedSchedulingForm';
+import { SchedulingForm } from '@/components/scheduling/SchedulingForm';
 import { MultipleSchedulingModal } from '@/components/scheduling/MultipleSchedulingModal';
 
 import { DoctorSchedule } from '@/components/scheduling/DoctorSchedule';
@@ -381,23 +381,18 @@ const Index = () => {
         )}
 
         {viewMode === 'new-appointment' && (
-          <ImprovedSchedulingForm
+          <SchedulingForm
             doctors={doctors}
             atendimentos={atendimentos}
+            appointments={appointments}
+            blockedDates={blockedDates}
+            isDateBlocked={isDateBlocked}
             onSubmit={handleSubmitAppointment}
             onCancel={goBack}
             getAtendimentosByDoctor={getAtendimentosByDoctor}
             searchPatientsByBirthDate={searchPatientsByBirthDate}
             preSelectedDoctor={selectedDoctor?.id}
             preSelectedDate={selectedAppointmentDate || undefined}
-            isTimeSlotOccupied={(doctorId, date, time) => {
-              return appointments.some(apt => 
-                apt.medico_id === doctorId && 
-                apt.data_agendamento === date && 
-                apt.hora_agendamento === time && 
-                apt.status !== 'cancelado'
-              );
-            }}
           />
         )}
 
@@ -435,23 +430,17 @@ const Index = () => {
         )}
 
         {viewMode === 'edit-appointment' && editingAppointment && (
-          <ImprovedSchedulingForm
+          <SchedulingForm
             doctors={doctors}
             atendimentos={atendimentos}
+            appointments={appointments}
+            blockedDates={blockedDates}
+            isDateBlocked={isDateBlocked}
             onSubmit={handleSubmitAppointment}
             onCancel={goBack}
             getAtendimentosByDoctor={getAtendimentosByDoctor}
             searchPatientsByBirthDate={searchPatientsByBirthDate}
             editingAppointment={editingAppointment}
-            isTimeSlotOccupied={(doctorId, date, time) => {
-              return appointments.some(apt => 
-                apt.medico_id === doctorId && 
-                apt.data_agendamento === date && 
-                apt.hora_agendamento === time && 
-                apt.status !== 'cancelado' &&
-                apt.id !== editingAppointment?.id
-              );
-            }}
           />
         )}
 

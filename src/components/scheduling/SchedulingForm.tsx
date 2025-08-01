@@ -22,6 +22,8 @@ interface SchedulingFormProps {
   getAtendimentosByDoctor: (doctorId: string) => Atendimento[];
   searchPatientsByBirthDate: (birthDate: string) => Promise<any[]>;
   editingAppointment?: AppointmentWithRelations;
+  preSelectedDoctor?: string;
+  preSelectedDate?: string;
 }
 
 export function SchedulingForm({ 
@@ -34,7 +36,9 @@ export function SchedulingForm({
   onCancel,
   getAtendimentosByDoctor,
   searchPatientsByBirthDate,
-  editingAppointment
+  editingAppointment,
+  preSelectedDoctor,
+  preSelectedDate
 }: SchedulingFormProps) {
   // Preparar dados iniciais para edição
   const initialEditData = editingAppointment ? {
@@ -51,7 +55,9 @@ export function SchedulingForm({
   } : undefined;
 
   const { formData, setFormData, loading, handleSubmit } = useSchedulingForm({
-    initialData: initialEditData
+    initialData: initialEditData,
+    preSelectedDoctor,
+    preSelectedDate
   });
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date>(new Date());
 
