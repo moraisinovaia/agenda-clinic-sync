@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { format, addDays, startOfWeek, isSameDay } from 'date-fns';
+import { format, addDays, startOfWeek, isSameDay, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Doctor, AppointmentWithRelations } from '@/types/scheduling';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,7 +37,8 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
   // Usar initialDate se fornecida, senão usar data atual
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     if (initialDate) {
-      return new Date(initialDate);
+      // Parse da data no formato YYYY-MM-DD para evitar problemas de timezone
+      return parse(initialDate, 'yyyy-MM-dd', new Date());
     }
     return new Date();
   });
