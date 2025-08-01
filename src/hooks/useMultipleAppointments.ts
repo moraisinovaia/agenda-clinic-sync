@@ -30,6 +30,9 @@ export function useMultipleAppointments() {
         p_criado_por_user_id: null
       });
 
+      console.log('📅 Data formatada corretamente:', formData.dataAgendamento);
+      console.log('🕒 Horário formatado corretamente:', formData.horaAgendamento);
+
       const { data, error } = await supabase.rpc('criar_agendamento_multiplo', {
         p_nome_completo: formData.nomeCompleto,
         p_data_nascimento: formData.dataNascimento,

@@ -5,7 +5,9 @@ import { Calendar, Clock, User, Stethoscope } from "lucide-react";
 import { SelectedExam } from "@/types/multiple-appointments";
 import { Doctor } from "@/types/scheduling";
 import { format } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
 import { ptBR } from "date-fns/locale";
+import { BRAZIL_TIMEZONE } from "@/utils/timezone";
 
 interface MultipleAppointmentPreviewProps {
   selectedExams: SelectedExam[];
@@ -35,7 +37,7 @@ export function MultipleAppointmentPreview({
   }
 
   const formattedDate = appointmentDate ? 
-    format(new Date(appointmentDate), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : 
+    formatInTimeZone(new Date(appointmentDate + 'T00:00:00'), BRAZIL_TIMEZONE, "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : 
     '';
 
   return (
