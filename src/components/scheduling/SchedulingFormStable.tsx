@@ -56,10 +56,15 @@ export function SchedulingFormStable({
     handleSubmit,
   } = useSchedulingForm({ initialData });
 
-  // Reset step quando há erro
+  // Determinar step apropriado quando há erro
   useEffect(() => {
     if (error) {
-      setStep(1); // Voltar para o primeiro step para correção
+      // Se o erro é sobre horário ocupado ou agenda bloqueada, ir para step 2
+      if (error.includes('horário já está ocupado') || error.includes('agenda está bloqueada')) {
+        setStep(2); // Ir para dados do agendamento para correção
+      } else {
+        setStep(1); // Outros erros, voltar para dados do paciente
+      }
     }
   }, [error]);
 
@@ -174,14 +179,24 @@ export function SchedulingFormStable({
                 <span className="font-medium">Erro ao criar agendamento</span>
               </div>
               <p className="text-sm text-destructive/80 mt-1">{error}</p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setStep(1)}
-                className="mt-2"
-              >
-                Corrigir dados
-              </Button>
+              <div className="flex gap-2 mt-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setStep(2)}
+                  className="bg-background hover:bg-muted"
+                >
+                  Corrigir horário
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setStep(1)}
+                  className="bg-background hover:bg-muted"
+                >
+                  Corrigir dados do paciente
+                </Button>
+              </div>
             </div>
           )}
 
