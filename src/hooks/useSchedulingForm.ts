@@ -88,8 +88,7 @@ export function useSchedulingForm(props?: UseSchedulingFormProps) {
       // Exibir erro sem resetar formulário
       setError(errorMessage);
       
-      // NÃO re-throw o erro para manter o formulário preenchido
-      return Promise.reject(error);
+      // CRITICAL: NÃO re-throw para evitar dupla execução e recarregamento
       
     } finally {
       console.log('🏁 useSchedulingForm: Finalizando submissão...');

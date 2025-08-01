@@ -63,17 +63,10 @@ export function SchedulingForm({
 
   // Handler específico para prevenir reload e garantir exibição de erro
   const handleFormSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
     console.log('🎯 SchedulingForm: Iniciando handleFormSubmit');
     
-    try {
-      await handleSubmit(e, onSubmit);
-    } catch (error) {
-      console.error('❌ SchedulingForm: Erro final capturado:', error);
-      // Erro já deve estar sendo exibido pelo useSchedulingForm
-    }
+    // CRITICAL: Chamar handleSubmit APENAS UMA VEZ
+    await handleSubmit(e, onSubmit);
   };
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date>(new Date());
 
@@ -145,11 +138,7 @@ export function SchedulingForm({
           </CardHeader>
           
           <CardContent>
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              handleSubmit(e, onSubmit);
-            }} className="space-y-4">
+            <form onSubmit={handleFormSubmit} className="space-y-4">
               <PatientDataFormFixed
                 formData={formData}
                 setFormData={setFormData}
