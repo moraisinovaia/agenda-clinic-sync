@@ -26,6 +26,8 @@ export function useSchedulingForm(props?: UseSchedulingFormProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const hasInitialized = useRef(false);
+  const isSubmitting = useRef(false);
+  const hasError = useRef(false);
 
   // Aplicar dados iniciais e pré-seleções apenas na primeira renderização
   useEffect(() => {
@@ -50,35 +52,51 @@ export function useSchedulingForm(props?: UseSchedulingFormProps) {
     e: React.FormEvent,
     onSubmit: (data: SchedulingFormData) => Promise<void>
   ) => {
+    // CRITICAL: Prevenir múltiplas execuções simultâneas
+    if (isSubmitting.current) {
+      console.log('⏸️ useSchedulingForm: Já existe uma submissão em andamento, ignorando...');
+      return;
+    }
+
     // CRITICAL: Prevenir comportamento padrão do form que pode causar reload
     e.preventDefault();
     e.stopPropagation();
     
+    // CRITICAL: Marcar como em submissão e resetar flags de erro
+    isSubmitting.current = true;
+    hasError.current = false;
     setLoading(true);
     setError(null);
     
     try {
       console.log('🎯 useSchedulingForm: Iniciando handleSubmit com dados:', formData);
+      console.log('🔐 useSchedulingForm: Mutex ativado - submissão protegida');
       
       // CRITICAL: Aguardar o resultado do onSubmit
       await onSubmit(formData);
       
-      console.log('✅ useSchedulingForm: Agendamento criado com sucesso, resetando formulário...');
-      
-      // CRITICAL: Só resetar se chegou até aqui sem erro
-      resetForm();
+      // CRITICAL: Só resetar se não houve erro E ainda estamos na mesma submissão
+      if (!hasError.current && isSubmitting.current) {
+        console.log('✅ useSchedulingForm: Agendamento criado com sucesso, resetando formulário...');
+        resetForm();
+      } else {
+        console.log('🚫 useSchedulingForm: Reset cancelado devido a erro ou concorrência');
+      }
     } catch (error) {
-      // CRITICAL: Capturar erro e manter formulário preenchido
+      // CRITICAL: Marcar flag de erro para prevenir reset
+      hasError.current = true;
+      
       const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
       
       console.log('❌ useSchedulingForm: Erro capturado:', errorMessage);
-      console.log('🔒 useSchedulingForm: Mantendo dados do formulário para correção');
+      console.log('🔒 useSchedulingForm: Flag de erro ativada - formulário preservado');
       
       setError(errorMessage);
       
       // CRITICAL: NÃO resetar o formulário em caso de erro - manter dados para correção
     } finally {
-      console.log('🏁 useSchedulingForm: Finalizando loading state...');
+      console.log('🏁 useSchedulingForm: Finalizando submissão...');
+      isSubmitting.current = false;
       setLoading(false);
     }
   };
