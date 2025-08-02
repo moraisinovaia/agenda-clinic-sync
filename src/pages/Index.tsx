@@ -8,7 +8,6 @@ import { useNotifications } from '@/hooks/useNotifications';
 import { SchedulingForm } from '@/components/scheduling/SchedulingForm';
 import { SimpleSchedulingForm } from '@/components/scheduling/SimpleSchedulingForm';
 import { MultipleSchedulingModal } from '@/components/scheduling/MultipleSchedulingModal';
-import { SimpleAppointmentForm } from '@/components/scheduling/new/SimpleAppointmentForm';
 
 import { DoctorSchedule } from '@/components/scheduling/DoctorSchedule';
 import { AppointmentsList } from '@/components/scheduling/AppointmentsList';
@@ -44,7 +43,6 @@ import { useStableAuth } from '@/hooks/useStableAuth';
 import { Button } from '@/components/ui/button';
 import { AuthTest } from '@/components/AuthTest';
 import PendingApproval from '@/components/PendingApproval';
-import { toast } from 'sonner';
 
 const Index = () => {
   const { user, profile, loading: authLoading, signOut } = useStableAuth();
@@ -244,14 +242,14 @@ const Index = () => {
     }
   };
 
-  // ✅ CORREÇÃO DEFINITIVA: Handler retorna objeto ao invés de throw
-  const handleSimpleAppointmentSubmit = async (formData: SchedulingFormData): Promise<{ success: boolean; error?: string }> => {
-    console.log('🎯 Index.tsx: handleSimpleAppointmentSubmit - retorno por objeto');
+  // Handler para formulário simples - CORREÇÃO DEFINITIVA
+  const handleSimpleAppointmentSubmit = async (formData: SchedulingFormData) => {
+    console.log('🎯 Index.tsx: handleSimpleAppointmentSubmit chamado');
     
-    // ✅ createAppointment agora retorna objeto
-    const result = await createAppointment(formData, editingAppointment?.id);
-    
-    if (result.success) {
+    try {
+      // Tentar criar o agendamento
+      await createAppointment(formData, editingAppointment?.id);
+      
       console.log('✅ Index.tsx: Agendamento criado com sucesso - navegando');
       
       // SUCESSO - navegar APENAS após sucesso confirmado
@@ -276,12 +274,12 @@ const Index = () => {
           setViewMode('schedule');
         }
       }
-    } else {
-      console.log('❌ Index.tsx: Erro no agendamento - NÃO navegando:', result.error);
-      // ✅ Em caso de erro, NÃO fazer nenhuma mudança de estado
+    } catch (error) {
+      console.log('❌ Index.tsx: Erro capturado - NÃO navegando, deixando formulário intacto');
+      // CRÍTICO: Em caso de erro, NÃO fazer nenhuma mudança de estado
+      // Deixar o erro subir para o SimpleSchedulingForm tratar
+      throw error;
     }
-    
-    return result;
   };
 
   const handleEditAppointment = (appointment: AppointmentWithRelations) => {
@@ -532,19 +530,6 @@ const Index = () => {
             <div className="flex justify-center">
               <AuthTest />
             </div>
-          </div>
-        )}
-
-        {viewMode === 'simple-new' && (
-          <div className="max-w-4xl mx-auto">
-            <SimpleAppointmentForm 
-              onSuccess={() => {
-                console.log('✅ Sistema Novo: Agendamento criado com sucesso');
-                toast.success('Agendamento criado com sucesso!');
-                setViewMode('doctors');
-              }}
-              className="w-full"
-            />
           </div>
         )}
 

@@ -39,33 +39,25 @@ export function useSimpleSchedulingForm(props?: UseSimpleSchedulingFormProps) {
 
   const handleSubmit = async (
     e: React.FormEvent,
-    onSubmit: (data: SchedulingFormData) => Promise<{ success: boolean; error?: string }>
+    onSubmit: (data: SchedulingFormData) => Promise<void>
   ) => {
     e.preventDefault();
     e.stopPropagation();
     
-    console.log('🎯 SimpleSchedulingForm: Iniciando submissão - sem throw errors');
+    console.log('🎯 SimpleSchedulingForm: Iniciando submissão');
     
     setLoading(true);
     setError(null);
     
     try {
-      // ✅ onSubmit agora retorna objeto ao invés de throw
-      const result = await onSubmit(formData);
-      
-      if (result.success) {
-        console.log('✅ SimpleSchedulingForm: Sucesso - resetando formulário');
-        resetForm();
-      } else {
-        console.log('❌ SimpleSchedulingForm: Erro no resultado:', result.error);
-        setError(result.error || 'Erro desconhecido');
-        // ✅ NÃO resetar formulário em caso de erro - preservar dados
-      }
+      await onSubmit(formData);
+      console.log('✅ SimpleSchedulingForm: Sucesso - resetando formulário');
+      resetForm();
     } catch (error) {
-      // ✅ Catch apenas para erros inesperados do sistema
-      const errorMessage = error instanceof Error ? error.message : 'Erro inesperado do sistema';
-      console.log('❌ SimpleSchedulingForm: Erro inesperado capturado:', errorMessage);
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      console.log('❌ SimpleSchedulingForm: Erro capturado:', errorMessage);
       setError(errorMessage);
+      // NÃO resetar formulário em caso de erro
     } finally {
       setLoading(false);
     }
