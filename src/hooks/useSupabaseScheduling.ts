@@ -19,12 +19,13 @@ export function useSupabaseScheduling() {
     ]);
   }, [schedulingData.refetch, appointmentsList.refetch]);
 
-  // ✅ ESTABILIZAR: Envolver createAppointment para recarregar dados após sucesso
+  // ✅ CORREÇÃO DEFINITIVA: Invalidar cache APENAS em caso de sucesso
   const createAppointment = useCallback(async (formData: any, editingAppointmentId?: string) => {
     try {
       const result = await appointmentCreation.createAppointment(formData, editingAppointmentId);
       
-      // Invalidar cache específico e forçar atualização
+      // ✅ SUCESSO CONFIRMADO - Agora sim invalidar cache e atualizar dados
+      console.log('✅ Sucesso confirmado - invalidando cache e atualizando dados');
       appointmentsList.invalidateCache?.();
       schedulingData.refetch();
       
@@ -33,11 +34,13 @@ export function useSupabaseScheduling() {
         appointmentsList.forceRefetch?.();
       }, 100);
       
-      console.log('🔄 Cache invalidated after appointment edit/creation');
+      console.log('🔄 Cache invalidated after CONFIRMED success');
       
       return result;
     } catch (error) {
-      throw error; // Repassar erro para manter o formulário
+      // ❌ ERRO - NÃO invalidar cache nem fazer refetch
+      console.log('❌ Erro capturado - PRESERVANDO cache e dados do formulário');
+      throw error; // Repassar erro sem afetar o estado
     }
   }, [appointmentCreation.createAppointment, appointmentsList, schedulingData]);
 
