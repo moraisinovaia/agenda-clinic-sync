@@ -19,28 +19,24 @@ export function useSupabaseScheduling() {
     ]);
   }, [schedulingData.refetch, appointmentsList.refetch]);
 
-  // ✅ CORREÇÃO DEFINITIVA: Invalidar cache APENAS em caso de sucesso CONFIRMADO
+  // ✅ CORREÇÃO DEFINITIVA: Função retorna objeto ao invés de throw
   const createAppointment = useCallback(async (formData: any, editingAppointmentId?: string) => {
-    console.log('🎯 useSupabaseScheduling: Iniciando createAppointment - SEM invalidar cache ainda');
+    console.log('🎯 useSupabaseScheduling: Iniciando createAppointment - retorno por objeto');
     
-    try {
-      const result = await appointmentCreation.createAppointment(formData, editingAppointmentId);
-      
-      // ✅ VERIFICAR SE É REALMENTE SUCESSO antes de invalidar cache
-      if (result && result.success !== false) {
-        console.log('✅ Sucesso CONFIRMADO - agora sim invalidar cache');
-        appointmentsList.invalidateCache?.();
-        schedulingData.refetch();
-        console.log('🔄 Cache invalidated only after CONFIRMED success');
-      } else {
-        console.log('⚠️ Resultado indefinido ou falha - NÃO invalidando cache');
-      }
-      
-      return result;
-    } catch (error) {
-      console.log('❌ Erro capturado - PRESERVANDO cache e formulário:', error);
-      throw error; // Repassar erro SEM afetar estado
+    // ✅ appointmentCreation agora retorna objeto
+    const result = await appointmentCreation.createAppointment(formData, editingAppointmentId);
+    
+    // ✅ VERIFICAR SE É REALMENTE SUCESSO antes de invalidar cache
+    if (result.success) {
+      console.log('✅ Sucesso CONFIRMADO - agora sim invalidar cache');
+      appointmentsList.invalidateCache?.();
+      schedulingData.refetch();
+      console.log('🔄 Cache invalidated only after CONFIRMED success');
+    } else {
+      console.log('⚠️ Erro ou falha - NÃO invalidando cache:', result.error);
     }
+    
+    return result;
   }, [appointmentCreation.createAppointment, appointmentsList, schedulingData]);
 
   // ✅ ESTABILIZAR: Envolver cancelAppointment para usar a funcionalidade existente

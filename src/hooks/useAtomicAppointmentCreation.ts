@@ -18,46 +18,46 @@ export function useAtomicAppointmentCreation() {
   // Função de delay para retry
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-  // Validações básicas no frontend
-  const validateFormData = (formData: SchedulingFormData) => {
+  // ✅ CORREÇÃO: Validações retornam objeto resultado ao invés de throw
+  const validateFormData = (formData: SchedulingFormData): { success: boolean; error?: string } => {
     if (!formData.medicoId?.trim()) {
-      throw new Error('Médico é obrigatório');
+      return { success: false, error: 'Médico é obrigatório' };
     }
     if (!formData.atendimentoId?.trim()) {
-      throw new Error('Tipo de atendimento é obrigatório');
+      return { success: false, error: 'Tipo de atendimento é obrigatório' };
     }
     if (!formData.nomeCompleto?.trim()) {
-      throw new Error('Nome completo é obrigatório');
+      return { success: false, error: 'Nome completo é obrigatório' };
     }
     if (formData.nomeCompleto.trim().length < 3) {
-      throw new Error('Nome completo deve ter pelo menos 3 caracteres');
+      return { success: false, error: 'Nome completo deve ter pelo menos 3 caracteres' };
     }
     if (!formData.dataNascimento) {
-      throw new Error('Data de nascimento é obrigatória');
+      return { success: false, error: 'Data de nascimento é obrigatória' };
     }
     if (!formData.convenio?.trim()) {
-      throw new Error('Convênio é obrigatório');
+      return { success: false, error: 'Convênio é obrigatório' };
     }
     if (!formData.celular?.trim()) {
-      throw new Error('Celular é obrigatório');
+      return { success: false, error: 'Celular é obrigatório' };
     }
     
     // Validação de formato de celular brasileiro
     const celularRegex = /^\(\d{2}\)\s\d{4,5}-\d{4}$/;
     if (!celularRegex.test(formData.celular)) {
-      throw new Error('Formato de celular inválido. Use o formato (XX) XXXXX-XXXX');
+      return { success: false, error: 'Formato de celular inválido. Use o formato (XX) XXXXX-XXXX' };
     }
     
     if (!formData.dataAgendamento) {
-      throw new Error('Data do agendamento é obrigatória');
+      return { success: false, error: 'Data do agendamento é obrigatória' };
     }
     if (!formData.horaAgendamento) {
-      throw new Error('Hora do agendamento é obrigatória');
+      return { success: false, error: 'Hora do agendamento é obrigatória' };
     }
     
     // Validar se o usuário está autenticado
     if (!user?.id) {
-      throw new Error('Usuário não está autenticado');
+      return { success: false, error: 'Usuário não está autenticado' };
     }
 
     // Validações de negócio - usar timezone do Brasil
@@ -73,7 +73,7 @@ export function useAtomicAppointmentCreation() {
     if (appointmentDateTimeBrazil <= oneHourFromNowBrazil) {
       const currentTimeFormatted = formatInTimeZone(nowBrazil, BRAZIL_TIMEZONE, 'dd/MM/yyyy HH:mm');
       const requestedTimeFormatted = formatInTimeZone(appointmentDateTimeBrazil, BRAZIL_TIMEZONE, 'dd/MM/yyyy HH:mm');
-      throw new Error(`Agendamento deve ser feito com pelo menos 1 hora de antecedência. Horário atual do Brasil: ${currentTimeFormatted} - Agendamento solicitado: ${requestedTimeFormatted}`);
+      return { success: false, error: `Agendamento deve ser feito com pelo menos 1 hora de antecedência. Horário atual do Brasil: ${currentTimeFormatted} - Agendamento solicitado: ${requestedTimeFormatted}` };
     }
 
     // Validar idade do paciente
@@ -81,18 +81,24 @@ export function useAtomicAppointmentCreation() {
     const age = Math.floor((nowBrazil.getTime() - birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
     
     if (age < 0 || age > 120) {
-      throw new Error('Data de nascimento inválida');
+      return { success: false, error: 'Data de nascimento inválida' };
     }
+    
+    return { success: true };
   };
 
-  // ✅ DEFINITIVO: Criar agendamento com função atômica com locks
-  const createAppointment = useCallback(async (formData: SchedulingFormData, editingAppointmentId?: string): Promise<any> => {
+  // ✅ CORREÇÃO DEFINITIVA: Não usar throw para validações
+  const createAppointment = useCallback(async (formData: SchedulingFormData, editingAppointmentId?: string): Promise<{ success: boolean; error?: string; data?: any }> => {
     try {
       setLoading(true);
-      console.log('🎯 useAtomicAppointmentCreation: Criando agendamento com função atômica definitiva');
+      console.log('🎯 useAtomicAppointmentCreation: Criando agendamento - NÃO usar throw para validações');
 
-      // Validações no frontend
-      validateFormData(formData);
+      // ✅ Validações retornam objeto ao invés de throw
+      const validation = validateFormData(formData);
+      if (!validation.success) {
+        console.log('❌ Erro de validação:', validation.error);
+        return { success: false, error: validation.error };
+      }
 
       // Buscar nome do usuário logado
       const { data: profile } = await supabase
@@ -126,15 +132,14 @@ export function useAtomicAppointmentCreation() {
 
       console.log('✅ Resultado da função:', data);
 
-      // Verificar se a função retornou sucesso
+      // ✅ Verificar resultado SEM usar throw para conflitos
       const result = data as unknown as AtomicAppointmentResult;
       if (!result?.success) {
         const errorMessage = result?.error || result?.message || 'Erro desconhecido na criação do agendamento';
         console.log('❌ Função SQL retornou erro:', errorMessage);
         
-        // CRITICAL: Não fazer toast aqui para erros de conflito
-        // Deixar o componente tratar o erro
-        throw new Error(errorMessage);
+        // ✅ Retornar objeto de erro ao invés de throw
+        return { success: false, error: errorMessage };
       }
 
       // Sucesso!
@@ -159,31 +164,31 @@ export function useAtomicAppointmentCreation() {
       }
 
       console.log('✅ Agendamento criado com sucesso:', data);
-      return data;
+      return { success: true, data };
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
       console.error('❌ Erro na criação do agendamento:', errorMessage);
 
-      // Para erros de validação/conflito, NÃO mostrar toast - deixar o componente mostrar
-      const isValidationError = errorMessage.includes('já está ocupado') ||
-          errorMessage.includes('bloqueada') ||
-          errorMessage.includes('idade') ||
-          errorMessage.includes('convênio') ||
-          errorMessage.includes('obrigatório') ||
-          errorMessage.includes('inválido') ||
-          errorMessage.includes('não está ativo');
+      // ✅ Para erros críticos do sistema (não de validação), mostrar toast
+      const isSystemError = !errorMessage.includes('já está ocupado') &&
+          !errorMessage.includes('bloqueada') &&
+          !errorMessage.includes('idade') &&
+          !errorMessage.includes('convênio') &&
+          !errorMessage.includes('obrigatório') &&
+          !errorMessage.includes('inválido') &&
+          !errorMessage.includes('não está ativo');
 
-      if (!isValidationError) {
+      if (isSystemError) {
         toast({
-          title: 'Erro no Agendamento',
+          title: 'Erro no Sistema',
           description: errorMessage,
           variant: 'destructive',
         });
       }
       
-      // Throw error imediatamente para ser capturado pelo useSchedulingForm
-      throw new Error(errorMessage);
+      // ✅ Retornar objeto de erro ao invés de throw
+      return { success: false, error: errorMessage };
       
     } finally {
       // Garantir que o loading sempre seja resetado

@@ -18,7 +18,7 @@ interface SimpleSchedulingFormProps {
   appointments: AppointmentWithRelations[];
   blockedDates?: any[];
   isDateBlocked?: (doctorId: string, date: Date) => boolean;
-  onSubmit: (data: SchedulingFormData) => Promise<void>;
+  onSubmit: (data: SchedulingFormData) => Promise<{ success: boolean; error?: string }>;
   onCancel: () => void;
   getAtendimentosByDoctor: (doctorId: string) => Atendimento[];
   searchPatientsByBirthDate: (birthDate: string) => Promise<any[]>;

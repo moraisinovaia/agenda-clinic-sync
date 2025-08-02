@@ -25,6 +25,25 @@ export class GlobalErrorBoundary extends Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): State {
+    // 🚨 CRÍTICO: NÃO capturar erros de validação/conflito
+    const errorMessage = error.message.toLowerCase();
+    
+    if (errorMessage.includes('já está ocupado') || 
+        errorMessage.includes('bloqueada') ||
+        errorMessage.includes('idade') ||
+        errorMessage.includes('convênio') ||
+        errorMessage.includes('obrigatório') ||
+        errorMessage.includes('inválido') ||
+        errorMessage.includes('conflito')) {
+      console.log('🔄 GlobalErrorBoundary: Ignorando erro de validação - deixando formulário tratar');
+      // Retornar estado sem erro para não ativar o boundary
+      return {
+        hasError: false,
+        error: null,
+        errorInfo: null
+      };
+    }
+    
     return {
       hasError: true,
       error,
@@ -35,6 +54,19 @@ export class GlobalErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('🚨 Error caught by ErrorBoundary:', error);
     console.error('Error Info:', errorInfo);
+    
+    // Verificar se é erro de validação - se for, não tratar
+    const errorMessage = error.message.toLowerCase();
+    if (errorMessage.includes('já está ocupado') || 
+        errorMessage.includes('bloqueada') ||
+        errorMessage.includes('idade') ||
+        errorMessage.includes('convênio') ||
+        errorMessage.includes('obrigatório') ||
+        errorMessage.includes('inválido') ||
+        errorMessage.includes('conflito')) {
+      console.log('🔄 GlobalErrorBoundary: Ignorando erro de validação no componentDidCatch');
+      return;
+    }
     
     // Log to external service if needed
     this.logErrorToService(error, errorInfo);

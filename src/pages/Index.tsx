@@ -242,14 +242,14 @@ const Index = () => {
     }
   };
 
-  // Handler para formulário simples - CORREÇÃO DEFINITIVA
-  const handleSimpleAppointmentSubmit = async (formData: SchedulingFormData) => {
-    console.log('🎯 Index.tsx: handleSimpleAppointmentSubmit chamado');
+  // ✅ CORREÇÃO DEFINITIVA: Handler retorna objeto ao invés de throw
+  const handleSimpleAppointmentSubmit = async (formData: SchedulingFormData): Promise<{ success: boolean; error?: string }> => {
+    console.log('🎯 Index.tsx: handleSimpleAppointmentSubmit - retorno por objeto');
     
-    try {
-      // Tentar criar o agendamento
-      await createAppointment(formData, editingAppointment?.id);
-      
+    // ✅ createAppointment agora retorna objeto
+    const result = await createAppointment(formData, editingAppointment?.id);
+    
+    if (result.success) {
       console.log('✅ Index.tsx: Agendamento criado com sucesso - navegando');
       
       // SUCESSO - navegar APENAS após sucesso confirmado
@@ -274,12 +274,12 @@ const Index = () => {
           setViewMode('schedule');
         }
       }
-    } catch (error) {
-      console.log('❌ Index.tsx: Erro capturado - NÃO navegando, deixando formulário intacto');
-      // CRÍTICO: Em caso de erro, NÃO fazer nenhuma mudança de estado
-      // Deixar o erro subir para o SimpleSchedulingForm tratar
-      throw error;
+    } else {
+      console.log('❌ Index.tsx: Erro no agendamento - NÃO navegando:', result.error);
+      // ✅ Em caso de erro, NÃO fazer nenhuma mudança de estado
     }
+    
+    return result;
   };
 
   const handleEditAppointment = (appointment: AppointmentWithRelations) => {
