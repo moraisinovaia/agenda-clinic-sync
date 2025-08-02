@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -27,7 +27,7 @@ interface SimpleSchedulingFormProps {
   preSelectedDate?: string;
 }
 
-export function SimpleSchedulingForm({ 
+export const SimpleSchedulingForm = React.memo(function SimpleSchedulingForm({ 
   doctors, 
   atendimentos, 
   appointments,
@@ -60,6 +60,11 @@ export function SimpleSchedulingForm({
     preSelectedDoctor,
     preSelectedDate
   });
+  
+  // ✅ Memoizar handleSubmit para evitar re-renders
+  const memoizedHandleSubmit = useCallback((e: React.FormEvent) => {
+    handleSubmit(e, onSubmit);
+  }, [handleSubmit, onSubmit]);
 
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date>(new Date());
 
@@ -131,7 +136,7 @@ export function SimpleSchedulingForm({
           </CardHeader>
           
           <CardContent>
-            <form onSubmit={(e) => handleSubmit(e, onSubmit)} className="space-y-4">
+            <form onSubmit={memoizedHandleSubmit} className="space-y-4">
               <PatientDataFormFixed
                 formData={formData}
                 setFormData={setFormData}
@@ -309,4 +314,4 @@ export function SimpleSchedulingForm({
       </div>
     </div>
   );
-}
+});
