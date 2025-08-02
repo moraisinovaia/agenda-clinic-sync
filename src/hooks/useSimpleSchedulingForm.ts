@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { SchedulingFormData } from '@/types/scheduling';
+import { useFormValidation } from './useFormValidation';
 
 const initialFormData: SchedulingFormData = {
   nomeCompleto: '',
@@ -30,11 +31,13 @@ export function useSimpleSchedulingForm(props?: UseSimpleSchedulingFormProps) {
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { errors: validationErrors, validateForm, clearAllErrors } = useFormValidation();
 
   const resetForm = () => {
     setFormData(initialFormData);
     setError(null);
     setLoading(false);
+    clearAllErrors();
   };
 
   const handleSubmit = async (
@@ -46,8 +49,18 @@ export function useSimpleSchedulingForm(props?: UseSimpleSchedulingFormProps) {
     
     console.log('🎯 SimpleSchedulingForm: Iniciando submissão');
     
+    // Validar formulário antes de submeter
+    const { isValid, errors } = validateForm(formData);
+    
+    if (!isValid) {
+      console.log('❌ SimpleSchedulingForm: Validação falhou:', errors);
+      setError('Por favor, corrija os erros no formulário antes de continuar.');
+      return;
+    }
+    
     setLoading(true);
     setError(null);
+    clearAllErrors();
     
     try {
       await onSubmit(formData);
@@ -68,6 +81,7 @@ export function useSimpleSchedulingForm(props?: UseSimpleSchedulingFormProps) {
     setFormData,
     loading,
     error,
+    validationErrors,
     resetForm,
     handleSubmit,
   };

@@ -55,7 +55,7 @@ export function SimpleSchedulingForm({
     observacoes: editingAppointment.observacoes || '',
   } : undefined;
 
-  const { formData, setFormData, loading, error, handleSubmit } = useSimpleSchedulingForm({
+  const { formData, setFormData, loading, error, validationErrors, handleSubmit } = useSimpleSchedulingForm({
     initialData: initialEditData,
     preSelectedDoctor,
     preSelectedDate
@@ -145,6 +145,7 @@ export function SimpleSchedulingForm({
                 setFormData={setFormData}
                 doctors={doctors}
                 atendimentos={atendimentos}
+                validationErrors={validationErrors}
               />
 
               {/* Exibir erro sempre que existir */}

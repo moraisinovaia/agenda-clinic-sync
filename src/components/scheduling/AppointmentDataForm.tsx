@@ -18,13 +18,15 @@ interface AppointmentDataFormProps {
   setFormData: React.Dispatch<React.SetStateAction<SchedulingFormData>>;
   doctors: Doctor[];
   atendimentos: Atendimento[];
+  validationErrors?: { [key: string]: string };
 }
 
 export function AppointmentDataForm({ 
   formData, 
   setFormData, 
-  doctors,
-  atendimentos 
+  doctors, 
+  atendimentos,
+  validationErrors: externalValidationErrors = {}
 }: AppointmentDataFormProps) {
   const [openDoctorCombo, setOpenDoctorCombo] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
@@ -168,7 +170,7 @@ export function AppointmentDataForm({
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <Label htmlFor="medico" className={validationErrors.medicoId ? 'text-destructive' : ''}>
+          <Label htmlFor="medico" className={(validationErrors.medicoId || externalValidationErrors.medicoId) ? 'text-destructive' : ''}>
             Médico *
           </Label>
           <Popover open={openDoctorCombo} onOpenChange={setOpenDoctorCombo}>
@@ -179,7 +181,7 @@ export function AppointmentDataForm({
                 aria-expanded={openDoctorCombo}
                 className={cn(
                   "w-full justify-between",
-                  validationErrors.medicoId && "border-destructive"
+                  (validationErrors.medicoId || externalValidationErrors.medicoId) && "border-destructive"
                 )}
               >
                 {formData.medicoId
@@ -216,16 +218,16 @@ export function AppointmentDataForm({
               </Command>
             </PopoverContent>
           </Popover>
-          {validationErrors.medicoId && (
+          {(validationErrors.medicoId || externalValidationErrors.medicoId) && (
             <p className="text-sm text-destructive mt-1 flex items-center gap-1">
               <AlertCircle className="h-3 w-3" />
-              {validationErrors.medicoId}
+              {validationErrors.medicoId || externalValidationErrors.medicoId}
             </p>
           )}
         </div>
 
         <div>
-          <Label htmlFor="atendimento" className={validationErrors.atendimentoId ? 'text-destructive' : ''}>
+          <Label htmlFor="atendimento" className={(validationErrors.atendimentoId || externalValidationErrors.atendimentoId) ? 'text-destructive' : ''}>
             Tipo de Atendimento *
           </Label>
           <Select 
@@ -236,7 +238,7 @@ export function AppointmentDataForm({
             }}
             disabled={!formData.medicoId}
           >
-            <SelectTrigger className={cn(validationErrors.atendimentoId && "border-destructive")}>
+            <SelectTrigger className={cn((validationErrors.atendimentoId || externalValidationErrors.atendimentoId) && "border-destructive")}>
               <SelectValue placeholder={
                 !formData.medicoId 
                   ? "Selecione primeiro um médico" 
@@ -253,10 +255,10 @@ export function AppointmentDataForm({
               ))}
             </SelectContent>
           </Select>
-          {validationErrors.atendimentoId && (
+          {(validationErrors.atendimentoId || externalValidationErrors.atendimentoId) && (
             <p className="text-sm text-destructive mt-1 flex items-center gap-1">
               <AlertCircle className="h-3 w-3" />
-              {validationErrors.atendimentoId}
+              {validationErrors.atendimentoId || externalValidationErrors.atendimentoId}
             </p>
           )}
           {filteredAtendimentos.length === 0 && formData.medicoId && (
