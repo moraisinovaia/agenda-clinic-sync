@@ -1727,6 +1727,15 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: boolean
       }
+      validar_conflito_agendamento: {
+        Args: {
+          p_medico_id: string
+          p_data_agendamento: string
+          p_hora_agendamento: string
+          p_agendamento_id_edicao?: string
+        }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never
