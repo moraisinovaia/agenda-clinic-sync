@@ -1,7 +1,7 @@
 import { Calendar, Clock, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos' | 'fila-espera' | 'nova-fila' | 'bloqueio-agenda' | 'relatorio-agenda' | 'auth-test' | 'alertas' | 'multiple-appointment' | 'canceled-appointments';
+type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos' | 'fila-espera' | 'nova-fila' | 'bloqueio-agenda' | 'relatorio-agenda' | 'auth-test' | 'alertas' | 'multiple-appointment' | 'canceled-appointments' | 'simple-new';
 
 interface DashboardActionsProps {
   onViewChange: (view: ViewMode) => void;
@@ -11,12 +11,21 @@ export const DashboardActions = ({ onViewChange }: DashboardActionsProps) => {
   return (
     <div className="flex flex-wrap gap-2 w-full overflow-x-auto pb-2">
       <Button 
+        onClick={() => onViewChange('simple-new')}
+        variant="default"
+        className="flex items-center gap-2 whitespace-nowrap bg-green-600 hover:bg-green-700"
+      >
+        <Calendar className="h-4 w-4" />
+        🆕 Sistema Novo (Zero Reloads)
+      </Button>
+      
+      <Button 
         onClick={() => onViewChange('new-appointment')}
         variant="outline"
         className="flex items-center gap-2 whitespace-nowrap"
       >
         <Calendar className="h-4 w-4" />
-        Novo Agendamento
+        Novo Agendamento (Antigo)
       </Button>
       
       <Button 

@@ -8,6 +8,7 @@ import { useNotifications } from '@/hooks/useNotifications';
 import { SchedulingForm } from '@/components/scheduling/SchedulingForm';
 import { SimpleSchedulingForm } from '@/components/scheduling/SimpleSchedulingForm';
 import { MultipleSchedulingModal } from '@/components/scheduling/MultipleSchedulingModal';
+import { SimpleAppointmentForm } from '@/components/scheduling/new/SimpleAppointmentForm';
 
 import { DoctorSchedule } from '@/components/scheduling/DoctorSchedule';
 import { AppointmentsList } from '@/components/scheduling/AppointmentsList';
@@ -43,6 +44,7 @@ import { useStableAuth } from '@/hooks/useStableAuth';
 import { Button } from '@/components/ui/button';
 import { AuthTest } from '@/components/AuthTest';
 import PendingApproval from '@/components/PendingApproval';
+import { toast } from 'sonner';
 
 const Index = () => {
   const { user, profile, loading: authLoading, signOut } = useStableAuth();
@@ -530,6 +532,19 @@ const Index = () => {
             <div className="flex justify-center">
               <AuthTest />
             </div>
+          </div>
+        )}
+
+        {viewMode === 'simple-new' && (
+          <div className="max-w-4xl mx-auto">
+            <SimpleAppointmentForm 
+              onSuccess={() => {
+                console.log('✅ Sistema Novo: Agendamento criado com sucesso');
+                toast.success('Agendamento criado com sucesso!');
+                setViewMode('doctors');
+              }}
+              className="w-full"
+            />
           </div>
         )}
 
