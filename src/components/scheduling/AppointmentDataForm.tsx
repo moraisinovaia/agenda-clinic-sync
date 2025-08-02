@@ -18,17 +18,16 @@ interface AppointmentDataFormProps {
   setFormData: React.Dispatch<React.SetStateAction<SchedulingFormData>>;
   doctors: Doctor[];
   atendimentos: Atendimento[];
-  validationErrors?: { [key: string]: string };
 }
 
 export function AppointmentDataForm({ 
   formData, 
   setFormData, 
-  doctors, 
-  atendimentos,
-  validationErrors: externalValidationErrors = {}
+  doctors,
+  atendimentos 
 }: AppointmentDataFormProps) {
   const [openDoctorCombo, setOpenDoctorCombo] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   
   // Filtrar atendimentos baseado no médico selecionado
   const filteredAtendimentos = formData.medicoId 
@@ -69,6 +68,45 @@ export function AppointmentDataForm({
     return '07:00'; // Horário padrão de início
   };
 
+  // Função para validar campo individual
+  const validateField = (field: string, value: string) => {
+    const errors: Record<string, string> = {};
+    
+    switch (field) {
+      case 'medicoId':
+        if (!value.trim()) {
+          errors.medicoId = 'Médico é obrigatório';
+        }
+        break;
+      case 'atendimentoId':
+        if (!value.trim()) {
+          errors.atendimentoId = 'Tipo de atendimento é obrigatório';
+        } else if (formData.medicoId && !filteredAtendimentos.some(a => a.id === value)) {
+          errors.atendimentoId = 'Tipo de atendimento inválido para o médico selecionado';
+        }
+        break;
+      case 'dataAgendamento':
+        if (!value) {
+          errors.dataAgendamento = 'Data é obrigatória';
+        }
+        break;
+      case 'horaAgendamento':
+        if (!value) {
+          errors.horaAgendamento = 'Horário é obrigatório';
+        } else if (formData.dataAgendamento && !isTimeValid(formData.dataAgendamento, value)) {
+          const minTime = getMinTime(formData.dataAgendamento);
+          errors.horaAgendamento = `Agendamento deve ser feito com pelo menos 1 hora de antecedência. Horário mínimo: ${minTime} (horário do Brasil)`;
+        }
+        break;
+    }
+    
+    setValidationErrors(prev => ({
+      ...prev,
+      [field]: errors[field] || ''
+    }));
+    
+    return !errors[field];
+  };
 
   // Função melhorada para mudança de médico
   const handleDoctorChange = (doctorId: string) => {
@@ -92,6 +130,12 @@ export function AppointmentDataForm({
       convenio: '' // Reset apenas convenio
     }));
 
+    // Limpar erros relacionados
+    setValidationErrors(prev => ({
+      ...prev,
+      medicoId: '',
+      atendimentoId: autoSelectAtendimento ? '' : prev.atendimentoId
+    }));
 
     setOpenDoctorCombo(false);
   };
@@ -107,6 +151,12 @@ export function AppointmentDataForm({
         : prev.horaAgendamento
     }));
     
+    validateField('dataAgendamento', date);
+    
+    // Re-validar horário se já estiver preenchido
+    if (formData.horaAgendamento) {
+      validateField('horaAgendamento', formData.horaAgendamento);
+    }
   };
 
   return (
@@ -118,7 +168,7 @@ export function AppointmentDataForm({
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <Label htmlFor="medico" className={externalValidationErrors.medicoId ? 'text-destructive' : ''}>
+          <Label htmlFor="medico" className={validationErrors.medicoId ? 'text-destructive' : ''}>
             Médico *
           </Label>
           <Popover open={openDoctorCombo} onOpenChange={setOpenDoctorCombo}>
@@ -129,7 +179,7 @@ export function AppointmentDataForm({
                 aria-expanded={openDoctorCombo}
                 className={cn(
                   "w-full justify-between",
-                  externalValidationErrors.medicoId && "border-destructive"
+                  validationErrors.medicoId && "border-destructive"
                 )}
               >
                 {formData.medicoId
@@ -166,26 +216,27 @@ export function AppointmentDataForm({
               </Command>
             </PopoverContent>
           </Popover>
-          {externalValidationErrors.medicoId && (
+          {validationErrors.medicoId && (
             <p className="text-sm text-destructive mt-1 flex items-center gap-1">
               <AlertCircle className="h-3 w-3" />
-              {externalValidationErrors.medicoId}
+              {validationErrors.medicoId}
             </p>
           )}
         </div>
 
         <div>
-          <Label htmlFor="atendimento" className={externalValidationErrors.atendimentoId ? 'text-destructive' : ''}>
+          <Label htmlFor="atendimento" className={validationErrors.atendimentoId ? 'text-destructive' : ''}>
             Tipo de Atendimento *
           </Label>
           <Select 
             value={formData.atendimentoId} 
             onValueChange={(value) => {
               setFormData(prev => ({ ...prev, atendimentoId: value }));
+              validateField('atendimentoId', value);
             }}
             disabled={!formData.medicoId}
           >
-            <SelectTrigger className={cn(externalValidationErrors.atendimentoId && "border-destructive")}>
+            <SelectTrigger className={cn(validationErrors.atendimentoId && "border-destructive")}>
               <SelectValue placeholder={
                 !formData.medicoId 
                   ? "Selecione primeiro um médico" 
@@ -202,10 +253,10 @@ export function AppointmentDataForm({
               ))}
             </SelectContent>
           </Select>
-          {externalValidationErrors.atendimentoId && (
+          {validationErrors.atendimentoId && (
             <p className="text-sm text-destructive mt-1 flex items-center gap-1">
               <AlertCircle className="h-3 w-3" />
-              {externalValidationErrors.atendimentoId}
+              {validationErrors.atendimentoId}
             </p>
           )}
           {filteredAtendimentos.length === 0 && formData.medicoId && (
@@ -216,7 +267,7 @@ export function AppointmentDataForm({
         </div>
         
         <div>
-          <Label htmlFor="dataAgendamento" className={externalValidationErrors.dataAgendamento ? 'text-destructive' : ''}>
+          <Label htmlFor="dataAgendamento" className={validationErrors.dataAgendamento ? 'text-destructive' : ''}>
             Data *
           </Label>
           <Input
@@ -224,14 +275,15 @@ export function AppointmentDataForm({
             type="date"
             value={formData.dataAgendamento}
             onChange={(e) => handleDateChange(e.target.value)}
+            onBlur={(e) => validateField('dataAgendamento', e.target.value)}
             min={today}
             required
-            className={cn(externalValidationErrors.dataAgendamento && "border-destructive")}
+            className={cn(validationErrors.dataAgendamento && "border-destructive")}
           />
-          {externalValidationErrors.dataAgendamento ? (
+          {validationErrors.dataAgendamento ? (
             <p className="text-sm text-destructive mt-1 flex items-center gap-1">
               <AlertCircle className="h-3 w-3" />
-              {externalValidationErrors.dataAgendamento}
+              {validationErrors.dataAgendamento}
             </p>
           ) : (
             <p className="text-xs text-muted-foreground mt-1">
@@ -241,7 +293,7 @@ export function AppointmentDataForm({
         </div>
         
         <div>
-          <Label htmlFor="horaAgendamento" className={externalValidationErrors.horaAgendamento ? 'text-destructive' : ''}>
+          <Label htmlFor="horaAgendamento" className={validationErrors.horaAgendamento ? 'text-destructive' : ''}>
             Horário *
           </Label>
           <Input
@@ -250,17 +302,19 @@ export function AppointmentDataForm({
             value={formData.horaAgendamento}
             onChange={(e) => {
               setFormData(prev => ({ ...prev, horaAgendamento: e.target.value }));
+              validateField('horaAgendamento', e.target.value);
             }}
+            onBlur={(e) => validateField('horaAgendamento', e.target.value)}
             min={getMinTime(formData.dataAgendamento)}
             max="18:00"
             step="60" // Intervalos de 1 minuto
             required
-            className={cn(externalValidationErrors.horaAgendamento && "border-destructive")}
+            className={cn(validationErrors.horaAgendamento && "border-destructive")}
           />
-          {externalValidationErrors.horaAgendamento ? (
+          {validationErrors.horaAgendamento ? (
             <p className="text-sm text-destructive mt-1 flex items-center gap-1">
               <AlertCircle className="h-3 w-3" />
-              {externalValidationErrors.horaAgendamento}
+              {validationErrors.horaAgendamento}
             </p>
           ) : (
             <p className="text-xs text-muted-foreground mt-1">

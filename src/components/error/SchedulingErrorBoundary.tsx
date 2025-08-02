@@ -1,7 +1,7 @@
 import React, { Component, ReactNode } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
 import { AlertCircle, RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface Props {
   children: ReactNode;
@@ -19,46 +19,51 @@ export class SchedulingErrorBoundary extends Component<Props, State> {
     this.state = { hasError: false, error: null };
   }
 
-  // ✅ DETECÇÃO ESPECÍFICA: Não capturar erros de validação ou conflito
   static getDerivedStateFromError(error: Error): State {
-    console.log('🛡️ SchedulingErrorBoundary: Erro capturado:', error.message);
+    // CRITICAL: Não interceptar erros de validação/conflito
+    // Estes devem ser tratados pelo próprio formulário
+    const errorMessage = error.message.toLowerCase();
     
-    // Ignorar erros específicos que não devem quebrar o componente
-    const ignoredErrors = [
-      'conflito',
-      'ocupado', 
-      'validation',
-      'validação',
-      'form error',
-      'já existe um agendamento'
-    ];
-    
-    const shouldIgnore = ignoredErrors.some(ignored => 
-      error.message.toLowerCase().includes(ignored)
-    );
-    
-    if (shouldIgnore) {
-      console.log('🟡 SchedulingErrorBoundary: Erro ignorado (validação/conflito)');
+    if (errorMessage.includes('já está ocupado') || 
+        errorMessage.includes('bloqueada') ||
+        errorMessage.includes('idade') ||
+        errorMessage.includes('convênio') ||
+        errorMessage.includes('obrigatório') ||
+        errorMessage.includes('inválido') ||
+        errorMessage.includes('conflito')) {
+      console.log('🔄 SchedulingErrorBoundary: Erro de validação ignorado - deixando formulário tratar');
       return { hasError: false, error: null };
     }
     
-    console.log('🔴 SchedulingErrorBoundary: Erro capturado para exibição');
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.log('🛡️ SchedulingErrorBoundary: componentDidCatch:', error, errorInfo);
+    console.error('🚨 SchedulingErrorBoundary capturou erro:', error, errorInfo);
     
-    // ✅ PRESERVAR ESTADO: Não recarregar página para erros de agendamento
-    if (error.message.includes('conflict') || error.message.includes('validation')) {
-      console.log('🔒 SchedulingErrorBoundary: Preservando estado do formulário');
-      // Prevent page reload
+    // Verificar se é erro de validação
+    const errorMessage = error.message.toLowerCase();
+    if (errorMessage.includes('já está ocupado') || 
+        errorMessage.includes('bloqueada') ||
+        errorMessage.includes('idade') ||
+        errorMessage.includes('convênio') ||
+        errorMessage.includes('obrigatório') ||
+        errorMessage.includes('inválido') ||
+        errorMessage.includes('conflito')) {
+      console.log('🔄 SchedulingErrorBoundary: Ignorando erro de validação');
       return;
+    }
+    
+    // Prevenir qualquer possível reload da página
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeunload', (e) => {
+        e.preventDefault();
+        e.returnValue = '';
+      });
     }
   }
 
   handleRetry = () => {
-    console.log('🔄 SchedulingErrorBoundary: Tentativa de retry');
     this.setState({ hasError: false, error: null });
     this.props.onRetry?.();
   };
@@ -66,26 +71,29 @@ export class SchedulingErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="p-4 space-y-4">
-          <Alert variant="destructive">
+        <div className="w-full max-w-4xl mx-auto p-4">
+          <Alert variant="destructive" className="mb-4">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              Ocorreu um erro inesperado no sistema de agendamento.
-              {this.state.error?.message && (
-                <div className="mt-2 text-sm">
-                  Detalhes: {this.state.error.message}
+              <div className="space-y-2">
+                <p className="font-semibold">Erro no sistema de agendamento</p>
+                <p className="text-sm">
+                  {this.state.error?.message || 'Ocorreu um erro inesperado. Seus dados foram preservados.'}
+                </p>
+                <div className="flex gap-2 mt-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={this.handleRetry}
+                    className="flex items-center gap-2"
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                    Tentar Novamente
+                  </Button>
                 </div>
-              )}
+              </div>
             </AlertDescription>
           </Alert>
-          <Button 
-            onClick={this.handleRetry}
-            variant="outline"
-            className="w-full"
-          >
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Tentar Novamente
-          </Button>
         </div>
       );
     }

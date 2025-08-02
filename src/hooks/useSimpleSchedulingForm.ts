@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { SchedulingFormData } from '@/types/scheduling';
-import { useFormValidation } from './useFormValidation';
 
 const initialFormData: SchedulingFormData = {
   nomeCompleto: '',
@@ -31,16 +30,11 @@ export function useSimpleSchedulingForm(props?: UseSimpleSchedulingFormProps) {
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { errors: validationErrors, validateForm, clearAllErrors } = useFormValidation();
-
-  // ✅ CORREÇÃO: Remover validação automática que causava loops infinitos
-  // Validação será feita apenas on-demand ao submeter
 
   const resetForm = () => {
     setFormData(initialFormData);
     setError(null);
     setLoading(false);
-    clearAllErrors();
   };
 
   const handleSubmit = async (
@@ -50,52 +44,22 @@ export function useSimpleSchedulingForm(props?: UseSimpleSchedulingFormProps) {
     e.preventDefault();
     e.stopPropagation();
     
-    console.log('🎯 SimpleSchedulingForm: Iniciando submissão', { formData });
-    console.log('🔍 TRACE: handleSubmit - componente montado, loading:', loading);
-    
-    // Validar formulário antes de submeter
-    const { isValid, errors } = validateForm(formData);
-    
-    if (!isValid) {
-      console.log('❌ SimpleSchedulingForm: Validação falhou:', errors);
-      setError('Por favor, corrija os erros no formulário antes de continuar.');
-      return;
-    }
+    console.log('🎯 SimpleSchedulingForm: Iniciando submissão');
     
     setLoading(true);
     setError(null);
-    clearAllErrors();
-    
-    console.log('🔄 TRACE: handleSubmit - iniciando onSubmit, loading agora:', true);
     
     try {
       await onSubmit(formData);
-      console.log('✅ TRACE: handleSubmit - onSubmit SUCCESS, resetando formulário');
+      console.log('✅ SimpleSchedulingForm: Sucesso - resetando formulário');
       resetForm();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
-      console.log('❌ TRACE: handleSubmit - onSubmit ERROR:', errorMessage);
-      console.log('🔍 TRACE: handleSubmit - preservando formData para evitar perda de dados');
-      
-      // Detectar especificamente erros de conflito
-      const isConflictError = errorMessage.includes('conflito') || 
-                            errorMessage.includes('ocupado') || 
-                            errorMessage.includes('já existe um agendamento');
-      
-      if (isConflictError) {
-        console.log('⚠️ CONFLICT DETECTED: Erro de conflito detectado, preservando formulário');
-        setError(`Conflito de horário: ${errorMessage}`);
-      } else {
-        console.log('❌ OTHER ERROR: Erro geral, preservando formulário');
-        setError(errorMessage);
-      }
-      
-      // CRÍTICO: NÃO resetar formulário em NENHUM caso de erro
-      // O usuário deve manter os dados para corrigir o problema
+      console.log('❌ SimpleSchedulingForm: Erro capturado:', errorMessage);
+      setError(errorMessage);
+      // NÃO resetar formulário em caso de erro
     } finally {
-      console.log('🔄 TRACE: handleSubmit - finalizando, setando loading para false');
       setLoading(false);
-      console.log('✅ TRACE: handleSubmit - loading finalizado');
     }
   };
 
@@ -104,7 +68,6 @@ export function useSimpleSchedulingForm(props?: UseSimpleSchedulingFormProps) {
     setFormData,
     loading,
     error,
-    validationErrors,
     resetForm,
     handleSubmit,
   };

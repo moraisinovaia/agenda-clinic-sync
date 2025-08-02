@@ -21,33 +21,25 @@ export function useSupabaseScheduling() {
 
   // ✅ CORREÇÃO DEFINITIVA: Invalidar cache APENAS em caso de sucesso
   const createAppointment = useCallback(async (formData: any, editingAppointmentId?: string) => {
-    console.log('🎯 TRACE: useSupabaseScheduling.createAppointment - INICIANDO');
-    console.log('📋 TRACE: formData recebido:', formData);
-    
     try {
-      console.log('🔄 TRACE: Chamando appointmentCreation.createAppointment');
       const result = await appointmentCreation.createAppointment(formData, editingAppointmentId);
       
       // ✅ SUCESSO CONFIRMADO - Agora sim invalidar cache e atualizar dados
-      console.log('✅ TRACE: SUCESSO CONFIRMADO - invalidando cache e atualizando dados');
-      console.log('📊 TRACE: Resultado:', result);
-      
+      console.log('✅ Sucesso confirmado - invalidando cache e atualizando dados');
       appointmentsList.invalidateCache?.();
       schedulingData.refetch();
       
-      // ✅ CORREÇÃO: Refetch imediato sem setTimeout que causa re-renders
-      appointmentsList.forceRefetch?.();
+      // Aguardar um pouco e forçar refetch completo para garantir dados frescos
+      setTimeout(() => {
+        appointmentsList.forceRefetch?.();
+      }, 100);
       
-      console.log('🔄 TRACE: Cache invalidated after CONFIRMED success');
+      console.log('🔄 Cache invalidated after CONFIRMED success');
       
       return result;
     } catch (error) {
       // ❌ ERRO - NÃO invalidar cache nem fazer refetch
-      console.log('❌ TRACE: ERRO CAPTURADO em useSupabaseScheduling - PRESERVANDO cache e dados');
-      console.log('🚫 TRACE: Error details:', error);
-      console.log('🔒 TRACE: NÃO fazendo refetch para preservar estado do formulário');
-      
-      // CRÍTICO: Não fazer NENHUM tipo de refetch ou invalidação em caso de erro
+      console.log('❌ Erro capturado - PRESERVANDO cache e dados do formulário');
       throw error; // Repassar erro sem afetar o estado
     }
   }, [appointmentCreation.createAppointment, appointmentsList, schedulingData]);

@@ -11,7 +11,6 @@ import { Doctor, Atendimento, SchedulingFormData, AppointmentWithRelations } fro
 import { PatientDataFormFixed } from './PatientDataFormFixed';
 import { AppointmentDataForm } from './AppointmentDataForm';
 import { useSimpleSchedulingForm } from '@/hooks/useSimpleSchedulingForm';
-import { SchedulingErrorBoundary } from '@/components/error/SchedulingErrorBoundary';
 
 interface SimpleSchedulingFormProps {
   doctors: Doctor[];
@@ -42,7 +41,6 @@ export function SimpleSchedulingForm({
   preSelectedDoctor,
   preSelectedDate
 }: SimpleSchedulingFormProps) {
-  console.log('🔄 TRACE: SimpleSchedulingForm RENDER - início');
   // Preparar dados iniciais para edição
   const initialEditData = editingAppointment ? {
     nomeCompleto: editingAppointment.pacientes?.nome_completo || '',
@@ -57,17 +55,10 @@ export function SimpleSchedulingForm({
     observacoes: editingAppointment.observacoes || '',
   } : undefined;
 
-  const { formData, setFormData, loading, error, validationErrors, handleSubmit } = useSimpleSchedulingForm({
+  const { formData, setFormData, loading, error, handleSubmit } = useSimpleSchedulingForm({
     initialData: initialEditData,
     preSelectedDoctor,
     preSelectedDate
-  });
-  
-  console.log('🔍 TRACE: SimpleSchedulingForm STATE:', { 
-    loading, 
-    error, 
-    hasFormData: !!formData.nomeCompleto,
-    medicoId: formData.medicoId 
   });
 
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date>(new Date());
@@ -128,8 +119,7 @@ export function SimpleSchedulingForm({
   };
 
   return (
-    <SchedulingErrorBoundary>
-      <div className="w-full max-w-6xl mx-auto space-y-6">
+    <div className="w-full max-w-6xl mx-auto space-y-6">
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Formulário de Agendamento */}
         <Card>
@@ -155,7 +145,6 @@ export function SimpleSchedulingForm({
                 setFormData={setFormData}
                 doctors={doctors}
                 atendimentos={atendimentos}
-                validationErrors={validationErrors}
               />
 
               {/* Exibir erro sempre que existir */}
@@ -318,7 +307,6 @@ export function SimpleSchedulingForm({
           </CardContent>
         </Card>
       </div>
-      </div>
-    </SchedulingErrorBoundary>
+    </div>
   );
 }

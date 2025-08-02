@@ -171,8 +171,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         description: 'O agendamento foi cancelado com sucesso',
       });
 
-      // ✅ CORREÇÃO: Invalidar cache sem refetch automático que pode causar loops
-      invalidateCache();
+      // Invalidar cache e recarregar
+      refetch();
       logger.info('Agendamento cancelado com sucesso', { appointmentId }, 'APPOINTMENTS');
     } catch (error) {
       logger.error('Erro ao cancelar agendamento', error, 'APPOINTMENTS');
