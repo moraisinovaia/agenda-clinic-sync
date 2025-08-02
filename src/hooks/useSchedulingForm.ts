@@ -88,7 +88,8 @@ export function useSchedulingForm(props?: UseSchedulingFormProps) {
       // Exibir erro sem resetar formulário
       setError(errorMessage);
       
-      // CRITICAL: NÃO re-throw para evitar dupla execução e recarregamento
+      // CRITICAL: Re-throw o erro para que Index.tsx saiba que houve falha
+      throw error;
       
     } finally {
       console.log('🏁 useSchedulingForm: Finalizando submissão...');

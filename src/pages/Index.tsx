@@ -248,6 +248,7 @@ const Index = () => {
       await createAppointment(formData, editingAppointment?.id);
       console.log('✅ Index.tsx: Agendamento criado/editado com sucesso');
       
+      // CRITICAL: TODA a lógica de sucesso deve estar DENTRO do try
       const doctor = doctors.find(d => d.id === formData.medicoId);
       if (doctor) {
         // Send notification for new appointment (only if not editing)
@@ -259,7 +260,7 @@ const Index = () => {
           );
         }
         
-        // Se estava editando, volta para lista de agendamentos
+        // Navigate based on context APENAS se não houve erro
         if (editingAppointment) {
           setEditingAppointment(null);
           setViewMode('appointments-list');
@@ -269,10 +270,12 @@ const Index = () => {
           setViewMode('schedule');
         }
       }
+      
     } catch (error) {
-      console.error('❌ Index.handleSubmitAppointment: Erro capturado e re-lançado:', error);
+      console.error('❌ Index.handleSubmitAppointment: Erro capturado - viewMode permanecerá new-appointment:', error);
       
       // CRITICAL: Re-throw para que o useSchedulingForm possa capturar e exibir
+      // ViewMode NÃO será alterado aqui, mantendo new-appointment
       throw error;
     }
   };
