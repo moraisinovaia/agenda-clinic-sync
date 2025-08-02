@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Doctor, AppointmentWithRelations } from '@/types/scheduling';
 
-export type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos' | 'fila-espera' | 'nova-fila' | 'bloqueio-agenda' | 'relatorio-agenda' | 'auth-test' | 'alertas' | 'multiple-appointment' | 'canceled-appointments' | 'simple-new';
+export type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos' | 'fila-espera' | 'nova-fila' | 'bloqueio-agenda' | 'relatorio-agenda' | 'auth-test' | 'alertas' | 'multiple-appointment' | 'canceled-appointments' | 'simple-new' | 'novo-agendamento';
 
 export const useViewMode = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('doctors');
