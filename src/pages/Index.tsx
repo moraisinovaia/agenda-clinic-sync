@@ -6,6 +6,7 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useNotifications } from '@/hooks/useNotifications';
 
 import { SchedulingForm } from '@/components/scheduling/SchedulingForm';
+import { SimpleSchedulingForm } from '@/components/scheduling/SimpleSchedulingForm';
 import { MultipleSchedulingModal } from '@/components/scheduling/MultipleSchedulingModal';
 
 import { DoctorSchedule } from '@/components/scheduling/DoctorSchedule';
@@ -241,42 +242,36 @@ const Index = () => {
     }
   };
 
-  const handleSubmitAppointment = async (formData: SchedulingFormData) => {
-    console.log('🎯 Index.tsx: Iniciando handleSubmitAppointment');
+  // Handler NOVO para formulário simples isolado
+  const handleSimpleAppointmentSubmit = async (formData: SchedulingFormData) => {
+    console.log('🎯 Index.tsx: handleSimpleAppointmentSubmit chamado (NOVO)');
     
-    try {
-      await createAppointment(formData, editingAppointment?.id);
-      console.log('✅ Index.tsx: Agendamento criado/editado com sucesso');
-      
-      // CRITICAL: TODA a lógica de sucesso deve estar DENTRO do try
-      const doctor = doctors.find(d => d.id === formData.medicoId);
-      if (doctor) {
-        // Send notification for new appointment (only if not editing)
-        if (!editingAppointment) {
-          notifyNewAppointment(
-            formData.nomeCompleto,
-            doctor.nome,
-            formData.horaAgendamento
-          );
-        }
-        
-        // Navigate based on context APENAS se não houve erro
-        if (editingAppointment) {
-          setEditingAppointment(null);
-          setViewMode('appointments-list');
-        } else {
-          setSelectedDoctor(doctor);
-          setLastAppointmentDate(formData.dataAgendamento);
-          setViewMode('schedule');
-        }
+    // CRITICAL: SEM try/catch aqui - deixar o erro subir para o SimpleSchedulingForm
+    await createAppointment(formData, editingAppointment?.id);
+    
+    console.log('✅ Index.tsx: Agendamento criado com sucesso - navegando');
+    
+    // Sucesso - navegar APENAS após sucesso confirmado
+    const doctor = doctors.find(d => d.id === formData.medicoId);
+    if (doctor) {
+      // Send notification for new appointment (only if not editing)
+      if (!editingAppointment) {
+        notifyNewAppointment(
+          formData.nomeCompleto,
+          doctor.nome,
+          formData.horaAgendamento
+        );
       }
       
-    } catch (error) {
-      console.error('❌ Index.handleSubmitAppointment: Erro capturado - viewMode permanecerá new-appointment:', error);
-      
-      // CRITICAL: Re-throw para que o useSchedulingForm possa capturar e exibir
-      // ViewMode NÃO será alterado aqui, mantendo new-appointment
-      throw error;
+      // Navigate based on context
+      if (editingAppointment) {
+        setEditingAppointment(null);
+        setViewMode('appointments-list');
+      } else {
+        setSelectedDoctor(doctor);
+        setLastAppointmentDate(formData.dataAgendamento);
+        setViewMode('schedule');
+      }
     }
   };
 
@@ -391,26 +386,19 @@ const Index = () => {
         )}
 
         {viewMode === 'new-appointment' && (
-          <SchedulingErrorBoundary 
-            onRetry={() => {
-              console.log('🔄 Retry do SchedulingErrorBoundary - new appointment');
-              setViewMode('doctors');
-            }}
-          >
-            <SchedulingForm
-              doctors={doctors}
-              atendimentos={atendimentos}
-              appointments={appointments}
-              blockedDates={blockedDates}
-              isDateBlocked={isDateBlocked}
-              onSubmit={handleSubmitAppointment}
-              onCancel={goBack}
-              getAtendimentosByDoctor={getAtendimentosByDoctor}
-              searchPatientsByBirthDate={searchPatientsByBirthDate}
-              preSelectedDoctor={selectedDoctor?.id}
-              preSelectedDate={selectedAppointmentDate || undefined}
-            />
-          </SchedulingErrorBoundary>
+          <SimpleSchedulingForm
+            doctors={doctors}
+            atendimentos={atendimentos}
+            appointments={appointments}
+            blockedDates={blockedDates}
+            isDateBlocked={isDateBlocked}
+            onSubmit={handleSimpleAppointmentSubmit}
+            onCancel={goBack}
+            getAtendimentosByDoctor={getAtendimentosByDoctor}
+            searchPatientsByBirthDate={searchPatientsByBirthDate}
+            preSelectedDoctor={selectedDoctor?.id}
+            preSelectedDate={selectedAppointmentDate || undefined}
+          />
         )}
 
 
@@ -447,26 +435,18 @@ const Index = () => {
         )}
 
         {viewMode === 'edit-appointment' && editingAppointment && (
-          <SchedulingErrorBoundary 
-            onRetry={() => {
-              console.log('🔄 Retry do SchedulingErrorBoundary - edit appointment');
-              setEditingAppointment(null);
-              setViewMode('appointments-list');
-            }}
-          >
-            <SchedulingForm
-              doctors={doctors}
-              atendimentos={atendimentos}
-              appointments={appointments}
-              blockedDates={blockedDates}
-              isDateBlocked={isDateBlocked}
-              onSubmit={handleSubmitAppointment}
-              onCancel={goBack}
-              getAtendimentosByDoctor={getAtendimentosByDoctor}
-              searchPatientsByBirthDate={searchPatientsByBirthDate}
-              editingAppointment={editingAppointment}
-            />
-          </SchedulingErrorBoundary>
+          <SimpleSchedulingForm
+            doctors={doctors}
+            atendimentos={atendimentos}
+            appointments={appointments}
+            blockedDates={blockedDates}
+            isDateBlocked={isDateBlocked}
+            onSubmit={handleSimpleAppointmentSubmit}
+            onCancel={goBack}
+            getAtendimentosByDoctor={getAtendimentosByDoctor}
+            searchPatientsByBirthDate={searchPatientsByBirthDate}
+            editingAppointment={editingAppointment}
+          />
         )}
 
         {viewMode === 'preparos' && (
