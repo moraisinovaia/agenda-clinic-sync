@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SchedulingFormData } from '@/types/scheduling';
 import { useFormValidation } from './useFormValidation';
 
@@ -32,6 +32,11 @@ export function useSimpleSchedulingForm(props?: UseSimpleSchedulingFormProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { errors: validationErrors, validateForm, clearAllErrors } = useFormValidation();
+
+  // Validação em tempo real sempre que formData mudar
+  useEffect(() => {
+    validateForm(formData);
+  }, [formData, validateForm]);
 
   const resetForm = () => {
     setFormData(initialFormData);
