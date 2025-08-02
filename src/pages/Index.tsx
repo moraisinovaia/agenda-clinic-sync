@@ -242,36 +242,43 @@ const Index = () => {
     }
   };
 
-  // Handler NOVO para formulário simples isolado
+  // Handler para formulário simples - CORREÇÃO DEFINITIVA
   const handleSimpleAppointmentSubmit = async (formData: SchedulingFormData) => {
-    console.log('🎯 Index.tsx: handleSimpleAppointmentSubmit chamado (NOVO)');
+    console.log('🎯 Index.tsx: handleSimpleAppointmentSubmit chamado');
     
-    // CRITICAL: SEM try/catch aqui - deixar o erro subir para o SimpleSchedulingForm
-    await createAppointment(formData, editingAppointment?.id);
-    
-    console.log('✅ Index.tsx: Agendamento criado com sucesso - navegando');
-    
-    // Sucesso - navegar APENAS após sucesso confirmado
-    const doctor = doctors.find(d => d.id === formData.medicoId);
-    if (doctor) {
-      // Send notification for new appointment (only if not editing)
-      if (!editingAppointment) {
-        notifyNewAppointment(
-          formData.nomeCompleto,
-          doctor.nome,
-          formData.horaAgendamento
-        );
-      }
+    try {
+      // Tentar criar o agendamento
+      await createAppointment(formData, editingAppointment?.id);
       
-      // Navigate based on context
-      if (editingAppointment) {
-        setEditingAppointment(null);
-        setViewMode('appointments-list');
-      } else {
-        setSelectedDoctor(doctor);
-        setLastAppointmentDate(formData.dataAgendamento);
-        setViewMode('schedule');
+      console.log('✅ Index.tsx: Agendamento criado com sucesso - navegando');
+      
+      // SUCESSO - navegar APENAS após sucesso confirmado
+      const doctor = doctors.find(d => d.id === formData.medicoId);
+      if (doctor) {
+        // Send notification for new appointment (only if not editing)
+        if (!editingAppointment) {
+          notifyNewAppointment(
+            formData.nomeCompleto,
+            doctor.nome,
+            formData.horaAgendamento
+          );
+        }
+        
+        // Navigate based on context
+        if (editingAppointment) {
+          setEditingAppointment(null);
+          setViewMode('appointments-list');
+        } else {
+          setSelectedDoctor(doctor);
+          setLastAppointmentDate(formData.dataAgendamento);
+          setViewMode('schedule');
+        }
       }
+    } catch (error) {
+      console.log('❌ Index.tsx: Erro capturado - NÃO navegando, deixando formulário intacto');
+      // CRÍTICO: Em caso de erro, NÃO fazer nenhuma mudança de estado
+      // Deixar o erro subir para o SimpleSchedulingForm tratar
+      throw error;
     }
   };
 
