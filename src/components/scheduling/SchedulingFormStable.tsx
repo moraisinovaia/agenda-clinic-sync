@@ -6,6 +6,7 @@ import { PatientDataFormStable } from './PatientDataFormStable';
 import { AppointmentDataForm } from './AppointmentDataForm';
 import { Doctor, SchedulingFormData, Atendimento, AppointmentWithRelations } from '@/types/scheduling';
 import { useSchedulingForm } from '@/hooks/useSchedulingForm';
+import { useFormValidation } from '@/hooks/useFormValidation';
 import { useDebounce } from '@/hooks/useDebounce';
 import { AlertCircle, CheckCircle, X } from 'lucide-react';
 
