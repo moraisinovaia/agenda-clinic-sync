@@ -35,10 +35,8 @@ export function useSupabaseScheduling() {
       appointmentsList.invalidateCache?.();
       schedulingData.refetch();
       
-      // Aguardar um pouco e forçar refetch completo para garantir dados frescos
-      setTimeout(() => {
-        appointmentsList.forceRefetch?.();
-      }, 100);
+      // ✅ CORREÇÃO: Refetch imediato sem setTimeout que causa re-renders
+      appointmentsList.forceRefetch?.();
       
       console.log('🔄 TRACE: Cache invalidated after CONFIRMED success');
       

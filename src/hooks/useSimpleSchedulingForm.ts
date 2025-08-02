@@ -33,10 +33,8 @@ export function useSimpleSchedulingForm(props?: UseSimpleSchedulingFormProps) {
   const [error, setError] = useState<string | null>(null);
   const { errors: validationErrors, validateForm, clearAllErrors } = useFormValidation();
 
-  // Validação em tempo real sempre que formData mudar
-  useEffect(() => {
-    validateForm(formData);
-  }, [formData, validateForm]);
+  // ✅ CORREÇÃO: Remover validação automática que causava loops infinitos
+  // Validação será feita apenas on-demand ao submeter
 
   const resetForm = () => {
     setFormData(initialFormData);

@@ -11,6 +11,7 @@ import { Doctor, Atendimento, SchedulingFormData, AppointmentWithRelations } fro
 import { PatientDataFormFixed } from './PatientDataFormFixed';
 import { AppointmentDataForm } from './AppointmentDataForm';
 import { useSimpleSchedulingForm } from '@/hooks/useSimpleSchedulingForm';
+import { SchedulingErrorBoundary } from '@/components/error/SchedulingErrorBoundary';
 
 interface SimpleSchedulingFormProps {
   doctors: Doctor[];
@@ -127,7 +128,8 @@ export function SimpleSchedulingForm({
   };
 
   return (
-    <div className="w-full max-w-6xl mx-auto space-y-6">
+    <SchedulingErrorBoundary>
+      <div className="w-full max-w-6xl mx-auto space-y-6">
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Formulário de Agendamento */}
         <Card>
@@ -316,6 +318,7 @@ export function SimpleSchedulingForm({
           </CardContent>
         </Card>
       </div>
-    </div>
+      </div>
+    </SchedulingErrorBoundary>
   );
 }
