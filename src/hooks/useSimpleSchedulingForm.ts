@@ -52,7 +52,8 @@ export function useSimpleSchedulingForm(props?: UseSimpleSchedulingFormProps) {
     e.preventDefault();
     e.stopPropagation();
     
-    console.log('🎯 SimpleSchedulingForm: Iniciando submissão');
+    console.log('🎯 SimpleSchedulingForm: Iniciando submissão', { formData });
+    console.log('🔍 TRACE: handleSubmit - componente montado, loading:', loading);
     
     // Validar formulário antes de submeter
     const { isValid, errors } = validateForm(formData);
@@ -67,17 +68,36 @@ export function useSimpleSchedulingForm(props?: UseSimpleSchedulingFormProps) {
     setError(null);
     clearAllErrors();
     
+    console.log('🔄 TRACE: handleSubmit - iniciando onSubmit, loading agora:', true);
+    
     try {
       await onSubmit(formData);
-      console.log('✅ SimpleSchedulingForm: Sucesso - resetando formulário');
+      console.log('✅ TRACE: handleSubmit - onSubmit SUCCESS, resetando formulário');
       resetForm();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
-      console.log('❌ SimpleSchedulingForm: Erro capturado:', errorMessage);
-      setError(errorMessage);
-      // NÃO resetar formulário em caso de erro
+      console.log('❌ TRACE: handleSubmit - onSubmit ERROR:', errorMessage);
+      console.log('🔍 TRACE: handleSubmit - preservando formData para evitar perda de dados');
+      
+      // Detectar especificamente erros de conflito
+      const isConflictError = errorMessage.includes('conflito') || 
+                            errorMessage.includes('ocupado') || 
+                            errorMessage.includes('já existe um agendamento');
+      
+      if (isConflictError) {
+        console.log('⚠️ CONFLICT DETECTED: Erro de conflito detectado, preservando formulário');
+        setError(`Conflito de horário: ${errorMessage}`);
+      } else {
+        console.log('❌ OTHER ERROR: Erro geral, preservando formulário');
+        setError(errorMessage);
+      }
+      
+      // CRÍTICO: NÃO resetar formulário em NENHUM caso de erro
+      // O usuário deve manter os dados para corrigir o problema
     } finally {
+      console.log('🔄 TRACE: handleSubmit - finalizando, setando loading para false');
       setLoading(false);
+      console.log('✅ TRACE: handleSubmit - loading finalizado');
     }
   };
 

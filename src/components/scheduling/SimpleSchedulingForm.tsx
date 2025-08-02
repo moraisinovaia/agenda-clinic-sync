@@ -41,6 +41,7 @@ export function SimpleSchedulingForm({
   preSelectedDoctor,
   preSelectedDate
 }: SimpleSchedulingFormProps) {
+  console.log('🔄 TRACE: SimpleSchedulingForm RENDER - início');
   // Preparar dados iniciais para edição
   const initialEditData = editingAppointment ? {
     nomeCompleto: editingAppointment.pacientes?.nome_completo || '',
@@ -59,6 +60,13 @@ export function SimpleSchedulingForm({
     initialData: initialEditData,
     preSelectedDoctor,
     preSelectedDate
+  });
+  
+  console.log('🔍 TRACE: SimpleSchedulingForm STATE:', { 
+    loading, 
+    error, 
+    hasFormData: !!formData.nomeCompleto,
+    medicoId: formData.medicoId 
   });
 
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date>(new Date());

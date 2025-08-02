@@ -45,7 +45,14 @@ import { AuthTest } from '@/components/AuthTest';
 import PendingApproval from '@/components/PendingApproval';
 
 const Index = () => {
+  console.log('🔄 TRACE: Index.tsx - COMPONENT RENDER START');
   const { user, profile, loading: authLoading, signOut } = useStableAuth();
+  console.log('🔍 TRACE: Index.tsx - auth state:', { 
+    hasUser: !!user, 
+    hasProfile: !!profile, 
+    authLoading,
+    profileStatus: profile?.status 
+  });
   
   // Estados sempre inicializados na mesma ordem (antes de qualquer return)
   const [searchTerm, setSearchTerm] = useState('');
@@ -244,19 +251,23 @@ const Index = () => {
 
   // Handler para formulário simples - CORREÇÃO DEFINITIVA
   const handleSimpleAppointmentSubmit = async (formData: SchedulingFormData) => {
-    console.log('🎯 Index.tsx: handleSimpleAppointmentSubmit chamado');
+    console.log('🎯 TRACE: Index.tsx - handleSimpleAppointmentSubmit CHAMADO');
+    console.log('📋 TRACE: formData recebido:', formData);
+    console.log('✏️ TRACE: editando agendamento?', !!editingAppointment);
     
     try {
+      console.log('🔄 TRACE: Index.tsx - chamando createAppointment');
       // Tentar criar o agendamento
       await createAppointment(formData, editingAppointment?.id);
       
-      console.log('✅ Index.tsx: Agendamento criado com sucesso - navegando');
+      console.log('✅ TRACE: Index.tsx - SUCESSO no createAppointment - navegando');
       
       // SUCESSO - navegar APENAS após sucesso confirmado
       const doctor = doctors.find(d => d.id === formData.medicoId);
       if (doctor) {
         // Send notification for new appointment (only if not editing)
         if (!editingAppointment) {
+          console.log('📢 TRACE: Enviando notificação para novo agendamento');
           notifyNewAppointment(
             formData.nomeCompleto,
             doctor.nome,
@@ -266,16 +277,21 @@ const Index = () => {
         
         // Navigate based on context
         if (editingAppointment) {
+          console.log('🔄 TRACE: Editando - indo para appointments-list');
           setEditingAppointment(null);
           setViewMode('appointments-list');
         } else {
+          console.log('🔄 TRACE: Novo agendamento - indo para schedule');
           setSelectedDoctor(doctor);
           setLastAppointmentDate(formData.dataAgendamento);
           setViewMode('schedule');
         }
       }
     } catch (error) {
-      console.log('❌ Index.tsx: Erro capturado - NÃO navegando, deixando formulário intacto');
+      console.log('❌ TRACE: Index.tsx - ERRO capturado em handleSimpleAppointmentSubmit');
+      console.log('🚫 TRACE: Error details:', error);
+      console.log('🔒 TRACE: NÃO navegando, deixando formulário intacto');
+      
       // CRÍTICO: Em caso de erro, NÃO fazer nenhuma mudança de estado
       // Deixar o erro subir para o SimpleSchedulingForm tratar
       throw error;
