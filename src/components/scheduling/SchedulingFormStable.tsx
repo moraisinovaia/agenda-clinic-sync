@@ -58,6 +58,8 @@ export function SchedulingFormStable({
     resetForm,
     handleSubmit,
   } = useSchedulingForm({ initialData });
+  
+  const { validateForm } = useFormValidation();
 
   // Debounce para prevenir múltiplas submissões
   const debouncedIsSubmitting = useDebounce(isSubmitting, 300);
@@ -96,29 +98,42 @@ export function SchedulingFormStable({
   // Buscar dados do médico selecionado
   const selectedDoctor = doctors.find(d => d.id === formData.medicoId);
 
-  const isStepValid = (stepNumber: number) => {
-    switch (stepNumber) {
-      case 1:
-        return !!(
-          formData.nomeCompleto &&
-          formData.dataNascimento &&
-          formData.convenio &&
-          formData.celular
-        );
-      case 2:
-        return !!(
-          formData.medicoId &&
-          formData.atendimentoId &&
-          formData.dataAgendamento &&
-          formData.horaAgendamento
-        );
-      default:
-        return false;
+  // ✅ VALIDAÇÃO ROBUSTA: Função para validar se o passo atual está válido
+  const isStepValid = (step: number): boolean => {
+    if (step === 1) {
+      // Validar dados do paciente
+      const hasRequiredFields = !!(
+        formData.nomeCompleto?.trim() && 
+        formData.dataNascimento && 
+        formData.convenio?.trim() && 
+        formData.celular?.trim()
+      );
+      return hasRequiredFields;
+    } else if (step === 2) {
+      // Validar dados do agendamento COM VERIFICAÇÃO EXPLÍCITA DO ATENDIMENTO
+      const hasRequiredFields = !!(
+        formData.medicoId && 
+        formData.atendimentoId && // ← CRÍTICO: atendimento é obrigatório
+        formData.dataAgendamento && 
+        formData.horaAgendamento
+      );
+      
+      // Log para debug
+      console.log('🔍 Validação Step 2:', {
+        medicoId: !!formData.medicoId,
+        atendimentoId: !!formData.atendimentoId,
+        dataAgendamento: !!formData.dataAgendamento,
+        horaAgendamento: !!formData.horaAgendamento,
+        isValid: hasRequiredFields
+      });
+      
+      return hasRequiredFields;
     }
+    return false;
   };
 
   const handleNext = () => {
-    if (isStepValid(step)) {
+    if (isStepValid(1)) {
       setStep(2);
     }
   };
@@ -132,7 +147,27 @@ export function SchedulingFormStable({
     onCancel();
   };
 
+  // ✅ CORREÇÃO: Submissão do formulário com validação robusta
   const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    console.log('🎯 SchedulingFormStable: Tentativa de submissão', formData);
+    
+    // ✅ VALIDAÇÃO PRÉ-SUBMISSÃO: Verificar todos os campos obrigatórios
+    const validation = validateForm(formData);
+    if (!validation.isValid) {
+      console.log('❌ Validação falhou:', validation.errors);
+      
+      // Se atendimento não está selecionado, mostrar erro específico
+      if (!formData.atendimentoId) {
+        console.log('🚨 ERRO ESPECÍFICO: Tipo de atendimento não selecionado');
+        return; // Bloquear submissão
+      }
+      
+      return; // Bloquear submissão para qualquer erro
+    }
+    
     if (isSubmitting || debouncedIsSubmitting) {
       console.log('🛑 SchedulingFormStable: Submissão em andamento, ignorando...');
       return;
