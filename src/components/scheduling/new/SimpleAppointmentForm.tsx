@@ -11,7 +11,7 @@ import { AlertCircle, CheckCircle2, User, Calendar, Clock, Stethoscope } from 'l
 
 import { useFormState } from '@/hooks/new/useFormState';
 import { useBasicSchedulingData } from '@/hooks/new/useBasicSchedulingData';
-import { useIsolatedAppointmentCreation } from '@/hooks/new/useIsolatedAppointmentCreation';
+import { useSimpleAppointmentCreation } from '@/hooks/new/useSimpleAppointmentCreation';
 import { validateField } from '@/utils/new/appointmentValidation';
 
 interface SimpleAppointmentFormProps {
@@ -32,7 +32,7 @@ export function SimpleAppointmentForm({ onSuccess, className }: SimpleAppointmen
   } = useFormState();
 
   const { doctors, atendimentos, loading: dataLoading, error: dataError } = useBasicSchedulingData();
-  const { loading: submitting, lastResult, submitAppointment, clearLastResult } = useIsolatedAppointmentCreation();
+  const { loading: submitting, lastResult, submitAppointment, clearLastResult } = useSimpleAppointmentCreation();
 
   // Filtrar atendimentos por médico selecionado
   const availableAtendimentos = useMemo(() => {

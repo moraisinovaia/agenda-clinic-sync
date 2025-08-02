@@ -9,7 +9,6 @@ import { SchedulingForm } from '@/components/scheduling/SchedulingForm';
 import { SimpleSchedulingForm } from '@/components/scheduling/SimpleSchedulingForm';
 import { MultipleSchedulingModal } from '@/components/scheduling/MultipleSchedulingModal';
 import { SimpleAppointmentForm } from '@/components/scheduling/new/SimpleAppointmentForm';
-import { IsolatedSchedulingWrapper } from '@/components/scheduling/new/IsolatedSchedulingWrapper';
 
 import { DoctorSchedule } from '@/components/scheduling/DoctorSchedule';
 import { AppointmentsList } from '@/components/scheduling/AppointmentsList';
@@ -36,6 +35,7 @@ import {
 } from '@/components/performance/LazyComponents';
 
 import { SystemMonitor } from '@/components/system/SystemMonitor';
+import { SchedulingErrorBoundary } from '@/components/error/SchedulingErrorBoundary';
 
 import { useFilaEspera } from '@/hooks/useFilaEspera';
 import { useViewMode } from '@/hooks/useViewMode';
@@ -535,15 +535,17 @@ const Index = () => {
           </div>
         )}
 
-        {viewMode === 'novo-agendamento' && (
-          <IsolatedSchedulingWrapper
-            onSuccess={() => {
-              console.log('✅ Sistema Novo Isolado: Agendamento criado com sucesso');
-              toast.success('Agendamento criado com sucesso!');
-              setViewMode('doctors');
-            }}
-            onBack={() => setViewMode('doctors')}
-          />
+        {viewMode === 'simple-new' && (
+          <div className="max-w-4xl mx-auto">
+            <SimpleAppointmentForm 
+              onSuccess={() => {
+                console.log('✅ Sistema Novo: Agendamento criado com sucesso');
+                toast.success('Agendamento criado com sucesso!');
+                setViewMode('doctors');
+              }}
+              className="w-full"
+            />
+          </div>
         )}
 
         {viewMode === 'alertas' && (
