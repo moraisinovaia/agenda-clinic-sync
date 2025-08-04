@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { DateOfBirthInput } from '@/components/ui/date-of-birth-input';
 import { User, Search, UserCheck, AlertCircle, CheckCircle } from 'lucide-react';
 import { SchedulingFormData } from '@/types/scheduling';
 
@@ -175,13 +176,10 @@ export function PatientDataForm({
         </div>
         
         <div>
-          <Label htmlFor="dataNascimento">Data de Nascimento *</Label>
           <div className="relative">
-            <Input
-              id="dataNascimento"
-              type="date"
+            <DateOfBirthInput
               value={formData.dataNascimento}
-              onChange={(e) => setFormData(prev => ({ ...prev, dataNascimento: e.target.value }))}
+              onChange={(value) => setFormData(prev => ({ ...prev, dataNascimento: value }))}
               required
             />
             {searchingPatients && (

@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { DateOfBirthInput } from '@/components/ui/date-of-birth-input';
 import { CalendarIcon, Clock, User } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -120,15 +121,14 @@ export function FilaEsperaForm({
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="dataNascimento">Data de Nascimento</Label>
                   <div className="flex gap-2">
-                    <Input
-                      id="dataNascimento"
-                      type="date"
-                      value={pacienteData.dataNascimento}
-                      onChange={(e) => setPacienteData(prev => ({ ...prev, dataNascimento: e.target.value }))}
-                      className="flex-1"
-                    />
+                    <div className="flex-1">
+                      <DateOfBirthInput
+                        value={pacienteData.dataNascimento}
+                        onChange={(value) => setPacienteData(prev => ({ ...prev, dataNascimento: value }))}
+                        label="Data de Nascimento"
+                      />
+                    </div>
                     <Button 
                       type="button" 
                       onClick={(e) => {
@@ -137,6 +137,7 @@ export function FilaEsperaForm({
                       }}
                       disabled={!pacienteData.dataNascimento || searchingPatient}
                       variant="outline"
+                      className="mt-6"
                     >
                       {searchingPatient ? 'Buscando...' : 'Buscar'}
                     </Button>
