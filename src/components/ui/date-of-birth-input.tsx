@@ -142,13 +142,12 @@ export const DateOfBirthInput = React.memo(({
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const input = e.target.value;
     
-    // Verificar se já atingiu o limite de 8 dígitos numéricos
-    const currentNumbers = displayValue.replace(/[^\d]/g, '');
+    // Extrair apenas dígitos da nova entrada
     const inputNumbers = input.replace(/[^\d]/g, '');
     
-    // Se já tem 8 dígitos e está tentando adicionar mais, bloquear
-    if (currentNumbers.length >= 8 && inputNumbers.length > currentNumbers.length) {
-      return; // Bloquear entrada adicional
+    // Limitar rigorosamente a 8 dígitos máximo
+    if (inputNumbers.length > 8) {
+      return; // Bloquear qualquer entrada que exceda 8 dígitos
     }
     
     const processed = processInput(input);
@@ -163,7 +162,7 @@ export const DateOfBirthInput = React.memo(({
     } else if (processed === '') {
       onChange('');
     }
-  }, [processInput, convertToISO, onChange, displayValue]);
+  }, [processInput, convertToISO, onChange]);
 
   const handleBlur = useCallback(() => {
     // Ao perder foco, tentar processar se tiver conteúdo parcial
@@ -192,7 +191,7 @@ export const DateOfBirthInput = React.memo(({
         onChange={handleChange}
         onBlur={handleBlur}
         placeholder="DD/MM/AAAA"
-        maxLength={10}
+        
         required={required}
         className={className}
       />
