@@ -39,7 +39,8 @@ export const useAdvancedAppointmentFilters = (appointments: AppointmentWithRelat
       // Date filter
       let matchesDate = true;
       if (dateFilter !== 'all') {
-        const appointmentDate = new Date(appointment.data_agendamento);
+        // Fix timezone issue by ensuring date is parsed in local timezone
+        const appointmentDate = new Date(appointment.data_agendamento + 'T00:00:00');
         const today = startOfDay(new Date());
 
         switch (dateFilter) {
