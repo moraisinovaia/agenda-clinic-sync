@@ -1,0 +1,1 @@
+UPDATE medicos SET convenios_aceitos = ARRAY['Particular'] WHERE nome = 'Dr. Carlos Philliph';

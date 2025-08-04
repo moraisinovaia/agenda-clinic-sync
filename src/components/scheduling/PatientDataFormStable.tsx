@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { DateOfBirthInput } from '@/components/ui/date-of-birth-input';
 import { User, Search, UserCheck, AlertCircle, CheckCircle } from 'lucide-react';
 import { SchedulingFormData } from '@/types/scheduling';
 import { usePatientManagement } from '@/hooks/usePatientManagement';
@@ -173,13 +174,11 @@ export const PatientDataFormStable = React.memo(({
         </div>
         
         <div>
-          <Label htmlFor="dataNascimento">Data de Nascimento *</Label>
           <div className="relative">
-            <Input
+            <DateOfBirthInput
               id="dataNascimento"
-              type="date"
               value={formData.dataNascimento}
-              onChange={(e) => handleInputChange('dataNascimento', e.target.value)}
+              onChange={(value) => handleInputChange('dataNascimento', value)}
               required
             />
             {searchingPatients && (
