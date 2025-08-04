@@ -143,13 +143,54 @@ export const DateOfBirthInput = React.memo(({
     setDisplayValue(formatForDisplay(value));
   }, [value, formatForDisplay]);
 
+  const handleInput = useCallback((e: React.FormEvent<HTMLInputElement>) => {
+    const input = (e.target as HTMLInputElement).value;
+    const onlyNumbers = input.replace(/[^\d]/g, '');
+    
+    // Bloquear rigorosamente mais de 8 dígitos
+    if (onlyNumbers.length > 8) {
+      e.preventDefault();
+      return;
+    }
+  }, []);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    const currentNumbers = displayValue.replace(/[^\d]/g, '');
+    
+    // Bloquear números se já tem 8 dígitos (exceto backspace, delete, setas)
+    if (currentNumbers.length >= 8 && /\d/.test(e.key) && 
+        !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.key)) {
+      e.preventDefault();
+    }
+  }, [displayValue]);
+
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pastedText = e.clipboardData.getData('text');
+    const onlyNumbers = pastedText.replace(/[^\d]/g, '');
+    
+    // Limitar a 8 dígitos na colagem
+    const limitedNumbers = onlyNumbers.substring(0, 8);
+    const processed = processInput(limitedNumbers);
+    setDisplayValue(processed);
+    
+    if (processed.length === 10) {
+      const isoDate = convertToISO(processed);
+      if (isoDate) {
+        onChange(isoDate);
+      }
+    } else if (processed === '') {
+      onChange('');
+    }
+  }, [processInput, convertToISO, onChange]);
+
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const input = e.target.value;
-    
-    // Verificar se a nova entrada excederia 8 dígitos antes de processar
     const onlyNumbers = input.replace(/[^\d]/g, '');
+    
+    // Validação rigorosa: não permitir mais de 8 dígitos
     if (onlyNumbers.length > 8) {
-      return; // Bloquear entrada que exceda 8 dígitos
+      return;
     }
     
     const processed = processInput(input);
@@ -165,15 +206,6 @@ export const DateOfBirthInput = React.memo(({
       onChange('');
     }
   }, [processInput, convertToISO, onChange]);
-
-  const handleKeyPress = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-    const currentNumbers = displayValue.replace(/[^\d]/g, '');
-    
-    // Se já tem 8 dígitos e está tentando digitar um número, bloquear
-    if (currentNumbers.length >= 8 && /\d/.test(e.key)) {
-      e.preventDefault();
-    }
-  }, [displayValue]);
 
   const handleBlur = useCallback(() => {
     // Ao perder foco, tentar processar se tiver conteúdo parcial
@@ -200,9 +232,13 @@ export const DateOfBirthInput = React.memo(({
         type="text"
         value={displayValue}
         onChange={handleChange}
-        onKeyPress={handleKeyPress}
+        onInput={handleInput}
+        onKeyDown={handleKeyDown}
+        onPaste={handlePaste}
         onBlur={handleBlur}
         placeholder="DD/MM/AAAA"
+        pattern="[0-9]{2}/[0-9]{2}/[0-9]{4}"
+        inputMode="numeric"
         maxLength={10}
         required={required}
         className={className}
