@@ -51,6 +51,15 @@ export function MultipleSchedulingModal({
     atendimentos.filter(a => a.medico_id === selectedDoctor.id && a.ativo) : 
     [];
 
+  // Filtrar convênios baseado no médico selecionado
+  const filteredConvenios = selectedDoctor && selectedDoctor.convenios_aceitos 
+    ? availableConvenios.filter(convenio => 
+        selectedDoctor.convenios_aceitos?.some(medConvenio => 
+          medConvenio.toLowerCase() === convenio.toLowerCase()
+        )
+      )
+    : availableConvenios;
+
   const handleExamChange = (exam: Atendimento, checked: boolean) => {
     setSelectedExams(prev => {
       if (checked) {
@@ -141,7 +150,7 @@ export function MultipleSchedulingModal({
           <PatientDataFormFixed
             formData={formData}
             setFormData={setFormData}
-            availableConvenios={availableConvenios}
+            availableConvenios={filteredConvenios}
             medicoSelected={!!formData.medicoId}
             selectedDoctor={selectedDoctor}
           />

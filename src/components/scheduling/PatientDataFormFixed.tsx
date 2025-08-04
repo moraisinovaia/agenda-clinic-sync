@@ -81,7 +81,35 @@ export function PatientDataFormFixed({
     return null;
   };
 
+  // Validação de convênio vs médico
+  const getConvenioValidation = () => {
+    if (!selectedDoctor || !formData.convenio) return null;
+
+    const { convenios_aceitos } = selectedDoctor;
+    
+    if (convenios_aceitos && convenios_aceitos.length > 0) {
+      const convenioAceito = convenios_aceitos.some(convenio => 
+        convenio.toLowerCase() === formData.convenio.toLowerCase()
+      );
+      
+      if (!convenioAceito) {
+        return {
+          type: 'warning',
+          message: `ATENÇÃO: Convênio "${formData.convenio}" pode não ser aceito por ${selectedDoctor.nome}`
+        };
+      } else {
+        return {
+          type: 'success',
+          message: `Convênio aceito por ${selectedDoctor.nome}`
+        };
+      }
+    }
+
+    return null;
+  };
+
   const ageValidation = getAgeValidation();
+  const convenioValidation = getConvenioValidation();
 
   // Buscar pacientes quando a data de nascimento debounced muda
   useEffect(() => {
@@ -237,6 +265,22 @@ export function PatientDataFormFixed({
           )}
           <AlertDescription>
             {ageValidation.message}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Alerta de validação de convênio */}
+      {convenioValidation && (
+        <Alert variant={convenioValidation.type === 'warning' ? 'default' : convenioValidation.type === 'success' ? 'default' : 'destructive'}>
+          {convenioValidation.type === 'warning' ? (
+            <AlertCircle className="h-4 w-4 text-yellow-600" />
+          ) : convenioValidation.type === 'success' ? (
+            <CheckCircle className="h-4 w-4 text-green-600" />
+          ) : (
+            <AlertCircle className="h-4 w-4" />
+          )}
+          <AlertDescription>
+            {convenioValidation.message}
           </AlertDescription>
         </Alert>
       )}

@@ -41,6 +41,7 @@ import { useViewMode } from '@/hooks/useViewMode';
 import { SchedulingFormData, AppointmentWithRelations } from '@/types/scheduling';
 import { useStableAuth } from '@/hooks/useStableAuth';
 import { Button } from '@/components/ui/button';
+import { NavigationHeader } from '@/components/ui/navigation-header';
 import { AuthTest } from '@/components/AuthTest';
 import PendingApproval from '@/components/PendingApproval';
 
@@ -380,62 +381,92 @@ const Index = () => {
         )}
 
         {viewMode === 'schedule' && selectedDoctor && (
-          <DoctorSchedule
-            doctor={selectedDoctor}
-            appointments={appointments.filter(apt => apt.medico_id === selectedDoctor.id)}
-            blockedDates={blockedDates}
-            isDateBlocked={isDateBlocked}
-            onCancelAppointment={cancelAppointment}
-            onConfirmAppointment={handleConfirmAppointment}
-            onEditAppointment={handleEditAppointment}
-            onNewAppointment={(selectedDate) => {
-              if (selectedDate) {
-                setSelectedAppointmentDate(selectedDate);
-              }
-              setViewMode('new-appointment');
-            }}
-            initialDate={lastAppointmentDate || undefined}
-          />
+          <div className="space-y-6">
+            <NavigationHeader
+              title={`Agenda - ${selectedDoctor.nome}`}
+              subtitle={selectedDoctor.especialidade}
+              onBack={goBack}
+              onHome={() => setViewMode('doctors')}
+              showBack={true}
+              showHome={true}
+            />
+            <DoctorSchedule
+              doctor={selectedDoctor}
+              appointments={appointments.filter(apt => apt.medico_id === selectedDoctor.id)}
+              blockedDates={blockedDates}
+              isDateBlocked={isDateBlocked}
+              onCancelAppointment={cancelAppointment}
+              onConfirmAppointment={handleConfirmAppointment}
+              onEditAppointment={handleEditAppointment}
+              onNewAppointment={(selectedDate) => {
+                if (selectedDate) {
+                  setSelectedAppointmentDate(selectedDate);
+                }
+                setViewMode('new-appointment');
+              }}
+              initialDate={lastAppointmentDate || undefined}
+            />
+          </div>
         )}
 
         {viewMode === 'new-appointment' && (
-          <SimpleSchedulingForm
-            doctors={doctors}
-            atendimentos={atendimentos}
-            appointments={appointments}
-            blockedDates={blockedDates}
-            isDateBlocked={isDateBlocked}
-            onSubmit={handleSimpleAppointmentSubmit}
-            onCancel={goBack}
-            getAtendimentosByDoctor={getAtendimentosByDoctor}
-            searchPatientsByBirthDate={searchPatientsByBirthDate}
-            preSelectedDoctor={selectedDoctor?.id}
-            preSelectedDate={selectedAppointmentDate || undefined}
-          />
+          <div className="space-y-6">
+            <NavigationHeader
+              title="Novo Agendamento"
+              subtitle={selectedDoctor ? `${selectedDoctor.nome} - ${selectedDoctor.especialidade}` : undefined}
+              onBack={goBack}
+              onHome={() => setViewMode('doctors')}
+              showBack={true}
+              showHome={true}
+            />
+            <SimpleSchedulingForm
+              doctors={doctors}
+              atendimentos={atendimentos}
+              appointments={appointments}
+              blockedDates={blockedDates}
+              isDateBlocked={isDateBlocked}
+              onSubmit={handleSimpleAppointmentSubmit}
+              onCancel={goBack}
+              getAtendimentosByDoctor={getAtendimentosByDoctor}
+              searchPatientsByBirthDate={searchPatientsByBirthDate}
+              preSelectedDoctor={selectedDoctor?.id}
+              preSelectedDate={selectedAppointmentDate || undefined}
+            />
+          </div>
         )}
 
 
         {viewMode === 'appointments-list' && (
-          <AppointmentsList 
-            appointments={appointments}
-            doctors={doctors}
-            onEditAppointment={handleEditAppointment}
-            onCancelAppointment={cancelAppointment}
-            onConfirmAppointment={handleConfirmAppointment}
-            onUnconfirmAppointment={handleUnconfirmAppointment}
-          />
+          <div className="space-y-6">
+            <NavigationHeader
+              title="Lista de Agendamentos"
+              subtitle="Gerencie todos os agendamentos"
+              onBack={goBack}
+              onHome={() => setViewMode('doctors')}
+              showBack={true}
+              showHome={true}
+            />
+            <AppointmentsList 
+              appointments={appointments}
+              doctors={doctors}
+              onEditAppointment={handleEditAppointment}
+              onCancelAppointment={cancelAppointment}
+              onConfirmAppointment={handleConfirmAppointment}
+              onUnconfirmAppointment={handleUnconfirmAppointment}
+            />
+          </div>
         )}
 
         {viewMode === 'canceled-appointments' && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold">Agendamentos Cancelados</h2>
-                <p className="text-muted-foreground mt-1">
-                  Visualize todos os agendamentos cancelados
-                </p>
-              </div>
-            </div>
+            <NavigationHeader
+              title="Agendamentos Cancelados"
+              subtitle="Visualize todos os agendamentos cancelados"
+              onBack={goBack}
+              onHome={() => setViewMode('doctors')}
+              showBack={true}
+              showHome={true}
+            />
             <AppointmentsList 
               appointments={appointments.filter(apt => apt.status === 'cancelado')}
               doctors={doctors}
@@ -448,30 +479,40 @@ const Index = () => {
         )}
 
         {viewMode === 'edit-appointment' && editingAppointment && (
-          <SimpleSchedulingForm
-            doctors={doctors}
-            atendimentos={atendimentos}
-            appointments={appointments}
-            blockedDates={blockedDates}
-            isDateBlocked={isDateBlocked}
-            onSubmit={handleSimpleAppointmentSubmit}
-            onCancel={goBack}
-            getAtendimentosByDoctor={getAtendimentosByDoctor}
-            searchPatientsByBirthDate={searchPatientsByBirthDate}
-            editingAppointment={editingAppointment}
-          />
+          <div className="space-y-6">
+            <NavigationHeader
+              title="Editar Agendamento"
+              subtitle={`${editingAppointment.pacientes?.nome_completo} - ${editingAppointment.medicos?.nome}`}
+              onBack={goBack}
+              onHome={() => setViewMode('doctors')}
+              showBack={true}
+              showHome={true}
+            />
+            <SimpleSchedulingForm
+              doctors={doctors}
+              atendimentos={atendimentos}
+              appointments={appointments}
+              blockedDates={blockedDates}
+              isDateBlocked={isDateBlocked}
+              onSubmit={handleSimpleAppointmentSubmit}
+              onCancel={goBack}
+              getAtendimentosByDoctor={getAtendimentosByDoctor}
+              searchPatientsByBirthDate={searchPatientsByBirthDate}
+              editingAppointment={editingAppointment}
+            />
+          </div>
         )}
 
         {viewMode === 'preparos' && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold">Preparos de Exames</h2>
-                <p className="text-muted-foreground mt-1">
-                  Instruções detalhadas para preparação de exames
-                </p>
-              </div>
-            </div>
+            <NavigationHeader
+              title="Preparos de Exames"
+              subtitle="Instruções detalhadas para preparação de exames"
+              onBack={goBack}
+              onHome={() => setViewMode('doctors')}
+              showBack={true}
+              showHome={true}
+            />
             <PreparosView showAll={true} />
           </div>
         )}
