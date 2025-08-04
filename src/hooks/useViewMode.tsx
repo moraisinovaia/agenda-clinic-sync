@@ -5,6 +5,7 @@ export type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointment
 
 export const useViewMode = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('doctors');
+  const [navigationHistory, setNavigationHistory] = useState<ViewMode[]>([]);
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
   const [lastAppointmentDate, setLastAppointmentDate] = useState<string | null>(null);
   const [selectedAppointmentDate, setSelectedAppointmentDate] = useState<string | null>(null);
@@ -12,6 +13,15 @@ export const useViewMode = () => {
 
   // Função personalizada para setViewMode que limpa estados quando necessário
   const setViewModeWithCleanup = (newViewMode: ViewMode) => {
+    // Adiciona a tela atual ao histórico antes de navegar
+    if (viewMode !== newViewMode) {
+      setNavigationHistory(prev => {
+        const newHistory = [...prev, viewMode];
+        // Mantém apenas as últimas 5 telas no histórico
+        return newHistory.slice(-5);
+      });
+    }
+    
     // Se está saindo do modo de edição, limpa o editingAppointment
     if (viewMode === 'edit-appointment' && newViewMode !== 'edit-appointment') {
       setEditingAppointment(null);
@@ -24,6 +34,7 @@ export const useViewMode = () => {
     setLastAppointmentDate(null);
     setSelectedAppointmentDate(null);
     setEditingAppointment(null);
+    setNavigationHistory([]);
   };
 
   const goBack = () => {
@@ -31,10 +42,20 @@ export const useViewMode = () => {
     if (viewMode === 'edit-appointment') {
       setViewMode('appointments-list');
       setEditingAppointment(null);
+      return;
+    }
+    
+    // Usa o histórico para navegar de volta
+    if (navigationHistory.length > 0) {
+      const previousView = navigationHistory[navigationHistory.length - 1];
+      setNavigationHistory(prev => prev.slice(0, -1)); // Remove a última entrada do histórico
+      setViewMode(previousView);
     } else {
+      // Fallback para doctors se não há histórico
       setViewMode('doctors');
       resetViewState();
     }
+    
     // Limpar data de agendamento selecionada ao voltar
     setSelectedAppointmentDate(null);
   };
