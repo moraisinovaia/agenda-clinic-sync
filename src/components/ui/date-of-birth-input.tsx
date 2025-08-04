@@ -77,11 +77,6 @@ export const DateOfBirthInput = React.memo(({
     // Remover tudo exceto números
     let onlyNumbers = input.replace(/[^\d]/g, '');
     
-    // BLOQUEAR RIGOROSAMENTE: máximo 8 dígitos (DD + MM + AAAA)
-    if (onlyNumbers.length > 8) {
-      return displayValue; // Retorna o valor atual, impedindo alteração
-    }
-    
     // Aplicar máscara progressiva DD/MM/AAAA
     if (onlyNumbers.length === 0) {
       return '';
@@ -92,7 +87,7 @@ export const DateOfBirthInput = React.memo(({
     } else {
       return onlyNumbers.replace(/(\d{2})(\d{2})(\d{0,4})/, '$1/$2/$3');
     }
-  }, [displayValue]);
+  }, []);
 
   // Converter para formato ISO (YYYY-MM-DD)
   const convertToISO = useCallback((displayValue: string): string => {
@@ -141,6 +136,12 @@ export const DateOfBirthInput = React.memo(({
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const input = e.target.value;
+    
+    // Verificar se a nova entrada excederia 8 dígitos antes de processar
+    const onlyNumbers = input.replace(/[^\d]/g, '');
+    if (onlyNumbers.length > 8) {
+      return; // Bloquear entrada que exceda 8 dígitos
+    }
     
     const processed = processInput(input);
     setDisplayValue(processed);
