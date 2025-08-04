@@ -166,6 +166,15 @@ export const DateOfBirthInput = React.memo(({
     }
   }, [processInput, convertToISO, onChange]);
 
+  const handleKeyPress = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    const currentNumbers = displayValue.replace(/[^\d]/g, '');
+    
+    // Se já tem 8 dígitos e está tentando digitar um número, bloquear
+    if (currentNumbers.length >= 8 && /\d/.test(e.key)) {
+      e.preventDefault();
+    }
+  }, [displayValue]);
+
   const handleBlur = useCallback(() => {
     // Ao perder foco, tentar processar se tiver conteúdo parcial
     if (displayValue.length >= 8 && displayValue.length < 10) {
@@ -191,9 +200,10 @@ export const DateOfBirthInput = React.memo(({
         type="text"
         value={displayValue}
         onChange={handleChange}
+        onKeyPress={handleKeyPress}
         onBlur={handleBlur}
         placeholder="DD/MM/AAAA"
-        
+        maxLength={10}
         required={required}
         className={className}
       />
