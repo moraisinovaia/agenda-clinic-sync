@@ -74,20 +74,23 @@ export const DateOfBirthInput = React.memo(({
 
   // Processar entrada do usuário
   const processInput = useCallback((input: string) => {
-    // Remover tudo exceto números e barras
-    let cleaned = input.replace(/[^\d/]/g, '');
+    // Remover tudo exceto números
+    let onlyNumbers = input.replace(/[^\d]/g, '');
     
-    // Aplicar máscara DD/MM/AAAA
-    if (cleaned.length <= 2) {
-      return cleaned;
-    } else if (cleaned.length <= 4) {
-      return cleaned.replace(/(\d{2})(\d{0,2})/, '$1/$2');
-    } else if (cleaned.length <= 8) {
-      return cleaned.replace(/(\d{2})(\d{2})(\d{0,4})/, '$1/$2/$3');
+    // Limitar a máximo 8 dígitos (DD + MM + AAAA)
+    if (onlyNumbers.length > 8) {
+      onlyNumbers = onlyNumbers.substring(0, 8);
+    }
+    
+    // Aplicar máscara progressiva DD/MM/AAAA
+    if (onlyNumbers.length === 0) {
+      return '';
+    } else if (onlyNumbers.length <= 2) {
+      return onlyNumbers;
+    } else if (onlyNumbers.length <= 4) {
+      return onlyNumbers.replace(/(\d{2})(\d{0,2})/, '$1/$2');
     } else {
-      // Limitar a 10 caracteres (DD/MM/AAAA)
-      cleaned = cleaned.substring(0, 8);
-      return cleaned.replace(/(\d{2})(\d{2})(\d{4})/, '$1/$2/$3');
+      return onlyNumbers.replace(/(\d{2})(\d{2})(\d{0,4})/, '$1/$2/$3');
     }
   }, []);
 
