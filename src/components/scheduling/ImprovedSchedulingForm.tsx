@@ -73,23 +73,24 @@ export function ImprovedSchedulingForm({
   const handleImprovedSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Verificar conflito antes de submeter
+    // Verificar conflito antes de submeter - apenas avisar, não impedir
     if (checkTimeConflict()) {
       toast({
-        title: "Conflito de horário",
-        description: "Este horário já está ocupado. Por favor, escolha outro horário.",
-        variant: "destructive",
+        title: "⚠️ Conflito de horário detectado",
+        description: "Este horário já está ocupado. Verifique se realmente deseja continuar.",
+        variant: "default",
       });
-      return; // NÃO limpar o formulário
     }
-
+    
     try {
+      // Sempre tentar submeter - deixar o backend validar e retornar erro se necessário
       await onSubmit(formData);
       // Só limpar em caso de sucesso (o onSubmit original já trata isso)
     } catch (error) {
       // Em caso de erro, preservar todos os dados do formulário
       console.error('Erro ao submeter agendamento:', error);
       // O formulário manterá todos os dados preenchidos
+      // O erro será exibido pelo useSchedulingForm ou componente pai
     }
   };
 
@@ -142,7 +143,7 @@ export function ImprovedSchedulingForm({
             </Button>
             <Button 
               type="submit" 
-              disabled={loading || !!conflictWarning}
+              disabled={loading}
               className="flex-1"
             >
               {loading 
