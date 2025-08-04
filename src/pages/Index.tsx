@@ -191,10 +191,16 @@ const Index = () => {
     }
   };
 
-  // Convênios únicos disponíveis
+  // Convênios únicos disponíveis (convertendo para lowercase para remover duplicatas case-insensitive)
   const uniqueConvenios = Array.from(new Set(
     doctors.flatMap(doctor => doctor.convenios_aceitos || [])
-  )).filter(Boolean);
+      .map(convenio => convenio.toLowerCase())
+  )).filter(Boolean)
+    .map(convenio => 
+      // Capitalizar primeira letra para exibição
+      convenio.charAt(0).toUpperCase() + convenio.slice(1)
+    )
+    .sort();
   
   
   // Redirecionar para login se não autenticado
