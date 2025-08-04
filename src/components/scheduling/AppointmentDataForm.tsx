@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { Doctor, SchedulingFormData, Atendimento } from '@/types/scheduling';
 import { toZonedTime, format } from 'date-fns-tz';
 import { BRAZIL_TIMEZONE } from '@/utils/timezone';
+import FutureDateInput from "@/components/ui/future-date-input";
 
 interface AppointmentDataFormProps {
   formData: SchedulingFormData;
@@ -267,16 +268,11 @@ export function AppointmentDataForm({
         </div>
         
         <div>
-          <Label htmlFor="dataAgendamento" className={validationErrors.dataAgendamento ? 'text-destructive' : ''}>
-            Data *
-          </Label>
-          <Input
+          <FutureDateInput
             id="dataAgendamento"
-            type="date"
             value={formData.dataAgendamento}
-            onChange={(e) => handleDateChange(e.target.value)}
-            onBlur={(e) => validateField('dataAgendamento', e.target.value)}
-            min={today}
+            onChange={handleDateChange}
+            label="Data *"
             required
             className={cn(validationErrors.dataAgendamento && "border-destructive")}
           />
