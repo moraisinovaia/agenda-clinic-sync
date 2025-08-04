@@ -77,6 +77,11 @@ export const DateOfBirthInput = React.memo(({
     // Remover tudo exceto números
     let onlyNumbers = input.replace(/[^\d]/g, '');
     
+    // Limitar a 8 dígitos no total (DDMMAAAA)
+    if (onlyNumbers.length > 8) {
+      onlyNumbers = onlyNumbers.substring(0, 8);
+    }
+    
     // Aplicar máscara progressiva DD/MM/AAAA
     if (onlyNumbers.length === 0) {
       return '';
@@ -85,7 +90,11 @@ export const DateOfBirthInput = React.memo(({
     } else if (onlyNumbers.length <= 4) {
       return onlyNumbers.replace(/(\d{2})(\d{0,2})/, '$1/$2');
     } else {
-      return onlyNumbers.replace(/(\d{2})(\d{2})(\d{0,4})/, '$1/$2/$3');
+      // Limitar o ano a exatamente 4 dígitos
+      const day = onlyNumbers.substring(0, 2);
+      const month = onlyNumbers.substring(2, 4);
+      const year = onlyNumbers.substring(4, 8); // Máximo 4 dígitos para o ano
+      return `${day}/${month}/${year}`;
     }
   }, []);
 
