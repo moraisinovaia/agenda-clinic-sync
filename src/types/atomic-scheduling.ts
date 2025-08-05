@@ -9,6 +9,8 @@ export interface AtomicAppointmentResult {
   warnings?: string[];
   is_editing?: boolean;
   criado_por_usado?: string;
+  conflict_detected?: boolean;
+  conflict_details?: any;
 }
 
 export interface AtomicAppointmentParams {

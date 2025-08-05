@@ -133,8 +133,16 @@ export function useAtomicAppointmentCreation() {
         const errorMessage = result?.error || result?.message || 'Erro desconhecido na criação do agendamento';
         console.log('❌ Função SQL retornou erro:', errorMessage);
         
-        // CRITICAL: Não fazer toast aqui para erros de conflito
-        // Deixar o componente tratar o erro
+        // ✅ DETECÇÃO DE CONFLITO: Verificar se é conflito específico
+        if (result?.conflict_detected) {
+          console.log('⚠️ Conflito detectado - criando erro especial para modal');
+          const conflictError = new Error(errorMessage) as any;
+          conflictError.isConflict = true;
+          conflictError.conflictDetails = result?.conflict_details || result;
+          throw conflictError;
+        }
+        
+        // Para outros erros, comportamento normal (sem toast para validações)
         throw new Error(errorMessage);
       }
 
