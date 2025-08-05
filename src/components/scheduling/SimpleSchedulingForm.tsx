@@ -11,6 +11,7 @@ import { Doctor, Atendimento, SchedulingFormData, AppointmentWithRelations } fro
 import { PatientDataFormFixed } from './PatientDataFormFixed';
 import { AppointmentDataForm } from './AppointmentDataForm';
 import { useSimpleSchedulingForm } from '@/hooks/useSimpleSchedulingForm';
+import { ConflictConfirmationModal } from './ConflictConfirmationModal';
 
 interface SimpleSchedulingFormProps {
   doctors: Doctor[];
@@ -34,7 +35,8 @@ export const SimpleSchedulingForm = React.memo(function SimpleSchedulingForm({
   appointments,
   blockedDates = [],
   isDateBlocked,
-  onSubmit, 
+  onSubmit,
+  onSubmitWithForce,
   onCancel,
   getAtendimentosByDoctor,
   searchPatientsByBirthDate,
@@ -62,10 +64,54 @@ export const SimpleSchedulingForm = React.memo(function SimpleSchedulingForm({
     preSelectedDate
   });
   
-  // ✅ Memoizar handleSubmit para evitar re-renders
-  const memoizedHandleSubmit = useCallback((e: React.FormEvent) => {
-    handleSubmit(e, onSubmit);
+  // Estados para modal de conflito
+  const [showConflictModal, setShowConflictModal] = useState(false);
+  const [conflictMessage, setConflictMessage] = useState('');
+  const [conflictDetails, setConflictDetails] = useState<any>(null);
+  
+  // ✅ Memoizar handleSubmit com detecção de conflito
+  const memoizedHandleSubmit = useCallback(async (e: React.FormEvent) => {
+    try {
+      await handleSubmit(e, onSubmit);
+    } catch (error: any) {
+      console.log('🔍 Erro capturado no SimpleSchedulingForm:', error);
+      
+      // Detectar se é erro de conflito
+      if (error?.isConflict) {
+        console.log('⚠️ Conflito detectado - mostrando modal');
+        setConflictMessage(error.message || 'Conflito de horário detectado');
+        setConflictDetails(error.conflictDetails || null);
+        setShowConflictModal(true);
+        // NÃO propagar o erro para não resetar o formulário
+      } else {
+        // Re-propagar outros tipos de erro
+        throw error;
+      }
+    }
   }, [handleSubmit, onSubmit]);
+
+  // Handler para confirmação de conflito
+  const handleConfirmConflict = useCallback(async () => {
+    console.log('✅ Confirmando agendamento com conflito');
+    setShowConflictModal(false);
+    
+    if (onSubmitWithForce) {
+      try {
+        await onSubmitWithForce(formData);
+        console.log('✅ Agendamento forçado com sucesso');
+      } catch (error) {
+        console.log('❌ Erro ao forçar agendamento:', error);
+        // O erro será tratado pelo useSimpleSchedulingForm
+      }
+    }
+  }, [onSubmitWithForce, formData]);
+
+  const handleCancelConflict = useCallback(() => {
+    console.log('❌ Cancelando modal de conflito');
+    setShowConflictModal(false);
+    setConflictMessage('');
+    setConflictDetails(null);
+  }, []);
 
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date>(new Date());
 
@@ -313,6 +359,15 @@ export const SimpleSchedulingForm = React.memo(function SimpleSchedulingForm({
           </CardContent>
         </Card>
       </div>
+
+      {/* Modal de Confirmação de Conflito */}
+      <ConflictConfirmationModal
+        open={showConflictModal}
+        onConfirm={handleConfirmConflict}
+        onCancel={handleCancelConflict}
+        conflictMessage={conflictMessage}
+        conflictDetails={conflictDetails}
+      />
     </div>
   );
 });
