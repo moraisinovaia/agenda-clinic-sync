@@ -1567,22 +1567,40 @@ export type Database = {
         Returns: Json
       }
       criar_agendamento_atomico: {
-        Args: {
-          p_nome_completo: string
-          p_data_nascimento: string
-          p_convenio: string
-          p_telefone: string
-          p_celular: string
-          p_medico_id: string
-          p_atendimento_id: string
-          p_data_agendamento: string
-          p_hora_agendamento: string
-          p_observacoes?: string
-          p_criado_por?: string
-          p_criado_por_user_id?: string
-          p_agendamento_id_edicao?: string
-          p_force_update_patient?: boolean
-        }
+        Args:
+          | {
+              p_nome_completo: string
+              p_data_nascimento: string
+              p_convenio: string
+              p_telefone: string
+              p_celular: string
+              p_medico_id: string
+              p_atendimento_id: string
+              p_data_agendamento: string
+              p_hora_agendamento: string
+              p_observacoes?: string
+              p_criado_por?: string
+              p_criado_por_user_id?: string
+              p_agendamento_id_edicao?: string
+              p_force_update_patient?: boolean
+            }
+          | {
+              p_nome_completo: string
+              p_data_nascimento: string
+              p_convenio: string
+              p_telefone: string
+              p_celular: string
+              p_medico_id: string
+              p_atendimento_id: string
+              p_data_agendamento: string
+              p_hora_agendamento: string
+              p_observacoes?: string
+              p_criado_por?: string
+              p_criado_por_user_id?: string
+              p_agendamento_id_edicao?: string
+              p_force_update_patient?: boolean
+              p_force_conflict?: boolean
+            }
         Returns: Json
       }
       criar_agendamento_multiplo: {

@@ -2,10 +2,11 @@ import { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertTriangle, CheckCircle } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { Doctor, Atendimento, SchedulingFormData } from '@/types/scheduling';
 import { PatientDataFormFixed } from './PatientDataFormFixed';
 import { AppointmentDataForm } from './AppointmentDataForm';
+import { ConflictConfirmationModal } from './ConflictConfirmationModal';
 import { useSchedulingForm } from '@/hooks/useSchedulingForm';
 import { useToast } from '@/hooks/use-toast';
 
@@ -13,6 +14,7 @@ interface ImprovedSchedulingFormProps {
   doctors: Doctor[];
   atendimentos: Atendimento[];
   onSubmit: (data: SchedulingFormData) => Promise<void>;
+  onSubmitWithForce: (data: SchedulingFormData) => Promise<void>;
   onCancel: () => void;
   getAtendimentosByDoctor: (doctorId: string) => Atendimento[];
   searchPatientsByBirthDate: (birthDate: string) => Promise<any[]>;
@@ -26,6 +28,7 @@ export function ImprovedSchedulingForm({
   doctors, 
   atendimentos, 
   onSubmit, 
+  onSubmitWithForce,
   onCancel, 
   getAtendimentosByDoctor,
   searchPatientsByBirthDate,
@@ -35,6 +38,11 @@ export function ImprovedSchedulingForm({
   preSelectedDate
 }: ImprovedSchedulingFormProps) {
   const [conflictWarning, setConflictWarning] = useState<string>('');
+  const [showConflictModal, setShowConflictModal] = useState(false);
+  const [pendingConflictData, setPendingConflictData] = useState<{
+    formData: SchedulingFormData;
+    conflictDetails: any;
+  } | null>(null);
   const { toast } = useToast();
 
   // Preparar dados iniciais para edição
@@ -73,25 +81,46 @@ export function ImprovedSchedulingForm({
   const handleImprovedSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Verificar conflito antes de submeter - apenas avisar, não impedir
-    if (checkTimeConflict()) {
-      toast({
-        title: "⚠️ Conflito de horário detectado",
-        description: "Este horário já está ocupado. Verifique se realmente deseja continuar.",
-        variant: "default",
-      });
+    try {
+      // Tentar submeter normalmente
+      await onSubmit(formData);
+    } catch (error: any) {
+      // Se é erro de conflito, mostrar modal de confirmação
+      if (error.isConflict) {
+        setPendingConflictData({
+          formData,
+          conflictDetails: error.conflictDetails
+        });
+        setShowConflictModal(true);
+        return;
+      }
+      
+      // Para outros erros, não fazer nada - dados já estão preservados
+      console.error('Erro ao submeter agendamento:', error);
     }
+  };
+
+  const handleConfirmConflict = async () => {
+    if (!pendingConflictData) return;
     
     try {
-      // Sempre tentar submeter - deixar o backend validar e retornar erro se necessário
-      await onSubmit(formData);
-      // Só limpar em caso de sucesso (o onSubmit original já trata isso)
+      // Chamar onSubmitWithForce com flag para forçar conflito
+      await onSubmitWithForce(pendingConflictData.formData);
+      setShowConflictModal(false);
+      setPendingConflictData(null);
     } catch (error) {
-      // Em caso de erro, preservar todos os dados do formulário
-      console.error('Erro ao submeter agendamento:', error);
-      // O formulário manterá todos os dados preenchidos
-      // O erro será exibido pelo useSchedulingForm ou componente pai
+      console.error('Erro ao forçar agendamento:', error);
+      toast({
+        title: "Erro ao criar agendamento",
+        description: error instanceof Error ? error.message : 'Erro desconhecido',
+        variant: "destructive",
+      });
     }
+  };
+
+  const handleCancelConflict = () => {
+    setShowConflictModal(false);
+    setPendingConflictData(null);
   };
 
   const selectedDoctor = doctors.find(doctor => doctor.id === formData.medicoId);
@@ -154,6 +183,14 @@ export function ImprovedSchedulingForm({
           </div>
         </form>
       </CardContent>
+      
+      <ConflictConfirmationModal
+        open={showConflictModal}
+        onConfirm={handleConfirmConflict}
+        onCancel={handleCancelConflict}
+        conflictMessage={pendingConflictData?.conflictDetails?.conflict_message || "Este horário já está ocupado"}
+        conflictDetails={pendingConflictData?.conflictDetails}
+      />
     </Card>
   );
 }

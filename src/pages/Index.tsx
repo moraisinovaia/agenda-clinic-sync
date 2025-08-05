@@ -249,12 +249,12 @@ const Index = () => {
     }
   };
 
-  // Handler para formulário simples - CORREÇÃO DEFINITIVA
+  // Handler para formulário simples - NORMAL
   const handleSimpleAppointmentSubmit = async (formData: SchedulingFormData) => {
     console.log('🎯 Index.tsx: handleSimpleAppointmentSubmit chamado');
     
     try {
-      // Tentar criar o agendamento
+      // Tentar criar o agendamento NORMAL (sem forçar conflito)
       await createAppointment(formData, editingAppointment?.id);
       
       console.log('✅ Index.tsx: Agendamento criado com sucesso - navegando');
@@ -285,6 +285,44 @@ const Index = () => {
       console.log('❌ Index.tsx: Erro capturado - NÃO navegando, deixando formulário intacto');
       // CRÍTICO: Em caso de erro, NÃO fazer nenhuma mudança de estado
       // Deixar o erro subir para o SimpleSchedulingForm tratar
+      throw error;
+    }
+  };
+
+  // Handler para formulário simples - COM FORÇA DE CONFLITO
+  const handleSimpleAppointmentSubmitWithForce = async (formData: SchedulingFormData) => {
+    console.log('🎯 Index.tsx: handleSimpleAppointmentSubmitWithForce chamado');
+    
+    try {
+      // Tentar criar o agendamento FORÇANDO CONFLITO
+      await createAppointment(formData, editingAppointment?.id, true); // force = true
+      
+      console.log('✅ Index.tsx: Agendamento criado com conflito forçado - navegando');
+      
+      // SUCESSO - navegar APENAS após sucesso confirmado
+      const doctor = doctors.find(d => d.id === formData.medicoId);
+      if (doctor) {
+        // Send notification for forced appointment
+        if (!editingAppointment) {
+          notifyNewAppointment(
+            formData.nomeCompleto,
+            doctor.nome,
+            formData.horaAgendamento
+          );
+        }
+        
+        // Navigate based on context
+        if (editingAppointment) {
+          setEditingAppointment(null);
+          setViewMode('appointments-list');
+        } else {
+          setSelectedDoctor(doctor);
+          setLastAppointmentDate(formData.dataAgendamento);
+          setViewMode('schedule');
+        }
+      }
+    } catch (error) {
+      console.log('❌ Index.tsx: Erro ao forçar agendamento');
       throw error;
     }
   };
@@ -426,6 +464,7 @@ const Index = () => {
               blockedDates={blockedDates}
               isDateBlocked={isDateBlocked}
               onSubmit={handleSimpleAppointmentSubmit}
+              onSubmitWithForce={handleSimpleAppointmentSubmitWithForce}
               onCancel={goBack}
               getAtendimentosByDoctor={getAtendimentosByDoctor}
               searchPatientsByBirthDate={searchPatientsByBirthDate}

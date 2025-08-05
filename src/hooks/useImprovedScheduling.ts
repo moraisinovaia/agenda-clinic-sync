@@ -10,14 +10,14 @@ export function useImprovedScheduling() {
   const { toast } = useToast();
 
   // Função para criar agendamento sem duplicação
-  const createAppointment = async (formData: SchedulingFormData) => {
+  const createAppointment = async (formData: SchedulingFormData, forceConflict = false) => {
     if (!user) {
       throw new Error('Usuário não autenticado');
     }
 
     setLoading(true);
     try {
-      console.log('🔄 Criando agendamento:', formData);
+      console.log('🔄 Criando agendamento:', formData, { forceConflict });
 
       const { data, error } = await supabase.rpc('criar_agendamento_atomico', {
         p_nome_completo: formData.nomeCompleto,
@@ -31,7 +31,8 @@ export function useImprovedScheduling() {
         p_hora_agendamento: formData.horaAgendamento,
         p_observacoes: formData.observacoes || null,
         p_criado_por: 'recepcionista',
-        p_criado_por_user_id: user.id
+        p_criado_por_user_id: user.id,
+        p_force_conflict: forceConflict  // NOVO PARÂMETRO
       });
 
       if (error) {
@@ -41,6 +42,15 @@ export function useImprovedScheduling() {
 
       const result = data as any;
       
+      // Se retornou sucesso false mas com conflict_detected, é um aviso de conflito
+      if (!result.success && result.conflict_detected) {
+        // Retornar erro especial que pode ser capturado pelo frontend
+        const conflictError = new Error(result.conflict_message || result.message);
+        (conflictError as any).isConflict = true;
+        (conflictError as any).conflictDetails = result.conflict_details;
+        throw conflictError;
+      }
+      
       if (!result.success) {
         throw new Error(result.error || result.message);
       }
@@ -48,6 +58,7 @@ export function useImprovedScheduling() {
       toast({
         title: "Agendamento criado com sucesso!",
         description: result.message,
+        variant: result.forced_conflict ? "default" : "default",
       });
 
       return result;
@@ -55,7 +66,12 @@ export function useImprovedScheduling() {
       const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
       console.error('Erro ao criar agendamento:', error);
       
-      // NÃO mostrar toast de erro aqui - deixar para o componente tratar
+      // Se é erro de conflito, não mostrar toast aqui - deixar componente tratar
+      if ((error as any).isConflict) {
+        throw error;
+      }
+      
+      // Para outros erros, não mostrar toast aqui - deixar para o componente tratar
       throw new Error(errorMessage);
     } finally {
       setLoading(false);

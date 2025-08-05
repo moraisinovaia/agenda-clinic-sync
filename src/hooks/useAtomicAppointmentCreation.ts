@@ -86,7 +86,7 @@ export function useAtomicAppointmentCreation() {
   };
 
   // ✅ DEFINITIVO: Criar agendamento com função atômica com locks
-  const createAppointment = useCallback(async (formData: SchedulingFormData, editingAppointmentId?: string): Promise<any> => {
+  const createAppointment = useCallback(async (formData: SchedulingFormData, editingAppointmentId?: string, forceConflict = false): Promise<any> => {
     try {
       setLoading(true);
       console.log('🎯 useAtomicAppointmentCreation: Criando agendamento com função atômica definitiva');
@@ -117,6 +117,7 @@ export function useAtomicAppointmentCreation() {
         p_criado_por_user_id: user?.id,
         p_agendamento_id_edicao: editingAppointmentId || null,
         p_force_update_patient: !!editingAppointmentId,
+        p_force_conflict: forceConflict
       });
 
       if (error) {
