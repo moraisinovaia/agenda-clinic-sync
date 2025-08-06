@@ -20,10 +20,21 @@ export const DoctorsView = ({
   onScheduleDoctor, 
   onViewSchedule 
 }: DoctorsViewProps) => {
-  const filteredDoctors = doctors.filter(doctor => 
-    doctor.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    doctor.especialidade.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const normalizeText = (text: string) => {
+    return text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, ''); // Remove acentos
+  };
+
+  const filteredDoctors = doctors.filter(doctor => {
+    const searchNormalized = normalizeText(searchTerm);
+    const nomeNormalized = normalizeText(doctor.nome);
+    const especialidadeNormalized = normalizeText(doctor.especialidade);
+    
+    return nomeNormalized.includes(searchNormalized) ||
+           especialidadeNormalized.includes(searchNormalized);
+  });
 
   return (
     <>
@@ -32,7 +43,7 @@ export const DoctorsView = ({
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar médico ou especialidade..."
+            placeholder="Buscar por nome do médico ou especialidade..."
             value={searchTerm}
             onChange={(e) => onSearchChange(e.target.value)}
             className="pl-10"
