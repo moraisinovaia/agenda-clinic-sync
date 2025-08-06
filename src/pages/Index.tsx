@@ -192,16 +192,18 @@ const Index = () => {
     }
   };
 
-  // Convênios únicos disponíveis (convertendo para lowercase para remover duplicatas case-insensitive)
-  const uniqueConvenios = Array.from(new Set(
+  // Convênios únicos disponíveis - preservando capitalização original
+  const uniqueConvenios = Array.from(
     doctors.flatMap(doctor => doctor.convenios_aceitos || [])
-      .map(convenio => convenio.toLowerCase())
-  )).filter(Boolean)
-    .map(convenio => 
-      // Capitalizar primeira letra para exibição
-      convenio.charAt(0).toUpperCase() + convenio.slice(1)
-    )
-    .sort();
+      .reduce((map, convenio) => {
+        const key = convenio.toLowerCase();
+        if (!map.has(key)) {
+          map.set(key, convenio); // Preserva a primeira ocorrência com capitalização original
+        }
+        return map;
+      }, new Map())
+      .values()
+  ).filter(Boolean).sort();
   
   
   // Redirecionar para login se não autenticado
