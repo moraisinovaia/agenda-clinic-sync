@@ -170,29 +170,38 @@ export function useAtomicAppointmentCreation() {
       console.log('✅ Agendamento criado com sucesso:', data);
       return data;
 
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
-      console.error('❌ Erro na criação do agendamento:', errorMessage);
-
-      // Para erros de validação/conflito, NÃO mostrar toast - deixar o componente mostrar
-      const isValidationError = errorMessage.includes('já está ocupado') ||
-          errorMessage.includes('bloqueada') ||
-          errorMessage.includes('idade') ||
-          errorMessage.includes('convênio') ||
-          errorMessage.includes('obrigatório') ||
-          errorMessage.includes('inválido') ||
-          errorMessage.includes('não está ativo');
-
-      if (!isValidationError) {
+    } catch (error: any) {
+      console.error('❌ Erro ao criar agendamento:', error);
+      
+      // Se o erro vem do backend e indica conflito, propagar com flag
+      if (error?.message?.includes('conflito') || error?.message?.includes('ocupado') || 
+          error?.conflict_detected) {
+        const conflictError = new Error(error.message);
+        (conflictError as any).isConflict = true;
+        (conflictError as any).conflict_detected = true;
+        throw conflictError;
+      }
+      
+      // Para warnings de idade, não tratar como erro fatal
+      if (error?.warnings && Array.isArray(error.warnings)) {
+        console.log('⚠️ Warnings detectados (idade):', error.warnings);
+        // Ainda mostra warning mas permite continuar
+      }
+      
+      // Para erros de validação críticos, não mostrar toast - deixar formulário preservado
+      const isCriticalValidationError = error?.message?.includes('obrigatório') ||
+          error?.message?.includes('inválido') ||
+          error?.message?.includes('não está ativo');
+      
+      if (!isCriticalValidationError && !error?.isConflict) {
         toast({
-          title: 'Erro no Agendamento',
-          description: errorMessage,
-          variant: 'destructive',
+          title: "Erro ao criar agendamento",
+          description: error?.message || "Ocorreu um erro inesperado",
+          variant: "destructive",
         });
       }
       
-      // Throw error imediatamente para ser capturado pelo useSchedulingForm
-      throw new Error(errorMessage);
+      throw error;
       
     } finally {
       // Garantir que o loading sempre seja resetado
