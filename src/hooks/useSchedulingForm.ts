@@ -82,10 +82,10 @@ export function useSchedulingForm(props?: UseSchedulingFormProps) {
       
       const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido ao criar agendamento';
       
-      console.log('❌ useSchedulingForm: Erro capturado:', errorMessage);
+      console.log('❌ useSchedulingForm: Erro capturado, preservando dados:', errorMessage);
       console.log('🔒 useSchedulingForm: Formulário preservado devido ao erro');
       
-      // Exibir erro sem resetar formulário
+      // CRÍTICO: NÃO resetar formulário - preservar dados do usuário
       setError(errorMessage);
       
       // CRITICAL: Re-throw o erro para que Index.tsx saiba que houve falha

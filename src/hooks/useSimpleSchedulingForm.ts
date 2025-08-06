@@ -56,16 +56,17 @@ export function useSimpleSchedulingForm(props?: UseSimpleSchedulingFormProps) {
     } catch (error: any) {
       console.log('❌ SimpleSchedulingForm: Erro capturado:', error);
       
-      // Se é erro de conflito, não mostrar no formulário
-      if (error?.isConflict) {
+      // CRÍTICO: Não resetar formulário em caso de erro - preservar dados
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      console.log('❌ SimpleSchedulingForm: Erro capturado, preservando dados:', errorMessage);
+      
+      // Se é erro de conflito, re-propagar para componente principal
+      if (error?.isConflict || error?.conflict_detected) {
         console.log('⚠️ Conflito detectado - propagando para componente');
-        // Re-propagar erro de conflito para que o componente possa mostrar modal
         throw error;
       } else {
-        // Para outros erros, mostrar no formulário
-        const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+        // Para outros erros, mostrar no formulário SEM RESETAR
         setError(errorMessage);
-        // NÃO resetar formulário em caso de erro
       }
     } finally {
       setLoading(false);
