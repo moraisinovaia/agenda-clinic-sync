@@ -85,8 +85,8 @@ export function useSupabaseScheduling() {
     appointments: appointmentsList.appointments,
     blockedDates: schedulingData.blockedDates,
     
-    // Estados de loading - apenas dos dados essenciais
-    loading: schedulingData.loading || patientManagement.loading || appointmentCreation.loading,
+    // Estados de loading - apenas dos dados essenciais (NÃO incluir loading de criação para não desmontar a tela durante submissão)
+    loading: schedulingData.loading || patientManagement.loading,
     
     // Operações - AGORA TODAS ESTÁVEIS
     createAppointment,
