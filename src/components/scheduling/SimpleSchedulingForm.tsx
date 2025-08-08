@@ -12,6 +12,7 @@ import { PatientDataFormFixed } from './PatientDataFormFixed';
 import { AppointmentDataForm } from './AppointmentDataForm';
 import { useSimpleSchedulingForm } from '@/hooks/useSimpleSchedulingForm';
 import { ConflictConfirmationModal } from './ConflictConfirmationModal';
+import { useToast } from '@/hooks/use-toast';
 
 interface SimpleSchedulingFormProps {
   doctors: Doctor[];
@@ -64,6 +65,7 @@ export const SimpleSchedulingForm = React.memo(function SimpleSchedulingForm({
     preSelectedDate
   });
   
+  const { toast } = useToast();
   // Estados para modal de conflito
   const [showConflictModal, setShowConflictModal] = useState(false);
   const [conflictMessage, setConflictMessage] = useState('');
@@ -78,11 +80,16 @@ export const SimpleSchedulingForm = React.memo(function SimpleSchedulingForm({
       
       // Detectar se é erro de conflito
       if (error?.isConflict) {
-        console.log('⚠️ Conflito detectado - mostrando modal');
+        console.log('⚠️ Conflito detectado - mostrando aviso e preservando formulário');
+        toast({
+          title: 'Horário já ocupado',
+          description: error.message || 'Já existe um paciente agendado neste horário. Ajuste a data ou horário e tente novamente.',
+          variant: 'destructive',
+        });
+        // Opcionalmente manter detalhes para futura inspeção
         setConflictMessage(error.message || 'Conflito de horário detectado');
         setConflictDetails(error.conflictDetails || null);
-        setShowConflictModal(true);
-        // NÃO propagar o erro para não resetar o formulário
+        // NÃO propagar o erro e NÃO abrir modal; manter dados para edição
       } else {
         // Re-propagar outros tipos de erro
         throw error;
