@@ -56,6 +56,54 @@ export function usePatientSearch() {
     }
   }, [toast]);
 
+  const searchPatientsByName = useCallback(async (name: string) => {
+    const trimmed = name?.trim();
+    if (!trimmed || trimmed.length < 3) {
+      setFoundPatients([]);
+      return [] as Patient[];
+    }
+
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('pacientes')
+        .select('*')
+        .ilike('nome_completo', `%${trimmed}%`)
+        .order('updated_at', { ascending: false })
+        .limit(20);
+
+      if (error) {
+        console.error('❌ Erro ao buscar pacientes por nome:', error);
+        throw error;
+      }
+
+      const uniquePatients = data ? data.reduce((acc, current) => {
+        const existing = acc.find(patient => 
+          patient.nome_completo.toLowerCase() === current.nome_completo.toLowerCase() &&
+          patient.convenio === current.convenio
+        );
+        if (!existing) {
+          acc.push(current);
+        }
+        return acc;
+      }, [] as typeof data) : [];
+
+      setFoundPatients(uniquePatients);
+      return uniquePatients as Patient[];
+    } catch (error) {
+      console.error('❌ Erro ao buscar pacientes por nome:', error);
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível buscar os pacientes pelo nome',
+        variant: 'destructive',
+      });
+      setFoundPatients([]);
+      return [] as Patient[];
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
   const clearResults = useCallback(() => {
     setFoundPatients([]);
   }, []);
@@ -64,6 +112,7 @@ export function usePatientSearch() {
     loading,
     foundPatients,
     searchPatients,
+    searchPatientsByName,
     clearResults
   };
 }

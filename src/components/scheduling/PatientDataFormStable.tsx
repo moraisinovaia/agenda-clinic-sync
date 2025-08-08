@@ -34,10 +34,11 @@ export const PatientDataFormStable = React.memo(({
   const [foundPatients, setFoundPatients] = useState<any[]>([]);
   const [showPatientsList, setShowPatientsList] = useState(false);
   
-  const { loading: searchingPatients, searchPatientsByBirthDate } = usePatientManagement();
+  const { loading: searchingPatients, searchPatientsByBirthDate, searchPatientsByName } = usePatientManagement();
   
   // Debounce da data de nascimento para evitar muitas requisições
   const debouncedBirthDate = useDebounce(formData.dataNascimento, 800);
+  const debouncedName = useDebounce(formData.nomeCompleto, 600);
 
   // Calcular idade do paciente de forma estável
   const patientAge = useMemo(() => {
@@ -104,6 +105,26 @@ export const PatientDataFormStable = React.memo(({
   React.useEffect(() => {
     handlePatientSearch();
   }, [handlePatientSearch]);
+
+  // Executar busca por nome quando não houver data válida
+  React.useEffect(() => {
+    const hasValidBirth = debouncedBirthDate && debouncedBirthDate.length === 10;
+    const run = async () => {
+      if (!hasValidBirth && debouncedName && debouncedName.length >= 3) {
+        try {
+          const patients = await searchPatientsByName(debouncedName);
+          setFoundPatients(patients);
+          setShowPatientsList(patients.length > 0);
+        } catch (error) {
+          console.error('Erro ao buscar pacientes por nome:', error);
+          setFoundPatients([]);
+          setShowPatientsList(false);
+        }
+      }
+    };
+    run();
+  }, [debouncedBirthDate, debouncedName, searchPatientsByName]);
+
 
   // Função para selecionar paciente de forma estável
   const selectPatient = useCallback((patient: any) => {
@@ -186,7 +207,7 @@ export const PatientDataFormStable = React.memo(({
             )}
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            {searchingPatients ? 'Buscando pacientes...' : 'Ao inserir a data, buscaremos pacientes existentes'}
+            {searchingPatients ? 'Buscando pacientes...' : 'Ao inserir a data ou nome, buscaremos pacientes existentes'}
           </p>
         </div>
       </div>
