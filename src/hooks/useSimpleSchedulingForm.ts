@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useToast } from '@/hooks/use-toast';
 import { SchedulingFormData } from '@/types/scheduling';
 
 const initialFormData: SchedulingFormData = {
@@ -21,6 +22,7 @@ interface UseSimpleSchedulingFormProps {
 }
 
 export function useSimpleSchedulingForm(props?: UseSimpleSchedulingFormProps) {
+  const { toast } = useToast();
   const [formData, setFormData] = useState<SchedulingFormData>(() => ({
     ...initialFormData,
     ...props?.initialData,
@@ -60,10 +62,15 @@ export function useSimpleSchedulingForm(props?: UseSimpleSchedulingFormProps) {
       const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
       console.log('❌ SimpleSchedulingForm: Erro capturado, preservando dados:', errorMessage);
       
-      // Se é erro de conflito, re-propagar para componente principal
+      // Se é erro de conflito, notificar e NÃO propagar
       if (error?.isConflict || error?.conflict_detected) {
-        console.log('⚠️ Conflito detectado - propagando para componente');
-        throw error;
+        console.log('⚠️ Conflito detectado - notificando e preservando dados');
+        toast({
+          title: 'Horário já ocupado',
+          description: errorMessage || 'Já existe um paciente agendado neste horário. Ajuste a data ou horário e tente novamente.',
+          variant: 'destructive',
+        });
+        // Não propagar e não resetar; manter dados para edição
       } else {
         // Para outros erros, mostrar no formulário SEM RESETAR
         setError(errorMessage);
