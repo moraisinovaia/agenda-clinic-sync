@@ -459,20 +459,22 @@ const Index = () => {
               showBack={true}
               showHome={true}
             />
-            <SimpleSchedulingForm
-              doctors={doctors}
-              atendimentos={atendimentos}
-              appointments={appointments}
-              blockedDates={blockedDates}
-              isDateBlocked={isDateBlocked}
-              onSubmit={handleSimpleAppointmentSubmit}
-              onSubmitWithForce={handleSimpleAppointmentSubmitWithForce}
-              onCancel={goBack}
-              getAtendimentosByDoctor={getAtendimentosByDoctor}
-              searchPatientsByBirthDate={searchPatientsByBirthDate}
-              preSelectedDoctor={selectedDoctor?.id}
-              preSelectedDate={selectedAppointmentDate || undefined}
-            />
+            <SchedulingErrorBoundary>
+              <SimpleSchedulingForm
+                doctors={doctors}
+                atendimentos={atendimentos}
+                appointments={appointments}
+                blockedDates={blockedDates}
+                isDateBlocked={isDateBlocked}
+                onSubmit={handleSimpleAppointmentSubmit}
+                onSubmitWithForce={handleSimpleAppointmentSubmitWithForce}
+                onCancel={goBack}
+                getAtendimentosByDoctor={getAtendimentosByDoctor}
+                searchPatientsByBirthDate={searchPatientsByBirthDate}
+                preSelectedDoctor={selectedDoctor?.id}
+                preSelectedDate={selectedAppointmentDate || undefined}
+              />
+            </SchedulingErrorBoundary>
           </div>
         )}
 
