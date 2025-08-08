@@ -19,13 +19,17 @@ interface AppointmentDataFormProps {
   setFormData: React.Dispatch<React.SetStateAction<SchedulingFormData>>;
   doctors: Doctor[];
   atendimentos: Atendimento[];
+  timeConflictError?: string;
+  onClearTimeConflict?: () => void;
 }
 
 export function AppointmentDataForm({ 
   formData, 
   setFormData, 
   doctors,
-  atendimentos 
+  atendimentos,
+  timeConflictError,
+  onClearTimeConflict,
 }: AppointmentDataFormProps) {
   const [openDoctorCombo, setOpenDoctorCombo] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
@@ -141,24 +145,27 @@ export function AppointmentDataForm({
     setOpenDoctorCombo(false);
   };
 
-  // Função para mudança de data com validação de horário
-  const handleDateChange = (date: string) => {
-    setFormData(prev => ({ 
-      ...prev, 
-      dataAgendamento: date,
-      // Reset horário apenas se a data for hoje e o horário atual for inválido
-      horaAgendamento: date === today && prev.horaAgendamento && !isTimeValid(date, prev.horaAgendamento)
-        ? '' 
-        : prev.horaAgendamento
-    }));
-    
-    validateField('dataAgendamento', date);
-    
-    // Re-validar horário se já estiver preenchido
-    if (formData.horaAgendamento) {
-      validateField('horaAgendamento', formData.horaAgendamento);
-    }
-  };
+// Função para mudança de data com validação de horário
+const handleDateChange = (date: string) => {
+  setFormData(prev => ({ 
+    ...prev, 
+    dataAgendamento: date,
+    // Reset horário apenas se a data for hoje e o horário atual for inválido
+    horaAgendamento: date === today && prev.horaAgendamento && !isTimeValid(date, prev.horaAgendamento)
+      ? '' 
+      : prev.horaAgendamento
+  }));
+  
+  // Limpar conflito de horário externo ao alterar a data
+  onClearTimeConflict?.();
+  
+  validateField('dataAgendamento', date);
+  
+  // Re-validar horário se já estiver preenchido
+  if (formData.horaAgendamento) {
+    validateField('horaAgendamento', formData.horaAgendamento);
+  }
+};
 
   return (
     <div className="space-y-4">
@@ -289,7 +296,7 @@ export function AppointmentDataForm({
         </div>
         
         <div>
-          <Label htmlFor="horaAgendamento" className={validationErrors.horaAgendamento ? 'text-destructive' : ''}>
+          <Label htmlFor="horaAgendamento" className={(validationErrors.horaAgendamento || timeConflictError) ? 'text-destructive' : ''}>
             Horário *
           </Label>
           <Input
@@ -298,6 +305,7 @@ export function AppointmentDataForm({
             value={formData.horaAgendamento}
             onChange={(e) => {
               setFormData(prev => ({ ...prev, horaAgendamento: e.target.value }));
+              onClearTimeConflict?.();
               validateField('horaAgendamento', e.target.value);
             }}
             onBlur={(e) => validateField('horaAgendamento', e.target.value)}
@@ -305,9 +313,14 @@ export function AppointmentDataForm({
             max="18:00"
             step="60" // Intervalos de 1 minuto
             required
-            className={cn(validationErrors.horaAgendamento && "border-destructive")}
+            className={cn((validationErrors.horaAgendamento || timeConflictError) && "border-destructive")}
           />
-          {validationErrors.horaAgendamento ? (
+          {timeConflictError ? (
+            <p className="text-sm text-destructive mt-1 flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" />
+              {timeConflictError}
+            </p>
+          ) : validationErrors.horaAgendamento ? (
             <p className="text-sm text-destructive mt-1 flex items-center gap-1">
               <AlertCircle className="h-3 w-3" />
               {validationErrors.horaAgendamento}

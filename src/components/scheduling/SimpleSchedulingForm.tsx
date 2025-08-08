@@ -70,6 +70,7 @@ export const SimpleSchedulingForm = React.memo(function SimpleSchedulingForm({
   const [showConflictModal, setShowConflictModal] = useState(false);
   const [conflictMessage, setConflictMessage] = useState('');
   const [conflictDetails, setConflictDetails] = useState<any>(null);
+  const [timeConflictError, setTimeConflictError] = useState<string | null>(null);
   
   // ✅ Memoizar handleSubmit com detecção de conflito
   const memoizedHandleSubmit = useCallback(async (e: React.FormEvent) => {
@@ -89,6 +90,7 @@ export const SimpleSchedulingForm = React.memo(function SimpleSchedulingForm({
         // Opcionalmente manter detalhes para futura inspeção
         setConflictMessage(error.message || 'Conflito de horário detectado');
         setConflictDetails(error.conflictDetails || null);
+        setTimeConflictError(error.message || 'Horário já está ocupado. Ajuste a data ou o horário.');
         // NÃO propagar o erro e NÃO abrir modal; manter dados para edição
       } else {
         // Re-propagar outros tipos de erro
@@ -204,6 +206,8 @@ export const SimpleSchedulingForm = React.memo(function SimpleSchedulingForm({
                 setFormData={setFormData}
                 doctors={doctors}
                 atendimentos={atendimentos}
+                timeConflictError={timeConflictError || undefined}
+                onClearTimeConflict={() => setTimeConflictError(null)}
               />
 
               {/* Exibir erro sempre que existir */}
