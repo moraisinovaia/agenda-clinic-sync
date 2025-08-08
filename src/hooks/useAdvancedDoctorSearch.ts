@@ -79,7 +79,9 @@ export const useAdvancedDoctorSearch = (
 
       // Filtro de busca
       const matchesSearch = fuzzyMatch(doctor.nome, debouncedSearchTerm) ||
-                           fuzzyMatch(doctor.especialidade, debouncedSearchTerm);
+                           fuzzyMatch(doctor.especialidade, debouncedSearchTerm) ||
+                           (Array.isArray(doctor.convenios_aceitos) && doctor.convenios_aceitos.some((c) => fuzzyMatch(String(c), debouncedSearchTerm)));
+
 
       // Filtro de especialidade
       const matchesSpecialty = selectedSpecialty === 'all' || 
