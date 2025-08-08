@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User, Trash2, Plus, Edit, CheckCircle, Phone } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User, Trash2, Plus, Edit, CheckCircle, Phone, RotateCcw } from 'lucide-react';
 import { 
   AlertDialog, 
   AlertDialogAction, 
@@ -28,12 +28,13 @@ interface DoctorScheduleProps {
   isDateBlocked?: (doctorId: string, date: Date) => boolean;
   onCancelAppointment: (appointmentId: string) => Promise<void>;
   onConfirmAppointment?: (appointmentId: string) => Promise<void>;
+  onUnconfirmAppointment?: (appointmentId: string) => Promise<void>;
   onEditAppointment?: (appointment: AppointmentWithRelations) => void;
   onNewAppointment?: (selectedDate?: string) => void;
   initialDate?: string; // Data inicial para posicionar o calendário
 }
 
-export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDateBlocked, onCancelAppointment, onConfirmAppointment, onEditAppointment, onNewAppointment, initialDate }: DoctorScheduleProps) {
+export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDateBlocked, onCancelAppointment, onConfirmAppointment, onUnconfirmAppointment, onEditAppointment, onNewAppointment, initialDate }: DoctorScheduleProps) {
   // Usar initialDate se fornecida, senão usar data atual
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     if (initialDate) {
@@ -271,6 +272,17 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                                       title="Confirmar"
                                     >
                                       <CheckCircle className="h-2.5 w-2.5" />
+                                    </Button>
+                                  )}
+                                  {appointment.status === 'confirmado' && onUnconfirmAppointment && (
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm"
+                                      onClick={() => onUnconfirmAppointment(appointment.id)}
+                                      className="h-5 w-5 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                      title="Desconfirmar"
+                                    >
+                                      <RotateCcw className="h-2.5 w-2.5" />
                                     </Button>
                                   )}
                                   {appointment.status === 'agendado' && (

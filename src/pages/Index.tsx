@@ -437,6 +437,7 @@ const Index = () => {
               isDateBlocked={isDateBlocked}
               onCancelAppointment={cancelAppointment}
               onConfirmAppointment={handleConfirmAppointment}
+              onUnconfirmAppointment={handleUnconfirmAppointment}
               onEditAppointment={handleEditAppointment}
               onNewAppointment={(selectedDate) => {
                 if (selectedDate) {
