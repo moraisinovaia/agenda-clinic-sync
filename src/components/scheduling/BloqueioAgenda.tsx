@@ -126,33 +126,52 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
 
     try {
       console.log('🔒 Enviando bloqueio de agenda...');
-      
-      const { data, error } = await supabase.functions.invoke('bloqueio-agenda', {
-        body: {
-          action: 'create',
-          medicoId,
-          dataInicio,
-          dataFim,
-          motivo
+
+      if (medicoId === 'ALL') {
+        // Bloquear todos os médicos em paralelo
+        const doctorIds = medicos.map(m => m.id);
+        const results = await Promise.all(
+          doctorIds.map(id =>
+            supabase.functions.invoke('bloqueio-agenda', {
+              body: { action: 'create', medicoId: id, dataInicio, dataFim, motivo }
+            })
+          )
+        );
+
+        // Agregar resultados
+        const successes = results.filter(r => r.data?.success);
+        const totalAfetados = successes.reduce((sum, r) => sum + (r.data?.data?.agendamentos_afetados || 0), 0);
+        const fails = results.length - successes.length;
+
+        if (successes.length === 0) {
+          throw new Error('Falha ao bloquear agendas. Tente novamente.');
         }
-      });
 
-      console.log('📡 Resposta da função:', { data, error });
+        toast({
+          title: 'Agendas Bloqueadas!',
+          description: `${successes.length} médico(s) processados. ${totalAfetados} agendamento(s) serão cancelados${fails ? ` • ${fails} falha(s)` : ''}.`,
+        });
+      } else {
+        const { data, error } = await supabase.functions.invoke('bloqueio-agenda', {
+          body: { action: 'create', medicoId, dataInicio, dataFim, motivo }
+        });
 
-      if (error) {
-        console.error('❌ Erro na função:', error);
-        throw new Error(error.message || 'Erro na comunicação com o servidor');
+        console.log('📡 Resposta da função:', { data, error });
+
+        if (error) {
+          console.error('❌ Erro na função:', error);
+          throw new Error(error.message || 'Erro na comunicação com o servidor');
+        }
+        if (!data?.success) {
+          console.error('❌ Resposta de erro:', data);
+          throw new Error(data?.error || 'Erro desconhecido no servidor');
+        }
+
+        toast({
+          title: 'Agenda Bloqueada com Sucesso!',
+          description: `${data.data.agendamentos_afetados} agendamento(s) serão cancelados.`,
+        });
       }
-
-      if (!data?.success) {
-        console.error('❌ Resposta de erro:', data);
-        throw new Error(data?.error || 'Erro desconhecido no servidor');
-      }
-
-      toast({
-        title: "Agenda Bloqueada com Sucesso!",
-        description: `${data.data.agendamentos_afetados} agendamento(s) serão cancelados.`,
-      });
 
       // Limpar formulário
       setMedicoId('');
@@ -165,15 +184,12 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
         onRefresh();
       }
 
-      console.log('✅ Bloqueio realizado:', data.data);
-
     } catch (error) {
       console.error('❌ Erro:', error);
-      
       toast({
-        title: "Erro ao Bloquear Agenda",
+        title: 'Erro ao Bloquear Agenda',
         description: error instanceof Error ? error.message : 'Erro desconhecido',
-        variant: "destructive",
+        variant: 'destructive',
       });
     } finally {
       setLoading(false);
@@ -344,8 +360,10 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
                           aria-expanded={openCombobox}
                           className="w-full justify-between"
                         >
-                          {medicoId
-                            ? medicos.find((medico) => medico.id === medicoId)?.nome + " - " + medicos.find((medico) => medico.id === medicoId)?.especialidade
+                           {medicoId
+                            ? (medicoId === "ALL"
+                              ? "Todos os médicos"
+                              : `${medicos.find((medico) => medico.id === medicoId)?.nome} - ${medicos.find((medico) => medico.id === medicoId)?.especialidade}`)
                             : "Selecione o médico..."}
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
@@ -356,6 +374,22 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
                           <CommandList>
                             <CommandEmpty>Nenhum médico encontrado.</CommandEmpty>
                             <CommandGroup>
+                              <CommandItem
+                                key="ALL"
+                                value="Todos os médicos"
+                                onSelect={() => {
+                                  setMedicoId(medicoId === "ALL" ? "" : "ALL");
+                                  setOpenCombobox(false);
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    medicoId === "ALL" ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                                Todos os médicos
+                              </CommandItem>
                               {medicos.map((medico) => (
                                 <CommandItem
                                   key={medico.id}
@@ -431,14 +465,20 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
                   </div>
 
                   {/* Preview da Ação */}
-                  {medicoSelecionado && dataInicio && dataFim && (
+                  {medicoId && dataInicio && dataFim && (
                     <div className="bg-muted/50 p-4 rounded-lg border-l-4 border-l-destructive">
                       <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
                         <AlertTriangle className="h-4 w-4 text-destructive" />
                         Ação que será executada:
                       </h4>
                       <ul className="text-sm text-muted-foreground space-y-1">
-                        <li>• Agenda de <strong>{medicoSelecionado.nome}</strong> será bloqueada</li>
+                        <li>
+                          • {medicoId === "ALL" ? (
+                            <>Agenda de <strong>todos os médicos</strong> será bloqueada</>
+                          ) : (
+                            <>Agenda de <strong>{medicoSelecionado?.nome}</strong> será bloqueada</>
+                          )}
+                        </li>
                         <li>• Período: <strong>{formatDateForDisplay(dataInicio)}</strong> até <strong>{formatDateForDisplay(dataFim)}</strong></li>
                         <li>• Todos os agendamentos neste período serão <strong>cancelados automaticamente</strong></li>
                         <li>• Pacientes serão <strong>notificados via WhatsApp</strong> sobre o cancelamento</li>
@@ -599,7 +639,7 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
                   ⚠️ Esta ação NÃO pode ser desfeita!
                 </p>
                 <ul className="text-sm space-y-1">
-                  <li>• Médico: <strong>{medicoSelecionado?.nome}</strong></li>
+                  <li>• Médico: <strong>{medicoId === 'ALL' ? 'Todos os médicos' : medicoSelecionado?.nome}</strong></li>
                   <li>• Período: <strong>{formatDateForDisplay(dataInicio)}</strong> até <strong>{formatDateForDisplay(dataFim)}</strong></li>
                   <li>• Todos os agendamentos serão cancelados</li>
                   <li>• Pacientes serão notificados via WhatsApp</li>
