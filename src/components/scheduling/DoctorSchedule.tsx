@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { format, addDays, startOfWeek, isSameDay, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Doctor, AppointmentWithRelations } from '@/types/scheduling';
+import { Doctor, AppointmentWithRelations, Atendimento } from '@/types/scheduling';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,9 @@ import {
   AlertDialogTitle, 
   AlertDialogTrigger 
 } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { FilaEsperaForm } from '@/components/fila-espera/FilaEsperaForm';
+import { FilaEsperaFormData } from '@/types/fila-espera';
 
 interface DoctorScheduleProps {
   doctor: Doctor;
@@ -32,9 +35,12 @@ interface DoctorScheduleProps {
   onEditAppointment?: (appointment: AppointmentWithRelations) => void;
   onNewAppointment?: (selectedDate?: string) => void;
   initialDate?: string; // Data inicial para posicionar o calendário
+  atendimentos: Atendimento[];
+  adicionarFilaEspera: (data: FilaEsperaFormData) => Promise<boolean>;
+  searchPatientsByBirthDate: (birthDate: string) => Promise<any[]>;
 }
 
-export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDateBlocked, onCancelAppointment, onConfirmAppointment, onUnconfirmAppointment, onEditAppointment, onNewAppointment, initialDate }: DoctorScheduleProps) {
+export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDateBlocked, onCancelAppointment, onConfirmAppointment, onUnconfirmAppointment, onEditAppointment, onNewAppointment, initialDate, atendimentos, adicionarFilaEspera, searchPatientsByBirthDate, onNewMultipleAppointment }: DoctorScheduleProps) {
   // Usar initialDate se fornecida, senão usar data atual
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     if (initialDate) {
@@ -43,6 +49,8 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
     }
     return new Date();
   });
+  
+  const [waitlistOpen, setWaitlistOpen] = useState(false);
   
   const getAppointmentsForDate = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
@@ -120,10 +128,15 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
               </div>
             </div>
             {onNewAppointment && (
-              <Button onClick={() => onNewAppointment(format(selectedDate, 'yyyy-MM-dd'))} className="flex items-center gap-2">
-                <Plus className="h-4 w-4" />
-                Novo Agendamento
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button onClick={() => onNewAppointment(format(selectedDate, 'yyyy-MM-dd'))} className="flex items-center gap-2">
+                  <Plus className="h-4 w-4" />
+                  Novo Agendamento
+                </Button>
+                <Button variant="outline" onClick={() => setWaitlistOpen(true)}>
+                  Adicionar à Fila
+                </Button>
+              </div>
             )}
           </div>
         </CardHeader>
@@ -349,6 +362,22 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
           </div>
         </CardContent>
       </Card>
+
+      {/* Modal: Adicionar à Fila de Espera */}
+      <Dialog open={waitlistOpen} onOpenChange={setWaitlistOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Adicionar à Fila de Espera</DialogTitle>
+          </DialogHeader>
+          <FilaEsperaForm
+            doctors={[doctor]}
+            atendimentos={atendimentos.filter(a => a.medico_id === doctor.id)}
+            onSubmit={adicionarFilaEspera}
+            onCancel={() => setWaitlistOpen(false)}
+            searchPatientsByBirthDate={searchPatientsByBirthDate}
+          />
+        </DialogContent>
+      </Dialog>
 
       {/* Resumo estatístico */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

@@ -19,6 +19,7 @@ interface MultipleSchedulingModalProps {
   atendimentos: Atendimento[];
   availableConvenios: string[];
   onSuccess: () => void;
+  initialData?: Partial<SchedulingFormData>;
 }
 
 export function MultipleSchedulingModal({

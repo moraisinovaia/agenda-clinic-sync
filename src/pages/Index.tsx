@@ -446,6 +446,9 @@ const Index = () => {
                 setViewMode('new-appointment');
               }}
               initialDate={lastAppointmentDate || undefined}
+              atendimentos={atendimentos}
+              adicionarFilaEspera={adicionarFilaEspera}
+              searchPatientsByBirthDate={searchPatientsByBirthDate}
             />
           </div>
         )}

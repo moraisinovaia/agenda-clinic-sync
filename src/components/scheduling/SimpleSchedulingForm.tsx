@@ -13,6 +13,7 @@ import { AppointmentDataForm } from './AppointmentDataForm';
 import { useSimpleSchedulingForm } from '@/hooks/useSimpleSchedulingForm';
 import { ConflictConfirmationModal } from './ConflictConfirmationModal';
 import { useToast } from '@/hooks/use-toast';
+import { MultipleSchedulingModal } from './MultipleSchedulingModal';
 
 interface SimpleSchedulingFormProps {
   doctors: Doctor[];
