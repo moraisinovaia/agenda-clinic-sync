@@ -79,6 +79,7 @@ export const SimpleSchedulingForm = React.memo(function SimpleSchedulingForm({
   const [conflictDetails, setConflictDetails] = useState<any>(null);
   const [timeConflictError, setTimeConflictError] = useState<string | null>(null);
   const [waitlistOpen, setWaitlistOpen] = useState(false);
+  const [multipleOpen, setMultipleOpen] = useState(false);
   
   // ✅ Memoizar handleSubmit com detecção de conflito
   const memoizedHandleSubmit = useCallback(async (e: React.FormEvent) => {
@@ -235,6 +236,9 @@ export const SimpleSchedulingForm = React.memo(function SimpleSchedulingForm({
                     : (editingAppointment ? 'Atualizar Agendamento' : 'Confirmar Agendamento')
                   }
                 </Button>
+                <Button type="button" variant="outline" onClick={() => setMultipleOpen(true)}>
+                  Agendar múltiplos
+                </Button>
                 <Button type="button" variant="outline" onClick={() => setWaitlistOpen(true)}>
                   Adicionar à Fila
                 </Button>
@@ -389,6 +393,32 @@ export const SimpleSchedulingForm = React.memo(function SimpleSchedulingForm({
         onCancel={handleCancelConflict}
         conflictMessage={conflictMessage}
         conflictDetails={conflictDetails}
+      />
+
+      {/* Modal: Agendamento Múltiplo */}
+      <MultipleSchedulingModal
+        open={multipleOpen}
+        onOpenChange={setMultipleOpen}
+        doctors={doctors}
+        atendimentos={atendimentos}
+        availableConvenios={Array.from(new Set(doctors.flatMap(d => d.convenios_aceitos || [])))}
+        onSuccess={() => {
+          toast({
+            title: 'Agendamentos criados',
+            description: 'Múltiplos exames agendados com sucesso.',
+          });
+        }}
+        initialData={{
+          nomeCompleto: formData.nomeCompleto,
+          dataNascimento: formData.dataNascimento,
+          convenio: formData.convenio,
+          telefone: formData.telefone,
+          celular: formData.celular,
+          medicoId: formData.medicoId,
+          dataAgendamento: formData.dataAgendamento,
+          horaAgendamento: formData.horaAgendamento,
+          observacoes: formData.observacoes || '',
+        }}
       />
 
       {/* Modal: Adicionar à Fila de Espera */}

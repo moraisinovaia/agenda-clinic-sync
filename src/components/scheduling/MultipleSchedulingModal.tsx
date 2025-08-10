@@ -28,7 +28,8 @@ export function MultipleSchedulingModal({
   doctors,
   atendimentos,
   availableConvenios,
-  onSuccess
+  onSuccess,
+  initialData
 }: MultipleSchedulingModalProps) {
   const { createMultipleAppointments, loading } = useMultipleAppointments();
   
@@ -84,6 +85,11 @@ export function MultipleSchedulingModal({
     handleDoctorChange();
   }, [formData.medicoId]);
 
+  useEffect(() => {
+    if (open && initialData) {
+      setFormData((prev) => ({ ...prev, ...initialData }));
+    }
+  }, [open, initialData]);
   const handleSubmit = async () => {
     if (selectedExams.length === 0) {
       return;
