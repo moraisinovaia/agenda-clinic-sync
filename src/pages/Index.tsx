@@ -477,6 +477,7 @@ const Index = () => {
                 searchPatientsByBirthDate={searchPatientsByBirthDate}
                 preSelectedDoctor={selectedDoctor?.id}
                 preSelectedDate={selectedAppointmentDate || undefined}
+                adicionarFilaEspera={adicionarFilaEspera}
               />
             </SchedulingErrorBoundary>
           </div>
@@ -546,6 +547,7 @@ const Index = () => {
               getAtendimentosByDoctor={getAtendimentosByDoctor}
               searchPatientsByBirthDate={searchPatientsByBirthDate}
               editingAppointment={editingAppointment}
+              adicionarFilaEspera={adicionarFilaEspera}
             />
           </div>
         )}

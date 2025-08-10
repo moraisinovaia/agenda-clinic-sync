@@ -14,6 +14,9 @@ import { useSimpleSchedulingForm } from '@/hooks/useSimpleSchedulingForm';
 import { ConflictConfirmationModal } from './ConflictConfirmationModal';
 import { useToast } from '@/hooks/use-toast';
 import { MultipleSchedulingModal } from './MultipleSchedulingModal';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { FilaEsperaForm } from '@/components/fila-espera/FilaEsperaForm';
+import { FilaEsperaFormData } from '@/types/fila-espera';
 
 interface SimpleSchedulingFormProps {
   doctors: Doctor[];
@@ -29,7 +32,9 @@ interface SimpleSchedulingFormProps {
   editingAppointment?: AppointmentWithRelations;
   preSelectedDoctor?: string;
   preSelectedDate?: string;
+  adicionarFilaEspera: (data: FilaEsperaFormData) => Promise<boolean>;
 }
+
 
 export const SimpleSchedulingForm = React.memo(function SimpleSchedulingForm({ 
   doctors, 
@@ -44,7 +49,8 @@ export const SimpleSchedulingForm = React.memo(function SimpleSchedulingForm({
   searchPatientsByBirthDate,
   editingAppointment,
   preSelectedDoctor,
-  preSelectedDate
+  preSelectedDate,
+  adicionarFilaEspera
 }: SimpleSchedulingFormProps) {
   // Preparar dados iniciais para edição
   const initialEditData = editingAppointment ? {
@@ -72,6 +78,7 @@ export const SimpleSchedulingForm = React.memo(function SimpleSchedulingForm({
   const [conflictMessage, setConflictMessage] = useState('');
   const [conflictDetails, setConflictDetails] = useState<any>(null);
   const [timeConflictError, setTimeConflictError] = useState<string | null>(null);
+  const [waitlistOpen, setWaitlistOpen] = useState(false);
   
   // ✅ Memoizar handleSubmit com detecção de conflito
   const memoizedHandleSubmit = useCallback(async (e: React.FormEvent) => {
@@ -228,6 +235,9 @@ export const SimpleSchedulingForm = React.memo(function SimpleSchedulingForm({
                     : (editingAppointment ? 'Atualizar Agendamento' : 'Confirmar Agendamento')
                   }
                 </Button>
+                <Button type="button" variant="outline" onClick={() => setWaitlistOpen(true)}>
+                  Adicionar à Fila
+                </Button>
                 <Button type="button" variant="outline" onClick={onCancel}>
                   Cancelar
                 </Button>
@@ -380,6 +390,22 @@ export const SimpleSchedulingForm = React.memo(function SimpleSchedulingForm({
         conflictMessage={conflictMessage}
         conflictDetails={conflictDetails}
       />
+
+      {/* Modal: Adicionar à Fila de Espera */}
+      <Dialog open={waitlistOpen} onOpenChange={setWaitlistOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Adicionar à Fila de Espera</DialogTitle>
+          </DialogHeader>
+          <FilaEsperaForm
+            doctors={selectedDoctor ? [selectedDoctor] : doctors}
+            atendimentos={selectedDoctor ? atendimentos.filter(a => a.medico_id === selectedDoctor.id) : atendimentos}
+            onSubmit={adicionarFilaEspera}
+            onCancel={() => setWaitlistOpen(false)}
+            searchPatientsByBirthDate={searchPatientsByBirthDate}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 });
