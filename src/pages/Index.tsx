@@ -275,8 +275,10 @@ const Index = () => {
         
         // Navigate based on context
         if (editingAppointment) {
+          setSelectedDoctor(doctor);
+          setLastAppointmentDate(formData.dataAgendamento);
           setEditingAppointment(null);
-          setViewMode('appointments-list');
+          setViewMode('schedule');
         } else {
           setSelectedDoctor(doctor);
           setLastAppointmentDate(formData.dataAgendamento);
@@ -315,8 +317,10 @@ const Index = () => {
         
         // Navigate based on context
         if (editingAppointment) {
+          setSelectedDoctor(doctor);
+          setLastAppointmentDate(formData.dataAgendamento);
           setEditingAppointment(null);
-          setViewMode('appointments-list');
+          setViewMode('schedule');
         } else {
           setSelectedDoctor(doctor);
           setLastAppointmentDate(formData.dataAgendamento);

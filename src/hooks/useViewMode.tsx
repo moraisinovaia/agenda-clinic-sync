@@ -38,9 +38,9 @@ export const useViewMode = () => {
   };
 
   const goBack = () => {
-    // Se estava editando, volta para a lista de agendamentos
+    // Se estava editando, volta para a agenda do médico
     if (viewMode === 'edit-appointment') {
-      setViewMode('appointments-list');
+      setViewMode('schedule');
       setEditingAppointment(null);
       return;
     }
