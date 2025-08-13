@@ -104,12 +104,18 @@ const FutureDateInput = React.memo(({
   }, []);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-    const currentNumbers = displayValue.replace(/[^\d]/g, '');
-    
-    // Bloquear números se já tem 8 dígitos (exceto backspace, delete, setas)
-    if (currentNumbers.length >= 8 && /\d/.test(e.key) && 
-        !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.key)) {
-      e.preventDefault();
+    const inputEl = e.currentTarget;
+    const currentNumbers = displayValue.replace(/\D/g, '');
+    const selStart = inputEl.selectionStart ?? 0;
+    const selEnd = inputEl.selectionEnd ?? 0;
+    const selectedDigits = displayValue.slice(selStart, selEnd).replace(/\D/g, '').length;
+
+    if (/\d/.test(e.key)) {
+      const willHave = currentNumbers.length - selectedDigits + 1;
+      // Permite digitar números se estiver substituindo seleção; bloqueia apenas se exceder 8 dígitos
+      if (willHave > 8) {
+        e.preventDefault();
+      }
     }
   }, [displayValue]);
 
@@ -171,6 +177,11 @@ const FutureDateInput = React.memo(({
     }
   }, [displayValue, processInput, convertToISO, onChange]);
 
+  const handleFocus = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
+    // Seleciona todo o conteúdo ao focar para facilitar a sobrescrita
+    e.currentTarget.select();
+  }, []);
+
   return (
     <div className="space-y-2">
       {label && (
@@ -188,6 +199,7 @@ const FutureDateInput = React.memo(({
         onKeyDown={handleKeyDown}
         onPaste={handlePaste}
         onBlur={handleBlur}
+        onFocus={handleFocus}
         placeholder="DD/MM/AAAA"
         pattern="[0-9]{2}/[0-9]{2}/[0-9]{4}"
         inputMode="numeric"
