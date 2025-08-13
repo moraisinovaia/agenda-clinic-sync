@@ -17,6 +17,7 @@ import { MultipleSchedulingModal } from './MultipleSchedulingModal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { FilaEsperaForm } from '@/components/fila-espera/FilaEsperaForm';
 import { FilaEsperaFormData } from '@/types/fila-espera';
+import { MultipleAppointmentData } from '@/types/multiple-appointments';
 
 interface SimpleSchedulingFormProps {
   doctors: Doctor[];
@@ -33,6 +34,7 @@ interface SimpleSchedulingFormProps {
   preSelectedDoctor?: string;
   preSelectedDate?: string;
   adicionarFilaEspera: (data: FilaEsperaFormData) => Promise<boolean>;
+  onMultipleSuccess?: (data: MultipleAppointmentData) => void;
 }
 
 
@@ -50,7 +52,8 @@ export const SimpleSchedulingForm = React.memo(function SimpleSchedulingForm({
   editingAppointment,
   preSelectedDoctor,
   preSelectedDate,
-  adicionarFilaEspera
+  adicionarFilaEspera,
+  onMultipleSuccess
 }: SimpleSchedulingFormProps) {
   // Preparar dados iniciais para edição
   const initialEditData = editingAppointment ? {
@@ -402,11 +405,13 @@ export const SimpleSchedulingForm = React.memo(function SimpleSchedulingForm({
         doctors={doctors}
         atendimentos={atendimentos}
         availableConvenios={Array.from(new Set(doctors.flatMap(d => d.convenios_aceitos || [])))}
-        onSuccess={() => {
+        onSuccess={(data) => {
           toast({
             title: 'Agendamentos criados',
             description: 'Múltiplos exames agendados com sucesso.',
           });
+          // Propagar para o container (Index) quando disponível
+          onMultipleSuccess?.(data);
         }}
         initialData={{
           nomeCompleto: formData.nomeCompleto,

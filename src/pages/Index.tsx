@@ -178,10 +178,18 @@ const Index = () => {
     setViewMode('doctors');
   };
 
-  const handleMultipleAppointmentSuccess = async () => {
+  const handleMultipleAppointmentSuccess = async (data: { medicoId: string; dataAgendamento: string }) => {
+    await refetch();
     await fetchFilaEspera(true);
     setMultipleSchedulingOpen(false);
-    setViewMode('doctors');
+    const doctor = doctors.find(d => d.id === data.medicoId);
+    if (doctor) {
+      setSelectedDoctor(doctor);
+      setLastAppointmentDate(data.dataAgendamento);
+      setViewMode('schedule');
+    } else {
+      setViewMode('doctors');
+    }
   };
 
   // Controlar fechamento do modal múltiplo
@@ -482,6 +490,7 @@ const Index = () => {
                 preSelectedDoctor={selectedDoctor?.id}
                 preSelectedDate={selectedAppointmentDate || undefined}
                 adicionarFilaEspera={adicionarFilaEspera}
+                onMultipleSuccess={handleMultipleAppointmentSuccess}
               />
             </SchedulingErrorBoundary>
           </div>
@@ -552,6 +561,7 @@ const Index = () => {
               searchPatientsByBirthDate={searchPatientsByBirthDate}
               editingAppointment={editingAppointment}
               adicionarFilaEspera={adicionarFilaEspera}
+              onMultipleSuccess={handleMultipleAppointmentSuccess}
             />
           </div>
         )}

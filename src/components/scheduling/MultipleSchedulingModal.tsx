@@ -18,7 +18,7 @@ interface MultipleSchedulingModalProps {
   doctors: Doctor[];
   atendimentos: Atendimento[];
   availableConvenios: string[];
-  onSuccess: () => void;
+  onSuccess: (data: MultipleAppointmentData) => void;
   initialData?: Partial<SchedulingFormData>;
 }
 
@@ -110,7 +110,7 @@ export function MultipleSchedulingModal({
       };
 
       await createMultipleAppointments(multipleData);
-      onSuccess();
+      onSuccess(multipleData);
       handleClose();
     } catch (error) {
       // Erro já tratado no hook
