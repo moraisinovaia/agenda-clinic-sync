@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 import { MultipleAppointmentData, MultipleAppointmentResult } from '@/types/multiple-appointments';
 
 export function useMultipleAppointments() {
