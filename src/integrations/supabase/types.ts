@@ -1508,6 +1508,10 @@ export type Database = {
         }
         Returns: Json
       }
+      binary_quantize: {
+        Args: { "": string } | { "": unknown }
+        Returns: unknown
+      }
       buscar_agendamentos_otimizado: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -1683,6 +1687,38 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: string
       }
+      halfvec_avg: {
+        Args: { "": number[] }
+        Returns: unknown
+      }
+      halfvec_out: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      halfvec_send: {
+        Args: { "": unknown }
+        Returns: string
+      }
+      halfvec_typmod_in: {
+        Args: { "": unknown[] }
+        Returns: number
+      }
+      hnsw_bit_support: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      hnsw_halfvec_support: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      hnsw_sparsevec_support: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      hnswhandler: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
       is_admin_auditoria: {
         Args: Record<PropertyKey, never>
         Returns: boolean
@@ -1703,9 +1739,38 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: boolean
       }
+      ivfflat_bit_support: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      ivfflat_halfvec_support: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      ivfflathandler: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      l2_norm: {
+        Args: { "": unknown } | { "": unknown }
+        Returns: number
+      }
+      l2_normalize: {
+        Args: { "": string } | { "": unknown } | { "": unknown }
+        Returns: unknown
+      }
       log_access_audit: {
         Args: { p_action: string; p_resource: string; p_details?: Json }
         Returns: undefined
+      }
+      match_documents: {
+        Args: { query_embedding: string; match_count?: number; filter?: Json }
+        Returns: {
+          id: number
+          content: string
+          metadata: Json
+          similarity: number
+        }[]
       }
       rejeitar_usuario: {
         Args: { p_user_id: string; p_aprovador_id: string }
@@ -1721,6 +1786,18 @@ export type Database = {
           tempo_medio: number
           erros_por_tipo: Json
         }[]
+      }
+      sparsevec_out: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      sparsevec_send: {
+        Args: { "": unknown }
+        Returns: string
+      }
+      sparsevec_typmod_in: {
+        Args: { "": unknown[] }
+        Returns: number
       }
       toggle_backup_cron: {
         Args: { enable_cron: boolean }
@@ -1738,6 +1815,30 @@ export type Database = {
           p_agendamento_id_edicao?: string
         }
         Returns: Json
+      }
+      vector_avg: {
+        Args: { "": number[] }
+        Returns: string
+      }
+      vector_dims: {
+        Args: { "": string } | { "": unknown }
+        Returns: number
+      }
+      vector_norm: {
+        Args: { "": string }
+        Returns: number
+      }
+      vector_out: {
+        Args: { "": string }
+        Returns: unknown
+      }
+      vector_send: {
+        Args: { "": string }
+        Returns: string
+      }
+      vector_typmod_in: {
+        Args: { "": unknown[] }
+        Returns: number
       }
     }
     Enums: {
