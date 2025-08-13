@@ -5,7 +5,7 @@ import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { KeyboardShortcutsHelp } from '@/components/ui/keyboard-shortcuts-help';
 import endogastroLogo from '@/assets/endogastro-logo.png';
 
-type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos' | 'fila-espera' | 'nova-fila' | 'bloqueio-agenda' | 'relatorio-agenda' | 'auth-test' | 'alertas' | 'multiple-appointment' | 'canceled-appointments';
+type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos' | 'fila-espera' | 'nova-fila' | 'bloqueio-agenda' | 'relatorio-agenda' | 'auth-test' | 'alertas' | 'multiple-appointment' | 'canceled-appointments' | 'whatsapp-agent';
 
 interface DashboardHeaderProps {
   viewMode: ViewMode;
