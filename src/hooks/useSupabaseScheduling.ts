@@ -22,9 +22,11 @@ export function useSupabaseScheduling() {
   // ✅ CORREÇÃO DEFINITIVA: Invalidar cache SEMPRE após sucesso e garantir refetch
   const createAppointment = useCallback(async (formData: any, editingAppointmentId?: string, forceConflict = false) => {
     console.log('🎯 useSupabaseScheduling: Iniciando createAppointment');
+    console.log('📋 FormData recebido:', formData);
     
     try {
       const result = await appointmentCreation.createAppointment(formData, editingAppointmentId, forceConflict);
+      console.log('📊 Resultado do createAppointment:', result);
       
       // ✅ Se há sucesso (mesmo que não explícito), invalidar cache
       if (result && result.success !== false) {
@@ -35,9 +37,10 @@ export function useSupabaseScheduling() {
         await schedulingData.refetch();
         await appointmentsList.refetch();
         
-        console.log('🔄 Cache invalidated and data refreshed');
+        console.log('🔄 Cache invalidated and data refreshed - appointments should now be visible');
       } else {
         console.log('⚠️ Resultado indefinido ou falha - NÃO invalidando cache');
+        console.log('🔍 Result details:', JSON.stringify(result, null, 2));
       }
       
       return result;

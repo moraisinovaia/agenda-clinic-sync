@@ -15,6 +15,8 @@ export function useMultipleAppointments() {
     setLoading(true);
     
     try {
+      console.log('🔄 useMultipleAppointments: Iniciando criação múltipla');
+      console.log('📋 FormData completo:', JSON.stringify(formData, null, 2));
       console.log('🔍 Dados enviados para criar_agendamento_multiplo:', {
         p_nome_completo: formData.nomeCompleto,
         p_data_nascimento: formData.dataNascimento,
@@ -49,16 +51,25 @@ export function useMultipleAppointments() {
       });
 
       console.log('📥 Resposta da função criar_agendamento_multiplo:', { data, error });
+      console.log('✅ Raw result:', JSON.stringify(data, null, 2));
 
       if (error) {
+        console.error('❌ Erro na RPC:', error);
+        console.error('❌ Error details:', JSON.stringify(error, null, 2));
         throw error;
       }
 
       const result = data as unknown as MultipleAppointmentResult;
       
       if (!result?.success) {
+        console.error('❌ RPC retornou sucesso=false');
+        console.error('❌ Error message:', result?.error);
         throw new Error(result?.error || 'Erro ao criar agendamentos múltiplos');
       }
+
+      console.log('🎉 Agendamentos múltiplos criados com sucesso!');
+      console.log('📊 IDs criados:', result.agendamento_ids);
+      console.log('📊 Total criado:', result.total_agendamentos);
 
       toast({
         title: "Agendamentos criados!",
