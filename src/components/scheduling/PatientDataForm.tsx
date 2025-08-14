@@ -212,13 +212,13 @@ export function PatientDataForm({
             </div>
             
             <div className="flex-1 w-full">
-              <div className="border rounded-md">
-                <ScrollArea className="h-[300px] w-full">
+              <div className="border rounded-md bg-background">
+                <div className="max-h-[400px] overflow-y-auto overflow-x-hidden">
                   <div className="space-y-2 p-4">
                     {foundPatients.map((patient, index) => (
                       <div 
                         key={patient.id || `patient-${index}`} 
-                        className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent cursor-pointer group transition-colors"
+                        className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent cursor-pointer group transition-colors min-h-[80px]"
                         onClick={() => selectPatient(patient)}
                       >
                         <div className="flex-1 min-w-0">
@@ -255,8 +255,7 @@ export function PatientDataForm({
                       </div>
                     ))}
                   </div>
-                  <ScrollBar orientation="vertical" />
-                </ScrollArea>
+                </div>
               </div>
             </div>
             
