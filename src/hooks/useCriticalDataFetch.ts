@@ -1,14 +1,12 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { AppointmentWithRelations } from '@/types/scheduling';
-import { useToast } from '@/hooks/use-toast';
 
 /**
  * Hook para operações críticas que NUNCA devem usar cache
  * Usado para validar dados após operações de escrita
  */
 export function useCriticalDataFetch() {
-  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
 
   // 🔧 Busca CRÍTICA de agendamentos - SEMPRE do banco, NUNCA do cache
@@ -111,16 +109,11 @@ export function useCriticalDataFetch() {
       return transformedAppointments;
     } catch (error) {
       console.error('❌ CRITICAL FETCH falhou:', error);
-      toast({
-        title: 'Erro crítico',
-        description: 'Falha ao buscar dados atualizados do banco',
-        variant: 'destructive',
-      });
       throw error;
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, []);
 
   // 🔧 Validar consistência: comparar dados do cache vs banco
   const validateDataConsistency = useCallback(async (cachedData: AppointmentWithRelations[]) => {
@@ -140,11 +133,6 @@ export function useCriticalDataFetch() {
       
       if (!comparison.isConsistent) {
         console.warn('⚠️ INCONSISTÊNCIA DETECTADA entre cache e banco!', comparison);
-        toast({
-          title: 'Dados desatualizados detectados',
-          description: `Cache: ${comparison.cachedCount} agendamentos, Banco: ${comparison.freshCount} agendamentos`,
-          variant: 'destructive',
-        });
       }
       
       return comparison;
@@ -152,7 +140,7 @@ export function useCriticalDataFetch() {
       console.error('❌ Erro na validação de consistência:', error);
       return null;
     }
-  }, [fetchAppointmentsCritical, toast]);
+  }, [fetchAppointmentsCritical]);
 
   return {
     fetchAppointmentsCritical,
