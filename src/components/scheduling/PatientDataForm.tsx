@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DateOfBirthInput } from '@/components/ui/date-of-birth-input';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { User, Search, UserCheck, AlertCircle, CheckCircle } from 'lucide-react';
 import { SchedulingFormData } from '@/types/scheduling';
 
@@ -205,35 +206,37 @@ export function PatientDataForm({
                 }
               </h4>
             </div>
-            <div className="space-y-2">
-              {foundPatients.map((patient, index) => (
-                <div key={patient.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
-                  <div>
-                    <p className="font-medium">{patient.nome_completo}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {patient.convenio} • {patient.celular}
-                      {patient.telefone && ` • ${patient.telefone}`}
-                    </p>
+            <ScrollArea className="max-h-[300px] w-full">
+              <div className="space-y-2 pr-4">
+                {foundPatients.map((patient, index) => (
+                  <div key={patient.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
+                    <div>
+                      <p className="font-medium">{patient.nome_completo}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {patient.convenio} • {patient.celular}
+                        {patient.telefone && ` • ${patient.telefone}`}
+                      </p>
+                    </div>
+                    <Button 
+                      size="sm" 
+                      onClick={() => selectPatient(patient)}
+                      className="ml-2"
+                    >
+                      Selecionar
+                    </Button>
                   </div>
-                  <Button 
-                    size="sm" 
-                    onClick={() => selectPatient(patient)}
-                    className="ml-2"
-                  >
-                    Selecionar
-                  </Button>
-                </div>
-              ))}
-              <div className="pt-2 border-t">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={createNewPatient}
-                  className="w-full"
-                >
-                  Criar novo paciente com esta data
-                </Button>
+                ))}
               </div>
+            </ScrollArea>
+            <div className="pt-2 border-t mt-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={createNewPatient}
+                className="w-full"
+              >
+                Criar novo paciente com esta data
+              </Button>
             </div>
           </CardContent>
         </Card>
