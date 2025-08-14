@@ -206,8 +206,8 @@ export function PatientDataForm({
                 }
               </h4>
             </div>
-            {/* SOLUÇÃO MAIS SIMPLES: Container único com scroll */}
-            <div className="max-h-48 overflow-y-auto border rounded-md bg-background p-2 space-y-2 scrollbar-thin scrollbar-thumb-slate-400 scrollbar-track-slate-100">
+            {/* Container com scroll customizado */}
+            <div className="h-48 overflow-y-auto border rounded-md bg-background p-2 space-y-2 custom-scrollbar">
               {foundPatients.map((patient, index) => (
                 <div 
                   key={patient.id || `patient-${index}`} 
