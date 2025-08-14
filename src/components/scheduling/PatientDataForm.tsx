@@ -206,8 +206,21 @@ export function PatientDataForm({
                 }
               </h4>
             </div>
-            {/* Container com scroll customizado */}
-            <div className="h-48 overflow-y-auto border rounded-md bg-background p-2 space-y-2 custom-scrollbar">
+            {/* Container com scroll inline */}
+            <div 
+              className="h-48 overflow-y-auto border rounded-md bg-background p-2 space-y-2"
+              style={{
+                scrollbarWidth: 'thin',
+                scrollbarColor: '#94a3b8 transparent'
+              }}
+              onMouseEnter={(e) => {
+                const style = e.currentTarget.style;
+                style.setProperty('--webkit-scrollbar-width', '6px');
+                style.setProperty('--webkit-scrollbar-track-background', 'transparent');
+                style.setProperty('--webkit-scrollbar-thumb-background', '#cbd5e1');
+                style.setProperty('--webkit-scrollbar-thumb-border-radius', '3px');
+              }}
+            >
               {foundPatients.map((patient, index) => (
                 <div 
                   key={patient.id || `patient-${index}`} 
