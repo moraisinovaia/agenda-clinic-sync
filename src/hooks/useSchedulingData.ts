@@ -68,26 +68,8 @@ export function useSchedulingData() {
     return atendimentos.filter(atendimento => atendimento.medico_id === doctorId);
   };
 
-  // Verificar se médico trabalha no dia da semana
-  const isDoctorWorkingDay = (doctorId: string, date: Date) => {
-    const doctor = doctors.find(d => d.id === doctorId);
-    if (!doctor?.horarios) return true; // Se não tem horários definidos, assume que trabalha
-
-    const dayOfWeek = date.getDay(); // 0=domingo, 1=segunda, ..., 6=sábado
-    const dayNames = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
-    const dayName = dayNames[dayOfWeek];
-    
-    return doctor.horarios[dayName] && doctor.horarios[dayName].length > 0;
-  };
-
-  // Verificar se uma data está bloqueada para um médico (inclui validação de dias da semana)
+  // Verificar se uma data está bloqueada para um médico (apenas bloqueios manuais)
   const isDateBlocked = (doctorId: string, date: Date) => {
-    // Primeiro verifica se o médico trabalha neste dia da semana
-    if (!isDoctorWorkingDay(doctorId, date)) {
-      return true;
-    }
-
-    // Depois verifica bloqueios explícitos
     const dateStr = date.toISOString().split('T')[0];
     return blockedDates.some(blocked => 
       blocked.medico_id === doctorId &&
@@ -97,21 +79,8 @@ export function useSchedulingData() {
     );
   };
 
-  // Obter motivo específico do bloqueio
+  // Obter motivo específico do bloqueio (apenas bloqueios explícitos)
   const getBlockingReason = (doctorId: string, date: Date) => {
-    const doctor = doctors.find(d => d.id === doctorId);
-    
-    // Verificar se médico trabalha neste dia
-    if (!isDoctorWorkingDay(doctorId, date)) {
-      const dayNames = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
-      const dayName = dayNames[date.getDay()];
-      return {
-        type: 'no_working_day',
-        message: `${doctor?.nome || 'Médico'} não atende às ${dayName}s`
-      };
-    }
-
-    // Verificar bloqueios explícitos
     const dateStr = date.toISOString().split('T')[0];
     const blocked = blockedDates.find(blocked => 
       blocked.medico_id === doctorId &&
@@ -163,7 +132,6 @@ export function useSchedulingData() {
     getAtendimentosByDoctor,
     isDateBlocked,
     getBlockedDatesByDoctor,
-    isDoctorWorkingDay,
     getBlockingReason,
     refetch: () => Promise.all([fetchDoctors(), fetchAtendimentos(), fetchBlockedDates()]),
   };

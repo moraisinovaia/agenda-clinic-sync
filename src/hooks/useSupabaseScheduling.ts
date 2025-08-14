@@ -102,7 +102,6 @@ export function useSupabaseScheduling() {
     getAtendimentosByDoctor: schedulingData.getAtendimentosByDoctor,
     getAppointmentsByDoctorAndDate: appointmentsList.getAppointmentsByDoctorAndDate,
     isDateBlocked: schedulingData.isDateBlocked,
-    isDoctorWorkingDay: schedulingData.isDoctorWorkingDay,
     getBlockingReason: schedulingData.getBlockingReason,
     getBlockedDatesByDoctor: schedulingData.getBlockedDatesByDoctor,
     
@@ -127,7 +126,6 @@ export function useSupabaseScheduling() {
     schedulingData.getAtendimentosByDoctor,
     appointmentsList.getAppointmentsByDoctorAndDate,
     schedulingData.isDateBlocked,
-    schedulingData.isDoctorWorkingDay,
     schedulingData.getBlockingReason,
     schedulingData.getBlockedDatesByDoctor,
     refetch,

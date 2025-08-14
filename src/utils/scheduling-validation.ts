@@ -27,14 +27,10 @@ export const DAY_KEYS = {
 
 /**
  * Verifica se um médico trabalha em um determinado dia da semana
+ * REMOVIDO: Agora sempre retorna true para dar flexibilidade às recepcionistas
  */
 export function isDoctorWorkingDay(doctor: Doctor, date: Date): boolean {
-  if (!doctor.horarios) return true; // Se não tem horários definidos, assume que trabalha
-
-  const dayOfWeek = date.getDay() as keyof typeof DAY_KEYS;
-  const dayKey = DAY_KEYS[dayOfWeek];
-  
-  return doctor.horarios[dayKey] && doctor.horarios[dayKey].length > 0;
+  return true; // Sempre permite agendamento - recepcionista decide
 }
 
 /**
@@ -58,7 +54,7 @@ export function getDayNameInPortuguese(date: Date): string {
 }
 
 /**
- * Obter próximas datas disponíveis para um médico
+ * Obter próximas datas disponíveis para um médico (sem restrição de dias da semana)
  */
 export function getNextAvailableDates(
   doctor: Doctor,
@@ -69,23 +65,20 @@ export function getNextAvailableDates(
   const suggestions: Date[] = [];
   let currentDate = new Date(startDate);
   let attempts = 0;
-  const maxAttempts = 60; // 2 meses
+  const maxAttempts = 30; // 1 mês
 
   while (suggestions.length < limit && attempts < maxAttempts) {
-    // Verificar se médico trabalha neste dia
-    if (isDoctorWorkingDay(doctor, currentDate)) {
-      // Verificar se não está bloqueado
-      const dateStr = currentDate.toISOString().split('T')[0];
-      const isBlocked = blockedDates.some(blocked => 
-        blocked.medico_id === doctor.id &&
-        blocked.status === 'ativo' &&
-        dateStr >= blocked.data_inicio &&
-        dateStr <= blocked.data_fim
-      );
-      
-      if (!isBlocked) {
-        suggestions.push(new Date(currentDate));
-      }
+    // Verificar apenas se não está bloqueado manualmente
+    const dateStr = currentDate.toISOString().split('T')[0];
+    const isBlocked = blockedDates.some(blocked => 
+      blocked.medico_id === doctor.id &&
+      blocked.status === 'ativo' &&
+      dateStr >= blocked.data_inicio &&
+      dateStr <= blocked.data_fim
+    );
+    
+    if (!isBlocked) {
+      suggestions.push(new Date(currentDate));
     }
     
     currentDate.setDate(currentDate.getDate() + 1);

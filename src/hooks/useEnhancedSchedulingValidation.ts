@@ -11,18 +11,7 @@ export interface ValidationResult {
 export function useEnhancedSchedulingValidation() {
   const [loading, setLoading] = useState(false);
 
-  // Verificar se é dia de trabalho do médico
-  const isDoctorWorkingDay = useCallback((doctor: Doctor, date: Date): boolean => {
-    if (!doctor.horarios) return true; // Se não tem horários definidos, assume que trabalha
-
-    const dayOfWeek = date.getDay(); // 0=domingo, 1=segunda, ..., 6=sábado
-    const dayNames = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
-    const dayName = dayNames[dayOfWeek];
-    
-    return doctor.horarios[dayName] && doctor.horarios[dayName].length > 0;
-  }, []);
-
-  // Obter horários disponíveis para um médico em uma data
+  // Obter horários disponíveis para um médico em uma data (para referência)
   const getDoctorAvailableHours = useCallback((doctor: Doctor, date: Date): string[] => {
     if (!doctor.horarios) return [];
 
@@ -33,7 +22,7 @@ export function useEnhancedSchedulingValidation() {
     return doctor.horarios[dayName] || [];
   }, []);
 
-  // Validar data e horário completos
+  // Validar data e horário (sem validação automática de dias da semana)
   const validateDateAndTime = useCallback((
     doctor: Doctor, 
     date: Date, 
@@ -52,36 +41,7 @@ export function useEnhancedSchedulingValidation() {
       };
     }
 
-    // 2. Verificar se médico trabalha neste dia da semana
-    if (!isDoctorWorkingDay(doctor, date)) {
-      const dayNames = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
-      const dayName = dayNames[date.getDay()];
-      const availableDays = Object.keys(doctor.horarios || {})
-        .filter(day => doctor.horarios?.[day]?.length > 0)
-        .map(day => {
-          const dayMap: { [key: string]: string } = {
-            'domingo': 'domingos',
-            'segunda': 'segundas-feiras',
-            'terca': 'terças-feiras', 
-            'quarta': 'quartas-feiras',
-            'quinta': 'quintas-feiras',
-            'sexta': 'sextas-feiras',
-            'sabado': 'sábados'
-          };
-          return dayMap[day] || day;
-        });
-
-      return {
-        isValid: false,
-        type: 'no_working_day',
-        message: `${doctor.nome} não atende às ${dayName}s`,
-        suggestions: availableDays.length > 0 
-          ? [`Dias disponíveis: ${availableDays.join(', ')}`]
-          : []
-      };
-    }
-
-    // 3. Verificar bloqueios explícitos
+    // 2. Verificar apenas bloqueios explícitos (removida validação de dias da semana)
     const blocked = blockedDates.find(blocked => 
       blocked.medico_id === doctor.id &&
       blocked.status === 'ativo' &&
@@ -97,26 +57,11 @@ export function useEnhancedSchedulingValidation() {
       };
     }
 
-    // 4. Se foi informado horário, verificar se está nos horários do médico
-    if (time) {
-      const availableHours = getDoctorAvailableHours(doctor, date);
-      if (availableHours.length > 0 && !availableHours.includes(time)) {
-        return {
-          isValid: false,
-          type: 'time_conflict',
-          message: `Horário ${time} não está disponível para ${doctor.nome}`,
-          suggestions: [
-            `Horários disponíveis: ${availableHours.join(', ')}`
-          ]
-        };
-      }
-    }
-
-    // 5. Tudo OK
+    // 3. Tudo OK - recepcionista pode agendar livremente
     return { isValid: true };
-  }, [isDoctorWorkingDay, getDoctorAvailableHours]);
+  }, []);
 
-  // Sugerir próximas datas disponíveis
+  // Sugerir próximas datas disponíveis (sem restrição de dias da semana)
   const suggestNextAvailableDates = useCallback((
     doctor: Doctor, 
     startDate: Date,
@@ -126,7 +71,7 @@ export function useEnhancedSchedulingValidation() {
     const suggestions: Date[] = [];
     let currentDate = new Date(startDate);
     let attempts = 0;
-    const maxAttempts = 60; // 2 meses
+    const maxAttempts = 30; // 1 mês
 
     while (suggestions.length < limit && attempts < maxAttempts) {
       const validation = validateDateAndTime(doctor, currentDate, undefined, blockedDates);
@@ -143,7 +88,6 @@ export function useEnhancedSchedulingValidation() {
 
   return {
     loading,
-    isDoctorWorkingDay,
     getDoctorAvailableHours,
     validateDateAndTime,
     suggestNextAvailableDates
