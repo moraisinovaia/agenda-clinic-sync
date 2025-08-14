@@ -148,14 +148,15 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       }, 'fetch_appointments', 'GET');
   }, [measureApiCall]);
 
-  // Usar cache otimizado para buscar agendamentos
+  // 🔧 TEMPORÁRIO: Cache desabilitado para operações críticas
   const { data: appointments, loading, error, refetch, invalidateCache, forceRefetch } = useOptimizedQuery<AppointmentWithRelations[]>(
     fetchAppointments,
     [],
     { 
       cacheKey: 'appointments-list',
-      cacheTime: 5 * 60 * 1000, // 5 minutos
-      staleTime: 30 * 1000 // 30 segundos
+      cacheTime: 0, // 🚫 Cache desabilitado temporariamente
+      staleTime: 0, // 🚫 Sempre buscar dados frescos
+      disableCache: true // 🚫 Força dados frescos sempre
     }
   );
 

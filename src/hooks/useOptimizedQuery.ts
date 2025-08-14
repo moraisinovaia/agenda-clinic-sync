@@ -6,6 +6,7 @@ interface QueryOptions {
   cacheTime?: number; // in milliseconds
   staleTime?: number; // in milliseconds
   refetchOnMount?: boolean;
+  disableCache?: boolean; // 🔧 NOVO: Para operações críticas
 }
 
 interface CachedData<T> {
@@ -61,13 +62,23 @@ export const useOptimizedQuery = <T>(
     cacheKey,
     cacheTime = 5 * 60 * 1000, // 5 minutes default
     staleTime = 30 * 1000, // 30 seconds default
-    refetchOnMount = true
+    refetchOnMount = true,
+    disableCache = false // 🔧 NOVO: Desabilitar cache para operações críticas
   } = options;
 
   const executeQuery = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
+
+      // 🔧 NOVO: Se cache está desabilitado, sempre buscar dados frescos
+      if (disableCache) {
+        console.log('🚫 Cache DESABILITADO para:', cacheKey, '- buscando dados frescos');
+        const result = await queryFn();
+        setData(result);
+        setLoading(false);
+        return;
+      }
 
       // Check cache first
       const cached = queryCache.get(cacheKey);
@@ -109,12 +120,14 @@ export const useOptimizedQuery = <T>(
       console.log('🔍 DEBUG - Executando query fresh para:', cacheKey);
       const result = await queryFn();
       
-      // Cache the result
-      queryCache.set(cacheKey, {
-        data: result,
-        timestamp: now,
-        isStale: false
-      });
+      // Cache the result (only if cache is enabled)
+      if (!disableCache) {
+        queryCache.set(cacheKey, {
+          data: result,
+          timestamp: now,
+          isStale: false
+        });
+      }
 
       console.log('🔍 DEBUG - Query executada e cache atualizado:', cacheKey);
       setData(result);
@@ -124,7 +137,7 @@ export const useOptimizedQuery = <T>(
     } finally {
       setLoading(false);
     }
-  }, [queryFn, cacheKey, cacheTime, staleTime]); // Dependências corretas
+  }, [queryFn, cacheKey, cacheTime, staleTime, disableCache]); // Dependências corretas
 
   const refetch = useCallback(() => {
     // Clear cache for this key and refetch
