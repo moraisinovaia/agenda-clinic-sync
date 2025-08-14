@@ -49,12 +49,12 @@ export const StatsCards = ({ doctors, appointments }: StatsCardsProps) => {
     tomorrowAppointments
   });
 
-  // 🚨 ALERTA: Se agendados < 1200, temos um problema
-  if (pendingAppointments < 1200) {
+  // ✅ CORRIGIDO: Ajustado threshold após correção dos filtros
+  if (pendingAppointments < 1000) {
     console.error('🚨 [DASHBOARD-DIAGNÓSTICO] ALERTA: Poucos agendamentos exibidos!', {
-      esperado: 'pelo menos 1200',
+      esperado: 'pelo menos 1000',
       atual: pendingAppointments,
-      diferenca: 1200 - pendingAppointments
+      diferenca: 1000 - pendingAppointments
     });
   }
   

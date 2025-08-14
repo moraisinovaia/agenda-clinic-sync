@@ -37,18 +37,29 @@ export const useAdvancedAppointmentFilters = (appointments: AppointmentWithRelat
       }))
     });
 
-    // Separar agendamentos cancelados por padrão
-    const baseFilter = statusFilter === 'cancelado' || statusFilter === 'cancelado_bloqueio' 
-      ? appointments 
-      : appointments.filter(appointment => 
-          appointment.status !== 'cancelado' && 
-          appointment.status !== 'cancelado_bloqueio'
-        );
+    // CORRIGIDO: Só filtrar cancelados se statusFilter não for 'all'
+    const baseFilter = statusFilter === 'all' 
+      ? appointments // Mostra TODOS quando filter é 'all'
+      : statusFilter === 'cancelado' || statusFilter === 'cancelado_bloqueio'
+        ? appointments.filter(appointment => 
+            appointment.status === 'cancelado' || appointment.status === 'cancelado_bloqueio'
+          )
+        : appointments.filter(appointment => 
+            appointment.status !== 'cancelado' && 
+            appointment.status !== 'cancelado_bloqueio'
+          );
 
-    console.log('🔍 [FILTROS] Após filtro base de cancelados:', {
+    console.log('🔍 [FILTROS] Após filtro base de status:', {
       original: appointments.length,
       afterBaseFilter: baseFilter.length,
-      removed: appointments.length - baseFilter.length
+      removed: appointments.length - baseFilter.length,
+      statusFilter,
+      statusCounts: {
+        agendado: appointments.filter(a => a.status === 'agendado').length,
+        confirmado: appointments.filter(a => a.status === 'confirmado').length,
+        cancelado: appointments.filter(a => a.status === 'cancelado').length,
+        cancelado_bloqueio: appointments.filter(a => a.status === 'cancelado_bloqueio').length,
+      }
     });
     
     const filtered = baseFilter.filter(appointment => {
