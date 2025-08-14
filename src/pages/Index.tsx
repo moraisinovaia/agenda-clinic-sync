@@ -45,6 +45,7 @@ import { NavigationHeader } from '@/components/ui/navigation-header';
 import { AuthTest } from '@/components/AuthTest';
 import PendingApproval from '@/components/PendingApproval';
 import { WhatsAppAgentDashboard } from '@/components/whatsapp-agent/WhatsAppAgentDashboard';
+import { WhatsAppTestPanel } from '@/components/admin/WhatsAppTestPanel';
 
 const Index = () => {
   const { user, profile, loading: authLoading, signOut } = useStableAuth();
@@ -403,7 +404,10 @@ const Index = () => {
           <div className="space-y-6">
             {/* User Approval Panel for Admins */}
             {profile?.role === 'admin' && profile?.status === 'aprovado' && (
-              <UserApprovalPanel />
+              <>
+                <UserApprovalPanel />
+                <WhatsAppTestPanel />
+              </>
             )}
             
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">

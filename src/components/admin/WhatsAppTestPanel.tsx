@@ -52,7 +52,8 @@ export function WhatsAppTestPanel() {
       
       if (error) throw error;
       
-      setTestResult(data);
+      const result = data as any;
+      setTestResult(result);
       
       // Buscar logs recentes
       const { data: logsData } = await supabase
@@ -65,9 +66,9 @@ export function WhatsAppTestPanel() {
       setLogs(logsData || []);
       
       toast({
-        title: data.success ? "Teste enviado!" : "Teste falhou",
-        description: data.message,
-        variant: data.success ? "default" : "destructive",
+        title: result?.success ? "Teste enviado!" : "Teste falhou",
+        description: result?.message || "Teste executado",
+        variant: result?.success ? "default" : "destructive",
       });
     } catch (error) {
       console.error('Erro no teste:', error);
@@ -106,10 +107,11 @@ export function WhatsAppTestPanel() {
       
       if (error) throw error;
       
+      const result = data as any;
       toast({
-        title: data.success ? "Fallback enviado!" : "Fallback falhou",
-        description: data.error || "Teste de fallback executado",
-        variant: data.success ? "default" : "destructive",
+        title: result?.success ? "Fallback enviado!" : "Fallback falhou",
+        description: result?.error || result?.message || "Teste de fallback executado",
+        variant: result?.success ? "default" : "destructive",
       });
     } catch (error) {
       console.error('Erro no fallback:', error);
