@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { format, addDays, startOfWeek, isSameDay, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Doctor, AppointmentWithRelations, Atendimento } from '@/types/scheduling';
@@ -23,8 +23,6 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { FilaEsperaForm } from '@/components/fila-espera/FilaEsperaForm';
 import { FilaEsperaFormData } from '@/types/fila-espera';
-import { setupAppointmentDebugFunctions } from '@/utils/appointment-debug';
-import { AppointmentQuickDebug } from '@/components/debug/AppointmentQuickDebug';
 
 
 interface DoctorScheduleProps {
@@ -57,76 +55,33 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
   
   const [waitlistOpen, setWaitlistOpen] = useState(false);
 
-  // Setup debug functions quando appointments mudarem
-  useEffect(() => {
-    if (appointments.length > 0) {
-      setupAppointmentDebugFunctions(appointments);
-    }
-  }, [appointments]);
-  
   const getAppointmentsForDate = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     
-    // 🔥 DEBUG CRÍTICO - Comparação de IDs
-    console.group(`🔥 DEBUG CRÍTICO - ${doctor.nome} em ${dateStr}`);
-    console.log('Doctor object recebido:', {
-      id: doctor.id,
-      nome: doctor.nome,
-      idType: typeof doctor.id,
-      idLength: String(doctor.id).length
-    });
-    
-    // Testar com agendamento específico de setembro
-    const septemberSample = appointments.find(apt => 
-      apt.data_agendamento >= '2025-09-01' && apt.data_agendamento <= '2025-09-30'
-    );
-    
-    if (septemberSample) {
-      console.log('Sample appointment setembro:', {
-        id: septemberSample.id,
-        medico_id: septemberSample.medico_id,
-        medico_nome: septemberSample.medicos?.nome,
-        data: septemberSample.data_agendamento,
-        medicoIdType: typeof septemberSample.medico_id,
-        medicoIdLength: String(septemberSample.medico_id).length
-      });
-      
-      console.log('Comparação direta:', {
-        'doctor.id === apt.medico_id': doctor.id === septemberSample.medico_id,
-        'String(doctor.id) === String(apt.medico_id)': String(doctor.id) === String(septemberSample.medico_id),
-        'doctor.id': doctor.id,
-        'apt.medico_id': septemberSample.medico_id
-      });
-    }
-    
-    // Filtrar agendamentos de forma robusta
+    // Filtrar agendamentos com comparação robusta de IDs
     const filteredAppointments = appointments.filter(appointment => {
-      // Comparação robusta de IDs (suporta string e UUID)
-      const appointmentDoctorId = String(appointment.medico_id || '').trim();
-      const targetDoctorId = String(doctor.id || '').trim();
+      // Normalizar IDs para string e remover espaços
+      const appointmentDoctorId = String(appointment.medico_id || '').trim().toLowerCase();
+      const targetDoctorId = String(doctor.id || '').trim().toLowerCase();
       const appointmentDate = String(appointment.data_agendamento || '').trim();
       
+      // Comparação robusta
       const doctorMatch = appointmentDoctorId === targetDoctorId;
       const dateMatch = appointmentDate === dateStr;
-      
-      // Log detalhado apenas se for setembro
-      if (appointmentDate.startsWith('2025-09')) {
-        console.log(`🔍 Setembro Test:`, {
-          appointmentId: appointment.id.substring(0, 8),
-          appointmentDate,
-          appointmentDoctorId,
-          targetDoctorId,
-          doctorMatch,
-          dateMatch,
-          passes: doctorMatch && dateMatch
-        });
-      }
       
       return doctorMatch && dateMatch;
     });
     
-    console.log(`📊 Resultado: ${filteredAppointments.length} agendamentos para ${dateStr}`);
-    console.groupEnd();
+    // Log simples apenas para setembro durante debug
+    if (dateStr.includes('2025-09') && filteredAppointments.length === 0) {
+      const septemberAppts = appointments.filter(apt => 
+        apt.data_agendamento?.includes('2025-09') && 
+        String(apt.medico_id).trim().toLowerCase() === String(doctor.id).trim().toLowerCase()
+      );
+      if (septemberAppts.length > 0) {
+        console.warn(`⚠️  Setembro appointments exist but not showing for ${dateStr}:`, septemberAppts.length);
+      }
+    }
     
     return filteredAppointments;
   };
@@ -185,8 +140,6 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
 
   return (
     <div className="space-y-6">
-      {/* Debug temporário para diagnosticar problema do mês 09 */}
-      <AppointmentQuickDebug appointments={appointments} doctor={doctor} />
       <Card className="w-full">
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
