@@ -166,42 +166,17 @@ export function WhatsAppTestPanel() {
   const testDirectCall = async () => {
     setLoading(true);
     try {
-      // Buscar dados do agendamento
-      const { data: agendamentos } = await supabase
-        .from('agendamentos')
-        .select('id')
-        .eq('paciente_id', (await supabase
-          .from('pacientes')
-          .select('id')
-          .eq('celular', celular)
-          .single()).data?.id)
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      if (!agendamentos?.length) {
-        throw new Error('Nenhum agendamento encontrado para este celular');
-      }
-
-      const { data: agendamentData } = await supabase.rpc('enviar_whatsapp_via_invoke', {
-        p_agendamento_id: agendamentos[0].id
-      });
-
-      const invokeData = agendamentData as any;
-      if (!invokeData?.success) {
-        throw new Error(invokeData?.error || 'Erro ao preparar dados');
-      }
-
-      // Chamar edge function diretamente via client
+      // Chamar edge function diretamente via client com dados de teste
       const { data, error } = await supabase.functions.invoke('whatsapp-confirmacao', {
         body: {
-          agendamento_id: invokeData.agendamento_id,
-          paciente_nome: invokeData.paciente,
-          paciente_celular: invokeData.celular,
-          medico_nome: invokeData.medico,
-          atendimento_nome: invokeData.atendimento,
-          atendimento_id: invokeData.agendamento_id,
-          data_agendamento: invokeData.data,
-          hora_agendamento: invokeData.hora,
+          agendamento_id: 'test-' + Date.now(),
+          paciente_nome: 'Paciente Teste',
+          celular: celular,
+          medico_nome: 'Dr. Teste',
+          atendimento_nome: 'Consulta de Teste',
+          data_agendamento: new Date().toISOString().split('T')[0],
+          hora_agendamento: '14:00',
+          convenio: 'Particular',
           observacoes: 'TESTE DIRETO VIA CLIENT SUPABASE'
         }
       });
@@ -209,6 +184,13 @@ export function WhatsAppTestPanel() {
       if (error) throw error;
 
       const result = data as any;
+      setTestResult({
+        test_id: 'direct-call-' + Date.now(),
+        success: result?.success || false,
+        response: result,
+        message: result?.message || 'Teste direto executado'
+      });
+
       toast({
         title: result?.success ? "WhatsApp enviado via client!" : "Falha no envio via client",
         description: result?.message || "Teste direto via client executado",

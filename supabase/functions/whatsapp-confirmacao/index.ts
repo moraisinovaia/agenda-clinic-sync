@@ -1,5 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.3'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -9,11 +8,22 @@ const corsHeaders = {
 // Função para enviar WhatsApp via Evolution API
 async function enviarWhatsAppEvolution(celular: string, mensagem: string) {
   try {
-    const evolutionUrl = Deno.env.get('EVOLUTION_API_URL') || 'https://evolutionapi.inovaia.online';
-    const apiKey = Deno.env.get('EVOLUTION_API_KEY') || 'grozNCsxwy32iYir20LRw7dfIRNPI8UZ';
-    const instanceName = Deno.env.get('EVOLUTION_INSTANCE_NAME') || 'Endogastro';
+    const evolutionUrl = Deno.env.get('EVOLUTION_API_URL');
+    const apiKey = Deno.env.get('EVOLUTION_API_KEY');
+    const instanceName = Deno.env.get('EVOLUTION_INSTANCE_NAME');
+
+    if (!evolutionUrl || !apiKey || !instanceName) {
+      throw new Error('Configurações da Evolution API não encontradas nos secrets');
+    }
 
     console.log(`📱 Enviando WhatsApp de confirmação para: ${celular}`);
+    console.log(`🔗 URL: ${evolutionUrl}/message/sendText/${instanceName}`);
+
+    // Limpar o número de caracteres especiais
+    const numeroLimpo = celular.replace(/\D/g, '');
+    
+    // Adicionar código do país se não tiver
+    const numeroCompleto = numeroLimpo.startsWith('55') ? numeroLimpo : `55${numeroLimpo}`;
 
     const response = await fetch(`${evolutionUrl}/message/sendText/${instanceName}`, {
       method: 'POST',
@@ -22,7 +32,7 @@ async function enviarWhatsAppEvolution(celular: string, mensagem: string) {
         'apikey': apiKey
       },
       body: JSON.stringify({
-        number: celular,
+        number: numeroCompleto,
         text: mensagem
       })
     });
@@ -30,7 +40,7 @@ async function enviarWhatsAppEvolution(celular: string, mensagem: string) {
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`❌ Erro ao enviar WhatsApp: ${response.status} - ${errorText}`);
-      throw new Error(`Evolution API error: ${response.status}`);
+      throw new Error(`Evolution API error: ${response.status} - ${errorText}`);
     }
 
     const result = await response.json();
@@ -42,7 +52,7 @@ async function enviarWhatsAppEvolution(celular: string, mensagem: string) {
   }
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -73,21 +83,26 @@ serve(async (req) => {
       agendamento_id,
       paciente_nome,
       paciente_celular,
+      celular,
       medico_nome,
       atendimento_nome,
       atendimento_id,
       data_agendamento,
       hora_agendamento,
-      observacoes
+      observacoes,
+      convenio
     } = body;
 
+    // Usar o celular do campo correto
+    const numeroCelular = paciente_celular || celular;
+
     // Validar dados obrigatórios
-    if (!agendamento_id || !paciente_nome || !paciente_celular || !medico_nome || !atendimento_nome) {
+    if (!agendamento_id || !paciente_nome || !numeroCelular) {
       console.error('❌ Dados obrigatórios faltando');
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Dados obrigatórios faltando' 
+          error: 'Dados obrigatórios faltando: agendamento_id, paciente_nome e celular são obrigatórios' 
         }),
         { 
           status: 400, 
@@ -188,13 +203,13 @@ _Mensagem automática - Endogastro_`;
 
     try {
       // Enviar WhatsApp
-      await enviarWhatsAppEvolution(paciente_celular, mensagem);
+      await enviarWhatsAppEvolution(numeroCelular, mensagem);
 
       // Registrar log de sucesso
       await supabase.from('notification_logs').insert({
         agendamento_id: agendamento_id,
         type: 'confirmacao',
-        recipient: paciente_celular,
+        recipient: numeroCelular,
         message: mensagem,
         status: 'sent',
         sent_at: new Date().toISOString(),
@@ -206,7 +221,9 @@ _Mensagem automática - Endogastro_`;
       return new Response(
         JSON.stringify({ 
           success: true, 
-          message: 'Confirmação WhatsApp enviada com sucesso' 
+          message: 'Confirmação WhatsApp enviada com sucesso',
+          recipient: numeroCelular,
+          agendamento_id
         }),
         { 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -220,7 +237,7 @@ _Mensagem automática - Endogastro_`;
       await supabase.from('notification_logs').insert({
         agendamento_id: agendamento_id,
         type: 'confirmacao',
-        recipient: paciente_celular,
+        recipient: numeroCelular,
         message: mensagem,
         status: 'error',
         error_message: whatsappError.message,
