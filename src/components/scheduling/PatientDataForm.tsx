@@ -196,11 +196,11 @@ export function PatientDataForm({
         </div>
       </div>
       
-      {/* Lista de pacientes encontrados - COM SCROLLAREA FUNCIONAL */}
+      {/* Lista de pacientes encontrados - MESMA ESTRUTURA DA AGENDA */}
       {showResults && foundPatients.length > 0 && (
-        <Card className="mt-4">
-          <CardContent className="p-4 max-h-[400px] overflow-hidden">
-            <div className="flex items-center gap-2 mb-3">
+        <div className="mt-4 flex flex-col border rounded-lg">
+          <div className="p-3 border-b bg-muted/30">
+            <div className="flex items-center gap-2">
               <UserCheck className="h-4 w-4 text-green-600" />
               <h4 className="font-medium text-green-700">
                 {foundPatients.length === 1 
@@ -209,9 +209,11 @@ export function PatientDataForm({
                 }
               </h4>
             </div>
-            
-            <ScrollArea className="h-[300px] w-full rounded-md border p-4">
-              <div className="space-y-2">
+          </div>
+          
+          <div className="flex-1 w-full">
+            <ScrollArea className="h-[300px] w-full">
+              <div className="p-4 space-y-2">
                 {foundPatients.map((patient, index) => (
                   <div 
                     key={patient.id || `patient-${index}`} 
@@ -254,7 +256,7 @@ export function PatientDataForm({
               </div>
             </ScrollArea>
             
-            <div className="pt-3 border-t mt-3">
+            <div className="p-4 border-t">
               <Button 
                 variant="outline" 
                 size="sm" 
@@ -264,8 +266,8 @@ export function PatientDataForm({
                 Criar novo paciente com esta data
               </Button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Alerta de validação de idade */}
