@@ -156,19 +156,7 @@ export function useSupabaseScheduling() {
   }, [appointmentsList.forceRefetch, schedulingData.refetch]);
 
   // ✅ MEMOIZAR: O objeto retornado para garantir referências estáveis
-  return useMemo(() => {
-    // 🔍 DIAGNÓSTICO CRÍTICO: Log dos dados passados pelo useSupabaseScheduling
-    console.log('🔍 [SUPABASE-SCHEDULING] Dados sendo retornados:', {
-      appointmentsCount: appointmentsList.appointments.length,
-      appointmentsLoading: appointmentsList.loading,
-      schedulingLoading: schedulingData.loading,
-      statusBreakdown: appointmentsList.appointments.reduce((acc, apt) => {
-        acc[apt.status] = (acc[apt.status] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>)
-    });
-
-    return {
+  return useMemo(() => ({
       // Dados
       doctors: schedulingData.doctors,
       atendimentos: schedulingData.atendimentos,
@@ -201,8 +189,7 @@ export function useSupabaseScheduling() {
     
     // 🔧 CRÍTICO: Validação de dados
     validateDataConsistency: criticalDataFetch.validateDataConsistency,
-    };
-  }, [
+  }), [
     // Dados
     schedulingData.doctors,
     schedulingData.atendimentos,

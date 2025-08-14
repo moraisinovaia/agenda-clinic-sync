@@ -88,23 +88,6 @@ const Index = () => {
     forceRefresh
   } = useSupabaseScheduling();
 
-  // 🔍 DIAGNÓSTICO CRÍTICO: Log dos dados no Index antes de passar ao StatsCards
-  console.log('🔍 [INDEX-DIAGNÓSTICO] Dados no Index.tsx:', {
-    appointmentsCount: appointments.length,
-    loading,
-    appointmentsType: typeof appointments,
-    isArray: Array.isArray(appointments),
-    statusCounts: appointments.reduce((acc, apt) => {
-      acc[apt.status] = (acc[apt.status] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>),
-    sampleAppointments: appointments.slice(0, 3).map(apt => ({
-      id: apt.id,
-      status: apt.status,
-      data: apt.data_agendamento
-    }))
-  });
-
   const {
     filaEspera,
     loading: filaLoading,

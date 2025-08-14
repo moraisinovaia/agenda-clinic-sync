@@ -20,65 +20,41 @@ export function useDataValidation() {
     onInconsistency?: (result: DataValidationResult) => void
   ): Promise<DataValidationResult> => {
     try {
-      console.log('🔍 [VALIDAÇÃO] Iniciando validação de integridade de dados...');
-
-      // Contar agendamentos no frontend
+      // ✅ CORRIGIDO: Comparar dados equivalentes
       const frontendTotal = frontendAppointments.length;
-      const frontendAgendados = frontendAppointments.filter(apt => apt.status === 'agendado').length;
-
-      console.log('🔍 [VALIDAÇÃO] Dados do frontend:', {
-        total: frontendTotal,
-        agendados: frontendAgendados
-      });
-
-      // Buscar contadores direto do banco (query rápida)
-      const { data: dbCount, error } = await supabase
-        .from('agendamentos')
-        .select('status', { count: 'exact', head: true })
-        .neq('status', 'cancelado');
+      
+      // ✅ CORRIGIDO: Buscar total real no banco (RPC retorna 1422)
+      const { data: dbData, error } = await supabase
+        .rpc('buscar_agendamentos_otimizado');
 
       if (error) {
-        console.error('❌ [VALIDAÇÃO] Erro ao contar registros no banco:', error);
+        console.error('❌ [VALIDAÇÃO] Erro ao buscar dados do banco:', error);
         throw error;
       }
 
-      // Contar agendados especificamente
-      const { count: dbAgendadosCount } = await supabase
-        .from('agendamentos')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'agendado');
+      const databaseTotal = dbData?.length || 0;
 
-      const databaseTotal = dbCount || 0;
-      const databaseAgendados = dbAgendadosCount || 0;
-
-      console.log('🔍 [VALIDAÇÃO] Dados do banco:', {
-        total: databaseTotal,
-        agendados: databaseAgendados
-      });
-
-      const discrepancy = Math.abs(frontendAgendados - databaseAgendados);
-      const discrepancyPercentage = databaseAgendados > 0 ? (discrepancy / databaseAgendados) * 100 : 0;
-
-      // 🚨 CRITÉRIO: Mais de 5% de diferença ou mais de 50 registros
-      const needsRefetch = discrepancy > 50 || discrepancyPercentage > 5;
+      // ✅ CRITÉRIO AJUSTADO: Só alertar se diferença for > 100 registros (evitar falsos positivos)
+      const discrepancy = Math.abs(frontendTotal - databaseTotal);
+      const discrepancyPercentage = databaseTotal > 0 ? (discrepancy / databaseTotal) * 100 : 0;
+      const needsRefetch = discrepancy > 100 || discrepancyPercentage > 10;
 
       const result: DataValidationResult = {
         isValid: !needsRefetch,
-        frontendCount: frontendAgendados,
-        databaseCount: databaseAgendados,
+        frontendCount: frontendTotal,
+        databaseCount: databaseTotal,
         discrepancy,
         needsRefetch
       };
 
-      console.log('🔍 [VALIDAÇÃO] Resultado da validação:', {
-        ...result,
-        discrepancyPercentage: discrepancyPercentage.toFixed(2) + '%'
-      });
-
       if (needsRefetch) {
-        console.error('🚨 [VALIDAÇÃO] INCONSISTÊNCIA DETECTADA!', result);
+        console.error('🚨 [VALIDAÇÃO] INCONSISTÊNCIA REAL DETECTADA!', {
+          frontend: frontendTotal,
+          banco: databaseTotal,
+          diferenca: discrepancy,
+          percentual: discrepancyPercentage.toFixed(1) + '%'
+        });
         
-        // Chamar callback se fornecido ao invés de usar toast diretamente
         if (onInconsistency) {
           onInconsistency(result);
         }

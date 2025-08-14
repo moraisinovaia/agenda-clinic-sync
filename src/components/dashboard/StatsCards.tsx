@@ -12,22 +12,6 @@ interface StatsCardsProps {
 }
 
 export const StatsCards = ({ doctors, appointments }: StatsCardsProps) => {
-  // 🔍 DIAGNÓSTICO CRÍTICO: Log dos dados recebidos no dashboard
-  console.log('🔍 [DASHBOARD-DIAGNÓSTICO] StatsCards recebeu:', {
-    totalAppointments: appointments.length,
-    appointmentsType: typeof appointments,
-    isArray: Array.isArray(appointments),
-    statusBreakdown: appointments.reduce((acc, apt) => {
-      acc[apt.status] = (acc[apt.status] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>),
-    sampleAppointments: appointments.slice(0, 3).map(apt => ({
-      id: apt.id,
-      status: apt.status,
-      data: apt.data_agendamento,
-      paciente: apt.pacientes?.nome_completo
-    }))
-  });
   
   const today = new Date().toISOString().split('T')[0];
   const tomorrow = addDays(new Date(), 1).toISOString().split('T')[0];
@@ -39,24 +23,6 @@ export const StatsCards = ({ doctors, appointments }: StatsCardsProps) => {
   const confirmedAppointments = appointments.filter(apt => apt.status === 'confirmado').length;
   const cancelledAppointments = appointments.filter(apt => apt.status === 'cancelado').length;
 
-  // 🔍 DIAGNÓSTICO: Log dos cálculos finais
-  console.log('🔍 [DASHBOARD-DIAGNÓSTICO] Estatísticas calculadas:', {
-    totalAppointments,
-    pendingAppointments,
-    confirmedAppointments,
-    cancelledAppointments,
-    todayAppointments,
-    tomorrowAppointments
-  });
-
-  // ✅ CORRIGIDO: Ajustado threshold após correção dos filtros
-  if (pendingAppointments < 1000) {
-    console.error('🚨 [DASHBOARD-DIAGNÓSTICO] ALERTA: Poucos agendamentos exibidos!', {
-      esperado: 'pelo menos 1000',
-      atual: pendingAppointments,
-      diferenca: 1000 - pendingAppointments
-    });
-  }
   
   // Calculate active doctors (with appointments today)
   const activeDoctorsToday = new Set(

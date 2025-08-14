@@ -147,23 +147,12 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           perdaAgendados: rawAgendados - finalAgendados
         });
 
-        // 🚨 ALERTA CRÍTICO: Se perdemos dados na transformação
-        if (rawTotal !== finalTotal || rawAgendados !== finalAgendados) {
-          console.error('🚨 [DIAGNÓSTICO] PERDA DE DADOS DETECTADA na transformação!', {
-            entradaRaw: rawTotal,
-            saidaTransformada: finalTotal,
-            perdaTotal: rawTotal - finalTotal,
-            entradaAgendados: rawAgendados,
-            saidaAgendados: finalAgendados,
-            perdaAgendados: rawAgendados - finalAgendados
-          });
-        }
-
+        // ✅ SIMPLIFICADO: Log básico apenas
         logger.info(`Agendamentos carregados: ${finalTotal} registros`, {
           total: finalTotal,
-          agendados: finalAgendados,
-          transformationTime: Date.now()
+          agendados: finalAgendados
         }, 'APPOINTMENTS');
+        
         if (rawTotal !== finalTotal) {
           console.error('🚨 [DIAGNÓSTICO] PERDA DE DADOS NA TRANSFORMAÇÃO!', {
             dadosOriginais: rawTotal,
