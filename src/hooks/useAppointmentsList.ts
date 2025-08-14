@@ -5,51 +5,65 @@ import { useToast } from '@/hooks/use-toast';
 import { useOptimizedQuery } from '@/hooks/useOptimizedQuery';
 import { usePagination } from '@/hooks/usePagination';
 import { usePerformanceMetrics } from '@/hooks/usePerformanceMetrics';
+import { useDataValidation } from '@/hooks/useDataValidation';
 import { logger } from '@/utils/logger';
 
 export function useAppointmentsList(itemsPerPage: number = 20) {
   const { toast } = useToast();
   const { measureApiCall } = usePerformanceMetrics();
+  const { validateAppointmentsData, fetchCriticalData } = useDataValidation();
+  const [lastValidationTime, setLastValidationTime] = useState<number>(0);
 
   // ✅ ESTABILIZAR: Função de query totalmente estável
   const fetchAppointments = useCallback(async () => {
     logger.info('Iniciando busca de agendamentos', {}, 'APPOINTMENTS');
     
     return measureApiCall(async () => {
-        // Usar função RPC otimizada que já filtra cancelados e inclui relacionamentos
+        // 🔍 DIAGNÓSTICO CRÍTICO: Buscar dados direto do banco
+        console.log('🔍 [DIAGNÓSTICO] Iniciando RPC buscar_agendamentos_otimizado...');
+        
         const { data: appointmentsWithRelations, error } = await supabase
           .rpc('buscar_agendamentos_otimizado');
 
         if (error) {
+          console.error('❌ [DIAGNÓSTICO] Erro na RPC:', error);
           logger.error('Erro na consulta de agendamentos otimizada', error, 'APPOINTMENTS');
           throw error;
         }
 
-        // Log básico dos dados - DEBUG SETEMBRO
-        const setembroApts = appointmentsWithRelations?.filter(apt => 
-          apt.data_agendamento >= '2025-09-01' && apt.data_agendamento <= '2025-09-30'
-        ) || [];
+        // 🔍 DIAGNÓSTICO: Contadores detalhados da RPC
+        const rawTotal = appointmentsWithRelations?.length || 0;
+        const rawAgendados = appointmentsWithRelations?.filter(apt => apt.status === 'agendado').length || 0;
+        const rawConfirmados = appointmentsWithRelations?.filter(apt => apt.status === 'confirmado').length || 0;
+        const rawCancelados = appointmentsWithRelations?.filter(apt => apt.status === 'cancelado').length || 0;
         
-        console.log('📊 Agendamentos carregados:', {
-          total: appointmentsWithRelations?.length || 0,
-          setembro2025: setembroApts.length,
-          primeiroAgendamento: appointmentsWithRelations?.[0] ? {
-            data: appointmentsWithRelations[0].data_agendamento,
-            tipo: typeof appointmentsWithRelations[0].data_agendamento,
-            setembro: appointmentsWithRelations[0].data_agendamento >= '2025-09-01' && appointmentsWithRelations[0].data_agendamento <= '2025-09-30'
-          } : null,
-          setembroSample: setembroApts.slice(0, 3).map(apt => ({
-            data: apt.data_agendamento,
-            tipo: typeof apt.data_agendamento,
-            medico: apt.medico_nome
-          }))
+        console.log('🔍 [DIAGNÓSTICO] Dados RAW da RPC:', {
+          totalRecords: rawTotal,
+          agendados: rawAgendados,
+          confirmados: rawConfirmados,
+          cancelados: rawCancelados,
+          statusBreakdown: appointmentsWithRelations?.reduce((acc, apt) => {
+            acc[apt.status] = (acc[apt.status] || 0) + 1;
+            return acc;
+          }, {} as Record<string, number>) || {}
         });
 
-        // Transformar para o formato esperado - SEM FILTROS ADICIONAIS
-        const transformedAppointments = (appointmentsWithRelations || []).map(apt => {
-          // 🔍 DEBUG: Log de cada transformação
-          if (apt.data_agendamento === '2025-09-22') {
-            console.log('🔍 DEBUG - Transformando agendamento 22/09:', apt);
+        // 🚨 VALIDAÇÃO CRÍTICA: Se menos de 1200 agendamentos, algo está errado
+        if (rawAgendados < 1200) {
+          console.error('🚨 [DIAGNÓSTICO] ALERTA: Número de agendamentos abaixo do esperado!', {
+            esperado: 'pelo menos 1200',
+            encontrado: rawAgendados,
+            diferenca: 1200 - rawAgendados
+          });
+        }
+
+        // 🔍 DIAGNÓSTICO: Transformação COMPLETA dos dados
+        console.log('🔍 [DIAGNÓSTICO] Iniciando transformação de', rawTotal, 'registros...');
+        
+        const transformedAppointments = (appointmentsWithRelations || []).map((apt, index) => {
+          // Log de progresso a cada 100 registros
+          if (index % 100 === 0) {
+            console.log(`🔍 [DIAGNÓSTICO] Transformando registro ${index + 1}/${rawTotal}`);
           }
           
           return {
@@ -120,30 +134,52 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           };
         });
 
-        // 🔍 DEBUG: Log detalhado dos agendamentos carregados
-        const drEdsonAppointments = transformedAppointments.filter(apt => 
-          apt.medicos?.nome?.toLowerCase().includes('edson')
-        );
-        const setembro22 = transformedAppointments.filter(apt => 
-          apt.data_agendamento === '2025-09-22'
-        );
+        // 🔍 DIAGNÓSTICO FINAL: Verificar transformação
+        const finalTotal = transformedAppointments.length;
+        const finalAgendados = transformedAppointments.filter(apt => apt.status === 'agendado').length;
+        const finalConfirmados = transformedAppointments.filter(apt => apt.status === 'confirmado').length;
         
-        console.log('🔍 DEBUG - Agendamentos PROCESSADOS:', {
-          totalTransformados: transformedAppointments.length,
-          drEdsonTotal: drEdsonAppointments.length,
-          setembro22Total: setembro22.length,
-          setembro22Details: setembro22.map(apt => ({
-            id: apt.id,
-            data: apt.data_agendamento,
-            hora: apt.hora_agendamento,
-            paciente: apt.pacientes?.nome_completo,
-            medico_id: apt.medico_id,
-            medico_nome: apt.medicos?.nome,
-            status: apt.status
-          }))
+        console.log('🔍 [DIAGNÓSTICO] Dados TRANSFORMADOS:', {
+          totalTransformados: finalTotal,
+          agendados: finalAgendados,
+          confirmados: finalConfirmados,
+          perdaDados: rawTotal - finalTotal,
+          perdaAgendados: rawAgendados - finalAgendados
         });
 
-        logger.info('Agendamentos carregados com sucesso via RPC', { count: transformedAppointments.length }, 'APPOINTMENTS');
+        // 🚨 ALERTA CRÍTICO: Se perdemos dados na transformação
+        if (rawTotal !== finalTotal) {
+          console.error('🚨 [DIAGNÓSTICO] PERDA DE DADOS NA TRANSFORMAÇÃO!', {
+            dadosOriginais: rawTotal,
+            dadosTransformados: finalTotal,
+            dadosPerdidos: rawTotal - finalTotal
+          });
+        }
+
+        if (rawAgendados !== finalAgendados) {
+          console.error('🚨 [DIAGNÓSTICO] PERDA DE AGENDAMENTOS NA TRANSFORMAÇÃO!', {
+            agendadosOriginais: rawAgendados,
+            agendadosTransformados: finalAgendados,
+            agendadosPerdidos: rawAgendados - finalAgendados
+          });
+        }
+
+        // 🔍 DIAGNÓSTICO: Validar se algum registro foi corrompido ou filtrado
+        const corruptedRecords = appointmentsWithRelations?.filter((original, index) => {
+          const transformed = transformedAppointments[index];
+          return !transformed || original.id !== transformed.id;
+        }) || [];
+
+        if (corruptedRecords.length > 0) {
+          console.error('🚨 [DIAGNÓSTICO] REGISTROS CORROMPIDOS:', corruptedRecords.slice(0, 5));
+        }
+
+        logger.info('Agendamentos carregados com sucesso via RPC', { 
+          count: transformedAppointments.length,
+          originalCount: rawTotal,
+          dataLoss: rawTotal - finalTotal
+        }, 'APPOINTMENTS');
+        
         return transformedAppointments;
       }, 'fetch_appointments', 'GET');
   }, [measureApiCall]);
@@ -159,6 +195,43 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       disableCache: true // 🚫 Força dados frescos sempre
     }
   );
+
+  // 🔍 VALIDAÇÃO AUTOMÁTICA: Verificar integridade dos dados
+  useEffect(() => {
+    const runValidation = async () => {
+      if (!appointments || appointments.length === 0) return;
+      
+      const now = Date.now();
+      // Executar validação a cada 30 segundos no máximo
+      if (now - lastValidationTime < 30000) return;
+      
+      try {
+        const validation = await validateAppointmentsData(appointments);
+        setLastValidationTime(now);
+        
+        // 🚨 Se dados estão inconsistentes, tentar recuperação automática
+        if (validation.needsRefetch) {
+          console.log('🔄 [AUTO-RECUPERAÇÃO] Tentando recuperar dados íntegros...');
+          
+          try {
+            const criticalData = await fetchCriticalData();
+            
+            // Se dados críticos são diferentes dos atuais, forçar atualização
+            if (criticalData.length !== appointments.length) {
+              console.log('🔄 [AUTO-RECUPERAÇÃO] Forçando atualização com dados íntegros...');
+              await forceRefetch();
+            }
+          } catch (error) {
+            console.error('❌ [AUTO-RECUPERAÇÃO] Falha na recuperação automática:', error);
+          }
+        }
+      } catch (error) {
+        console.error('❌ [VALIDAÇÃO] Erro na validação automática:', error);
+      }
+    };
+
+    runValidation();
+  }, [appointments, validateAppointmentsData, fetchCriticalData, forceRefetch, lastValidationTime]);
 
   // Paginação
   const pagination = usePagination(appointments || [], { itemsPerPage });

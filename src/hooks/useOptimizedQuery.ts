@@ -85,7 +85,7 @@ export const useOptimizedQuery = <T>(
       const now = Date.now();
 
       // 🔍 DEBUG: Log do estado do cache
-      console.log('🔍 DEBUG - Cache status:', {
+      console.log('🔍 [CACHE] Status:', {
         cacheKey,
         hasCached: !!cached,
         cacheAge: cached ? now - cached.timestamp : 0,
@@ -94,6 +94,24 @@ export const useOptimizedQuery = <T>(
         isExpired: cached ? (now - cached.timestamp) >= cacheTime : true,
         isStale: cached ? (now - cached.timestamp) > staleTime : true
       });
+
+      // 🔍 VALIDAÇÃO DE CACHE: Verificar se dados em cache estão íntegros
+      if (cached && cached.data) {
+        const cacheDataCount = Array.isArray(cached.data) ? cached.data.length : 0;
+        
+        // Se cache tem poucos dados, pode estar corrompido
+        if (cacheDataCount > 0 && cacheDataCount < 1000 && cacheKey.includes('appointments')) {
+          console.warn('⚠️ [CACHE] Cache com poucos dados, pode estar corrompido:', {
+            cacheKey,
+            dataCount: cacheDataCount,
+            forçandoRefetch: true
+          });
+          
+          // Invalidar cache suspeito e buscar dados frescos
+          queryCache.delete(cacheKey);
+          // Continuar para fresh query
+        }
+      }
 
       if (cached && (now - cached.timestamp) < cacheTime) {
         console.log('🔍 DEBUG - Usando dados do cache para:', cacheKey);
