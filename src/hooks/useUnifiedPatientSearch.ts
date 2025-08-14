@@ -21,25 +21,26 @@ export function useUnifiedPatientSearch() {
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const cacheRef = useRef<{ [key: string]: Patient[] }>({});
 
-  // Função unificada de busca híbrida que suporta múltiplos critérios
-  const performHybridSearch = useCallback(async (birthDate?: string, name?: string, phone?: string) => {
+  // Função unificada de busca que evita chamadas duplicadas
+  const performSearch = useCallback(async (query: string, type: 'birthDate' | 'name') => {
     // Cancelar busca anterior
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
 
     // Validações básicas
-    const hasValidBirthDate = birthDate && birthDate.length === 10;
-    const hasValidName = name?.trim() && name.trim().length >= 3;
-    const hasValidPhone = phone?.trim() && phone.trim().length >= 8;
-
-    if (!hasValidBirthDate && !hasValidName && !hasValidPhone) {
+    if (type === 'birthDate' && (!query || query.length !== 10)) {
       setState(prev => ({ ...prev, foundPatients: [], showResults: false }));
       return [];
     }
 
-    // Criar chave de cache única para busca híbrida
-    const cacheKey = `hybrid:${birthDate || ''}:${name || ''}:${phone || ''}`;
+    if (type === 'name' && (!query?.trim() || query.trim().length < 3)) {
+      setState(prev => ({ ...prev, foundPatients: [], showResults: false }));
+      return [];
+    }
+
+    // Verificar cache
+    const cacheKey = `${type}:${query}`;
     if (cacheRef.current[cacheKey]) {
       const cachedResults = cacheRef.current[cacheKey];
       setState(prev => ({
@@ -53,85 +54,50 @@ export function useUnifiedPatientSearch() {
     try {
       setState(prev => ({ ...prev, loading: true }));
       
-      let allResults: Patient[] = [];
+      let data: Patient[] = [];
 
-      // Busca por data de nascimento (mais específica)
-      if (hasValidBirthDate) {
-        const { data: birthDateResults, error } = await supabase
+      if (type === 'birthDate') {
+        const { data: results, error } = await supabase
           .from('pacientes')
           .select('*')
-          .eq('data_nascimento', birthDate)
+          .eq('data_nascimento', query)
           .order('updated_at', { ascending: false });
         
         if (error) throw error;
-        allResults = [...allResults, ...(birthDateResults || [])];
-      }
-
-      // Busca por nome (busca independente ou para complementar resultados)
-      if (hasValidName) {
-        const trimmedName = name!.trim();
-        const { data: nameResults, error } = await supabase
+        data = results || [];
+      } else if (type === 'name') {
+        const trimmedQuery = query.trim();
+        const { data: results, error } = await supabase
           .from('pacientes')
           .select('*')
-          .ilike('nome_completo', `%${trimmedName}%`)
+          .ilike('nome_completo', `%${trimmedQuery}%`)
           .order('updated_at', { ascending: false })
-          .limit(50); // Aumentar limite para garantir todos os resultados
+          .limit(20);
         
         if (error) throw error;
-        allResults = [...allResults, ...(nameResults || [])];
+        data = results || [];
       }
 
-      // Busca por telefone (se especificado)
-      if (hasValidPhone) {
-        const cleanPhone = phone!.replace(/\D/g, '');
-        const { data: phoneResults, error } = await supabase
-          .from('pacientes')
-          .select('*')
-          .or(`telefone.ilike.%${cleanPhone}%,celular.ilike.%${cleanPhone}%`)
-          .order('updated_at', { ascending: false })
-          .limit(30); // Aumentar limite também aqui
-        
-        if (error) throw error;
-        allResults = [...allResults, ...(phoneResults || [])];
-      }
-
-      // Remover duplicatas baseado no ID (não no nome/convenio)
-      const uniquePatients = allResults.reduce((acc, current) => {
-        const existing = acc.find(patient => patient.id === current.id);
+      // Remover duplicatas
+      const uniquePatients = data.reduce((acc, current) => {
+        const existing = acc.find(patient => 
+          patient.nome_completo.toLowerCase() === current.nome_completo.toLowerCase() &&
+          patient.convenio === current.convenio
+        );
         if (!existing) acc.push(current);
         return acc;
       }, [] as Patient[]);
 
-      // Ordenação inteligente
-      const sortedPatients = uniquePatients.sort((a, b) => {
-        // 1. Priorizar matches exatos de nome se busca por nome
-        if (hasValidName) {
-          const nameToMatch = name!.trim().toLowerCase();
-          const aExactName = a.nome_completo.toLowerCase() === nameToMatch;
-          const bExactName = b.nome_completo.toLowerCase() === nameToMatch;
-          if (aExactName && !bExactName) return -1;
-          if (!aExactName && bExactName) return 1;
-        }
-        
-        // 2. Priorizar dados mais completos
-        const aCompleteness = (a.telefone ? 1 : 0) + (a.celular ? 1 : 0);
-        const bCompleteness = (b.telefone ? 1 : 0) + (b.celular ? 1 : 0);
-        if (aCompleteness !== bCompleteness) return bCompleteness - aCompleteness;
-        
-        // 3. Mais recentes primeiro
-        return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
-      });
-
       // Armazenar no cache
-      cacheRef.current[cacheKey] = sortedPatients;
+      cacheRef.current[cacheKey] = uniquePatients;
 
       setState(prev => ({
         ...prev,
-        foundPatients: sortedPatients,
-        showResults: sortedPatients.length > 0,
+        foundPatients: uniquePatients,
+        showResults: uniquePatients.length > 0,
       }));
 
-      return sortedPatients;
+      return uniquePatients;
 
     } catch (error) {
       console.error('❌ Erro ao buscar pacientes:', error);
@@ -154,47 +120,29 @@ export function useUnifiedPatientSearch() {
 
   // Buscar por data de nascimento com debounce
   const searchByBirthDate = useCallback((birthDate: string) => {
+    // Cancelar timeout anterior
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
 
+    // Aplicar debounce
     searchTimeoutRef.current = setTimeout(() => {
-      performHybridSearch(birthDate);
+      performSearch(birthDate, 'birthDate');
     }, 300);
-  }, [performHybridSearch]);
+  }, [performSearch]);
 
   // Buscar por nome com debounce
   const searchByName = useCallback((name: string) => {
+    // Cancelar timeout anterior
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
 
+    // Aplicar debounce
     searchTimeoutRef.current = setTimeout(() => {
-      performHybridSearch(undefined, name);
+      performSearch(name, 'name');
     }, 500);
-  }, [performHybridSearch]);
-
-  // Nova função para busca híbrida
-  const searchHybrid = useCallback((birthDate?: string, name?: string, phone?: string) => {
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-
-    searchTimeoutRef.current = setTimeout(() => {
-      performHybridSearch(birthDate, name, phone);
-    }, 300);
-  }, [performHybridSearch]);
-
-  // Buscar por telefone
-  const searchByPhone = useCallback((phone: string) => {
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-
-    searchTimeoutRef.current = setTimeout(() => {
-      performHybridSearch(undefined, undefined, phone);
-    }, 500);
-  }, [performHybridSearch]);
+  }, [performSearch]);
 
   // Selecionar paciente e limpar resultados
   const selectPatient = useCallback((patient: Patient) => {
@@ -232,8 +180,6 @@ export function useUnifiedPatientSearch() {
     selectedPatient: state.selectedPatient,
     searchByBirthDate,
     searchByName,
-    searchByPhone,
-    searchHybrid,
     selectPatient,
     clearSearch,
     hideResults,

@@ -6,10 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DateOfBirthInput } from '@/components/ui/date-of-birth-input';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { User, UserCheck, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
+import { User, Search, UserCheck, AlertCircle, CheckCircle } from 'lucide-react';
 import { SchedulingFormData } from '@/types/scheduling';
-import { useUnifiedPatientSearch } from '@/hooks/useUnifiedPatientSearch';
 
 interface PatientDataFormProps {
   formData: SchedulingFormData;
@@ -33,19 +31,9 @@ export function PatientDataForm({
   searchPatientsByBirthDate,
   selectedDoctor
 }: PatientDataFormProps) {
-  // Hook unificado para busca por nome e data
-  const {
-    loading,
-    foundPatients,
-    showResults,
-    selectedPatient,
-    searchByBirthDate,
-    searchByName,
-    searchHybrid,
-    selectPatient: selectPatientFromHook,
-    clearSearch,
-    hideResults
-  } = useUnifiedPatientSearch();
+  const [foundPatients, setFoundPatients] = useState<any[]>([]);
+  const [searchingPatients, setSearchingPatients] = useState(false);
+  const [showPatientsList, setShowPatientsList] = useState(false);
 
   // Calcular idade do paciente
   const calculateAge = (birthDate: string) => {
@@ -94,22 +82,29 @@ export function PatientDataForm({
 
   const ageValidation = getAgeValidation();
 
-  // Busca híbrida inteligente por data de nascimento e/ou nome
+  // Buscar pacientes quando a data de nascimento for alterada
   useEffect(() => {
-    const hasValidBirthDate = formData.dataNascimento && formData.dataNascimento.length === 10;
-    const hasValidName = formData.nomeCompleto && formData.nomeCompleto.trim().length >= 3;
-    const hasValidPhone = formData.celular && formData.celular.replace(/\D/g, '').length >= 8;
+    const searchPatients = async () => {
+      if (formData.dataNascimento && formData.dataNascimento.length === 10) {
+        setSearchingPatients(true);
+        try {
+          const patients = await searchPatientsByBirthDate(formData.dataNascimento);
+          setFoundPatients(patients);
+          setShowPatientsList(patients.length > 0);
+        } catch (error) {
+          console.error('Erro ao buscar pacientes:', error);
+        } finally {
+          setSearchingPatients(false);
+        }
+      } else {
+        setFoundPatients([]);
+        setShowPatientsList(false);
+      }
+    };
 
-    if (hasValidBirthDate || hasValidName || hasValidPhone) {
-      searchHybrid(
-        hasValidBirthDate ? formData.dataNascimento : undefined,
-        hasValidName ? formData.nomeCompleto.trim() : undefined,
-        hasValidPhone ? formData.celular : undefined
-      );
-    } else {
-      hideResults();
-    }
-  }, [formData.dataNascimento, formData.nomeCompleto, formData.celular, searchHybrid, hideResults]);
+    const timeoutId = setTimeout(searchPatients, 500); // Debounce de 500ms
+    return () => clearTimeout(timeoutId);
+  }, [formData.dataNascimento]); // Remover searchPatientsByBirthDate das dependências
 
   // Função para selecionar um paciente encontrado
   const selectPatient = (patient: any) => {
@@ -120,7 +115,7 @@ export function PatientDataForm({
       celular: patient.celular,
       convenio: patient.convenio,
     }));
-    selectPatientFromHook(patient);
+    setShowPatientsList(false);
   };
 
   // Função para criar novo paciente (limpar seleção)
@@ -132,7 +127,7 @@ export function PatientDataForm({
       celular: '',
       convenio: '',
     }));
-    clearSearch();
+    setShowPatientsList(false);
   };
 
   // Função para aplicar máscara de telefone
@@ -167,7 +162,7 @@ export function PatientDataForm({
         <User className="h-4 w-4" />
         Dados do Paciente
       </h3>
-    
+      
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <Label htmlFor="nomeCompleto">Nome Completo *</Label>
@@ -187,18 +182,18 @@ export function PatientDataForm({
               onChange={(value) => setFormData(prev => ({ ...prev, dataNascimento: value }))}
               required
             />
-            {loading && (
-              <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin" />
+            {searchingPatients && (
+              <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin" />
             )}
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            {loading ? 'Buscando pacientes...' : 'Digite nome (3+ caracteres) ou data para buscar pacientes'}
+            {searchingPatients ? 'Buscando pacientes...' : 'Ao inserir a data, buscaremos pacientes existentes'}
           </p>
         </div>
       </div>
       
-      {/* Lista de pacientes encontrados - COM SCROLLAREA FUNCIONAL */}
-      {showResults && foundPatients.length > 0 && (
+      {/* Lista de pacientes encontrados */}
+      {showPatientsList && (
         <Card className="mt-4">
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-3">
@@ -210,64 +205,35 @@ export function PatientDataForm({
                 }
               </h4>
             </div>
-            
-            <div className="flex-1 w-full">
-              <div className="border rounded-md bg-background">
-                <div className="max-h-[400px] overflow-y-auto overflow-x-hidden">
-                  <div className="space-y-2 p-4">
-                    {foundPatients.map((patient, index) => (
-                      <div 
-                        key={patient.id || `patient-${index}`} 
-                        className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent cursor-pointer group transition-colors min-h-[80px]"
-                        onClick={() => selectPatient(patient)}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                            <span className="font-medium truncate">{patient.nome_completo}</span>
-                          </div>
-                          <div className="text-sm text-muted-foreground mt-1 truncate">
-                            {patient.data_nascimento && (
-                              <span>Nascimento: {patient.data_nascimento}</span>
-                            )}
-                            {patient.convenio && (
-                              <span className="ml-3">Convênio: {patient.convenio}</span>
-                            )}
-                            {(patient.telefone || patient.celular) && (
-                              <span className="ml-3">
-                                {patient.telefone || patient.celular}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="ml-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            selectPatient(patient);
-                          }}
-                        >
-                          <UserCheck className="h-4 w-4 mr-1" />
-                          Selecionar
-                        </Button>
-                      </div>
-                    ))}
+            <div className="space-y-2">
+              {foundPatients.map((patient, index) => (
+                <div key={patient.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
+                  <div>
+                    <p className="font-medium">{patient.nome_completo}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {patient.convenio} • {patient.celular}
+                      {patient.telefone && ` • ${patient.telefone}`}
+                    </p>
                   </div>
+                  <Button 
+                    size="sm" 
+                    onClick={() => selectPatient(patient)}
+                    className="ml-2"
+                  >
+                    Selecionar
+                  </Button>
                 </div>
+              ))}
+              <div className="pt-2 border-t">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={createNewPatient}
+                  className="w-full"
+                >
+                  Criar novo paciente com esta data
+                </Button>
               </div>
-            </div>
-            
-            <div className="pt-3 border-t mt-3">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={createNewPatient}
-                className="w-full"
-              >
-                Criar novo paciente com esta data
-              </Button>
             </div>
           </CardContent>
         </Card>
@@ -290,6 +256,7 @@ export function PatientDataForm({
       )}
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        
         <div>
           <Label htmlFor="convenio">Convênio *</Label>
           <Select 
