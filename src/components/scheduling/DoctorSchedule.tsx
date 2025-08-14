@@ -124,6 +124,14 @@ export function DoctorSchedule({
   const getAppointmentsForDate = (date: Date): AppointmentWithRelations[] => {
     const dateStr = format(date, 'yyyy-MM-dd');
 
+    console.log('🗓️ [DOCTOR-SCHEDULE] Buscando agendamentos para:', {
+      selectedDate: date.toISOString(),
+      dateStr,
+      doctorId: doctor.id,
+      doctorName: doctor.nome,
+      totalAppointments: appointments.length
+    });
+
     const filteredAppointments = appointments.filter(apt => {
       if (!apt.data_agendamento) return false;
       
@@ -135,7 +143,32 @@ export function DoctorSchedule({
       // Força conversão para string e trim, evitando diferenças de tipo/espaço
       const doctorMatch = String(apt.medico_id).trim() === String(doctor.id).trim();
 
+      console.log('🔍 [DOCTOR-SCHEDULE] Verificando agendamento:', {
+        appointmentId: apt.id,
+        aptDataOriginal: apt.data_agendamento,
+        aptDateStr,
+        targetDateStr: dateStr,
+        dateMatch,
+        aptMedicoId: apt.medico_id,
+        targetDoctorId: doctor.id,
+        doctorMatch,
+        finalMatch: dateMatch && doctorMatch,
+        paciente: apt.pacientes?.nome_completo
+      });
+
       return dateMatch && doctorMatch;
+    });
+
+    console.log('🗓️ [DOCTOR-SCHEDULE] Resultado final:', {
+      dateStr,
+      doctorId: doctor.id,
+      totalFiltered: filteredAppointments.length,
+      agendamentos: filteredAppointments.map(apt => ({
+        id: apt.id,
+        data: apt.data_agendamento,
+        hora: apt.hora_agendamento,
+        paciente: apt.pacientes?.nome_completo
+      }))
     });
 
     return filteredAppointments;
