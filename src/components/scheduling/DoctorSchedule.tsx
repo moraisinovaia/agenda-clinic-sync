@@ -124,51 +124,18 @@ export function DoctorSchedule({
   const getAppointmentsForDate = (date: Date): AppointmentWithRelations[] => {
     const dateStr = format(date, 'yyyy-MM-dd');
 
-    console.log('🗓️ [DOCTOR-SCHEDULE] Buscando agendamentos para:', {
-      selectedDate: date.toISOString(),
-      dateStr,
-      doctorId: doctor.id,
-      doctorName: doctor.nome,
-      totalAppointments: appointments.length
-    });
-
     const filteredAppointments = appointments.filter(apt => {
       if (!apt.data_agendamento) return false;
       
-      // Converte a data_agendamento para Date e formata igual à dateStr, 
-      // evitando problemas de fuso horário ou string mal formatada
-      const aptDateStr = format(new Date(apt.data_agendamento), 'yyyy-MM-dd');
+      // Converte a data_agendamento para Date com timezone brasileiro consistente
+      // Adiciona T12:00:00 para evitar problemas de fuso horário
+      const aptDateStr = format(new Date(apt.data_agendamento + 'T12:00:00'), 'yyyy-MM-dd');
       const dateMatch = aptDateStr === dateStr;
 
       // Força conversão para string e trim, evitando diferenças de tipo/espaço
       const doctorMatch = String(apt.medico_id).trim() === String(doctor.id).trim();
 
-      console.log('🔍 [DOCTOR-SCHEDULE] Verificando agendamento:', {
-        appointmentId: apt.id,
-        aptDataOriginal: apt.data_agendamento,
-        aptDateStr,
-        targetDateStr: dateStr,
-        dateMatch,
-        aptMedicoId: apt.medico_id,
-        targetDoctorId: doctor.id,
-        doctorMatch,
-        finalMatch: dateMatch && doctorMatch,
-        paciente: apt.pacientes?.nome_completo
-      });
-
       return dateMatch && doctorMatch;
-    });
-
-    console.log('🗓️ [DOCTOR-SCHEDULE] Resultado final:', {
-      dateStr,
-      doctorId: doctor.id,
-      totalFiltered: filteredAppointments.length,
-      agendamentos: filteredAppointments.map(apt => ({
-        id: apt.id,
-        data: apt.data_agendamento,
-        hora: apt.hora_agendamento,
-        paciente: apt.pacientes?.nome_completo
-      }))
     });
 
     return filteredAppointments;
