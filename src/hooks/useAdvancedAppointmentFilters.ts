@@ -18,6 +18,22 @@ export const useAdvancedAppointmentFilters = (appointments: AppointmentWithRelat
   const [convenioFilter, setConvenioFilter] = useState('all');
 
   const filteredAppointments = useMemo(() => {
+    // 🔍 DIAGNÓSTICO: Log dos dados de entrada
+    console.log('🔍 [FILTROS] Iniciando filtragem de agendamentos:', {
+      totalAppointments: appointments.length,
+      statusFilter,
+      dateFilter,
+      doctorFilter,
+      convenioFilter,
+      searchTerm,
+      sampleAppointments: appointments.slice(0, 3).map(apt => ({
+        id: apt.id,
+        status: apt.status,
+        data: apt.data_agendamento,
+        paciente: apt.pacientes?.nome_completo
+      }))
+    });
+
     // Separar agendamentos cancelados por padrão
     const baseFilter = statusFilter === 'cancelado' || statusFilter === 'cancelado_bloqueio' 
       ? appointments 
@@ -25,8 +41,14 @@ export const useAdvancedAppointmentFilters = (appointments: AppointmentWithRelat
           appointment.status !== 'cancelado' && 
           appointment.status !== 'cancelado_bloqueio'
         );
+
+    console.log('🔍 [FILTROS] Após filtro base de cancelados:', {
+      original: appointments.length,
+      afterBaseFilter: baseFilter.length,
+      removed: appointments.length - baseFilter.length
+    });
     
-    return baseFilter.filter(appointment => {
+    const filtered = baseFilter.filter(appointment => {
       // Search filter
       const matchesSearch = !searchTerm || 
         appointment.pacientes?.nome_completo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -74,6 +96,14 @@ export const useAdvancedAppointmentFilters = (appointments: AppointmentWithRelat
 
       return matchesSearch && matchesStatus && matchesDate && matchesDoctor && matchesConvenio;
     });
+
+    console.log('🔍 [FILTROS] Após todos os filtros:', {
+      baseFilter: baseFilter.length,
+      filtered: filtered.length,
+      removed: baseFilter.length - filtered.length
+    });
+
+    return filtered;
   }, [appointments, searchTerm, statusFilter, dateFilter, doctorFilter, convenioFilter]);
 
   const sortedAppointments = useMemo(() => {
