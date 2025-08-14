@@ -158,11 +158,61 @@ export function PatientDataForm({
   };
 
   return (
-    <div className="space-y-4">
-      <h3 className="text-lg font-semibold flex items-center gap-2">
-        <User className="h-4 w-4" />
-        Dados do Paciente
-      </h3>
+    <>
+      {/* CSS FORÇADO DIRETO NO DOM */}
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          .force-scrollbar {
+            height: 200px !important;
+            overflow-y: scroll !important;
+            overflow-x: hidden !important;
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 6px !important;
+            padding: 8px !important;
+            background-color: white !important;
+          }
+          
+          .force-scrollbar::-webkit-scrollbar {
+            width: 12px !important;
+            display: block !important;
+          }
+          
+          .force-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1 !important;
+          }
+          
+          .force-scrollbar::-webkit-scrollbar-thumb {
+            background: #888 !important;
+            border-radius: 6px !important;
+          }
+          
+          .force-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #555 !important;
+          }
+          
+          .patient-item {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            padding: 12px !important;
+            margin-bottom: 8px !important;
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 6px !important;
+            background-color: #f8fafc !important;
+            min-height: 68px !important;
+          }
+          
+          .patient-item:hover {
+            background-color: #e2e8f0 !important;
+          }
+        `
+      }} />
+      
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold flex items-center gap-2">
+          <User className="h-4 w-4" />
+          Dados do Paciente
+        </h3>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
@@ -206,29 +256,15 @@ export function PatientDataForm({
                 }
               </h4>
             </div>
-            {/* Container com scroll inline */}
-            <div 
-              className="h-48 overflow-y-auto border rounded-md bg-background p-2 space-y-2"
-              style={{
-                scrollbarWidth: 'thin',
-                scrollbarColor: '#94a3b8 transparent'
-              }}
-              onMouseEnter={(e) => {
-                const style = e.currentTarget.style;
-                style.setProperty('--webkit-scrollbar-width', '6px');
-                style.setProperty('--webkit-scrollbar-track-background', 'transparent');
-                style.setProperty('--webkit-scrollbar-thumb-background', '#cbd5e1');
-                style.setProperty('--webkit-scrollbar-thumb-border-radius', '3px');
-              }}
-            >
+            {/* CONTAINER COM SCROLL FORÇADO VIA CSS */}
+            <div className="force-scrollbar">
               {foundPatients.map((patient, index) => (
-                <div 
-                  key={patient.id || `patient-${index}`} 
-                  className="flex items-center justify-between p-3 border rounded-lg bg-muted/50 hover:bg-muted/70 transition-colors min-h-[68px]"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{patient.nome_completo}</p>
-                    <p className="text-sm text-muted-foreground truncate">
+                <div key={patient.id || `patient-${index}`} className="patient-item">
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontWeight: '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {patient.nome_completo}
+                    </p>
+                    <p style={{ fontSize: '14px', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {patient.convenio} • {patient.celular}
                       {patient.telefone && ` • ${patient.telefone}`}
                     </p>
@@ -236,7 +272,7 @@ export function PatientDataForm({
                   <Button 
                     size="sm" 
                     onClick={() => selectPatient(patient)}
-                    className="ml-2 flex-shrink-0"
+                    style={{ marginLeft: '8px', flexShrink: 0 }}
                   >
                     Selecionar
                   </Button>
@@ -330,6 +366,7 @@ export function PatientDataForm({
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
