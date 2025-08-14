@@ -103,3 +103,33 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+
+/* Productivity enhancements */
+@layer utilities {
+  /* Quick Actions Animation */
+  .animate-fade-in {
+    animation: fadeIn 0.2s ease-out;
+  }
+  
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+  
+  /* Enhanced focus indicators */
+  .focus-enhanced:focus-visible {
+    @apply ring-2 ring-primary ring-offset-2 ring-offset-background;
+    outline: none;
+  }
+  
+  /* Keyboard navigation hints */
+  .keyboard-hint {
+    @apply text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded border;
+  }
+}

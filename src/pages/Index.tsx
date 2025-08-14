@@ -46,6 +46,9 @@ import { NavigationHeader } from '@/components/ui/navigation-header';
 import { AuthTest } from '@/components/AuthTest';
 import PendingApproval from '@/components/PendingApproval';
 import { WhatsAppAgentDashboard } from '@/components/whatsapp-agent/WhatsAppAgentDashboard';
+import { QuickActionsPanel } from '@/components/productivity/QuickActionsPanel';
+import { useSmartDefaults } from '@/hooks/useSmartDefaults';
+import { useEnhancedKeyboardNavigation } from '@/hooks/useEnhancedKeyboardNavigation';
 
 const Index = () => {
   const { user, profile, loading: authLoading, signOut } = useStableAuth();
@@ -105,6 +108,22 @@ const Index = () => {
     notifyAppointmentConflict,
     notifyCancellation,
   } = useNotifications();
+
+  // Smart Defaults Hook
+  const smartDefaults = useSmartDefaults();
+
+  // Enhanced Keyboard Navigation
+  const { focusElement } = useEnhancedKeyboardNavigation({
+    onViewChange: setViewMode,
+    onDoctorSelect: (doctorId) => {
+      const doctor = doctors.find(d => d.id === doctorId);
+      if (doctor) {
+        setSelectedDoctor(doctor);
+        setViewMode('schedule');
+      }
+    },
+    doctors: doctors.map(d => ({ id: d.id, nome: d.nome })),
+  });
 
   // Setup keyboard shortcuts - atalhos específicos e funcionais
   const shortcuts = [
@@ -399,9 +418,18 @@ const Index = () => {
       <DashboardHeader
         viewMode={viewMode}
         profileName={profile?.nome}
+        doctors={doctors}
         onBack={goBack}
         onBackToFilaEspera={goBackToFilaEspera}
         onSignOut={signOut}
+        onViewChange={setViewMode}
+        onNavigateToSchedule={(doctorId) => {
+          const doctor = doctors.find(d => d.id === doctorId);
+          if (doctor) {
+            setSelectedDoctor(doctor);
+            setViewMode('schedule');
+          }
+        }}
       />
 
       <div className="container mx-auto px-4 py-6">
@@ -677,6 +705,12 @@ const Index = () => {
         atendimentos={atendimentos}
         availableConvenios={uniqueConvenios}
         onSuccess={handleMultipleAppointmentSuccess}
+      />
+
+      {/* Quick Actions Panel - Always visible except in auth states */}
+      <QuickActionsPanel 
+        onViewChange={setViewMode}
+        isVisible={!authLoading && user && profile?.status === 'aprovado'}
       />
     </div>
   );
