@@ -3,33 +3,25 @@ import { InstallButton } from '@/components/InstallButton';
 import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { KeyboardShortcutsHelp } from '@/components/ui/keyboard-shortcuts-help';
-import { GlobalSearchBar } from '@/components/productivity/GlobalSearchBar';
 import endogastroLogo from '@/assets/endogastro-logo.png';
-import { Doctor } from '@/types/scheduling';
 
 type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos' | 'fila-espera' | 'nova-fila' | 'bloqueio-agenda' | 'relatorio-agenda' | 'auth-test' | 'alertas' | 'multiple-appointment' | 'canceled-appointments' | 'whatsapp-agent';
 
 interface DashboardHeaderProps {
   viewMode: ViewMode;
   profileName?: string;
-  doctors?: Doctor[];
   onBack: () => void;
   onBackToFilaEspera: () => void;
   onSignOut: () => void;
-  onViewChange?: (viewMode: ViewMode) => void;
-  onNavigateToSchedule?: (doctorId: string) => void;
   notificationCenter?: React.ReactNode;
 }
 
 export const DashboardHeader = ({ 
   viewMode, 
-  profileName,
-  doctors = [],
+  profileName, 
   onBack, 
   onBackToFilaEspera,
   onSignOut,
-  onViewChange,
-  onNavigateToSchedule,
   notificationCenter
 }: DashboardHeaderProps) => {
   return (
@@ -58,11 +50,6 @@ export const DashboardHeader = ({
           </div>
           
           <div className="flex items-center gap-2">
-            <GlobalSearchBar 
-              doctors={doctors}
-              onViewChange={onViewChange || (() => {})}
-              onNavigateToSchedule={onNavigateToSchedule}
-            />
             <KeyboardShortcutsHelp />
             <ThemeToggle />
             <NotificationCenter />

@@ -7,11 +7,8 @@ import {
   isThisMonth, 
   isBefore, 
   isAfter,
-  startOfDay,
-  parseISO 
+  startOfDay 
 } from 'date-fns';
-import { toZonedTime, formatInTimeZone } from 'date-fns-tz';
-import { BRAZIL_TIMEZONE } from '@/utils/timezone';
 
 export const useAdvancedAppointmentFilters = (appointments: AppointmentWithRelations[]) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -21,51 +18,50 @@ export const useAdvancedAppointmentFilters = (appointments: AppointmentWithRelat
   const [convenioFilter, setConvenioFilter] = useState('all');
 
   const filteredAppointments = useMemo(() => {
-    // ✅ SIMPLIFICADO: Filtragem limpa e eficiente
-    return appointments.filter(appointment => {
+    // Separar agendamentos cancelados por padrão
+    const baseFilter = statusFilter === 'cancelado' || statusFilter === 'cancelado_bloqueio' 
+      ? appointments 
+      : appointments.filter(appointment => 
+          appointment.status !== 'cancelado' && 
+          appointment.status !== 'cancelado_bloqueio'
+        );
+    
+    return baseFilter.filter(appointment => {
       // Search filter
       const matchesSearch = !searchTerm || 
         appointment.pacientes?.nome_completo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         appointment.medicos?.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         appointment.atendimentos?.nome?.toLowerCase().includes(searchTerm.toLowerCase());
 
-      // Status filter - ✅ CORRIGIDO: 'all' mostra TODOS os agendamentos
+      // Status filter
       const matchesStatus = statusFilter === 'all' || appointment.status === statusFilter;
 
       // Date filter
       let matchesDate = true;
       if (dateFilter !== 'all') {
-        try {
-          const appointmentDateString = appointment.data_agendamento;
-          const appointmentDate = toZonedTime(parseISO(appointmentDateString + 'T12:00:00'), BRAZIL_TIMEZONE);
-          const today = toZonedTime(new Date(), BRAZIL_TIMEZONE);
-          const todayStart = startOfDay(today);
+        // Fix timezone issue by ensuring date is parsed in local timezone
+        const appointmentDate = new Date(appointment.data_agendamento + 'T00:00:00');
+        const today = startOfDay(new Date());
 
-          switch (dateFilter) {
-            case 'today':
-              matchesDate = isToday(appointmentDate);
-              break;
-            case 'tomorrow':
-              matchesDate = isTomorrow(appointmentDate);
-              break;
-            case 'week':
-              matchesDate = isThisWeek(appointmentDate, { weekStartsOn: 0 });
-              break;
-            case 'month':
-              matchesDate = isThisMonth(appointmentDate);
-              break;
-            case 'future':
-              matchesDate = isAfter(appointmentDate, todayStart);
-              break;
-            case 'past':
-              matchesDate = isBefore(appointmentDate, todayStart);
-              break;
-            default:
-              matchesDate = true;
-          }
-        } catch (error) {
-          console.error('❌ [FILTROS] Erro ao processar data:', appointment.data_agendamento);
-          matchesDate = true;
+        switch (dateFilter) {
+          case 'today':
+            matchesDate = isToday(appointmentDate);
+            break;
+          case 'tomorrow':
+            matchesDate = isTomorrow(appointmentDate);
+            break;
+          case 'week':
+            matchesDate = isThisWeek(appointmentDate, { weekStartsOn: 0 });
+            break;
+          case 'month':
+            matchesDate = isThisMonth(appointmentDate);
+            break;
+          case 'future':
+            matchesDate = isAfter(appointmentDate, today);
+            break;
+          case 'past':
+            matchesDate = isBefore(appointmentDate, today);
+            break;
         }
       }
 

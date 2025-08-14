@@ -68,7 +68,7 @@ export function useSchedulingData() {
     return atendimentos.filter(atendimento => atendimento.medico_id === doctorId);
   };
 
-  // Verificar se uma data está bloqueada para um médico (apenas bloqueios manuais)
+  // Verificar se uma data está bloqueada para um médico
   const isDateBlocked = (doctorId: string, date: Date) => {
     const dateStr = date.toISOString().split('T')[0];
     return blockedDates.some(blocked => 
@@ -77,26 +77,6 @@ export function useSchedulingData() {
       dateStr >= blocked.data_inicio &&
       dateStr <= blocked.data_fim
     );
-  };
-
-  // Obter motivo específico do bloqueio (apenas bloqueios explícitos)
-  const getBlockingReason = (doctorId: string, date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
-    const blocked = blockedDates.find(blocked => 
-      blocked.medico_id === doctorId &&
-      blocked.status === 'ativo' &&
-      dateStr >= blocked.data_inicio &&
-      dateStr <= blocked.data_fim
-    );
-
-    if (blocked) {
-      return {
-        type: 'explicit_block',
-        message: blocked.motivo || 'Data bloqueada na agenda'
-      };
-    }
-
-    return null;
   };
 
   // Obter bloqueios para um médico específico
@@ -132,7 +112,6 @@ export function useSchedulingData() {
     getAtendimentosByDoctor,
     isDateBlocked,
     getBlockedDatesByDoctor,
-    getBlockingReason,
     refetch: () => Promise.all([fetchDoctors(), fetchAtendimentos(), fetchBlockedDates()]),
   };
 }

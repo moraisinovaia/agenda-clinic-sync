@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { format, parse } from 'date-fns';
+import { format, addDays, startOfWeek, isSameDay, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Doctor, AppointmentWithRelations, Atendimento } from '@/types/scheduling';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { Calendar as CalendarIcon, Clock, User, Trash2, Plus, Edit, CheckCircle, RotateCcw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User, Trash2, Plus, Edit, CheckCircle, Phone, RotateCcw } from 'lucide-react';
 import { 
   AlertDialog, 
   AlertDialogAction, 
@@ -29,130 +29,50 @@ interface DoctorScheduleProps {
   appointments: AppointmentWithRelations[];
   blockedDates?: any[];
   isDateBlocked?: (doctorId: string, date: Date) => boolean;
-  getBlockingReason?: (doctorId: string, date: Date) => { type: string; message: string } | null;
   onCancelAppointment: (appointmentId: string) => Promise<void>;
   onConfirmAppointment?: (appointmentId: string) => Promise<void>;
   onUnconfirmAppointment?: (appointmentId: string) => Promise<void>;
   onEditAppointment?: (appointment: AppointmentWithRelations) => void;
   onNewAppointment?: (selectedDate?: string) => void;
-  initialDate?: string;
+  initialDate?: string; // Data inicial para posicionar o calendário
   atendimentos: Atendimento[];
   adicionarFilaEspera: (data: FilaEsperaFormData) => Promise<boolean>;
   searchPatientsByBirthDate: (birthDate: string) => Promise<any[]>;
-  onForceRefresh?: () => void;
 }
 
-export function DoctorSchedule({
-  doctor,
-  appointments,
-  blockedDates = [],
-  isDateBlocked,
-  onCancelAppointment,
-  onConfirmAppointment,
-  onUnconfirmAppointment,
-  onEditAppointment,
-  onNewAppointment,
-  initialDate,
-  atendimentos,
-  adicionarFilaEspera,
-  searchPatientsByBirthDate
-}: DoctorScheduleProps) {
-  // Parse initial date or use current date
+export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDateBlocked, onCancelAppointment, onConfirmAppointment, onUnconfirmAppointment, onEditAppointment, onNewAppointment, initialDate, atendimentos, adicionarFilaEspera, searchPatientsByBirthDate }: DoctorScheduleProps) {
+  // Usar initialDate se fornecida, senão usar data atual
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     if (initialDate) {
+      // Parse da data no formato YYYY-MM-DD para evitar problemas de timezone
       return parse(initialDate, 'yyyy-MM-dd', new Date());
     }
     return new Date();
   });
   
   const [waitlistOpen, setWaitlistOpen] = useState(false);
-
-  // Ultra-robust doctor ID comparison function with detailed debugging
-  const isDoctorMatch = (appointmentDoctorId: any, targetDoctorId: any): boolean => {
-    if (!appointmentDoctorId || !targetDoctorId) return false;
-    
-    // Direct comparison
-    if (appointmentDoctorId === targetDoctorId) return true;
-    
-    // String comparison
-    const strAppointment = String(appointmentDoctorId);
-    const strTarget = String(targetDoctorId);
-    if (strAppointment === strTarget) return true;
-    
-    // Normalized comparison (trim + lowercase)
-    const normalizedAppointment = strAppointment.trim().toLowerCase();
-    const normalizedTarget = strTarget.trim().toLowerCase();
-    if (normalizedAppointment === normalizedTarget) return true;
-    
-    // Ultra-robust comparisons for edge cases
-    // Remove all whitespace and special chars, compare
-    const cleanAppointment = strAppointment.replace(/[\s\-\_]/g, '').toLowerCase();
-    const cleanTarget = strTarget.replace(/[\s\-\_]/g, '').toLowerCase();
-    if (cleanAppointment === cleanTarget) return true;
-    
-    // Substring match (in case of encoding issues)
-    if (strAppointment.includes(strTarget) || strTarget.includes(strAppointment)) {
-      const lengthDiff = Math.abs(strAppointment.length - strTarget.length);
-      if (lengthDiff <= 2) return true; // Allow small differences for encoding issues
-    }
-    
-    // Last resort: character-by-character comparison ignoring case and common substitutions
-    if (strAppointment.length === strTarget.length) {
-      let matches = 0;
-      const minLength = Math.min(strAppointment.length, strTarget.length);
-      
-      for (let i = 0; i < minLength; i++) {
-        const charA = strAppointment.charAt(i).toLowerCase();
-        const charT = strTarget.charAt(i).toLowerCase();
-        if (charA === charT || 
-            (charA === '0' && charT === 'o') || 
-            (charA === 'o' && charT === '0') ||
-            (charA === '1' && charT === 'l') || 
-            (charA === 'l' && charT === '1')) {
-          matches++;
-        }
-      }
-      
-      // If 95% of characters match, consider it a match
-      if (matches / minLength >= 0.95) return true;
-    }
-    
-    return false;
-  };
-
-  // Get appointments for a specific date
-  const getAppointmentsForDate = (date: Date): AppointmentWithRelations[] => {
+  
+  const getAppointmentsForDate = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
-
-    const filteredAppointments = appointments.filter(apt => {
-      if (!apt.data_agendamento) return false;
-      
-      // Converte a data_agendamento para Date com timezone brasileiro consistente
-      // Adiciona T12:00:00 para evitar problemas de fuso horário
-      const aptDateStr = format(new Date(apt.data_agendamento + 'T12:00:00'), 'yyyy-MM-dd');
-      const dateMatch = aptDateStr === dateStr;
-
-      // Força conversão para string e trim, evitando diferenças de tipo/espaço
-      const doctorMatch = String(apt.medico_id).trim() === String(doctor.id).trim();
-
-      return dateMatch && doctorMatch;
-    });
-
-    return filteredAppointments;
+    return appointments.filter(
+      appointment => 
+        appointment.medico_id === doctor.id && 
+        appointment.data_agendamento === dateStr
+    );
   };
 
-  // Check if a date has appointments
-  const hasAppointments = (date: Date): boolean => {
+  // Função para verificar se uma data tem agendamentos
+  const hasAppointments = (date: Date) => {
     return getAppointmentsForDate(date).length > 0;
   };
 
-  // Check if date is blocked
-  const hasBlocks = (date: Date): boolean => {
+  // Função para verificar se uma data está bloqueada
+  const hasBlocks = (date: Date) => {
     if (isDateBlocked) {
       return isDateBlocked(doctor.id, date);
     }
-    
-    const dateStr = format(date, 'yyyy-MM-dd');
+    // Fallback manual se isDateBlocked não estiver disponível
+    const dateStr = date.toISOString().split('T')[0];
     return blockedDates.some(blocked => 
       blocked.medico_id === doctor.id &&
       blocked.status === 'ativo' &&
@@ -161,36 +81,37 @@ export function DoctorSchedule({
     );
   };
 
-  // Status styling helpers
-  const getStatusColor = (status: string): string => {
+  const getStatusColor = (status: string) => {
     switch (status) {
-      case 'agendado': return 'bg-blue-500 text-white hover:bg-blue-600';
-      case 'confirmado': return 'bg-green-500 text-white hover:bg-green-600';
-      case 'realizado': return 'bg-gray-500 text-white hover:bg-gray-600';
-      case 'cancelado': return 'bg-red-500 text-white hover:bg-red-600';
-      default: return 'bg-gray-400 text-white hover:bg-gray-500';
+      case 'agendado':
+        return 'bg-blue-500 text-white hover:bg-blue-600';
+      case 'confirmado':
+        return 'bg-green-500 text-white hover:bg-green-600';
+      case 'realizado':
+        return 'bg-gray-500 text-white hover:bg-gray-600';
+      case 'cancelado':
+        return 'bg-red-500 text-white hover:bg-red-600';
+      default:
+        return 'bg-gray-400 text-white hover:bg-gray-500';
     }
   };
 
-  const getStatusLabel = (status: string): string => {
+  const getStatusLabel = (status: string) => {
     switch (status) {
-      case 'agendado': return 'Agendado';
-      case 'confirmado': return 'Confirmado';
-      case 'realizado': return 'Realizado';
-      case 'cancelado': return 'Cancelado';
-      default: return status;
+      case 'agendado':
+        return 'Agendado';
+      case 'confirmado':
+        return 'Confirmado';
+      case 'realizado':
+        return 'Realizado';
+      case 'cancelado':
+        return 'Cancelado';
+      default:
+        return status;
     }
   };
 
-  // Get appointments for selected date
   const selectedDateAppointments = getAppointmentsForDate(selectedDate);
-
-  // Calculate statistics using robust comparison
-  const getAppointmentsByStatus = (status: string): number => {
-    return appointments.filter(apt => 
-      apt.status === status && isDoctorMatch(apt.medico_id, doctor.id)
-    ).length;
-  };
 
   return (
     <div className="space-y-6">
@@ -208,10 +129,7 @@ export function DoctorSchedule({
             </div>
             {onNewAppointment && (
               <div className="flex items-center gap-2">
-                <Button 
-                  onClick={() => onNewAppointment(format(selectedDate, 'yyyy-MM-dd'))}
-                  className="flex items-center gap-2"
-                >
+                <Button onClick={() => onNewAppointment(format(selectedDate, 'yyyy-MM-dd'))} className="flex items-center gap-2">
                   <Plus className="h-4 w-4" />
                   Novo Agendamento
                 </Button>
@@ -225,7 +143,7 @@ export function DoctorSchedule({
         
         <CardContent className="p-0">
           <div className="grid lg:grid-cols-3 h-[400px]">
-            {/* Calendar - Left Side */}
+            {/* Calendário - Lado Esquerdo */}
             <div className="border-r p-3 space-y-3">
               <h3 className="font-semibold text-xs">Selecione uma data</h3>
               <Calendar
@@ -264,7 +182,7 @@ export function DoctorSchedule({
               </div>
             </div>
 
-            {/* Appointments Table - Right Side */}
+            {/* Tabela de Agendamentos - Lado Direito */}
             <div className="lg:col-span-2 flex flex-col">
               <div className="p-3 border-b bg-muted/30">
                 <h3 className="font-semibold text-xs">
@@ -292,7 +210,7 @@ export function DoctorSchedule({
                           .sort((a, b) => a.hora_agendamento.localeCompare(b.hora_agendamento))
                           .map((appointment) => (
                             <TableRow key={appointment.id} className="hover:bg-muted/20">
-                              {/* Status/Time */}
+                              {/* Status/Hora */}
                               <TableCell className="w-[120px]">
                                 <div className="flex flex-col gap-1">
                                   <Badge 
@@ -306,7 +224,7 @@ export function DoctorSchedule({
                                 </div>
                               </TableCell>
                               
-                              {/* Patient */}
+                              {/* Paciente */}
                               <TableCell className="w-[200px]">
                                 <div className="space-y-1">
                                   <div className="text-xs font-medium leading-tight">
@@ -320,31 +238,31 @@ export function DoctorSchedule({
                                 </div>
                               </TableCell>
                               
-                              {/* Phone */}
+                              {/* Telefone */}
                               <TableCell className="w-[120px] text-[10px]">
                                 {appointment.pacientes?.telefone || appointment.pacientes?.celular || 'N/A'}
                               </TableCell>
                               
-                              {/* Insurance */}
+                              {/* Convênio */}
                               <TableCell className="w-[100px]">
                                 <Badge variant="outline" className="text-[10px] px-1 py-0">
                                   {appointment.pacientes?.convenio || 'N/A'}
                                 </Badge>
                               </TableCell>
                               
-                              {/* Type */}
+                              {/* Tipo */}
                               <TableCell className="w-[120px] text-[10px] text-muted-foreground">
                                 {appointment.atendimentos?.nome || 'Consulta'}
                               </TableCell>
                               
-                              {/* Created by */}
+                              {/* Agendado por */}
                               <TableCell className="w-[140px] text-[10px]">
                                 {appointment.criado_por_profile?.nome || 
                                  appointment.criado_por || 
                                  'Recepcionista'}
                               </TableCell>
                               
-                              {/* Actions */}
+                              {/* Ações */}
                               <TableCell className="w-[100px]">
                                 <div className="flex items-center justify-center gap-1">
                                   {onEditAppointment && (
@@ -358,7 +276,6 @@ export function DoctorSchedule({
                                       <Edit className="h-2.5 w-2.5" />
                                     </Button>
                                   )}
-                                  
                                   {appointment.status === 'agendado' && onConfirmAppointment && (
                                     <Button 
                                       variant="ghost" 
@@ -370,7 +287,6 @@ export function DoctorSchedule({
                                       <CheckCircle className="h-2.5 w-2.5" />
                                     </Button>
                                   )}
-                                  
                                   {appointment.status === 'confirmado' && onUnconfirmAppointment && (
                                     <Button 
                                       variant="ghost" 
@@ -382,7 +298,6 @@ export function DoctorSchedule({
                                       <RotateCcw className="h-2.5 w-2.5" />
                                     </Button>
                                   )}
-                                  
                                   {appointment.status === 'agendado' && (
                                     <AlertDialog>
                                       <AlertDialogTrigger asChild>
@@ -426,20 +341,18 @@ export function DoctorSchedule({
                 ) : (
                   <div className="flex-1 flex items-center justify-center p-8">
                     <div className="text-center">
-                      <CalendarIcon className="mx-auto h-12 w-12 text-gray-400" />
-                      <h3 className="mt-2 text-sm font-semibold text-gray-900">
+                      <CalendarIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <h4 className="text-lg font-medium text-muted-foreground mb-2">
                         Nenhum agendamento
-                      </h3>
-                      <p className="mt-1 text-sm text-gray-500">
+                      </h4>
+                      <p className="text-sm text-muted-foreground">
                         Não há agendamentos para esta data.
                       </p>
                       {onNewAppointment && (
-                        <div className="mt-6">
-                          <Button onClick={() => onNewAppointment(format(selectedDate, 'yyyy-MM-dd'))}>
-                            <Plus className="h-4 w-4 mr-2" />
-                            Criar novo agendamento
-                          </Button>
-                        </div>
+                        <Button onClick={() => onNewAppointment(format(selectedDate, 'yyyy-MM-dd'))} className="mt-4" size="sm">
+                          <Plus className="h-4 w-4 mr-2" />
+                          Novo Agendamento
+                        </Button>
                       )}
                     </div>
                   </div>
@@ -450,7 +363,23 @@ export function DoctorSchedule({
         </CardContent>
       </Card>
 
-      {/* Statistics Summary */}
+      {/* Modal: Adicionar à Fila de Espera */}
+      <Dialog open={waitlistOpen} onOpenChange={setWaitlistOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Adicionar à Fila de Espera</DialogTitle>
+          </DialogHeader>
+          <FilaEsperaForm
+            doctors={[doctor]}
+            atendimentos={atendimentos.filter(a => a.medico_id === doctor.id)}
+            onSubmit={adicionarFilaEspera}
+            onCancel={() => setWaitlistOpen(false)}
+            searchPatientsByBirthDate={searchPatientsByBirthDate}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Resumo estatístico */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="p-4">
           <div className="flex items-center gap-3">
@@ -459,7 +388,7 @@ export function DoctorSchedule({
             </div>
             <div>
               <p className="text-2xl font-bold">
-                {getAppointmentsByStatus('agendado')}
+                {appointments.filter(apt => apt.medico_id === doctor.id && apt.status === 'agendado').length}
               </p>
               <p className="text-sm text-muted-foreground">Agendados</p>
             </div>
@@ -473,7 +402,7 @@ export function DoctorSchedule({
             </div>
             <div>
               <p className="text-2xl font-bold">
-                {getAppointmentsByStatus('confirmado')}
+                {appointments.filter(apt => apt.medico_id === doctor.id && apt.status === 'confirmado').length}
               </p>
               <p className="text-sm text-muted-foreground">Confirmados</p>
             </div>
@@ -487,7 +416,7 @@ export function DoctorSchedule({
             </div>
             <div>
               <p className="text-2xl font-bold">
-                {getAppointmentsByStatus('realizado')}
+                {appointments.filter(apt => apt.medico_id === doctor.id && apt.status === 'realizado').length}
               </p>
               <p className="text-sm text-muted-foreground">Realizados</p>
             </div>
@@ -501,35 +430,13 @@ export function DoctorSchedule({
             </div>
             <div>
               <p className="text-2xl font-bold">
-                {getAppointmentsByStatus('cancelado')}
+                {appointments.filter(apt => apt.medico_id === doctor.id && apt.status === 'cancelado').length}
               </p>
               <p className="text-sm text-muted-foreground">Cancelados</p>
             </div>
           </div>
         </Card>
       </div>
-
-      {/* Waitlist Dialog */}
-      <Dialog open={waitlistOpen} onOpenChange={setWaitlistOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>Adicionar à Fila de Espera</DialogTitle>
-          </DialogHeader>
-          <FilaEsperaForm
-            doctors={[doctor]}
-            atendimentos={atendimentos}
-            onSubmit={async (data) => {
-              const success = await adicionarFilaEspera(data);
-              if (success) {
-                setWaitlistOpen(false);
-              }
-              return success;
-            }}
-            onCancel={() => setWaitlistOpen(false)}
-            searchPatientsByBirthDate={searchPatientsByBirthDate}
-          />
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

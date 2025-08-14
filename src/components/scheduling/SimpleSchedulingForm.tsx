@@ -18,7 +18,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { FilaEsperaForm } from '@/components/fila-espera/FilaEsperaForm';
 import { FilaEsperaFormData } from '@/types/fila-espera';
 import { MultipleAppointmentData } from '@/types/multiple-appointments';
-import { EnhancedDateBlockingInfo } from './EnhancedDateBlockingInfo';
 
 interface SimpleSchedulingFormProps {
   doctors: Doctor[];
@@ -26,7 +25,6 @@ interface SimpleSchedulingFormProps {
   appointments: AppointmentWithRelations[];
   blockedDates?: any[];
   isDateBlocked?: (doctorId: string, date: Date) => boolean;
-  getBlockingReason?: (doctorId: string, date: Date) => { type: string; message: string } | null;
   onSubmit: (data: SchedulingFormData) => Promise<void>;
   onSubmitWithForce?: (data: SchedulingFormData) => Promise<void>;
   onCancel: () => void;
@@ -46,7 +44,6 @@ export const SimpleSchedulingForm = React.memo(function SimpleSchedulingForm({
   appointments,
   blockedDates = [],
   isDateBlocked,
-  getBlockingReason,
   onSubmit,
   onSubmitWithForce,
   onCancel,
@@ -322,16 +319,6 @@ export const SimpleSchedulingForm = React.memo(function SimpleSchedulingForm({
                     </div>
                   </div>
                 </div>
-
-                {/* Informação sobre bloqueio da data */}
-                {selectedDoctor && getBlockingReason && (
-                  <EnhancedDateBlockingInfo 
-                    doctor={selectedDoctor}
-                    date={selectedCalendarDate}
-                    blockingReason={getBlockingReason(selectedDoctor.id, selectedCalendarDate)}
-                    className="mb-3"
-                  />
-                )}
 
                 {/* Lista de agendamentos do dia selecionado */}
                 <div className="space-y-3">

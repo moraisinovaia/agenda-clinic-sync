@@ -11,7 +11,6 @@ import { MultipleSchedulingModal } from '@/components/scheduling/MultipleSchedul
 
 import { DoctorSchedule } from '@/components/scheduling/DoctorSchedule';
 import { AppointmentsList } from '@/components/scheduling/AppointmentsList';
-import { OptimizedAppointmentsList } from '@/components/scheduling/OptimizedAppointmentsList';
 import { BloqueioAgenda } from '@/components/scheduling/BloqueioAgenda';
 import { PreparosView } from '@/components/preparos/PreparosView';
 import { FilaEsperaForm } from '@/components/fila-espera/FilaEsperaForm';
@@ -46,9 +45,6 @@ import { NavigationHeader } from '@/components/ui/navigation-header';
 import { AuthTest } from '@/components/AuthTest';
 import PendingApproval from '@/components/PendingApproval';
 import { WhatsAppAgentDashboard } from '@/components/whatsapp-agent/WhatsAppAgentDashboard';
-import { QuickActionsPanel } from '@/components/productivity/QuickActionsPanel';
-import { useSmartDefaults } from '@/hooks/useSmartDefaults';
-import { useEnhancedKeyboardNavigation } from '@/hooks/useEnhancedKeyboardNavigation';
 
 const Index = () => {
   const { user, profile, loading: authLoading, signOut } = useStableAuth();
@@ -86,10 +82,8 @@ const Index = () => {
     getAtendimentosByDoctor,
     getAppointmentsByDoctorAndDate,
     isDateBlocked,
-    getBlockingReason,
     getBlockedDatesByDoctor,
-    refetch,
-    forceRefresh
+    refetch
   } = useSupabaseScheduling();
 
   const {
@@ -108,22 +102,6 @@ const Index = () => {
     notifyAppointmentConflict,
     notifyCancellation,
   } = useNotifications();
-
-  // Smart Defaults Hook
-  const smartDefaults = useSmartDefaults();
-
-  // Enhanced Keyboard Navigation
-  const { focusElement } = useEnhancedKeyboardNavigation({
-    onViewChange: setViewMode,
-    onDoctorSelect: (doctorId) => {
-      const doctor = doctors.find(d => d.id === doctorId);
-      if (doctor) {
-        setSelectedDoctor(doctor);
-        setViewMode('schedule');
-      }
-    },
-    doctors: doctors.map(d => ({ id: d.id, nome: d.nome })),
-  });
 
   // Setup keyboard shortcuts - atalhos específicos e funcionais
   const shortcuts = [
@@ -284,12 +262,9 @@ const Index = () => {
 
   // Handler para formulário simples - NORMAL
   const handleSimpleAppointmentSubmit = async (formData: SchedulingFormData) => {
-    console.log('🚨 Index.tsx: ENTRADA na handleSimpleAppointmentSubmit!');
-    console.log('📋 Index.tsx: Dados do formulário recebidos:', formData);
     console.log('🎯 Index.tsx: handleSimpleAppointmentSubmit chamado');
     
     try {
-      console.log('🔥 Index.tsx: Chamando createAppointment...');
       // Tentar criar o agendamento NORMAL (sem forçar conflito)
       await createAppointment(formData, editingAppointment?.id);
       
@@ -418,73 +393,41 @@ const Index = () => {
       <DashboardHeader
         viewMode={viewMode}
         profileName={profile?.nome}
-        doctors={doctors}
         onBack={goBack}
         onBackToFilaEspera={goBackToFilaEspera}
         onSignOut={signOut}
-        onViewChange={setViewMode}
-        onNavigateToSchedule={(doctorId) => {
-          const doctor = doctors.find(d => d.id === doctorId);
-          if (doctor) {
-            setSelectedDoctor(doctor);
-            setViewMode('schedule');
-          }
-        }}
       />
 
       <div className="container mx-auto px-4 py-6">
         {viewMode === 'doctors' && (
-          <div className="space-y-8 animate-fade-in">
+          <div className="space-y-6">
             {/* User Approval Panel for Admins */}
             {profile?.role === 'admin' && profile?.status === 'aprovado' && (
-              <div className="animate-scale-in">
-                <UserApprovalPanel />
-              </div>
+              <UserApprovalPanel />
             )}
             
-            {/* Hero Section com gradiente */}
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary/10 via-primary/5 to-background border">
-              <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
-              <div className="relative p-8 md:p-12">
-                <div className="flex flex-col lg:flex-row gap-8 items-start lg:items-center justify-between">
-                  <div className="space-y-4">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium">
-                      <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
-                      Sistema Ativo
-                    </div>
-                    <h1 className="text-4xl lg:text-5xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-                      Central de Agendamentos
-                    </h1>
-                    <p className="text-lg text-muted-foreground max-w-2xl">
-                      Gerencie consultas médicas com eficiência e organização. 
-                      Agende, confirme e acompanhe todos os atendimentos em uma única plataforma.
-                    </p>
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+              <div className="lg:col-span-3">
+                <StatsCards doctors={doctors} appointments={appointments} />
+                
+                <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                  <div className="relative max-w-md">
+                    {/* This will be moved to DoctorsView component */}
                   </div>
-                  <div className="shrink-0">
-                    <DashboardActions onViewChange={setViewMode} />
-                  </div>
+                  <DashboardActions onViewChange={setViewMode} />
                 </div>
-              </div>
-            </div>
 
-            {/* Grid principal com animação */}
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-              <div className="lg:col-span-3 space-y-6">
-                <div className="animate-fade-in" style={{animationDelay: '0.1s'}}>
-                  <DoctorsView
-                    doctors={doctors}
-                    searchTerm={searchTerm}
-                    onSearchChange={setSearchTerm}
-                    onScheduleDoctor={handleScheduleDoctor}
-                    onViewSchedule={handleViewSchedule}
-                  />
-                </div>
+                <DoctorsView
+                  doctors={doctors}
+                  searchTerm={searchTerm}
+                  onSearchChange={setSearchTerm}
+                  onScheduleDoctor={handleScheduleDoctor}
+                  onViewSchedule={handleViewSchedule}
+                />
               </div>
               
               <div className="lg:col-span-1">
-                <div className="animate-fade-in" style={{animationDelay: '0.2s'}}>
-                  <SystemMonitor />
-                </div>
+                <SystemMonitor />
               </div>
             </div>
           </div>
@@ -502,14 +445,12 @@ const Index = () => {
             />
             <DoctorSchedule
               doctor={selectedDoctor}
-              appointments={appointments}
-                blockedDates={blockedDates}
-                isDateBlocked={isDateBlocked}
-                getBlockingReason={getBlockingReason}
+              appointments={appointments.filter(apt => apt.medico_id === selectedDoctor.id)}
+              blockedDates={blockedDates}
+              isDateBlocked={isDateBlocked}
               onCancelAppointment={cancelAppointment}
               onConfirmAppointment={handleConfirmAppointment}
               onUnconfirmAppointment={handleUnconfirmAppointment}
-              onForceRefresh={forceRefresh}
               onEditAppointment={handleEditAppointment}
               onNewAppointment={(selectedDate) => {
                 if (selectedDate) {
@@ -542,7 +483,6 @@ const Index = () => {
                 appointments={appointments}
                 blockedDates={blockedDates}
                 isDateBlocked={isDateBlocked}
-                getBlockingReason={getBlockingReason}
                 onSubmit={handleSimpleAppointmentSubmit}
                 onSubmitWithForce={handleSimpleAppointmentSubmitWithForce}
                 onCancel={goBack}
@@ -568,9 +508,13 @@ const Index = () => {
               showBack={true}
               showHome={true}
             />
-            <OptimizedAppointmentsList 
+            <AppointmentsList 
+              appointments={appointments}
               doctors={doctors}
               onEditAppointment={handleEditAppointment}
+              onCancelAppointment={cancelAppointment}
+              onConfirmAppointment={handleConfirmAppointment}
+              onUnconfirmAppointment={handleUnconfirmAppointment}
             />
           </div>
         )}
@@ -612,7 +556,6 @@ const Index = () => {
               appointments={appointments}
               blockedDates={blockedDates}
               isDateBlocked={isDateBlocked}
-              getBlockingReason={getBlockingReason}
               onSubmit={handleSimpleAppointmentSubmit}
               onCancel={goBack}
               getAtendimentosByDoctor={getAtendimentosByDoctor}
@@ -728,12 +671,6 @@ const Index = () => {
         atendimentos={atendimentos}
         availableConvenios={uniqueConvenios}
         onSuccess={handleMultipleAppointmentSuccess}
-      />
-
-      {/* Quick Actions Panel - Always visible except in auth states */}
-      <QuickActionsPanel 
-        onViewChange={setViewMode}
-        isVisible={!authLoading && user && profile?.status === 'aprovado'}
       />
     </div>
   );

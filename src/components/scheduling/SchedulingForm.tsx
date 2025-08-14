@@ -11,7 +11,6 @@ import { Doctor, Atendimento, SchedulingFormData, AppointmentWithRelations } fro
 import { PatientDataFormFixed } from './PatientDataFormFixed';
 import { AppointmentDataForm } from './AppointmentDataForm';
 import { useSchedulingForm } from '@/hooks/useSchedulingForm';
-import { EnhancedDateBlockingInfo } from './EnhancedDateBlockingInfo';
 
 interface SchedulingFormProps {
   doctors: Doctor[];
@@ -19,7 +18,6 @@ interface SchedulingFormProps {
   appointments: AppointmentWithRelations[];
   blockedDates?: any[];
   isDateBlocked?: (doctorId: string, date: Date) => boolean;
-  getBlockingReason?: (doctorId: string, date: Date) => { type: string; message: string } | null;
   onSubmit: (data: SchedulingFormData) => Promise<void>;
   onCancel: () => void;
   getAtendimentosByDoctor: (doctorId: string) => Atendimento[];
@@ -35,7 +33,6 @@ export function SchedulingForm({
   appointments,
   blockedDates = [],
   isDateBlocked,
-  getBlockingReason,
   onSubmit, 
   onCancel,
   getAtendimentosByDoctor,
@@ -66,18 +63,10 @@ export function SchedulingForm({
 
   // Handler específico para prevenir reload e garantir exibição de erro
   const handleFormSubmit = async (e: React.FormEvent) => {
-    console.log('🎯 SchedulingForm: INÍCIO handleFormSubmit - botão clicado!');
-    console.log('📋 SchedulingForm: Dados do formulário:', formData);
+    console.log('🎯 SchedulingForm: Iniciando handleFormSubmit');
     
-    try {
-      // CRITICAL: Chamar handleSubmit APENAS UMA VEZ
-      console.log('⚡ SchedulingForm: Chamando handleSubmit...');
-      await handleSubmit(e, onSubmit);
-      console.log('✅ SchedulingForm: handleSubmit concluído com sucesso');
-    } catch (error) {
-      console.error('❌ SchedulingForm: Erro no handleFormSubmit:', error);
-      // Erro já é tratado pelo useSchedulingForm
-    }
+    // CRITICAL: Chamar handleSubmit APENAS UMA VEZ
+    await handleSubmit(e, onSubmit);
   };
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date>(new Date());
 
@@ -176,12 +165,7 @@ export function SchedulingForm({
               )}
 
               <div className="flex gap-2 pt-4">
-                <Button 
-                  type="submit" 
-                  disabled={loading} 
-                  className="flex-1"
-                  onClick={() => console.log('🖱️ SchedulingForm: Botão SUBMIT clicado!')}
-                >
+                <Button type="submit" disabled={loading} className="flex-1">
                   {loading 
                     ? (editingAppointment ? 'Atualizando...' : 'Agendando...') 
                     : (editingAppointment ? 'Atualizar Agendamento' : 'Confirmar Agendamento')
@@ -261,16 +245,6 @@ export function SchedulingForm({
                     </div>
                   </div>
                 </div>
-
-                {/* Informação sobre bloqueio da data */}
-                {selectedDoctor && getBlockingReason && (
-                  <EnhancedDateBlockingInfo 
-                    doctor={selectedDoctor}
-                    date={selectedCalendarDate}
-                    blockingReason={getBlockingReason(selectedDoctor.id, selectedCalendarDate)}
-                    className="mb-3"
-                  />
-                )}
 
                 {/* Lista de agendamentos do dia selecionado */}
                 <div className="space-y-3">

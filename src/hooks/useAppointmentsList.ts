@@ -10,231 +10,102 @@ import { logger } from '@/utils/logger';
 export function useAppointmentsList(itemsPerPage: number = 20) {
   const { toast } = useToast();
   const { measureApiCall } = usePerformanceMetrics();
-  const [lastDataCount, setLastDataCount] = useState<number>(0);
 
-  // 🚀 OTIMIZADO: Função para buscar todos os registros com paginação automática
-  const fetchAllAppointmentsPaginated = useCallback(async (): Promise<AppointmentWithRelations[]> => {
-    const pageSize = 500;
-    let allAppointments: any[] = [];
-    let page = 0;
-    let hasMore = true;
-
-    logger.info('Iniciando busca paginada de agendamentos', {}, 'APPOINTMENTS');
-
-    while (hasMore) {
-      const { data: pageData, error } = await supabase
-        .from('agendamentos')
-        .select(`
-          *,
-          pacientes!inner(
-            id,
-            nome_completo,
-            data_nascimento,
-            convenio,
-            telefone,
-            celular
-          ),
-          medicos!inner(
-            id,
-            nome,
-            especialidade
-          ),
-          atendimentos!inner(
-            id,
-            nome,
-            tipo
-          )
-        `)
-        .order('data_agendamento', { ascending: false })
-        .order('hora_agendamento', { ascending: false })
-        .range(page * pageSize, (page + 1) * pageSize - 1);
-
-      if (error) {
-        logger.error('Erro na busca paginada', error, 'APPOINTMENTS');
-        throw error;
-      }
-
-      if (!pageData || pageData.length === 0) {
-        hasMore = false;
-        break;
-      }
-
-      allAppointments = [...allAppointments, ...pageData];
-      page++;
-
-      // Prevenção contra loop infinito
-      if (page > 10) {
-        logger.warn('Limite de páginas atingido', { page, totalRecords: allAppointments.length }, 'APPOINTMENTS');
-        break;
-      }
-    }
-
-    return allAppointments;
-  }, []);
-
-  // 🔧 OTIMIZADO: Função principal com fallback
+  // ✅ ESTABILIZAR: Função de query totalmente estável
   const fetchAppointments = useCallback(async () => {
+    logger.info('Iniciando busca de agendamentos', {}, 'APPOINTMENTS');
+    
     return measureApiCall(async () => {
-      let appointmentsData: any[] = [];
+        // Usar função RPC otimizada que já filtra cancelados e inclui relacionamentos
+        const { data: appointmentsWithRelations, error } = await supabase
+          .rpc('buscar_agendamentos_otimizado');
 
-      try {
-        // 🎯 Estratégia 1: Consulta direta com limite alto
-        const { data: directData, error: directError } = await supabase
-          .from('agendamentos')
-          .select(`
-            *,
-            pacientes!inner(
-              id,
-              nome_completo,
-              data_nascimento,
-              convenio,
-              telefone,
-              celular
-            ),
-            medicos!inner(
-              id,
-              nome,
-              especialidade
-            ),
-            atendimentos!inner(
-              id,
-              nome,
-              tipo
-            )
-          `)
-          .order('data_agendamento', { ascending: false })
-          .order('hora_agendamento', { ascending: false })
-          .limit(5000); // Limite alto para garantir todos os registros
-
-        if (directError) {
-          throw directError;
+        if (error) {
+          logger.error('Erro na consulta de agendamentos otimizada', error, 'APPOINTMENTS');
+          throw error;
         }
 
-        appointmentsData = directData || [];
-
-        // 🔍 Verificar se pode ter mais registros (próximo do limite)
-        if (appointmentsData.length >= 4500) {
-          logger.warn('Próximo do limite de 5000 registros, usando paginação', 
-            { count: appointmentsData.length }, 'APPOINTMENTS');
-          
-          // Fallback para paginação automática
-          appointmentsData = await fetchAllAppointmentsPaginated();
-        }
-
-      } catch (error) {
-        logger.warn('Consulta direta falhou, tentando paginação', error, 'APPOINTMENTS');
-        
-        // 🎯 Estratégia 2: Paginação automática como fallback
-        try {
-          appointmentsData = await fetchAllAppointmentsPaginated();
-        } catch (paginationError) {
-          logger.error('Ambas as estratégias falharam', paginationError, 'APPOINTMENTS');
-          throw paginationError;
-        }
-      }
-
-      // ✅ Transformar dados para o formato esperado
-      const transformedAppointments: AppointmentWithRelations[] = appointmentsData.map((apt) => ({
-        id: apt.id,
-        paciente_id: apt.paciente_id,
-        medico_id: apt.medico_id,
-        atendimento_id: apt.atendimento_id,
-        data_agendamento: apt.data_agendamento,
-        hora_agendamento: apt.hora_agendamento,
-        status: apt.status,
-        observacoes: apt.observacoes,
-        created_at: apt.created_at,
-        updated_at: apt.updated_at,
-        criado_por: apt.criado_por,
-        criado_por_user_id: apt.criado_por_user_id,
-        cancelado_em: apt.cancelado_em,
-        cancelado_por: apt.cancelado_por,
-        cancelado_por_user_id: apt.cancelado_por_user_id,
-        confirmado_em: apt.confirmado_em,
-        confirmado_por: apt.confirmado_por,
-        confirmado_por_user_id: apt.confirmado_por_user_id,
-        convenio: apt.convenio,
-        pacientes: apt.pacientes ? {
-          id: apt.pacientes.id,
-          nome_completo: apt.pacientes.nome_completo,
-          convenio: apt.pacientes.convenio,
-          celular: apt.pacientes.celular,
-          telefone: apt.pacientes.telefone || '',
-          data_nascimento: apt.pacientes.data_nascimento || '',
-          created_at: '',
-          updated_at: ''
-        } : null,
-        medicos: apt.medicos ? {
-          id: apt.medicos.id,
-          nome: apt.medicos.nome,
-          especialidade: apt.medicos.especialidade,
-          ativo: true,
-          crm: '',
-          created_at: '',
-          updated_at: '',
-          convenios_aceitos: [],
-          convenios_restricoes: null,
-          horarios: null,
-          idade_maxima: null,
-          idade_minima: null,
-          observacoes: ''
-        } : null,
-        atendimentos: apt.atendimentos ? {
-          id: apt.atendimentos.id,
-          nome: apt.atendimentos.nome,
-          tipo: apt.atendimentos.tipo,
-          ativo: true,
+        // Transformar para o formato esperado
+        const transformedAppointments = (appointmentsWithRelations || []).map(apt => ({
+          id: apt.id,
+          paciente_id: apt.paciente_id,
           medico_id: apt.medico_id,
-          medico_nome: apt.medicos?.nome || '',
-          created_at: '',
-          updated_at: '',
-          codigo: '',
-          coparticipacao_unimed_20: 0,
-          coparticipacao_unimed_40: 0,
-          forma_pagamento: 'convenio',
-          horarios: null,
-          observacoes: '',
-          valor_convenio: 0,
-          valor_particular: 0,
-          restricoes: null
-        } : null
-      }));
+          atendimento_id: apt.atendimento_id,
+          data_agendamento: apt.data_agendamento,
+          hora_agendamento: apt.hora_agendamento,
+          status: apt.status,
+          observacoes: apt.observacoes,
+          created_at: apt.created_at,
+          updated_at: apt.updated_at,
+          criado_por: apt.criado_por,
+          criado_por_user_id: apt.criado_por_user_id,
+          // Campos adicionais para cancelamento e confirmação
+          cancelado_em: null,
+          cancelado_por: null,
+          cancelado_por_user_id: null,
+          confirmado_em: null,
+          confirmado_por: null,
+          confirmado_por_user_id: null,
+          convenio: apt.paciente_convenio,
+          pacientes: {
+            id: apt.paciente_id,
+            nome_completo: apt.paciente_nome,
+            convenio: apt.paciente_convenio,
+            celular: apt.paciente_celular,
+            telefone: apt.paciente_telefone || '',
+            data_nascimento: apt.paciente_data_nascimento || '',
+            created_at: '',
+            updated_at: ''
+          },
+          medicos: {
+            id: apt.medico_id,
+            nome: apt.medico_nome,
+            especialidade: apt.medico_especialidade,
+            ativo: true,
+            crm: '',
+            created_at: '',
+            updated_at: '',
+            convenios_aceitos: [],
+            convenios_restricoes: null,
+            horarios: null,
+            idade_maxima: null,
+            idade_minima: null,
+            observacoes: ''
+          },
+          atendimentos: {
+            id: apt.atendimento_id,
+            nome: apt.atendimento_nome,
+            tipo: apt.atendimento_tipo,
+            ativo: true,
+            medico_id: apt.medico_id,
+            medico_nome: apt.medico_nome,
+            created_at: '',
+            updated_at: '',
+            codigo: '',
+            coparticipacao_unimed_20: 0,
+            coparticipacao_unimed_40: 0,
+            forma_pagamento: 'convenio',
+            horarios: null,
+            observacoes: '',
+            valor_convenio: 0,
+            valor_particular: 0,
+            restricoes: null
+          }
+        }));
 
-      // 📊 Validação silenciosa dos dados
-      const totalCount = transformedAppointments.length;
-      const agendadosCount = transformedAppointments.filter(apt => apt.status === 'agendado').length;
-      
-      // Alertar apenas se houver discrepância significativa
-      if (lastDataCount > 0 && Math.abs(totalCount - lastDataCount) > 10) {
-        logger.warn('Discrepância detectada nos dados', {
-          anterior: lastDataCount,
-          atual: totalCount,
-          diferenca: totalCount - lastDataCount
-        }, 'APPOINTMENTS');
-      }
+        logger.info('Agendamentos carregados com sucesso via RPC', { count: transformedAppointments.length }, 'APPOINTMENTS');
+        return transformedAppointments;
+      }, 'fetch_appointments', 'GET');
+  }, [measureApiCall]);
 
-      setLastDataCount(totalCount);
-
-      // ✅ Log otimizado apenas com informações essenciais
-      logger.info('Agendamentos carregados', {
-        total: totalCount,
-        agendados: agendadosCount,
-        strategy: appointmentsData.length >= 4500 ? 'pagination' : 'direct'
-      }, 'APPOINTMENTS');
-
-      return transformedAppointments;
-    }, 'fetch_appointments', 'GET');
-  }, [measureApiCall, fetchAllAppointmentsPaginated, lastDataCount]);
-
-  // 🚀 OTIMIZADO: Cache inteligente reabilitado
+  // Usar cache otimizado para buscar agendamentos
   const { data: appointments, loading, error, refetch, invalidateCache, forceRefetch } = useOptimizedQuery<AppointmentWithRelations[]>(
     fetchAppointments,
     [],
     { 
-      cacheKey: 'appointments-list-optimized',
-      cacheTime: 5 * 60 * 1000, // 5 minutos de cache
-      staleTime: 2 * 60 * 1000,  // 2 minutos para considerar stale
-      refetchOnMount: true
+      cacheKey: 'appointments-list',
+      cacheTime: 5 * 60 * 1000, // 5 minutos
+      staleTime: 30 * 1000 // 30 segundos
     }
   );
 
@@ -348,9 +219,19 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         return data;
       }, 'confirm_appointment', 'PUT');
 
-      // ⚡ Atualização otimizada de cache
+      // ⚡ INVALIDAÇÃO AGRESSIVA DE CACHE APÓS CONFIRMAÇÃO
+      console.log('🧹 Iniciando invalidação agressiva de cache após confirmação...');
+      
+      // 1. Invalidar cache imediatamente
       invalidateCache();
+      
+      // 2. Aguardar um pouco para garantir que mudança foi persistida no banco
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // 3. Forçar refetch completo, ignorando qualquer cache
       await forceRefetch();
+      
+      console.log('✅ Cache invalidado e dados recarregados após confirmação');
 
       toast({
         title: 'Agendamento confirmado',
@@ -409,9 +290,19 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         return data;
       }, 'unconfirm_appointment', 'PUT');
 
-      // ⚡ Atualização otimizada de cache
+      // ⚡ INVALIDAÇÃO AGRESSIVA DE CACHE APÓS DESCONFIRMAÇÃO
+      console.log('🧹 Iniciando invalidação agressiva de cache após desconfirmação...');
+      
+      // 1. Invalidar cache imediatamente
       invalidateCache();
+      
+      // 2. Aguardar um pouco para garantir que mudança foi persistida no banco
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // 3. Forçar refetch completo, ignorando qualquer cache
       await forceRefetch();
+      
+      console.log('✅ Cache invalidado e dados recarregados após desconfirmação');
 
       toast({
         title: 'Agendamento desconfirmado',
