@@ -67,15 +67,15 @@ export function useUnifiedPatientSearch() {
         allResults = [...allResults, ...(birthDateResults || [])];
       }
 
-      // Busca por nome (se não temos resultados ou para busca híbrida)
-      if (hasValidName && (!hasValidBirthDate || allResults.length === 0)) {
+      // Busca por nome (busca independente ou para complementar resultados)
+      if (hasValidName) {
         const trimmedName = name!.trim();
         const { data: nameResults, error } = await supabase
           .from('pacientes')
           .select('*')
           .ilike('nome_completo', `%${trimmedName}%`)
           .order('updated_at', { ascending: false })
-          .limit(20);
+          .limit(50); // Aumentar limite para garantir todos os resultados
         
         if (error) throw error;
         allResults = [...allResults, ...(nameResults || [])];
@@ -89,7 +89,7 @@ export function useUnifiedPatientSearch() {
           .select('*')
           .or(`telefone.ilike.%${cleanPhone}%,celular.ilike.%${cleanPhone}%`)
           .order('updated_at', { ascending: false })
-          .limit(10);
+          .limit(30); // Aumentar limite também aqui
         
         if (error) throw error;
         allResults = [...allResults, ...(phoneResults || [])];
