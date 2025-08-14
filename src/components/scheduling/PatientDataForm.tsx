@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DateOfBirthInput } from '@/components/ui/date-of-birth-input';
-
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { User, UserCheck, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import { SchedulingFormData } from '@/types/scheduling';
 import { useUnifiedPatientSearch } from '@/hooks/useUnifiedPatientSearch';
@@ -210,48 +210,51 @@ export function PatientDataForm({
               </h4>
             </div>
             
-            <div className="max-h-[360px] overflow-y-auto w-full rounded-md border p-4">
-              <div className="space-y-2">
-                {foundPatients.map((patient, index) => (
-                  <div 
-                    key={patient.id || `patient-${index}`} 
-                    className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent cursor-pointer group transition-colors"
-                    onClick={() => selectPatient(patient)}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                        <span className="font-medium truncate">{patient.nome_completo}</span>
-                      </div>
-                      <div className="text-sm text-muted-foreground mt-1 truncate">
-                        {patient.data_nascimento && (
-                          <span>Nascimento: {patient.data_nascimento}</span>
-                        )}
-                        {patient.convenio && (
-                          <span className="ml-3">Convênio: {patient.convenio}</span>
-                        )}
-                        {(patient.telefone || patient.celular) && (
-                          <span className="ml-3">
-                            {patient.telefone || patient.celular}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="ml-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        selectPatient(patient);
-                      }}
+            <div className="flex-1 w-full">
+              <ScrollArea className="h-[300px] w-full rounded-md border p-4">
+                <div className="space-y-2">
+                  {foundPatients.map((patient, index) => (
+                    <div 
+                      key={patient.id || `patient-${index}`} 
+                      className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent cursor-pointer group transition-colors"
+                      onClick={() => selectPatient(patient)}
                     >
-                      <UserCheck className="h-4 w-4 mr-1" />
-                      Selecionar
-                    </Button>
-                  </div>
-                ))}
-              </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          <span className="font-medium truncate">{patient.nome_completo}</span>
+                        </div>
+                        <div className="text-sm text-muted-foreground mt-1 truncate">
+                          {patient.data_nascimento && (
+                            <span>Nascimento: {patient.data_nascimento}</span>
+                          )}
+                          {patient.convenio && (
+                            <span className="ml-3">Convênio: {patient.convenio}</span>
+                          )}
+                          {(patient.telefone || patient.celular) && (
+                            <span className="ml-3">
+                              {patient.telefone || patient.celular}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="ml-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          selectPatient(patient);
+                        }}
+                      >
+                        <UserCheck className="h-4 w-4 mr-1" />
+                        Selecionar
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+                <ScrollBar orientation="vertical" />
+              </ScrollArea>
             </div>
             
             <div className="pt-3 border-t mt-3">
