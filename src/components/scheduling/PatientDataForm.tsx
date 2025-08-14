@@ -7,8 +7,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DateOfBirthInput } from '@/components/ui/date-of-birth-input';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { User, Search, UserCheck, AlertCircle, CheckCircle } from 'lucide-react';
+import { User, Search, UserCheck, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import { SchedulingFormData } from '@/types/scheduling';
+import { useUnifiedPatientSearch } from '@/hooks/useUnifiedPatientSearch';
 
 interface PatientDataFormProps {
   formData: SchedulingFormData;
@@ -32,9 +33,18 @@ export function PatientDataForm({
   searchPatientsByBirthDate,
   selectedDoctor
 }: PatientDataFormProps) {
-  const [foundPatients, setFoundPatients] = useState<any[]>([]);
-  const [searchingPatients, setSearchingPatients] = useState(false);
-  const [showPatientsList, setShowPatientsList] = useState(false);
+  // Hook unificado para busca por nome e data
+  const {
+    loading,
+    foundPatients,
+    showResults,
+    selectedPatient,
+    searchByBirthDate,
+    searchByName,
+    selectPatient: selectPatientFromHook,
+    clearSearch,
+    hideResults
+  } = useUnifiedPatientSearch();
 
   // Calcular idade do paciente
   const calculateAge = (birthDate: string) => {
@@ -83,29 +93,22 @@ export function PatientDataForm({
 
   const ageValidation = getAgeValidation();
 
-  // Buscar pacientes quando a data de nascimento for alterada
+  // Buscar pacientes por data de nascimento
   useEffect(() => {
-    const searchPatients = async () => {
-      if (formData.dataNascimento && formData.dataNascimento.length === 10) {
-        setSearchingPatients(true);
-        try {
-          const patients = await searchPatientsByBirthDate(formData.dataNascimento);
-          setFoundPatients(patients);
-          setShowPatientsList(patients.length > 0);
-        } catch (error) {
-          console.error('Erro ao buscar pacientes:', error);
-        } finally {
-          setSearchingPatients(false);
-        }
-      } else {
-        setFoundPatients([]);
-        setShowPatientsList(false);
-      }
-    };
+    if (formData.dataNascimento && formData.dataNascimento.length === 10) {
+      searchByBirthDate(formData.dataNascimento);
+    }
+  }, [formData.dataNascimento, searchByBirthDate]);
 
-    const timeoutId = setTimeout(searchPatients, 500); // Debounce de 500ms
-    return () => clearTimeout(timeoutId);
-  }, [formData.dataNascimento]); // Remover searchPatientsByBirthDate das dependências
+  // Buscar pacientes por nome (3+ caracteres)
+  useEffect(() => {
+    if (formData.nomeCompleto && formData.nomeCompleto.trim().length >= 3) {
+      // Se também tem data preenchida, priorizar busca por data
+      if (!formData.dataNascimento || formData.dataNascimento.length < 10) {
+        searchByName(formData.nomeCompleto.trim());
+      }
+    }
+  }, [formData.nomeCompleto, formData.dataNascimento, searchByName]);
 
   // Função para selecionar um paciente encontrado
   const selectPatient = (patient: any) => {
@@ -116,7 +119,7 @@ export function PatientDataForm({
       celular: patient.celular,
       convenio: patient.convenio,
     }));
-    setShowPatientsList(false);
+    selectPatientFromHook(patient);
   };
 
   // Função para criar novo paciente (limpar seleção)
@@ -128,7 +131,7 @@ export function PatientDataForm({
       celular: '',
       convenio: '',
     }));
-    setShowPatientsList(false);
+    clearSearch();
   };
 
   // Função para aplicar máscara de telefone
@@ -233,18 +236,18 @@ export function PatientDataForm({
               onChange={(value) => setFormData(prev => ({ ...prev, dataNascimento: value }))}
               required
             />
-            {searchingPatients && (
-              <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin" />
+            {loading && (
+              <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin" />
             )}
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            {searchingPatients ? 'Buscando pacientes...' : 'Ao inserir a data, buscaremos pacientes existentes'}
+            {loading ? 'Buscando pacientes...' : 'Digite nome (3+ caracteres) ou data para buscar pacientes'}
           </p>
         </div>
       </div>
       
       {/* Lista de pacientes encontrados */}
-      {showPatientsList && (
+      {showResults && (
         <Card className="mt-4">
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-3">
