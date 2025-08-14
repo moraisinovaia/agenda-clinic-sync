@@ -41,13 +41,27 @@ export const useOptimizedQuery = <T>(
       const cached = queryCache.get(cacheKey);
       const now = Date.now();
 
+      // 🔍 DEBUG: Log do estado do cache
+      console.log('🔍 DEBUG - Cache status:', {
+        cacheKey,
+        hasCached: !!cached,
+        cacheAge: cached ? now - cached.timestamp : 0,
+        cacheTime,
+        staleTime,
+        isExpired: cached ? (now - cached.timestamp) >= cacheTime : true,
+        isStale: cached ? (now - cached.timestamp) > staleTime : true
+      });
+
       if (cached && (now - cached.timestamp) < cacheTime) {
+        console.log('🔍 DEBUG - Usando dados do cache para:', cacheKey);
         setData(cached.data);
         setLoading(false);
         
         // If data is stale but not expired, return cached and refetch in background
         if ((now - cached.timestamp) > staleTime) {
+          console.log('🔍 DEBUG - Dados do cache estão obsoletos, buscando em background:', cacheKey);
           queryFn().then(freshData => {
+            console.log('🔍 DEBUG - Background refresh concluído:', cacheKey);
             queryCache.set(cacheKey, {
               data: freshData,
               timestamp: now,
@@ -60,6 +74,7 @@ export const useOptimizedQuery = <T>(
       }
 
       // Execute fresh query
+      console.log('🔍 DEBUG - Executando query fresh para:', cacheKey);
       const result = await queryFn();
       
       // Cache the result
@@ -69,6 +84,7 @@ export const useOptimizedQuery = <T>(
         isStale: false
       });
 
+      console.log('🔍 DEBUG - Query executada e cache atualizado:', cacheKey);
       setData(result);
     } catch (err) {
       setError(err as Error);

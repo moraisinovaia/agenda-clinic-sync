@@ -80,6 +80,16 @@ export function useSupabaseScheduling() {
     }
   }, [appointmentsList.unconfirmAppointment]);
 
+  // 🔍 DEBUG: Force refresh function para debug
+  const forceRefresh = useCallback(async () => {
+    console.log('🔍 DEBUG - Forcing complete refresh of all data');
+    await Promise.all([
+      appointmentsList.forceRefetch(),
+      schedulingData.refetch()
+    ]);
+    console.log('🔍 DEBUG - Force refresh completed');
+  }, [appointmentsList.forceRefetch, schedulingData.refetch]);
+
   // ✅ MEMOIZAR: O objeto retornado para garantir referências estáveis
   return useMemo(() => ({
     // Dados
@@ -107,6 +117,7 @@ export function useSupabaseScheduling() {
     
     // Recarregamento - ✅ EXPOR PARA COMPONENTES EXTERNOS
     refetch,
+    forceRefresh,
   }), [
     // Dados
     schedulingData.doctors,
@@ -129,5 +140,6 @@ export function useSupabaseScheduling() {
     schedulingData.getBlockingReason,
     schedulingData.getBlockedDatesByDoctor,
     refetch,
+    forceRefresh,
   ]);
 }

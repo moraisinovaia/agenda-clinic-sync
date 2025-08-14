@@ -93,6 +93,35 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           }
         }));
 
+        // 🔍 DEBUG: Log detalhado dos agendamentos carregados
+        console.log('🔍 DEBUG - Agendamentos carregados via RPC:', {
+          total: transformedAppointments.length,
+          sample: transformedAppointments.slice(0, 3).map(apt => ({
+            id: apt.id,
+            medico_id: apt.medico_id,
+            medico_nome: apt.medicos?.nome,
+            data_agendamento: apt.data_agendamento,
+            hora_agendamento: apt.hora_agendamento,
+            paciente_nome: apt.pacientes?.nome_completo,
+            status: apt.status
+          }))
+        });
+        
+        // 🔍 DEBUG: Agendamentos específicos do Dr. Edson
+        const drEdsonAppointments = transformedAppointments.filter(apt => 
+          apt.medicos?.nome?.toLowerCase().includes('edson')
+        );
+        console.log('🔍 DEBUG - Agendamentos do Dr. Edson:', {
+          count: drEdsonAppointments.length,
+          appointments: drEdsonAppointments.map(apt => ({
+            id: apt.id,
+            data: apt.data_agendamento,
+            hora: apt.hora_agendamento,
+            paciente: apt.pacientes?.nome_completo,
+            status: apt.status
+          }))
+        });
+
         logger.info('Agendamentos carregados com sucesso via RPC', { count: transformedAppointments.length }, 'APPOINTMENTS');
         return transformedAppointments;
       }, 'fetch_appointments', 'GET');
@@ -125,11 +154,29 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
 
   // Buscar agendamentos por médico e data
   const getAppointmentsByDoctorAndDate = (doctorId: string, date: string) => {
-    return (appointments || []).filter(
+    const filteredAppointments = (appointments || []).filter(
       appointment => 
         appointment.medico_id === doctorId && 
         appointment.data_agendamento === date
     );
+    
+    // 🔍 DEBUG: Log da filtragem por médico e data
+    console.log('🔍 DEBUG - getAppointmentsByDoctorAndDate:', {
+      doctorId,
+      date,
+      totalAppointments: appointments?.length || 0,
+      filteredCount: filteredAppointments.length,
+      filtered: filteredAppointments.map(apt => ({
+        id: apt.id,
+        medico_id: apt.medico_id,
+        data_agendamento: apt.data_agendamento,
+        hora_agendamento: apt.hora_agendamento,
+        paciente: apt.pacientes?.nome_completo,
+        status: apt.status
+      }))
+    });
+    
+    return filteredAppointments;
   };
 
   // Cancelar agendamento

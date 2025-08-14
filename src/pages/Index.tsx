@@ -84,7 +84,8 @@ const Index = () => {
     isDateBlocked,
     getBlockingReason,
     getBlockedDatesByDoctor,
-    refetch
+    refetch,
+    forceRefresh
   } = useSupabaseScheduling();
 
   const {
@@ -453,6 +454,7 @@ const Index = () => {
               onCancelAppointment={cancelAppointment}
               onConfirmAppointment={handleConfirmAppointment}
               onUnconfirmAppointment={handleUnconfirmAppointment}
+              onForceRefresh={forceRefresh}
               onEditAppointment={handleEditAppointment}
               onNewAppointment={(selectedDate) => {
                 if (selectedDate) {

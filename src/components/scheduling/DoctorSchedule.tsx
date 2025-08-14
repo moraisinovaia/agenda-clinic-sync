@@ -23,6 +23,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { FilaEsperaForm } from '@/components/fila-espera/FilaEsperaForm';
 import { FilaEsperaFormData } from '@/types/fila-espera';
+import { AppointmentDebugPanel } from '@/components/debug/AppointmentDebugPanel';
 
 interface DoctorScheduleProps {
   doctor: Doctor;
@@ -39,9 +40,10 @@ interface DoctorScheduleProps {
   atendimentos: Atendimento[];
   adicionarFilaEspera: (data: FilaEsperaFormData) => Promise<boolean>;
   searchPatientsByBirthDate: (birthDate: string) => Promise<any[]>;
+  onForceRefresh?: () => void;
 }
 
-export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDateBlocked, getBlockingReason, onCancelAppointment, onConfirmAppointment, onUnconfirmAppointment, onEditAppointment, onNewAppointment, initialDate, atendimentos, adicionarFilaEspera, searchPatientsByBirthDate }: DoctorScheduleProps) {
+export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDateBlocked, getBlockingReason, onCancelAppointment, onConfirmAppointment, onUnconfirmAppointment, onEditAppointment, onNewAppointment, initialDate, atendimentos, adicionarFilaEspera, searchPatientsByBirthDate, onForceRefresh }: DoctorScheduleProps) {
   // Usar initialDate se fornecida, senão usar data atual
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     if (initialDate) {
@@ -55,11 +57,36 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
   
   const getAppointmentsForDate = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
-    return appointments.filter(
+    const filteredAppointments = appointments.filter(
       appointment => 
         appointment.medico_id === doctor.id && 
         appointment.data_agendamento === dateStr
     );
+    
+    // 🔍 DEBUG: Log detalhado da filtragem na DoctorSchedule
+    console.log('🔍 DEBUG - DoctorSchedule.getAppointmentsForDate:', {
+      selectedDate: dateStr,
+      doctorId: doctor.id,
+      doctorName: doctor.nome,
+      totalAppointmentsReceived: appointments.length,
+      appointmentsAfterFilter: filteredAppointments.length,
+      appointmentsSample: appointments.slice(0, 5).map(apt => ({
+        id: apt.id,
+        medico_id: apt.medico_id,
+        data_agendamento: apt.data_agendamento,
+        hora_agendamento: apt.hora_agendamento,
+        paciente: apt.pacientes?.nome_completo,
+        status: apt.status
+      })),
+      filteredResults: filteredAppointments.map(apt => ({
+        id: apt.id,
+        hora_agendamento: apt.hora_agendamento,
+        paciente: apt.pacientes?.nome_completo,
+        status: apt.status
+      }))
+    });
+    
+    return filteredAppointments;
   };
 
   // Função para verificar se uma data tem agendamentos
@@ -116,6 +143,14 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
 
   return (
     <div className="space-y-6">
+      {/* Debug Panel - Only show in development or when debugging */}
+      <AppointmentDebugPanel
+        appointments={appointments}
+        selectedDoctor={doctor}
+        selectedDate={selectedDate}
+        onForceRefresh={onForceRefresh}
+        visible={process.env.NODE_ENV === 'development'}
+      />
       <Card className="w-full">
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
