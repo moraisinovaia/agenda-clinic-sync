@@ -66,10 +66,18 @@ export function SchedulingForm({
 
   // Handler específico para prevenir reload e garantir exibição de erro
   const handleFormSubmit = async (e: React.FormEvent) => {
-    console.log('🎯 SchedulingForm: Iniciando handleFormSubmit');
+    console.log('🎯 SchedulingForm: INÍCIO handleFormSubmit - botão clicado!');
+    console.log('📋 SchedulingForm: Dados do formulário:', formData);
     
-    // CRITICAL: Chamar handleSubmit APENAS UMA VEZ
-    await handleSubmit(e, onSubmit);
+    try {
+      // CRITICAL: Chamar handleSubmit APENAS UMA VEZ
+      console.log('⚡ SchedulingForm: Chamando handleSubmit...');
+      await handleSubmit(e, onSubmit);
+      console.log('✅ SchedulingForm: handleSubmit concluído com sucesso');
+    } catch (error) {
+      console.error('❌ SchedulingForm: Erro no handleFormSubmit:', error);
+      // Erro já é tratado pelo useSchedulingForm
+    }
   };
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date>(new Date());
 
@@ -168,7 +176,12 @@ export function SchedulingForm({
               )}
 
               <div className="flex gap-2 pt-4">
-                <Button type="submit" disabled={loading} className="flex-1">
+                <Button 
+                  type="submit" 
+                  disabled={loading} 
+                  className="flex-1"
+                  onClick={() => console.log('🖱️ SchedulingForm: Botão SUBMIT clicado!')}
+                >
                   {loading 
                     ? (editingAppointment ? 'Atualizando...' : 'Agendando...') 
                     : (editingAppointment ? 'Atualizar Agendamento' : 'Confirmar Agendamento')
