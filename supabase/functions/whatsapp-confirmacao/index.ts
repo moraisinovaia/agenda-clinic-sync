@@ -75,6 +75,7 @@ serve(async (req) => {
       paciente_celular,
       medico_nome,
       atendimento_nome,
+      atendimento_id,
       data_agendamento,
       hora_agendamento,
       observacoes
@@ -95,9 +96,69 @@ serve(async (req) => {
       );
     }
 
+    // Buscar preparos para este tipo de atendimento
+    let preparos = null;
+    try {
+      const { data: preparosData, error: preparosError } = await supabase
+        .from('preparos')
+        .select('*')
+        .ilike('exame', `%${atendimento_nome.replace(/[^\w\s]/gi, '')}%`)
+        .limit(1);
+      
+      if (preparosError) {
+        console.log('⚠️ Erro ao buscar preparos:', preparosError);
+      } else if (preparosData && preparosData.length > 0) {
+        preparos = preparosData[0];
+        console.log('✅ Preparos encontrados:', preparos.nome);
+      } else {
+        console.log('ℹ️ Nenhum preparo encontrado para:', atendimento_nome);
+      }
+    } catch (error) {
+      console.log('⚠️ Erro na busca de preparos:', error);
+    }
+
     // Formatar a data e hora
     const dataFormatada = new Date(data_agendamento + 'T00:00:00').toLocaleDateString('pt-BR');
     const horaFormatada = hora_agendamento.substring(0, 5);
+
+    // Formatar mensagem com preparos (se existirem)
+    let mensagemPreparos = '';
+    if (preparos) {
+      mensagemPreparos = `\n\n🔬 **INSTRUÇÕES DE PREPARO PARA ${atendimento_nome.toUpperCase()}:**\n`;
+      
+      if (preparos.jejum_horas) {
+        mensagemPreparos += `\n⏰ **Jejum:** ${preparos.jejum_horas} horas antes do exame`;
+      }
+      
+      if (preparos.medicacao_suspender) {
+        mensagemPreparos += `\n💊 **Medicações a suspender:** ${preparos.medicacao_suspender}`;
+        if (preparos.dias_suspensao) {
+          mensagemPreparos += ` (${preparos.dias_suspensao} dias antes)`;
+        }
+      }
+      
+      if (preparos.restricoes_alimentares) {
+        mensagemPreparos += `\n🍽️ **Restrições alimentares:** ${preparos.restricoes_alimentares}`;
+      }
+      
+      if (preparos.itens_levar) {
+        mensagemPreparos += `\n📋 **Documentos a trazer:** ${preparos.itens_levar}`;
+      }
+      
+      if (preparos.observacoes_especiais) {
+        mensagemPreparos += `\n⚠️ **Observações especiais:** ${preparos.observacoes_especiais}`;
+      }
+      
+      // Instruções detalhadas se existirem
+      if (preparos.instrucoes && Array.isArray(preparos.instrucoes)) {
+        mensagemPreparos += `\n\n📝 **Instruções detalhadas:**`;
+        preparos.instrucoes.forEach((instrucao, index) => {
+          mensagemPreparos += `\n${index + 1}. ${instrucao.instrucao}`;
+        });
+      }
+      
+      mensagemPreparos += `\n\n⚠️ **IMPORTANTE:** O não cumprimento das instruções pode resultar no cancelamento do exame.`;
+    }
 
     // Criar mensagem de confirmação
     const mensagem = `🏥 *ENDOGASTRO - Confirmação de Agendamento*
@@ -111,11 +172,12 @@ Olá, ${paciente_nome}!
 👨‍⚕️ **Médico:** Dr(a). ${medico_nome}
 🔬 **Procedimento:** ${atendimento_nome}
 
-${observacoes ? `📝 **Observações:** ${observacoes}` : ''}
+${observacoes ? `📝 **Observações:** ${observacoes}` : ''}${mensagemPreparos}
 
-📍 **Endereço:** [Inserir endereço da clínica]
+📍 **Endereço:** Rua da Clínica, 123 - Centro
+📞 **Contato:** (11) 1234-5678
 
-⚠️ **IMPORTANTE:**
+⚠️ **LEMBRETE GERAL:**
 • Chegue 15 minutos antes do horário
 • Traga documentos e cartão do convênio
 • Em caso de dúvidas, entre em contato
