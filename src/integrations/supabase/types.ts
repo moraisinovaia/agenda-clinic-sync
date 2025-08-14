@@ -1690,6 +1690,10 @@ export type Database = {
         Args: { p_agendamento_id: string }
         Returns: Json
       }
+      enviar_whatsapp_via_invoke: {
+        Args: { p_agendamento_id: string }
+        Returns: Json
+      }
       get_backup_cron_status: {
         Args: Record<PropertyKey, never>
         Returns: {

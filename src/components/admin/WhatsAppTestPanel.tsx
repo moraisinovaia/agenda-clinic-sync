@@ -3,17 +3,53 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, CheckCircle, XCircle, AlertTriangle, Phone, MessageSquare, Settings } from "lucide-react";
+import { Loader2, CheckCircle, XCircle, Phone, MessageSquare, Settings } from "lucide-react";
+
+interface DiagnosticResult {
+  timestamp: string;
+  extensoes: {
+    net_available: boolean;
+    http_available: boolean;
+  };
+  configuracao: {
+    edge_function_url: string;
+    trigger_exists: boolean;
+  };
+  recomendacoes: string[];
+}
+
+interface TestResult {
+  test_id: string;
+  success: boolean;
+  response: any;
+  message: string;
+}
+
+interface FallbackResult {
+  success: boolean;
+  status_code?: string;
+  response?: any;
+  message?: string;
+  error?: string;
+}
+
+interface LogEntry {
+  timestamp: string;
+  level: string;
+  message: string;
+  context: string;
+  data?: any;
+}
 
 export function WhatsAppTestPanel() {
   const [loading, setLoading] = useState(false);
-  const [diagnosticResult, setDiagnosticResult] = useState<any>(null);
-  const [testResult, setTestResult] = useState<any>(null);
-  const [logs, setLogs] = useState<any[]>([]);
+  const [diagnosticResult, setDiagnosticResult] = useState<DiagnosticResult | null>(null);
+  const [testResult, setTestResult] = useState<TestResult | null>(null);
+  const [fallbackResult, setFallbackResult] = useState<FallbackResult | null>(null);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
   const [celular, setCelular] = useState('87991311991');
   const { toast } = useToast();
 
@@ -23,12 +59,12 @@ export function WhatsAppTestPanel() {
       const { data, error } = await supabase.rpc('diagnosticar_whatsapp_sistema');
       if (error) throw error;
       
-      setDiagnosticResult(data);
+      setDiagnosticResult(data as unknown as DiagnosticResult);
       toast({
         title: "Diagnóstico concluído",
         description: "Verifique os resultados abaixo",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro no diagnóstico:', error);
       toast({
         title: "Erro no diagnóstico",
@@ -52,7 +88,7 @@ export function WhatsAppTestPanel() {
       
       if (error) throw error;
       
-      const result = data as any;
+      const result = data as unknown as TestResult;
       setTestResult(result);
       
       // Buscar logs recentes
@@ -63,14 +99,14 @@ export function WhatsAppTestPanel() {
         .order('timestamp', { ascending: false })
         .limit(5);
       
-      setLogs(logsData || []);
+      setLogs((logsData || []) as LogEntry[]);
       
       toast({
         title: result?.success ? "Teste enviado!" : "Teste falhou",
         description: result?.message || "Teste executado",
         variant: result?.success ? "default" : "destructive",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro no teste:', error);
       toast({
         title: "Erro no teste",
@@ -107,16 +143,82 @@ export function WhatsAppTestPanel() {
       
       if (error) throw error;
       
-      const result = data as any;
+      const result = data as unknown as FallbackResult;
+      setFallbackResult(result);
+      
       toast({
         title: result?.success ? "Fallback enviado!" : "Fallback falhou",
         description: result?.error || result?.message || "Teste de fallback executado",
         variant: result?.success ? "default" : "destructive",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro no fallback:', error);
       toast({
         title: "Erro no fallback",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const testDirectCall = async () => {
+    setLoading(true);
+    try {
+      // Buscar dados do agendamento
+      const { data: agendamentos } = await supabase
+        .from('agendamentos')
+        .select('id')
+        .eq('paciente_id', (await supabase
+          .from('pacientes')
+          .select('id')
+          .eq('celular', celular)
+          .single()).data?.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (!agendamentos?.length) {
+        throw new Error('Nenhum agendamento encontrado para este celular');
+      }
+
+      const { data: agendamentData } = await supabase.rpc('enviar_whatsapp_via_invoke', {
+        p_agendamento_id: agendamentos[0].id
+      });
+
+      const invokeData = agendamentData as any;
+      if (!invokeData?.success) {
+        throw new Error(invokeData?.error || 'Erro ao preparar dados');
+      }
+
+      // Chamar edge function diretamente via client
+      const { data, error } = await supabase.functions.invoke('whatsapp-confirmacao', {
+        body: {
+          agendamento_id: invokeData.agendamento_id,
+          paciente_nome: invokeData.paciente,
+          paciente_celular: invokeData.celular,
+          medico_nome: invokeData.medico,
+          atendimento_nome: invokeData.atendimento,
+          atendimento_id: invokeData.agendamento_id,
+          data_agendamento: invokeData.data,
+          hora_agendamento: invokeData.hora,
+          observacoes: 'TESTE DIRETO VIA CLIENT SUPABASE'
+        }
+      });
+
+      if (error) throw error;
+
+      const result = data as any;
+      toast({
+        title: result?.success ? "WhatsApp enviado via client!" : "Falha no envio via client",
+        description: result?.message || "Teste direto via client executado",
+        variant: result?.success ? "default" : "destructive",
+      });
+      
+    } catch (error: any) {
+      console.error('Erro no teste direto:', error);
+      toast({
+        title: "Erro no teste direto",
         description: error.message,
         variant: "destructive",
       });
@@ -158,7 +260,7 @@ export function WhatsAppTestPanel() {
               />
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <Button 
                 onClick={runDiagnostic}
                 disabled={loading}
@@ -172,10 +274,11 @@ export function WhatsAppTestPanel() {
               <Button 
                 onClick={testEdgeFunction}
                 disabled={loading}
+                variant="secondary"
                 className="w-full"
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <MessageSquare className="h-4 w-4 mr-2" />}
-                Testar Edge Function
+                Teste Trigger
               </Button>
               
               <Button 
@@ -185,7 +288,16 @@ export function WhatsAppTestPanel() {
                 className="w-full"
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Phone className="h-4 w-4 mr-2" />}
-                Testar Fallback
+                Teste Fallback
+              </Button>
+
+              <Button 
+                onClick={testDirectCall}
+                disabled={loading}
+                className="w-full"
+              >
+                {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle className="h-4 w-4 mr-2" />}
+                Teste Direto
               </Button>
             </div>
           </div>
@@ -256,7 +368,7 @@ export function WhatsAppTestPanel() {
                 <CheckCircle className="h-5 w-5 text-green-500" /> : 
                 <XCircle className="h-5 w-5 text-red-500" />
               }
-              Resultado do Teste
+              Resultado do Teste Trigger
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -265,6 +377,28 @@ export function WhatsAppTestPanel() {
               <div><strong>Test ID:</strong> {testResult.test_id}</div>
               <div><strong>Response:</strong> {testResult.response}</div>
               <div><strong>Mensagem:</strong> {testResult.message}</div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {fallbackResult && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              {fallbackResult.success ? 
+                <CheckCircle className="h-5 w-5 text-green-500" /> : 
+                <XCircle className="h-5 w-5 text-red-500" />
+              }
+              Resultado do Teste Fallback
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <div><strong>Status:</strong> {fallbackResult.success ? 'Sucesso' : 'Falha'}</div>
+              {fallbackResult.status_code && <div><strong>Status Code:</strong> {fallbackResult.status_code}</div>}
+              {fallbackResult.message && <div><strong>Mensagem:</strong> {fallbackResult.message}</div>}
+              {fallbackResult.error && <div><strong>Erro:</strong> {fallbackResult.error}</div>}
             </div>
           </CardContent>
         </Card>
