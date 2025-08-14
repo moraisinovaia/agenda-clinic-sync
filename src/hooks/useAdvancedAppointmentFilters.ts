@@ -7,8 +7,11 @@ import {
   isThisMonth, 
   isBefore, 
   isAfter,
-  startOfDay 
+  startOfDay,
+  parseISO 
 } from 'date-fns';
+import { toZonedTime, formatInTimeZone } from 'date-fns-tz';
+import { BRAZIL_TIMEZONE } from '@/utils/timezone';
 
 export const useAdvancedAppointmentFilters = (appointments: AppointmentWithRelations[]) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -58,33 +61,67 @@ export const useAdvancedAppointmentFilters = (appointments: AppointmentWithRelat
       // Status filter
       const matchesStatus = statusFilter === 'all' || appointment.status === statusFilter;
 
-      // Date filter
+      // Date filter - CRÍTICO: Corrigido para timezone brasileiro
       let matchesDate = true;
       if (dateFilter !== 'all') {
-        // Fix timezone issue by ensuring date is parsed in local timezone
-        const appointmentDate = new Date(appointment.data_agendamento + 'T00:00:00');
-        const today = startOfDay(new Date());
+        try {
+          // Parse date in Brazilian timezone to avoid timezone issues
+          const appointmentDateString = appointment.data_agendamento;
+          const appointmentDate = toZonedTime(parseISO(appointmentDateString + 'T12:00:00'), BRAZIL_TIMEZONE);
+          const today = toZonedTime(new Date(), BRAZIL_TIMEZONE);
+          const todayStart = startOfDay(today);
 
-        switch (dateFilter) {
-          case 'today':
-            matchesDate = isToday(appointmentDate);
-            break;
-          case 'tomorrow':
-            matchesDate = isTomorrow(appointmentDate);
-            break;
-          case 'week':
-            matchesDate = isThisWeek(appointmentDate, { weekStartsOn: 0 });
-            break;
-          case 'month':
-            matchesDate = isThisMonth(appointmentDate);
-            break;
-          case 'future':
-            matchesDate = isAfter(appointmentDate, today);
-            break;
-          case 'past':
-            matchesDate = isBefore(appointmentDate, today);
-            break;
+          console.log('🔍 [FILTROS] Processando data:', {
+            appointmentId: appointment.id,
+            originalDate: appointmentDateString,
+            parsedDate: appointmentDate.toISOString(),
+            todayDate: today.toISOString(),
+            dateFilter,
+            paciente: appointment.pacientes?.nome_completo
+          });
+
+          switch (dateFilter) {
+            case 'today':
+              matchesDate = isToday(appointmentDate);
+              break;
+            case 'tomorrow':
+              matchesDate = isTomorrow(appointmentDate);
+              break;
+            case 'week':
+              matchesDate = isThisWeek(appointmentDate, { weekStartsOn: 0 });
+              break;
+            case 'month':
+              matchesDate = isThisMonth(appointmentDate);
+              break;
+            case 'future':
+              matchesDate = isAfter(appointmentDate, todayStart);
+              break;
+            case 'past':
+              matchesDate = isBefore(appointmentDate, todayStart);
+              break;
+            default:
+              matchesDate = true;
+          }
+
+          if (!matchesDate) {
+            console.log('🚫 [FILTROS] Agendamento filtrado por data:', {
+              appointmentId: appointment.id,
+              data: appointmentDateString,
+              filtro: dateFilter,
+              paciente: appointment.pacientes?.nome_completo
+            });
+          }
+        } catch (error) {
+          console.error('❌ [FILTROS] Erro ao processar data:', {
+            appointmentId: appointment.id,
+            data: appointment.data_agendamento,
+            error: error.message
+          });
+          // Em caso de erro, manter o agendamento
+          matchesDate = true;
         }
+      } else {
+        console.log('✅ [FILTROS] Filtro de data = "all", mantendo todos os agendamentos');
       }
 
       // Doctor filter
