@@ -1682,6 +1682,14 @@ export type Database = {
         }
         Returns: Json
       }
+      diagnosticar_whatsapp_sistema: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      enviar_whatsapp_fallback: {
+        Args: { p_agendamento_id: string }
+        Returns: Json
+      }
       get_backup_cron_status: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -1844,6 +1852,17 @@ export type Database = {
       sparsevec_typmod_in: {
         Args: { "": unknown[] }
         Returns: number
+      }
+      test_whatsapp_edge_function: {
+        Args: {
+          p_atendimento?: string
+          p_celular: string
+          p_data?: string
+          p_hora?: string
+          p_medico?: string
+          p_nome?: string
+        }
+        Returns: Json
       }
       toggle_backup_cron: {
         Args: { enable_cron: boolean }
