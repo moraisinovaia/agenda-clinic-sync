@@ -25,99 +25,107 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           throw error;
         }
 
-        // Transformar para o formato esperado
-        const transformedAppointments = (appointmentsWithRelations || []).map(apt => ({
-          id: apt.id,
-          paciente_id: apt.paciente_id,
-          medico_id: apt.medico_id,
-          atendimento_id: apt.atendimento_id,
-          data_agendamento: apt.data_agendamento,
-          hora_agendamento: apt.hora_agendamento,
-          status: apt.status,
-          observacoes: apt.observacoes,
-          created_at: apt.created_at,
-          updated_at: apt.updated_at,
-          criado_por: apt.criado_por,
-          criado_por_user_id: apt.criado_por_user_id,
-          // Campos adicionais para cancelamento e confirmação
-          cancelado_em: null,
-          cancelado_por: null,
-          cancelado_por_user_id: null,
-          confirmado_em: null,
-          confirmado_por: null,
-          confirmado_por_user_id: null,
-          convenio: apt.paciente_convenio,
-          pacientes: {
-            id: apt.paciente_id,
-            nome_completo: apt.paciente_nome,
-            convenio: apt.paciente_convenio,
-            celular: apt.paciente_celular,
-            telefone: apt.paciente_telefone || '',
-            data_nascimento: apt.paciente_data_nascimento || '',
-            created_at: '',
-            updated_at: ''
-          },
-          medicos: {
-            id: apt.medico_id,
-            nome: apt.medico_nome,
-            especialidade: apt.medico_especialidade,
-            ativo: true,
-            crm: '',
-            created_at: '',
-            updated_at: '',
-            convenios_aceitos: [],
-            convenios_restricoes: null,
-            horarios: null,
-            idade_maxima: null,
-            idade_minima: null,
-            observacoes: ''
-          },
-          atendimentos: {
-            id: apt.atendimento_id,
-            nome: apt.atendimento_nome,
-            tipo: apt.atendimento_tipo,
-            ativo: true,
-            medico_id: apt.medico_id,
-            medico_nome: apt.medico_nome,
-            created_at: '',
-            updated_at: '',
-            codigo: '',
-            coparticipacao_unimed_20: 0,
-            coparticipacao_unimed_40: 0,
-            forma_pagamento: 'convenio',
-            horarios: null,
-            observacoes: '',
-            valor_convenio: 0,
-            valor_particular: 0,
-            restricoes: null
-          }
-        }));
+        // 🔍 DEBUG: Log dos dados RAW do banco
+        console.log('🔍 DEBUG - Dados RAW da RPC:', {
+          total: appointmentsWithRelations?.length || 0,
+          primeiros3: appointmentsWithRelations?.slice(0, 3),
+          setembro2025: appointmentsWithRelations?.filter(apt => apt.data_agendamento?.startsWith('2025-09'))?.length || 0
+        });
 
-        // 🔍 DEBUG: Log detalhado dos agendamentos carregados
-        console.log('🔍 DEBUG - Agendamentos carregados via RPC:', {
-          total: transformedAppointments.length,
-          sample: transformedAppointments.slice(0, 3).map(apt => ({
+        // Transformar para o formato esperado - SEM FILTROS ADICIONAIS
+        const transformedAppointments = (appointmentsWithRelations || []).map(apt => {
+          // 🔍 DEBUG: Log de cada transformação
+          if (apt.data_agendamento === '2025-09-22') {
+            console.log('🔍 DEBUG - Transformando agendamento 22/09:', apt);
+          }
+          
+          return {
             id: apt.id,
+            paciente_id: apt.paciente_id,
             medico_id: apt.medico_id,
-            medico_nome: apt.medicos?.nome,
+            atendimento_id: apt.atendimento_id,
             data_agendamento: apt.data_agendamento,
             hora_agendamento: apt.hora_agendamento,
-            paciente_nome: apt.pacientes?.nome_completo,
-            status: apt.status
-          }))
+            status: apt.status,
+            observacoes: apt.observacoes,
+            created_at: apt.created_at,
+            updated_at: apt.updated_at,
+            criado_por: apt.criado_por,
+            criado_por_user_id: apt.criado_por_user_id,
+            // Campos adicionais para cancelamento e confirmação
+            cancelado_em: null,
+            cancelado_por: null,
+            cancelado_por_user_id: null,
+            confirmado_em: null,
+            confirmado_por: null,
+            confirmado_por_user_id: null,
+            convenio: apt.paciente_convenio,
+            pacientes: {
+              id: apt.paciente_id,
+              nome_completo: apt.paciente_nome,
+              convenio: apt.paciente_convenio,
+              celular: apt.paciente_celular,
+              telefone: apt.paciente_telefone || '',
+              data_nascimento: apt.paciente_data_nascimento || '',
+              created_at: '',
+              updated_at: ''
+            },
+            medicos: {
+              id: apt.medico_id,
+              nome: apt.medico_nome,
+              especialidade: apt.medico_especialidade,
+              ativo: true,
+              crm: '',
+              created_at: '',
+              updated_at: '',
+              convenios_aceitos: [],
+              convenios_restricoes: null,
+              horarios: null,
+              idade_maxima: null,
+              idade_minima: null,
+              observacoes: ''
+            },
+            atendimentos: {
+              id: apt.atendimento_id,
+              nome: apt.atendimento_nome,
+              tipo: apt.atendimento_tipo,
+              ativo: true,
+              medico_id: apt.medico_id,
+              medico_nome: apt.medico_nome,
+              created_at: '',
+              updated_at: '',
+              codigo: '',
+              coparticipacao_unimed_20: 0,
+              coparticipacao_unimed_40: 0,
+              forma_pagamento: 'convenio',
+              horarios: null,
+              observacoes: '',
+              valor_convenio: 0,
+              valor_particular: 0,
+              restricoes: null
+            }
+          };
         });
-        
-        // 🔍 DEBUG: Agendamentos específicos do Dr. Edson
+
+        // 🔍 DEBUG: Log detalhado dos agendamentos carregados
         const drEdsonAppointments = transformedAppointments.filter(apt => 
           apt.medicos?.nome?.toLowerCase().includes('edson')
         );
-        console.log('🔍 DEBUG - Agendamentos do Dr. Edson:', {
-          count: drEdsonAppointments.length,
-          appointments: drEdsonAppointments.map(apt => ({
+        const setembro22 = transformedAppointments.filter(apt => 
+          apt.data_agendamento === '2025-09-22'
+        );
+        
+        console.log('🔍 DEBUG - Agendamentos PROCESSADOS:', {
+          totalTransformados: transformedAppointments.length,
+          drEdsonTotal: drEdsonAppointments.length,
+          setembro22Total: setembro22.length,
+          setembro22Details: setembro22.map(apt => ({
             id: apt.id,
             data: apt.data_agendamento,
             hora: apt.hora_agendamento,
             paciente: apt.pacientes?.nome_completo,
+            medico_id: apt.medico_id,
+            medico_nome: apt.medicos?.nome,
             status: apt.status
           }))
         });
