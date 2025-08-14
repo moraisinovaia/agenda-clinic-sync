@@ -162,54 +162,6 @@ export function PatientDataForm({
 
   return (
     <>
-      {/* CSS FORÇADO DIRETO NO DOM */}
-      <style dangerouslySetInnerHTML={{
-        __html: `
-          .force-scrollbar {
-            height: 200px !important;
-            overflow-y: scroll !important;
-            overflow-x: hidden !important;
-            border: 1px solid #e2e8f0 !important;
-            border-radius: 6px !important;
-            padding: 8px !important;
-            background-color: white !important;
-          }
-          
-          .force-scrollbar::-webkit-scrollbar {
-            width: 12px !important;
-            display: block !important;
-          }
-          
-          .force-scrollbar::-webkit-scrollbar-track {
-            background: #f1f1f1 !important;
-          }
-          
-          .force-scrollbar::-webkit-scrollbar-thumb {
-            background: #888 !important;
-            border-radius: 6px !important;
-          }
-          
-          .force-scrollbar::-webkit-scrollbar-thumb:hover {
-            background: #555 !important;
-          }
-          
-          .patient-item {
-            display: flex !important;
-            align-items: center !important;
-            justify-content: space-between !important;
-            padding: 12px !important;
-            margin-bottom: 8px !important;
-            border: 1px solid #e2e8f0 !important;
-            border-radius: 6px !important;
-            background-color: #f8fafc !important;
-            min-height: 68px !important;
-          }
-          
-          .patient-item:hover {
-            background-color: #e2e8f0 !important;
-          }
-        `
-      }} />
       
       <div className="space-y-4">
         <h3 className="text-lg font-semibold flex items-center gap-2">
@@ -259,24 +211,82 @@ export function PatientDataForm({
                 }
               </h4>
             </div>
-            {/* CONTAINER COM SCROLL FORÇADO VIA CSS */}
-            <div className="force-scrollbar">
+            {/* CONTAINER COM SCROLL FORÇADO - ESTILOS INLINE ROBUSTOS */}
+            <div 
+              style={{
+                maxHeight: foundPatients.length > 5 ? '300px' : 'auto',
+                minHeight: foundPatients.length > 5 ? '300px' : 'auto',
+                overflowY: foundPatients.length > 5 ? 'scroll' : 'auto',
+                overflowX: 'hidden',
+                border: '1px solid hsl(var(--border))',
+                borderRadius: '6px',
+                padding: '12px',
+                backgroundColor: 'hsl(var(--background))',
+                scrollbarWidth: 'thin',
+                scrollbarColor: 'hsl(var(--border)) hsl(var(--background))',
+                scrollbarGutter: 'stable',
+                WebkitOverflowScrolling: 'touch',
+                msOverflowStyle: 'scrollbar'
+              }}
+              className="space-y-2"
+            >
+              <style dangerouslySetInnerHTML={{
+                __html: `
+                  div[style*="maxHeight"] {
+                    scrollbar-width: thin !important;
+                  }
+                  div[style*="maxHeight"]::-webkit-scrollbar {
+                    width: 8px !important;
+                    display: block !important;
+                  }
+                  div[style*="maxHeight"]::-webkit-scrollbar-track {
+                    background: hsl(var(--muted)) !important;
+                    border-radius: 4px !important;
+                  }
+                  div[style*="maxHeight"]::-webkit-scrollbar-thumb {
+                    background: hsl(var(--border)) !important;
+                    border-radius: 4px !important;
+                  }
+                  div[style*="maxHeight"]::-webkit-scrollbar-thumb:hover {
+                    background: hsl(var(--muted-foreground)) !important;
+                  }
+                `
+              }} />
               {foundPatients.map((patient, index) => (
-                <div key={patient.id || `patient-${index}`} className="patient-item">
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontWeight: '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {patient.nome_completo}
-                    </p>
-                    <p style={{ fontSize: '14px', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {patient.convenio} • {patient.celular}
-                      {patient.telefone && ` • ${patient.telefone}`}
-                    </p>
+                <div 
+                  key={patient.id || `patient-${index}`} 
+                  className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent cursor-pointer group"
+                  onClick={() => selectPatient(patient)}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      <span className="font-medium truncate">{patient.nome_completo}</span>
+                    </div>
+                    <div className="text-sm text-muted-foreground mt-1 truncate">
+                      {patient.data_nascimento && (
+                        <span>Nascimento: {patient.data_nascimento}</span>
+                      )}
+                      {patient.convenio && (
+                        <span className="ml-3">Convênio: {patient.convenio}</span>
+                      )}
+                      {(patient.telefone || patient.celular) && (
+                        <span className="ml-3">
+                          {patient.telefone || patient.celular}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <Button 
-                    size="sm" 
-                    onClick={() => selectPatient(patient)}
-                    style={{ marginLeft: '8px', flexShrink: 0 }}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="ml-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      selectPatient(patient);
+                    }}
                   >
+                    <UserCheck className="h-4 w-4 mr-1" />
                     Selecionar
                   </Button>
                 </div>
