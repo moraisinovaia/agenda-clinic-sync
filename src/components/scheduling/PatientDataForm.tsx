@@ -206,8 +206,8 @@ export function PatientDataForm({
                 }
               </h4>
             </div>
-            <ScrollArea className="max-h-32 w-full border rounded-md">
-              <div className="space-y-2 p-1">
+            <div className="max-h-40 overflow-y-auto border rounded-md bg-background" style={{ scrollbarWidth: 'thin', scrollbarColor: 'hsl(var(--primary)) hsl(var(--muted))' }}>
+              <div className="space-y-2 p-2">
                 {foundPatients.map((patient, index) => (
                   <div key={patient.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
                     <div>
@@ -227,8 +227,7 @@ export function PatientDataForm({
                   </div>
                 ))}
               </div>
-              <ScrollBar className="w-4 bg-border [&_[data-radix-scroll-area-thumb]]:bg-primary" />
-            </ScrollArea>
+            </div>
             <div className="pt-2 border-t">
               <Button 
                 variant="outline" 
