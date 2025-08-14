@@ -88,6 +88,22 @@ export function AppointmentDebugPanel({
             <Database className="h-3 w-3 mr-1" />
             Cache Agendamentos
           </Button>
+          <Button 
+            size="sm" 
+            variant="destructive" 
+            onClick={() => {
+              console.log('🚨 FORÇA REFRESH CRÍTICO acionado!');
+              clearAllCache();
+              if (typeof window !== 'undefined') {
+                console.log('🔄 Forçando recarga da página...');
+                setTimeout(() => window.location.reload(), 1000);
+              }
+            }}
+            className="text-xs"
+          >
+            <RefreshCw className="h-3 w-3 mr-1" />
+            FORÇA REFRESH
+          </Button>
           {onForceRefresh && (
             <Button 
               size="sm" 

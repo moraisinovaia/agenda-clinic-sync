@@ -39,6 +39,22 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           apt.data_agendamento >= '2025-09-01' && apt.data_agendamento <= '2025-09-30'
         );
         console.log('🚨 DEBUG CRÍTICO - TODOS os agendamentos de setembro 2025:', setembroAgendamentos);
+        
+        // 🚨 DEBUG CRÍTICO: Especificamente para Dr. Edson em setembro
+        const edsonSeptember = appointmentsWithRelations?.filter(apt => 
+          apt.medico_id === '58b3d6f1-98ff-46c0-8b30-f3281dce816e' &&
+          apt.data_agendamento >= '2025-09-01' && apt.data_agendamento <= '2025-09-30'
+        );
+        console.log('🚨 DEBUG CRÍTICO - Dr. Edson em setembro 2025:', {
+          total: edsonSeptember?.length || 0,
+          appointments: edsonSeptember?.map(apt => ({
+            id: apt.id,
+            data: apt.data_agendamento,
+            hora: apt.hora_agendamento,
+            paciente: apt.paciente_nome,
+            medico_id: apt.medico_id
+          }))
+        });
 
         // Transformar para o formato esperado - SEM FILTROS ADICIONAIS
         const transformedAppointments = (appointmentsWithRelations || []).map(apt => {

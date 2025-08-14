@@ -14,7 +14,39 @@ interface CachedData<T> {
   isStale: boolean;
 }
 
+// Cache global para o sistema
 const queryCache = new Map<string, CachedData<any>>();
+
+// 🔧 CORREÇÃO: Cache storage mais robusto com localStorage backup
+const CACHE_STORAGE_KEY = 'lovable_query_cache_v2';
+
+const saveCache = () => {
+  try {
+    const cacheData = Object.fromEntries(queryCache.entries());
+    localStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(cacheData));
+    console.log('💾 Cache salvo no localStorage:', Object.keys(cacheData).length, 'entries');
+  } catch (error) {
+    console.warn('⚠️ Erro ao salvar cache:', error);
+  }
+};
+
+const loadCache = () => {
+  try {
+    const cached = localStorage.getItem(CACHE_STORAGE_KEY);
+    if (cached) {
+      const cacheData = JSON.parse(cached);
+      Object.entries(cacheData).forEach(([key, value]) => {
+        queryCache.set(key, value as CachedData<any>);
+      });
+      console.log('📂 Cache carregado do localStorage:', Object.keys(cacheData).length, 'entries');
+    }
+  } catch (error) {
+    console.warn('⚠️ Erro ao carregar cache:', error);
+  }
+};
+
+// Carregar cache na inicialização
+loadCache();
 
 export const useOptimizedQuery = <T>(
   queryFn: () => Promise<T>,
@@ -97,42 +129,69 @@ export const useOptimizedQuery = <T>(
   const refetch = useCallback(() => {
     // Clear cache for this key and refetch
     queryCache.delete(cacheKey);
+    saveCache(); // Salvar alterações
     console.log(`🔄 Cache invalidated and refetching: ${cacheKey}`);
     return executeQuery();
   }, [cacheKey, executeQuery]);
 
+  // 🔧 CORREÇÃO: Função para limpar cache específico com backup
   const invalidateCache = useCallback(() => {
     queryCache.delete(cacheKey);
+    saveCache(); // Salvar alterações
     console.log(`🗑️ Cache invalidated: ${cacheKey}`);
   }, [cacheKey]);
 
+  // 🔧 CORREÇÃO: Função para forçar refetch com limpeza completa
   const forceRefetch = useCallback(async () => {
-    // Force fresh data from server, bypassing cache completely
+    console.log(`🔄 FORCE REFETCH iniciado para: ${cacheKey}`);
+    
+    // Limpeza completa
     queryCache.delete(cacheKey);
-    console.log(`🚀 Force refetching: ${cacheKey}`);
+    // Também limpar do localStorage
+    try {
+      const cached = localStorage.getItem(CACHE_STORAGE_KEY);
+      if (cached) {
+        const cacheData = JSON.parse(cached);
+        delete cacheData[cacheKey];
+        localStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(cacheData));
+      }
+    } catch (e) {
+      console.warn('⚠️ Erro ao limpar localStorage:', e);
+    }
+    
+    setLoading(true);
+    setError(null);
+    setData(null); // Limpar dados antigos
+    
+    // Aguardar um pouco para garantir limpeza
+    await new Promise(resolve => setTimeout(resolve, 100));
     
     try {
-      setLoading(true);
-      setError(null);
-      
+      console.log(`🔄 Executando queryFn para: ${cacheKey}`);
       const result = await queryFn();
-      const now = Date.now();
-      
-      queryCache.set(cacheKey, {
-        data: result,
-        timestamp: now,
-        isStale: false
-      });
+      console.log(`✅ QueryFn completada para: ${cacheKey}`, result ? 'com dados' : 'sem dados');
       
       setData(result);
-      console.log(`✅ Fresh data loaded: ${cacheKey}`, result);
+      
+      // Cache o resultado se cacheKey estiver definido
+      if (cacheTime > 0 && result) {
+        const cacheEntry = {
+          data: result,
+          timestamp: Date.now(),
+          isStale: false
+        };
+        queryCache.set(cacheKey, cacheEntry);
+        saveCache();
+        console.log(`💾 Dados cacheados para: ${cacheKey}`);
+      }
     } catch (err) {
-      setError(err as Error);
-      console.error(`❌ Force refetch error for ${cacheKey}:`, err);
+      console.error(`❌ Erro no forceRefetch:`, err);
+      setError(err instanceof Error ? err : new Error(String(err)));
     } finally {
       setLoading(false);
+      console.log(`🔄 FORCE REFETCH finalizado para: ${cacheKey}`);
     }
-  }, [cacheKey, queryFn]);
+  }, [queryFn, cacheKey, cacheTime]);
 
   useEffect(() => {
     if (refetchOnMount) {
@@ -150,12 +209,18 @@ export const useOptimizedQuery = <T>(
   };
 };
 
-// Utility to clear all cache
+// 🔧 CORREÇÃO: Função para limpar todo o cache com localStorage
 export const clearAllCache = () => {
   queryCache.clear();
+  try {
+    localStorage.removeItem(CACHE_STORAGE_KEY);
+    console.log('🧹 Todo o cache foi limpo (memoria + localStorage)');
+  } catch (e) {
+    console.warn('⚠️ Erro ao limpar localStorage:', e);
+  }
 };
 
-// Utility to clear cache by pattern
+// 🔧 CORREÇÃO: Função para limpar cache por padrão com localStorage
 export const clearCacheByPattern = (pattern: string) => {
   const keysToDelete: string[] = [];
   queryCache.forEach((_, key) => {
@@ -164,4 +229,18 @@ export const clearCacheByPattern = (pattern: string) => {
     }
   });
   keysToDelete.forEach(key => queryCache.delete(key));
+  
+  // Também limpar do localStorage
+  try {
+    const cached = localStorage.getItem(CACHE_STORAGE_KEY);
+    if (cached) {
+      const cacheData = JSON.parse(cached);
+      keysToDelete.forEach(key => delete cacheData[key]);
+      localStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(cacheData));
+    }
+  } catch (e) {
+    console.warn('⚠️ Erro ao limpar localStorage por padrão:', e);
+  }
+  
+  console.log(`🧹 Cache limpo por padrão "${pattern}":`, keysToDelete);
 };

@@ -57,34 +57,79 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
   
   const getAppointmentsForDate = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
-    const filteredAppointments = appointments.filter(
-      appointment => 
-        appointment.medico_id === doctor.id && 
-        appointment.data_agendamento === dateStr
-    );
     
-    // 🔍 DEBUG: Log detalhado da filtragem na DoctorSchedule
-    console.log('🔍 DEBUG - DoctorSchedule.getAppointmentsForDate:', {
+    // 🚨 DEBUG CRÍTICO: Diagnóstico completo da filtragem
+    console.log('🚨 DEBUG CRÍTICO - getAppointmentsForDate INÍCIO:', {
+      dateStr,
+      doctorId: doctor.id,
+      doctorIdType: typeof doctor.id,
+      totalAppointments: appointments.length,
+      appointmentsSample: appointments.slice(0, 3).map(apt => ({
+        id: apt.id,
+        medico_id: apt.medico_id,
+        medico_id_type: typeof apt.medico_id,
+        data_agendamento: apt.data_agendamento,
+        data_type: typeof apt.data_agendamento,
+        matches_doctor: apt.medico_id === doctor.id,
+        matches_date: apt.data_agendamento === dateStr,
+        paciente: apt.pacientes?.nome_completo || 'SEM NOME'
+      }))
+    });
+
+    // 🔧 CORREÇÃO: Filtering robusto com conversão de tipos e fallbacks
+    const filteredAppointments = appointments.filter(appointment => {
+      // Garantir que os IDs sejam strings para comparação
+      const appointmentDoctorId = String(appointment.medico_id || '').trim();
+      const targetDoctorId = String(doctor.id || '').trim();
+      const appointmentDate = String(appointment.data_agendamento || '').trim();
+      
+      const doctorMatch = appointmentDoctorId === targetDoctorId;
+      const dateMatch = appointmentDate === dateStr;
+      
+      console.log(`🔍 Comparação appointment ${appointment.id}:`, {
+        appointmentDoctorId,
+        targetDoctorId,
+        doctorMatch,
+        appointmentDate,
+        dateStr,
+        dateMatch,
+        passes: doctorMatch && dateMatch
+      });
+      
+      return doctorMatch && dateMatch;
+    });
+    
+    // 🚨 DEBUG CRÍTICO: Resultado da filtragem
+    console.log('🚨 DEBUG CRÍTICO - getAppointmentsForDate RESULTADO:', {
       selectedDate: dateStr,
       doctorId: doctor.id,
       doctorName: doctor.nome,
       totalAppointmentsReceived: appointments.length,
       appointmentsAfterFilter: filteredAppointments.length,
-      appointmentsSample: appointments.slice(0, 5).map(apt => ({
-        id: apt.id,
-        medico_id: apt.medico_id,
-        data_agendamento: apt.data_agendamento,
-        hora_agendamento: apt.hora_agendamento,
-        paciente: apt.pacientes?.nome_completo,
-        status: apt.status
-      })),
       filteredResults: filteredAppointments.map(apt => ({
         id: apt.id,
         hora_agendamento: apt.hora_agendamento,
         paciente: apt.pacientes?.nome_completo,
-        status: apt.status
-      }))
+        status: apt.status,
+        medico_id: apt.medico_id
+      })),
+      // Fallback: Se não encontrou nenhum, mostrar todos do médico para debug
+      allDoctorAppointments: filteredAppointments.length === 0 ? 
+        appointments.filter(apt => String(apt.medico_id) === String(doctor.id)).map(apt => ({
+          data: apt.data_agendamento,
+          paciente: apt.pacientes?.nome_completo
+        })) : []
     });
+    
+    // 🔧 FALLBACK: Se não encontrou agendamentos mas há dados, tentar busca menos restritiva
+    if (filteredAppointments.length === 0 && appointments.length > 0) {
+      console.log('🔧 FALLBACK: Tentando busca menos restritiva...');
+      const fallbackResults = appointments.filter(apt => 
+        (apt.medico_id && String(apt.medico_id).includes(doctor.id.slice(-8))) ||
+        (apt.data_agendamento && apt.data_agendamento.includes(dateStr.split('-').join('')))
+      );
+      console.log('🔧 FALLBACK resultados:', fallbackResults.length);
+    }
     
     return filteredAppointments;
   };
@@ -149,7 +194,7 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
         selectedDoctor={doctor}
         selectedDate={selectedDate}
         onForceRefresh={onForceRefresh}
-        visible={process.env.NODE_ENV === 'development'}
+        visible={true}
       />
       <Card className="w-full">
         <CardHeader className="pb-4">
