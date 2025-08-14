@@ -9,7 +9,6 @@ import { DateOfBirthInput } from '@/components/ui/date-of-birth-input';
 import { User, Search, UserCheck, AlertCircle, CheckCircle } from 'lucide-react';
 import { SchedulingFormData } from '@/types/scheduling';
 import { useUnifiedPatientSearch } from '@/hooks/useUnifiedPatientSearch';
-import { CompactPatientList } from '@/components/ui/compact-patient-list';
 
 interface PatientDataFormFixedProps {
   formData: SchedulingFormData;
@@ -211,14 +210,49 @@ export function PatientDataFormFixed({
       
       {/* Lista de pacientes encontrados */}
       {showResults && (
-        <CompactPatientList
-          patients={foundPatients}
-          loading={searchingPatients}
-          onSelectPatient={selectPatient}
-          onCreateNew={createNewPatient}
-          showCreateNew={true}
-          className="mt-4"
-        />
+        <Card className="mt-4">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <UserCheck className="h-4 w-4 text-green-600" />
+              <h4 className="font-medium text-green-700">
+                {foundPatients.length === 1 
+                  ? 'Paciente encontrado!' 
+                  : `${foundPatients.length} pacientes encontrados`
+                }
+              </h4>
+            </div>
+            <div className="space-y-2">
+              {foundPatients.map((patient, index) => (
+                <div key={patient.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
+                  <div>
+                    <p className="font-medium">{patient.nome_completo}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {patient.convenio} • {patient.celular}
+                      {patient.telefone && ` • ${patient.telefone}`}
+                    </p>
+                  </div>
+                  <Button 
+                    size="sm" 
+                    onClick={() => selectPatient(patient)}
+                    className="ml-2"
+                  >
+                    Selecionar
+                  </Button>
+                </div>
+              ))}
+              <div className="pt-2 border-t">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={createNewPatient}
+                  className="w-full"
+                >
+                  Criar novo paciente com esta data
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Alerta de validação de idade */}
