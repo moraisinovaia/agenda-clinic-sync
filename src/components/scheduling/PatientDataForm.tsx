@@ -210,12 +210,8 @@ export function PatientDataForm({
               </h4>
             </div>
             
-            <ScrollArea 
-              type="always" 
-              scrollHideDelay={0}
-              className="max-h-[360px] w-full rounded-md border p-4"
-            >
-              <div className="space-y-2 pr-2">
+            <div className="max-h-[360px] overflow-y-auto w-full rounded-md border p-4">
+              <div className="space-y-2">
                 {foundPatients.map((patient, index) => (
                   <div 
                     key={patient.id || `patient-${index}`} 
@@ -256,7 +252,7 @@ export function PatientDataForm({
                   </div>
                 ))}
               </div>
-            </ScrollArea>
+            </div>
             
             <div className="pt-3 border-t mt-3">
               <Button 
