@@ -33,6 +33,19 @@ export function AppointmentDebugPanel({
     onForceRefresh?.();
   };
 
+  const handleTotalReset = () => {
+    console.log('🚨 RESET TOTAL acionado!');
+    // Limpar localStorage
+    localStorage.clear();
+    // Limpar cache
+    clearAllCache();
+    // Forçar reload da página
+    setTimeout(() => {
+      console.log('🔄 Recarregando página para reset completo...');
+      window.location.reload();
+    }, 500);
+  };
+
   const handleClearAppointmentsCache = () => {
     clearCacheByPattern('appointments');
     console.log('🧹 Cache de agendamentos limpo');
@@ -91,18 +104,11 @@ export function AppointmentDebugPanel({
           <Button 
             size="sm" 
             variant="destructive" 
-            onClick={() => {
-              console.log('🚨 FORÇA REFRESH CRÍTICO acionado!');
-              clearAllCache();
-              if (typeof window !== 'undefined') {
-                console.log('🔄 Forçando recarga da página...');
-                setTimeout(() => window.location.reload(), 1000);
-              }
-            }}
+            onClick={handleTotalReset}
             className="text-xs"
           >
             <RefreshCw className="h-3 w-3 mr-1" />
-            FORÇA REFRESH
+            RESET TOTAL
           </Button>
           {onForceRefresh && (
             <Button 
@@ -120,7 +126,8 @@ export function AppointmentDebugPanel({
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
           <div className="bg-white p-2 rounded border">
             <div className="font-medium">Total Agendamentos</div>
-            <div className="text-lg font-bold">{appointments.length}</div>
+            <div className="text-lg font-bold text-green-600">{appointments.length}</div>
+            <div className="text-xs text-muted-foreground">Passados para DoctorSchedule</div>
           </div>
           <div className="bg-white p-2 rounded border">
             <div className="font-medium">Dr. Edson</div>

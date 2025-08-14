@@ -450,7 +450,7 @@ const Index = () => {
             />
             <DoctorSchedule
               doctor={selectedDoctor}
-              appointments={appointments.filter(apt => apt.medico_id === selectedDoctor.id)}
+              appointments={appointments}
                 blockedDates={blockedDates}
                 isDateBlocked={isDateBlocked}
                 getBlockingReason={getBlockingReason}

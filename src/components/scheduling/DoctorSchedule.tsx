@@ -58,13 +58,14 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
   const getAppointmentsForDate = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     
-    // 🚨 DEBUG CRÍTICO: Diagnóstico completo da filtragem
+    // 🚨 DEBUG CRÍTICO: Diagnóstico completo da filtragem (SEM filtro duplicado do Index.tsx)
     console.log('🚨 DEBUG CRÍTICO - getAppointmentsForDate INÍCIO:', {
       dateStr,
       doctorId: doctor.id,
       doctorIdType: typeof doctor.id,
       totalAppointments: appointments.length,
-      appointmentsSample: appointments.slice(0, 3).map(apt => ({
+      message: '✅ CORREÇÃO: Agora recebendo TODOS os agendamentos (sem pré-filtro do Index.tsx)',
+      appointmentsSample: appointments.slice(0, 5).map(apt => ({
         id: apt.id,
         medico_id: apt.medico_id,
         medico_id_type: typeof apt.medico_id,
