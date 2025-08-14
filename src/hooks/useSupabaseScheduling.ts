@@ -155,38 +155,6 @@ export function useSupabaseScheduling() {
     console.log('🔍 DEBUG - Force refresh completed');
   }, [appointmentsList.forceRefetch, schedulingData.refetch]);
 
-  // 🔍 DIAGNÓSTICO CRÍTICO: Log detalhado dos dados antes de retornar
-  const diagnosticAppointments = appointmentsList.appointments || [];
-  const totalAppointments = diagnosticAppointments.length;
-  const agendadosCount = diagnosticAppointments.filter(apt => apt.status === 'agendado').length;
-  const confirmadosCount = diagnosticAppointments.filter(apt => apt.status === 'confirmado').length;
-  const canceladosCount = diagnosticAppointments.filter(apt => apt.status === 'cancelado').length;
-  
-  console.log('🔍 [DIAGNOSTIC] useSupabaseScheduling retornando:', {
-    totalAppointments,
-    agendadosCount,
-    confirmadosCount, 
-    canceladosCount,
-    statusBreakdown: diagnosticAppointments.reduce((acc, apt) => {
-      acc[apt.status] = (acc[apt.status] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>)
-  });
-
-  // Se há menos de 1200 agendados, investigar mais
-  if (agendadosCount < 1200) {
-    console.error('🚨 [DIAGNOSTIC] ALERTA: useSupabaseScheduling com poucos agendados!', {
-      esperado: 'pelo menos 1200',
-      encontrado: agendadosCount,
-      appointments: diagnosticAppointments.slice(0, 10).map(apt => ({
-        id: apt.id,
-        status: apt.status,
-        data_agendamento: apt.data_agendamento,
-        paciente: apt.pacientes?.nome_completo
-      }))
-    });
-  }
-
   // ✅ MEMOIZAR: O objeto retornado para garantir referências estáveis
   return useMemo(() => ({
       // Dados

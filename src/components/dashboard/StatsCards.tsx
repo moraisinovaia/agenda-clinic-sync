@@ -13,21 +13,6 @@ interface StatsCardsProps {
 
 export const StatsCards = ({ doctors, appointments }: StatsCardsProps) => {
   
-  // 🔍 DIAGNÓSTICO FINAL: Log detalhado dos dados recebidos pelo StatsCards
-  console.log('🔍 [STATSCARDS] Dados recebidos:', {
-    appointmentsTotal: appointments?.length || 0,
-    appointmentsStatusCount: appointments?.reduce((acc, apt) => {
-      acc[apt.status] = (acc[apt.status] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>) || {},
-    sampleAppointments: appointments?.slice(0, 5).map(apt => ({
-      id: apt.id,
-      status: apt.status,
-      data_agendamento: apt.data_agendamento,
-      paciente: apt.pacientes?.nome_completo
-    })) || []
-  });
-  
   const today = new Date().toISOString().split('T')[0];
   const tomorrow = addDays(new Date(), 1).toISOString().split('T')[0];
   
@@ -37,29 +22,6 @@ export const StatsCards = ({ doctors, appointments }: StatsCardsProps) => {
   const pendingAppointments = appointments.filter(apt => apt.status === 'agendado').length;
   const confirmedAppointments = appointments.filter(apt => apt.status === 'confirmado').length;
   const cancelledAppointments = appointments.filter(apt => apt.status === 'cancelado').length;
-  
-  // 🔍 DIAGNÓSTICO: Log das contagens calculadas
-  console.log('🔍 [STATSCARDS] Contagens calculadas:', {
-    totalAppointments,
-    pendingAppointments,
-    confirmedAppointments,
-    cancelledAppointments,
-    todayAppointments,
-    tomorrowAppointments
-  });
-  
-  // 🚨 ALERTA CRÍTICO: Se pendingAppointments < 1200, algo está muito errado
-  if (pendingAppointments < 1200) {
-    console.error('🚨 [STATSCARDS] PROBLEMA CRÍTICO: StatsCards recebendo poucos agendados!', {
-      esperado: 'pelo menos 1200',
-      encontrado: pendingAppointments,
-      totalRecebido: totalAppointments,
-      statusDistribution: appointments?.reduce((acc, apt) => {
-        acc[apt.status] = (acc[apt.status] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>) || {}
-    });
-  }
 
   
   // Calculate active doctors (with appointments today)

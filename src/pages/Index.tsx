@@ -413,31 +413,6 @@ const Index = () => {
             
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
               <div className="lg:col-span-3">
-                {/* 🔍 DIAGNÓSTICO: Log dos dados antes de passar para StatsCards */}
-                {(() => {
-                  const totalAppts = appointments?.length || 0;
-                  const agendadosAppts = appointments?.filter(apt => apt.status === 'agendado').length || 0;
-                  
-                  console.log('🔍 [INDEX] Passando dados para StatsCards:', {
-                    totalAppointments: totalAppts,
-                    agendadosAppointments: agendadosAppts,
-                    appointmentsArray: appointments?.slice(0, 5).map(apt => ({
-                      id: apt.id,
-                      status: apt.status,
-                      data_agendamento: apt.data_agendamento,
-                      paciente: apt.pacientes?.nome_completo
-                    })) || []
-                  });
-                  
-                  if (agendadosAppts < 1200) {
-                    console.error('🚨 [INDEX] PROBLEMA: Index.tsx passando poucos agendados para StatsCards!', {
-                      esperado: 'pelo menos 1200',
-                      encontrado: agendadosAppts
-                    });
-                  }
-                  
-                  return null;
-                })()}
                 <StatsCards doctors={doctors} appointments={appointments} />
                 
                 <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
