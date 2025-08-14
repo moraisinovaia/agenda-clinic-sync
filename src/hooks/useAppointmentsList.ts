@@ -19,26 +19,48 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     logger.info('Iniciando busca de agendamentos', {}, 'APPOINTMENTS');
     
     return measureApiCall(async () => {
-        // 🔍 DIAGNÓSTICO CRÍTICO: Buscar dados direto do banco
-        console.log('🔍 [DIAGNÓSTICO] Iniciando RPC buscar_agendamentos_otimizado...');
+        // 🔧 CORREÇÃO TEMPORÁRIA: Usar consulta direta enquanto corrigimos a RPC
+        console.log('🔧 [CORREÇÃO] Usando consulta direta ao invés da RPC...');
         
         const { data: appointmentsWithRelations, error } = await supabase
-          .rpc('buscar_agendamentos_otimizado')
-          .limit(10000); // 🔧 CORREÇÃO: Forçar limite alto para evitar truncamento automático do Supabase
+          .from('agendamentos')
+          .select(`
+            *,
+            pacientes!inner(
+              id,
+              nome_completo,
+              data_nascimento,
+              convenio,
+              telefone,
+              celular
+            ),
+            medicos!inner(
+              id,
+              nome,
+              especialidade
+            ),
+            atendimentos!inner(
+              id,
+              nome,
+              tipo
+            )
+          `)
+          .order('data_agendamento', { ascending: false })
+          .order('hora_agendamento', { ascending: false });
 
         if (error) {
-          console.error('❌ [DIAGNÓSTICO] Erro na RPC:', error);
-          logger.error('Erro na consulta de agendamentos otimizada', error, 'APPOINTMENTS');
+          console.error('❌ [CORREÇÃO] Erro na consulta direta:', error);
+          logger.error('Erro na consulta direta de agendamentos', error, 'APPOINTMENTS');
           throw error;
         }
 
-        // 🔍 DIAGNÓSTICO: Contadores detalhados da RPC
+        // 🔍 DIAGNÓSTICO: Contadores detalhados da consulta direta
         const rawTotal = appointmentsWithRelations?.length || 0;
         const rawAgendados = appointmentsWithRelations?.filter(apt => apt.status === 'agendado').length || 0;
         const rawConfirmados = appointmentsWithRelations?.filter(apt => apt.status === 'confirmado').length || 0;
         const rawCancelados = appointmentsWithRelations?.filter(apt => apt.status === 'cancelado').length || 0;
         
-        console.log('🔍 [DIAGNÓSTICO] Dados RAW da RPC:', {
+        console.log('🔍 [CORREÇÃO] Dados RAW da consulta DIRETA:', {
           totalRecords: rawTotal,
           agendados: rawAgendados,
           confirmados: rawConfirmados,
@@ -49,24 +71,15 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           }, {} as Record<string, number>) || {}
         });
 
-        // 🚨 VALIDAÇÃO CRÍTICA: Se menos de 1200 agendamentos, algo está errado
-        if (rawAgendados < 1200) {
-          console.error('🚨 [DIAGNÓSTICO] ALERTA: Número de agendamentos abaixo do esperado!', {
-            esperado: 'pelo menos 1200',
-            encontrado: rawAgendados,
-            diferenca: 1200 - rawAgendados
-          });
+        // ✅ Agora devemos ter TODOS os registros!
+        if (rawAgendados >= 1200) {
+          console.log('✅ [CORREÇÃO] SUCESSO: Consulta direta retornou todos os agendamentos!');
+        } else {
+          console.error('🚨 [CORREÇÃO] AINDA COM PROBLEMA: Consulta direta também tem poucos registros!');
         }
 
-        // 🔍 DIAGNÓSTICO: Transformação COMPLETA dos dados
-        console.log('🔍 [DIAGNÓSTICO] Iniciando transformação de', rawTotal, 'registros...');
-        
-        const transformedAppointments = (appointmentsWithRelations || []).map((apt, index) => {
-          // Log de progresso a cada 100 registros
-          if (index % 100 === 0) {
-            console.log(`🔍 [DIAGNÓSTICO] Transformando registro ${index + 1}/${rawTotal}`);
-          }
-          
+        // 🔧 Transformação simplificada para consulta direta
+        const transformedAppointments = (appointmentsWithRelations || []).map((apt) => {
           return {
             id: apt.id,
             paciente_id: apt.paciente_id,
@@ -81,27 +94,27 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
             criado_por: apt.criado_por,
             criado_por_user_id: apt.criado_por_user_id,
             // Campos adicionais para cancelamento e confirmação
-            cancelado_em: null,
-            cancelado_por: null,
-            cancelado_por_user_id: null,
-            confirmado_em: null,
-            confirmado_por: null,
-            confirmado_por_user_id: null,
-            convenio: apt.paciente_convenio,
-            pacientes: {
-              id: apt.paciente_id,
-              nome_completo: apt.paciente_nome,
-              convenio: apt.paciente_convenio,
-              celular: apt.paciente_celular,
-              telefone: apt.paciente_telefone || '',
-              data_nascimento: apt.paciente_data_nascimento || '',
+            cancelado_em: apt.cancelado_em,
+            cancelado_por: apt.cancelado_por,
+            cancelado_por_user_id: apt.cancelado_por_user_id,
+            confirmado_em: apt.confirmado_em,
+            confirmado_por: apt.confirmado_por,
+            confirmado_por_user_id: apt.confirmado_por_user_id,
+            convenio: apt.convenio,
+            pacientes: apt.pacientes ? {
+              id: apt.pacientes.id,
+              nome_completo: apt.pacientes.nome_completo,
+              convenio: apt.pacientes.convenio,
+              celular: apt.pacientes.celular,
+              telefone: apt.pacientes.telefone || '',
+              data_nascimento: apt.pacientes.data_nascimento || '',
               created_at: '',
               updated_at: ''
-            },
-            medicos: {
-              id: apt.medico_id,
-              nome: apt.medico_nome,
-              especialidade: apt.medico_especialidade,
+            } : null,
+            medicos: apt.medicos ? {
+              id: apt.medicos.id,
+              nome: apt.medicos.nome,
+              especialidade: apt.medicos.especialidade,
               ativo: true,
               crm: '',
               created_at: '',
@@ -112,14 +125,14 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
               idade_maxima: null,
               idade_minima: null,
               observacoes: ''
-            },
-            atendimentos: {
-              id: apt.atendimento_id,
-              nome: apt.atendimento_nome,
-              tipo: apt.atendimento_tipo,
+            } : null,
+            atendimentos: apt.atendimentos ? {
+              id: apt.atendimentos.id,
+              nome: apt.atendimentos.nome,
+              tipo: apt.atendimentos.tipo,
               ativo: true,
               medico_id: apt.medico_id,
-              medico_nome: apt.medico_nome,
+              medico_nome: apt.medicos?.nome || '',
               created_at: '',
               updated_at: '',
               codigo: '',
@@ -131,7 +144,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
               valor_convenio: 0,
               valor_particular: 0,
               restricoes: null
-            }
+            } : null
           };
         });
 
