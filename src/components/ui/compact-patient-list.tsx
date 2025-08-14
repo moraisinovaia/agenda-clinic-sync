@@ -101,7 +101,7 @@ export function CompactPatientList({
               </div>
             ))}
           </div>
-          <ScrollBar className="opacity-100 w-2 bg-muted/20 [&_[data-radix-scroll-area-thumb]]:bg-primary/50 hover:[&_[data-radix-scroll-area-thumb]]:bg-primary/70" />
+          <ScrollBar className="opacity-100 w-3 bg-muted/40 [&_[data-radix-scroll-area-thumb]]:bg-primary/80 hover:[&_[data-radix-scroll-area-thumb]]:bg-primary transition-colors" />
         </ScrollArea>
         
         {showCreateNew && onCreateNew && (
