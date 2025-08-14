@@ -7,7 +7,7 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
+  // Allows to automatically instanciate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "12.2.3 (519615d)"
@@ -1494,17 +1494,17 @@ export type Database = {
     }
     Functions: {
       aprovar_usuario: {
-        Args: { p_aprovador_id: string; p_user_id: string }
+        Args: { p_user_id: string; p_aprovador_id: string }
         Returns: Json
       }
       atualizar_dados_paciente: {
         Args: {
-          p_celular?: string
-          p_convenio: string
-          p_data_nascimento: string
-          p_nome_completo: string
           p_paciente_id: string
+          p_nome_completo: string
+          p_data_nascimento: string
+          p_convenio: string
           p_telefone?: string
+          p_celular?: string
         }
         Returns: Json
       }
@@ -1515,27 +1515,27 @@ export type Database = {
       buscar_agendamentos_otimizado: {
         Args: Record<PropertyKey, never>
         Returns: {
+          id: string
+          paciente_id: string
+          medico_id: string
           atendimento_id: string
-          atendimento_nome: string
-          atendimento_tipo: string
-          created_at: string
-          criado_por: string
-          criado_por_user_id: string
           data_agendamento: string
           hora_agendamento: string
-          id: string
-          medico_especialidade: string
-          medico_id: string
-          medico_nome: string
-          observacoes: string
-          paciente_celular: string
-          paciente_convenio: string
-          paciente_data_nascimento: string
-          paciente_id: string
-          paciente_nome: string
-          paciente_telefone: string
           status: string
+          observacoes: string
+          created_at: string
           updated_at: string
+          criado_por: string
+          criado_por_user_id: string
+          paciente_nome: string
+          paciente_convenio: string
+          paciente_celular: string
+          paciente_data_nascimento: string
+          paciente_telefone: string
+          medico_nome: string
+          medico_especialidade: string
+          atendimento_nome: string
+          atendimento_tipo: string
         }[]
       }
       cancelar_agendamento_soft: {
@@ -1567,60 +1567,60 @@ export type Database = {
         Returns: Json
       }
       confirmar_email_usuario_aprovado: {
-        Args: { p_admin_id: string; p_user_email: string }
+        Args: { p_user_email: string; p_admin_id: string }
         Returns: Json
       }
       criar_agendamento_atomico: {
         Args:
           | {
-              p_agendamento_id_edicao?: string
-              p_atendimento_id: string
-              p_celular: string
+              p_nome_completo: string
+              p_data_nascimento: string
               p_convenio: string
+              p_telefone: string
+              p_celular: string
+              p_medico_id: string
+              p_atendimento_id: string
+              p_data_agendamento: string
+              p_hora_agendamento: string
+              p_observacoes?: string
               p_criado_por?: string
               p_criado_por_user_id?: string
-              p_data_agendamento: string
-              p_data_nascimento: string
-              p_force_conflict?: boolean
+              p_agendamento_id_edicao?: string
               p_force_update_patient?: boolean
-              p_hora_agendamento: string
-              p_medico_id: string
-              p_nome_completo: string
-              p_observacoes?: string
-              p_telefone: string
             }
           | {
-              p_agendamento_id_edicao?: string
-              p_atendimento_id: string
-              p_celular: string
+              p_nome_completo: string
+              p_data_nascimento: string
               p_convenio: string
+              p_telefone: string
+              p_celular: string
+              p_medico_id: string
+              p_atendimento_id: string
+              p_data_agendamento: string
+              p_hora_agendamento: string
+              p_observacoes?: string
               p_criado_por?: string
               p_criado_por_user_id?: string
-              p_data_agendamento: string
-              p_data_nascimento: string
+              p_agendamento_id_edicao?: string
               p_force_update_patient?: boolean
-              p_hora_agendamento: string
-              p_medico_id: string
-              p_nome_completo: string
-              p_observacoes?: string
-              p_telefone: string
+              p_force_conflict?: boolean
             }
         Returns: Json
       }
       criar_agendamento_multiplo: {
         Args: {
-          p_atendimento_ids: string[]
-          p_celular: string
+          p_nome_completo: string
+          p_data_nascimento: string
           p_convenio: string
+          p_telefone: string
+          p_celular: string
+          p_medico_id: string
+          p_atendimento_ids: string[]
+          p_data_agendamento: string
+          p_hora_agendamento: string
+          p_observacoes?: string
           p_criado_por?: string
           p_criado_por_user_id?: string
-          p_data_agendamento: string
-          p_data_nascimento: string
-          p_hora_agendamento: string
-          p_medico_id: string
-          p_nome_completo: string
-          p_observacoes?: string
-          p_telefone: string
         }
         Returns: Json
       }
@@ -1639,48 +1639,48 @@ export type Database = {
       get_backup_cron_status: {
         Args: Record<PropertyKey, never>
         Returns: {
-          active: boolean
           job_name: string
           schedule: string
+          active: boolean
         }[]
       }
       get_current_user_profile: {
         Args: Record<PropertyKey, never>
         Returns: {
-          ativo: boolean
-          created_at: string
-          email: string
           id: string
-          nome: string
-          role: string
-          status: string
-          updated_at: string
           user_id: string
+          nome: string
+          email: string
+          role: string
+          ativo: boolean
           username: string
+          status: string
+          created_at: string
+          updated_at: string
         }[]
       }
       get_pending_users: {
         Args: Record<PropertyKey, never>
         Returns: {
-          aprovado_por_nome: string
-          created_at: string
-          email: string
           id: string
           nome: string
-          role: string
+          email: string
           username: string
+          role: string
+          created_at: string
+          aprovado_por_nome: string
         }[]
       }
       get_pending_users_safe: {
         Args: Record<PropertyKey, never>
         Returns: {
-          aprovado_por_nome: string
-          created_at: string
-          email: string
           id: string
           nome: string
-          role: string
+          email: string
           username: string
+          role: string
+          created_at: string
+          aprovado_por_nome: string
         }[]
       }
       get_user_role_safe: {
@@ -1760,31 +1760,31 @@ export type Database = {
         Returns: unknown
       }
       log_access_audit: {
-        Args: { p_action: string; p_details?: Json; p_resource: string }
+        Args: { p_action: string; p_resource: string; p_details?: Json }
         Returns: undefined
       }
       match_documents: {
-        Args: { filter?: Json; match_count?: number; query_embedding: string }
+        Args: { query_embedding: string; match_count?: number; filter?: Json }
         Returns: {
-          content: string
           id: number
+          content: string
           metadata: Json
           similarity: number
         }[]
       }
       rejeitar_usuario: {
-        Args: { p_aprovador_id: string; p_user_id: string }
+        Args: { p_user_id: string; p_aprovador_id: string }
         Returns: Json
       }
       relatorio_auditoria_periodo: {
-        Args: { data_fim: string; data_inicio: string }
+        Args: { data_inicio: string; data_fim: string }
         Returns: {
-          erros_por_tipo: Json
-          perguntas_criticas: number
-          taxa_sucesso: number
-          tempo_medio: number
-          total_alertas: number
           total_interacoes: number
+          taxa_sucesso: number
+          total_alertas: number
+          perguntas_criticas: number
+          tempo_medio: number
+          erros_por_tipo: Json
         }[]
       }
       sparsevec_out: {
@@ -1809,10 +1809,10 @@ export type Database = {
       }
       validar_conflito_agendamento: {
         Args: {
-          p_agendamento_id_edicao?: string
+          p_medico_id: string
           p_data_agendamento: string
           p_hora_agendamento: string
-          p_medico_id: string
+          p_agendamento_id_edicao?: string
         }
         Returns: Json
       }

@@ -127,11 +127,12 @@ export function DoctorSchedule({
     const filteredAppointments = appointments.filter(apt => {
       if (!apt.data_agendamento) return false;
       
-      // Convert date_agendamento to proper date string for comparison
+      // Converte a data_agendamento para Date e formata igual à dateStr, 
+      // evitando problemas de fuso horário ou string mal formatada
       const aptDateStr = format(new Date(apt.data_agendamento), 'yyyy-MM-dd');
       const dateMatch = aptDateStr === dateStr;
 
-      // Robust doctor ID comparison
+      // Força conversão para string e trim, evitando diferenças de tipo/espaço
       const doctorMatch = String(apt.medico_id).trim() === String(doctor.id).trim();
 
       return dateMatch && doctorMatch;
