@@ -17,6 +17,7 @@ import { Doctor, Atendimento } from '@/types/scheduling';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useUnifiedPatientSearch } from '@/hooks/useUnifiedPatientSearch';
+import { CompactPatientList } from '@/components/ui/compact-patient-list';
 
 interface FilaEsperaFormProps {
   doctors: Doctor[];
@@ -207,44 +208,17 @@ export function FilaEsperaForm({
 
                 {/* Lista de pacientes encontrados */}
                 {showResults && (
-                  <div className="md:col-span-2 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <UserCheck className="h-4 w-4 text-green-600" />
-                      <Label className="text-green-700 font-medium">
-                        {foundPatients.length === 1 
-                          ? 'Paciente encontrado!' 
-                          : `${foundPatients.length} pacientes encontrados`
-                        }
-                      </Label>
-                    </div>
-                    <div className="border rounded-md p-2 space-y-1 max-h-32 overflow-y-auto">
-                      {foundPatients.map((patient) => (
-                        <button
-                          key={patient.id}
-                          type="button"
-                          onClick={() => selectPatient(patient)}
-                          className="w-full text-left p-2 hover:bg-muted rounded text-sm border border-transparent hover:border-primary/20"
-                        >
-                          <div className="font-medium">{patient.nome_completo}</div>
-                          <div className="text-muted-foreground">
-                            {patient.data_nascimento} • {patient.convenio}
-                            {patient.celular && ` • ${patient.celular}`}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                    <Button
-                      type="button"
-                      onClick={() => {
+                  <div className="md:col-span-2">
+                    <CompactPatientList
+                      patients={foundPatients}
+                      loading={searchingPatients}
+                      onSelectPatient={selectPatient}
+                      onCreateNew={() => {
                         hideResults();
                         setShowCreateNew(true);
                       }}
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                    >
-                      Criar novo paciente com estes dados
-                    </Button>
+                      showCreateNew={true}
+                    />
                   </div>
                 )}
 
