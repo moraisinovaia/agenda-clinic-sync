@@ -25,12 +25,24 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           throw error;
         }
 
-        // Log básico dos dados
+        // Log básico dos dados - DEBUG SETEMBRO
+        const setembroApts = appointmentsWithRelations?.filter(apt => 
+          apt.data_agendamento >= '2025-09-01' && apt.data_agendamento <= '2025-09-30'
+        ) || [];
+        
         console.log('📊 Agendamentos carregados:', {
           total: appointmentsWithRelations?.length || 0,
-          setembro2025: appointmentsWithRelations?.filter(apt => 
-            apt.data_agendamento >= '2025-09-01' && apt.data_agendamento <= '2025-09-30'
-          )?.length || 0
+          setembro2025: setembroApts.length,
+          primeiroAgendamento: appointmentsWithRelations?.[0] ? {
+            data: appointmentsWithRelations[0].data_agendamento,
+            tipo: typeof appointmentsWithRelations[0].data_agendamento,
+            setembro: appointmentsWithRelations[0].data_agendamento >= '2025-09-01' && appointmentsWithRelations[0].data_agendamento <= '2025-09-30'
+          } : null,
+          setembroSample: setembroApts.slice(0, 3).map(apt => ({
+            data: apt.data_agendamento,
+            tipo: typeof apt.data_agendamento,
+            medico: apt.medico_nome
+          }))
         });
 
         // Transformar para o formato esperado - SEM FILTROS ADICIONAIS
