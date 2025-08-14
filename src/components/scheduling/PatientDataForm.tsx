@@ -206,8 +206,11 @@ export function PatientDataForm({
                 }
               </h4>
             </div>
-            <div className="max-h-[300px] overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
-              <div className="space-y-2 pr-4">
+            <div 
+              className="max-h-[300px] overflow-y-auto overflow-x-hidden border rounded-md bg-background"
+              style={{ height: 'auto', maxHeight: '300px' }}
+            >
+              <div className="space-y-2 p-2">
                 {foundPatients.map((patient, index) => (
                   <div key={patient.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
                     <div>
