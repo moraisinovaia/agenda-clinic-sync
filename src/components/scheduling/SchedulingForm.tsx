@@ -11,6 +11,7 @@ import { Doctor, Atendimento, SchedulingFormData, AppointmentWithRelations } fro
 import { PatientDataFormFixed } from './PatientDataFormFixed';
 import { AppointmentDataForm } from './AppointmentDataForm';
 import { useSchedulingForm } from '@/hooks/useSchedulingForm';
+import { EnhancedDateBlockingInfo } from './EnhancedDateBlockingInfo';
 
 interface SchedulingFormProps {
   doctors: Doctor[];
@@ -18,6 +19,7 @@ interface SchedulingFormProps {
   appointments: AppointmentWithRelations[];
   blockedDates?: any[];
   isDateBlocked?: (doctorId: string, date: Date) => boolean;
+  getBlockingReason?: (doctorId: string, date: Date) => { type: string; message: string } | null;
   onSubmit: (data: SchedulingFormData) => Promise<void>;
   onCancel: () => void;
   getAtendimentosByDoctor: (doctorId: string) => Atendimento[];
@@ -33,6 +35,7 @@ export function SchedulingForm({
   appointments,
   blockedDates = [],
   isDateBlocked,
+  getBlockingReason,
   onSubmit, 
   onCancel,
   getAtendimentosByDoctor,
@@ -245,6 +248,16 @@ export function SchedulingForm({
                     </div>
                   </div>
                 </div>
+
+                {/* Informação sobre bloqueio da data */}
+                {selectedDoctor && getBlockingReason && (
+                  <EnhancedDateBlockingInfo 
+                    doctor={selectedDoctor}
+                    date={selectedCalendarDate}
+                    blockingReason={getBlockingReason(selectedDoctor.id, selectedCalendarDate)}
+                    className="mb-3"
+                  />
+                )}
 
                 {/* Lista de agendamentos do dia selecionado */}
                 <div className="space-y-3">

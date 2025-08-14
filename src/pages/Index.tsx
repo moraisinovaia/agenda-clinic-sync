@@ -82,6 +82,7 @@ const Index = () => {
     getAtendimentosByDoctor,
     getAppointmentsByDoctorAndDate,
     isDateBlocked,
+    getBlockingReason,
     getBlockedDatesByDoctor,
     refetch
   } = useSupabaseScheduling();
@@ -446,8 +447,9 @@ const Index = () => {
             <DoctorSchedule
               doctor={selectedDoctor}
               appointments={appointments.filter(apt => apt.medico_id === selectedDoctor.id)}
-              blockedDates={blockedDates}
-              isDateBlocked={isDateBlocked}
+                blockedDates={blockedDates}
+                isDateBlocked={isDateBlocked}
+                getBlockingReason={getBlockingReason}
               onCancelAppointment={cancelAppointment}
               onConfirmAppointment={handleConfirmAppointment}
               onUnconfirmAppointment={handleUnconfirmAppointment}
@@ -483,6 +485,7 @@ const Index = () => {
                 appointments={appointments}
                 blockedDates={blockedDates}
                 isDateBlocked={isDateBlocked}
+                getBlockingReason={getBlockingReason}
                 onSubmit={handleSimpleAppointmentSubmit}
                 onSubmitWithForce={handleSimpleAppointmentSubmitWithForce}
                 onCancel={goBack}
@@ -556,6 +559,7 @@ const Index = () => {
               appointments={appointments}
               blockedDates={blockedDates}
               isDateBlocked={isDateBlocked}
+              getBlockingReason={getBlockingReason}
               onSubmit={handleSimpleAppointmentSubmit}
               onCancel={goBack}
               getAtendimentosByDoctor={getAtendimentosByDoctor}

@@ -29,6 +29,7 @@ interface DoctorScheduleProps {
   appointments: AppointmentWithRelations[];
   blockedDates?: any[];
   isDateBlocked?: (doctorId: string, date: Date) => boolean;
+  getBlockingReason?: (doctorId: string, date: Date) => { type: string; message: string } | null;
   onCancelAppointment: (appointmentId: string) => Promise<void>;
   onConfirmAppointment?: (appointmentId: string) => Promise<void>;
   onUnconfirmAppointment?: (appointmentId: string) => Promise<void>;
@@ -40,7 +41,7 @@ interface DoctorScheduleProps {
   searchPatientsByBirthDate: (birthDate: string) => Promise<any[]>;
 }
 
-export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDateBlocked, onCancelAppointment, onConfirmAppointment, onUnconfirmAppointment, onEditAppointment, onNewAppointment, initialDate, atendimentos, adicionarFilaEspera, searchPatientsByBirthDate }: DoctorScheduleProps) {
+export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDateBlocked, getBlockingReason, onCancelAppointment, onConfirmAppointment, onUnconfirmAppointment, onEditAppointment, onNewAppointment, initialDate, atendimentos, adicionarFilaEspera, searchPatientsByBirthDate }: DoctorScheduleProps) {
   // Usar initialDate se fornecida, senão usar data atual
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     if (initialDate) {
