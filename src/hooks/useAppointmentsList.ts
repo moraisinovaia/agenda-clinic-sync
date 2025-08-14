@@ -139,12 +139,52 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         const finalAgendados = transformedAppointments.filter(apt => apt.status === 'agendado').length;
         const finalConfirmados = transformedAppointments.filter(apt => apt.status === 'confirmado').length;
         
-        console.log('🔍 [DIAGNÓSTICO] Dados TRANSFORMADOS:', {
+        console.log('🔍 [USEAPPOINTMENTSLIST] Dados TRANSFORMADOS:', {
           totalTransformados: finalTotal,
           agendados: finalAgendados,
           confirmados: finalConfirmados,
           perdaDados: rawTotal - finalTotal,
           perdaAgendados: rawAgendados - finalAgendados
+        });
+        
+        // 🔍 INVESTIGAÇÃO ESPECÍFICA: Verificar se há filtros ocultos
+        const statusCounts = transformedAppointments.reduce((acc, apt) => {
+          acc[apt.status] = (acc[apt.status] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+        
+        console.log('🔍 [USEAPPOINTMENTSLIST] Status detalhado pós-transformação:', statusCounts);
+        
+        // 🔍 INVESTIGAÇÃO: Verificar se há agendamentos sendo filtrados por data
+        const agendadosPorData = transformedAppointments
+          .filter(apt => apt.status === 'agendado')
+          .reduce((acc, apt) => {
+            const ano = apt.data_agendamento.substring(0, 4);
+            acc[ano] = (acc[ano] || 0) + 1;
+            return acc;
+          }, {} as Record<string, number>);
+          
+        console.log('🔍 [USEAPPOINTMENTSLIST] Agendados por ano:', agendadosPorData);
+        
+        // 🔍 INVESTIGAÇÃO: Verificar agendamentos muito antigos ou muito futuros
+        const hoje = new Date().toISOString().split('T')[0];
+        const agendadosAntigos = transformedAppointments.filter(apt => 
+          apt.status === 'agendado' && apt.data_agendamento < '2024-01-01'
+        ).length;
+        const agendadosFuturos = transformedAppointments.filter(apt => 
+          apt.status === 'agendado' && apt.data_agendamento > '2025-12-31'
+        ).length;
+        const agendados2024_2025 = transformedAppointments.filter(apt => 
+          apt.status === 'agendado' && 
+          apt.data_agendamento >= '2024-01-01' && 
+          apt.data_agendamento <= '2025-12-31'
+        ).length;
+        
+        console.log('🔍 [USEAPPOINTMENTSLIST] Distribuição temporal dos agendados:', {
+          agendadosAntigos,
+          agendados2024_2025,
+          agendadosFuturos,
+          total: finalAgendados
         });
 
         // ✅ SIMPLIFICADO: Log básico apenas
