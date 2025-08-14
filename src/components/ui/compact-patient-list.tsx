@@ -71,7 +71,7 @@ export function CompactPatientList({
       </div>
       
       <div className="border rounded-md bg-background">
-        <ScrollArea className="max-h-40">
+        <ScrollArea className="max-h-60">
           <div className="p-2 space-y-1">
             {patients.map((patient) => (
               <div
