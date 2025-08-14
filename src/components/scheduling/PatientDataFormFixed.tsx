@@ -8,8 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DateOfBirthInput } from '@/components/ui/date-of-birth-input';
 import { User, Search, UserCheck, AlertCircle, CheckCircle } from 'lucide-react';
 import { SchedulingFormData } from '@/types/scheduling';
-import { usePatientSearch } from '@/hooks/usePatientSearch';
-import { useDebounce } from '@/hooks/useDebounce';
+import { useUnifiedPatientSearch } from '@/hooks/useUnifiedPatientSearch';
 
 interface PatientDataFormFixedProps {
   formData: SchedulingFormData;
@@ -31,12 +30,16 @@ export function PatientDataFormFixed({
   medicoSelected,
   selectedDoctor
 }: PatientDataFormFixedProps) {
-  const [showPatientsList, setShowPatientsList] = useState(false);
-  const { loading: searchingPatients, foundPatients, searchPatients, searchPatientsByName, clearResults } = usePatientSearch();
-  
-  // Debounce de entradas
-  const debouncedBirthDate = useDebounce(formData.dataNascimento, 500);
-  const debouncedName = useDebounce(formData.nomeCompleto, 500);
+  const { 
+    loading: searchingPatients, 
+    foundPatients, 
+    showResults, 
+    selectPatient: selectSearchedPatient,
+    searchByBirthDate,
+    searchByName,
+    clearSearch,
+    hideResults
+  } = useUnifiedPatientSearch();
 
   // Calcular idade do paciente
   const calculateAge = (birthDate: string) => {
@@ -113,55 +116,40 @@ export function PatientDataFormFixed({
   const ageValidation = getAgeValidation();
   const convenioValidation = getConvenioValidation();
 
-  // Buscar pacientes quando a data de nascimento debounced muda
+  // Buscar por data de nascimento quando ela muda
   useEffect(() => {
-    if (debouncedBirthDate && debouncedBirthDate.length === 10) {
-      searchPatients(debouncedBirthDate).then(patients => {
-        setShowPatientsList(patients.length > 0);
-      });
-    } else {
-      // Só limpar resultados se não houver busca por nome ativa
-      if (!debouncedName || debouncedName.length < 3) {
-        clearResults();
-        setShowPatientsList(false);
-      }
+    if (formData.dataNascimento) {
+      searchByBirthDate(formData.dataNascimento);
     }
-  }, [debouncedBirthDate, debouncedName, searchPatients, clearResults]);
+  }, [formData.dataNascimento, searchByBirthDate]);
 
-  // Buscar pacientes por nome quando não houver data válida
+  // Buscar por nome quando ele muda e não há data válida
   useEffect(() => {
-    const run = async () => {
-      const hasValidBirth = debouncedBirthDate && debouncedBirthDate.length === 10;
-      if (!hasValidBirth && debouncedName && debouncedName.length >= 3) {
-        const patients = await searchPatientsByName(debouncedName);
-        setShowPatientsList(patients.length > 0);
-      }
-    };
-    run();
-  }, [debouncedBirthDate, debouncedName, searchPatientsByName]);
+    const hasValidBirthDate = formData.dataNascimento && formData.dataNascimento.length === 10;
+    if (!hasValidBirthDate && formData.nomeCompleto) {
+      searchByName(formData.nomeCompleto);
+    }
+  }, [formData.nomeCompleto, formData.dataNascimento, searchByName]);
 
   // Função para selecionar um paciente encontrado
   const selectPatient = (patient: any) => {
+    // Preencher dados do formulário
     setFormData(prev => ({
       ...prev,
       nomeCompleto: patient.nome_completo,
+      dataNascimento: patient.data_nascimento,
       telefone: patient.telefone || '',
       celular: patient.celular,
       convenio: patient.convenio,
     }));
-    setShowPatientsList(false);
+    
+    // Registrar seleção e esconder resultados
+    selectSearchedPatient(patient);
   };
 
-  // Função para criar novo paciente (limpar seleção)
+  // Função para criar novo paciente (manter dados atuais)
   const createNewPatient = () => {
-    setFormData(prev => ({
-      ...prev,
-      nomeCompleto: '',
-      telefone: '',
-      celular: '',
-      convenio: '',
-    }));
-    setShowPatientsList(false);
+    hideResults();
   };
 
   // Função para aplicar máscara de telefone
@@ -221,7 +209,7 @@ export function PatientDataFormFixed({
       </div>
       
       {/* Lista de pacientes encontrados */}
-      {showPatientsList && (
+      {showResults && (
         <Card className="mt-4">
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-3">

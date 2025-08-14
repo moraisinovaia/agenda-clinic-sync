@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DateOfBirthInput } from '@/components/ui/date-of-birth-input';
-import { CalendarIcon, Clock, User } from 'lucide-react';
+import { CalendarIcon, Clock, User, UserCheck, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -16,6 +16,7 @@ import { FilaEsperaFormData } from '@/types/fila-espera';
 import { Doctor, Atendimento } from '@/types/scheduling';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useUnifiedPatientSearch } from '@/hooks/useUnifiedPatientSearch';
 
 interface FilaEsperaFormProps {
   doctors: Doctor[];
@@ -50,62 +51,39 @@ export function FilaEsperaForm({
     convenio: '',
   });
 
-  const [searchingPatient, setSearchingPatient] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [selectedLimitDate, setSelectedLimitDate] = useState<Date>();
-  const [foundPatients, setFoundPatients] = useState<any[]>([]);
   const [showCreateNew, setShowCreateNew] = useState(false);
   const { toast } = useToast();
+
+  // Hook unificado para busca de pacientes
+  const {
+    loading: searchingPatients,
+    foundPatients,
+    showResults,
+    selectPatient: selectSearchedPatient,
+    searchByBirthDate,
+    searchByName,
+    hideResults
+  } = useUnifiedPatientSearch();
 
   const selectedDoctor = doctors.find(d => d.id === formData.medicoId);
   const doctorAtendimentos = atendimentos.filter(a => a.medico_id === formData.medicoId);
 
-  const handleSearchPatient = async () => {
-    if (!pacienteData.dataNascimento && !pacienteData.nomeCompleto) return;
-    
-    setSearchingPatient(true);
-    setFoundPatients([]);
-    setShowCreateNew(false);
-    
-    try {
-      let patients: any[] = [];
-      
-      if (pacienteData.dataNascimento) {
-        patients = await searchPatientsByBirthDate(pacienteData.dataNascimento);
-      } else if (pacienteData.nomeCompleto) {
-        // Buscar por nome
-        const { data } = await supabase
-          .from('pacientes')
-          .select('*')
-          .ilike('nome_completo', `%${pacienteData.nomeCompleto}%`)
-          .limit(5);
-        patients = data || [];
-      }
-      
-      if (patients && patients.length > 0) {
-        setFoundPatients(patients);
-        if (patients.length === 1) {
-          selectPatient(patients[0]);
-        }
-      } else {
-        setShowCreateNew(true);
-        toast({
-          title: 'Nenhum paciente encontrado',
-          description: 'Você pode criar um novo paciente com os dados inseridos.',
-        });
-      }
-    } catch (error) {
-      console.error('Erro ao buscar paciente:', error);
-      toast({
-        title: 'Erro na busca',
-        description: 'Erro ao buscar paciente. Tente novamente.',
-        variant: 'destructive',
-      });
-    } finally {
-      setSearchingPatient(false);
+  // Buscar automaticamente quando dados mudarem
+  useEffect(() => {
+    if (pacienteData.dataNascimento) {
+      searchByBirthDate(pacienteData.dataNascimento);
     }
-  };
+  }, [pacienteData.dataNascimento, searchByBirthDate]);
+
+  useEffect(() => {
+    const hasValidBirthDate = pacienteData.dataNascimento && pacienteData.dataNascimento.length === 10;
+    if (!hasValidBirthDate && pacienteData.nomeCompleto) {
+      searchByName(pacienteData.nomeCompleto);
+    }
+  }, [pacienteData.nomeCompleto, pacienteData.dataNascimento, searchByName]);
 
   const selectPatient = (patient: any) => {
     setPacienteData({
@@ -115,7 +93,7 @@ export function FilaEsperaForm({
       convenio: patient.convenio || '',
     });
     setFormData(prev => ({ ...prev, pacienteId: patient.id }));
-    setFoundPatients([]);
+    selectSearchedPatient(patient);
     setShowCreateNew(false);
   };
 
@@ -202,29 +180,18 @@ export function FilaEsperaForm({
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <div className="flex gap-2">
-                    <div className="flex-1">
-                      <DateOfBirthInput
-                        value={pacienteData.dataNascimento}
-                        onChange={(value) => setPacienteData(prev => ({ ...prev, dataNascimento: value }))}
-                        label="Data de Nascimento"
-                      />
-                    </div>
-                    <Button 
-                      type="button" 
-                      onClick={(e) => {
-                        e.preventDefault();
-                        handleSearchPatient();
-                      }}
-                      disabled={(!pacienteData.dataNascimento && !pacienteData.nomeCompleto) || searchingPatient}
-                      variant="outline"
-                      className="mt-6"
-                    >
-                      {searchingPatient ? 'Buscando...' : 'Buscar'}
-                    </Button>
+                  <div className="relative">
+                    <DateOfBirthInput
+                      value={pacienteData.dataNascimento}
+                      onChange={(value) => setPacienteData(prev => ({ ...prev, dataNascimento: value }))}
+                      label="Data de Nascimento"
+                    />
+                    {searchingPatients && (
+                      <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin" />
+                    )}
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    Busque por data de nascimento ou nome completo
+                    {searchingPatients ? 'Buscando pacientes...' : 'Ao inserir a data ou nome, buscaremos pacientes automaticamente'}
                   </div>
                 </div>
 
@@ -239,24 +206,45 @@ export function FilaEsperaForm({
                 </div>
 
                 {/* Lista de pacientes encontrados */}
-                {foundPatients.length > 1 && (
+                {showResults && (
                   <div className="md:col-span-2 space-y-2">
-                    <Label>Pacientes Encontrados</Label>
+                    <div className="flex items-center gap-2">
+                      <UserCheck className="h-4 w-4 text-green-600" />
+                      <Label className="text-green-700 font-medium">
+                        {foundPatients.length === 1 
+                          ? 'Paciente encontrado!' 
+                          : `${foundPatients.length} pacientes encontrados`
+                        }
+                      </Label>
+                    </div>
                     <div className="border rounded-md p-2 space-y-1 max-h-32 overflow-y-auto">
                       {foundPatients.map((patient) => (
                         <button
                           key={patient.id}
                           type="button"
                           onClick={() => selectPatient(patient)}
-                          className="w-full text-left p-2 hover:bg-muted rounded text-sm"
+                          className="w-full text-left p-2 hover:bg-muted rounded text-sm border border-transparent hover:border-primary/20"
                         >
                           <div className="font-medium">{patient.nome_completo}</div>
                           <div className="text-muted-foreground">
                             {patient.data_nascimento} • {patient.convenio}
+                            {patient.celular && ` • ${patient.celular}`}
                           </div>
                         </button>
                       ))}
                     </div>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        hideResults();
+                        setShowCreateNew(true);
+                      }}
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                    >
+                      Criar novo paciente com estes dados
+                    </Button>
                   </div>
                 )}
 
