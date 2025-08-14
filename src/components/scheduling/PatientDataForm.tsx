@@ -206,28 +206,49 @@ export function PatientDataForm({
                 }
               </h4>
             </div>
-            <ScrollArea className="h-60 w-full border rounded-md bg-background">
-              <div className="space-y-2 p-2">
-                {foundPatients.map((patient, index) => (
-                  <div key={patient.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/50 hover:bg-muted/70 transition-colors">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{patient.nome_completo}</p>
-                      <p className="text-sm text-muted-foreground truncate">
-                        {patient.convenio} • {patient.celular}
-                        {patient.telefone && ` • ${patient.telefone}`}
-                      </p>
-                    </div>
-                    <Button 
-                      size="sm" 
-                      onClick={() => selectPatient(patient)}
-                      className="ml-2 flex-shrink-0"
+            {/* Container com scroll forçado - Altura pequena para garantir scroll */}
+            <div 
+              className="border rounded-md bg-background"
+              style={{ 
+                height: '160px', 
+                overflow: 'hidden' 
+              }}
+            >
+              <div 
+                style={{
+                  height: '160px',
+                  overflowY: 'scroll',
+                  overflowX: 'hidden',
+                  scrollbarWidth: 'thin',
+                  scrollbarColor: '#64748b #f1f5f9'
+                }}
+              >
+                <div className="p-2 space-y-2">
+                  {foundPatients.map((patient, index) => (
+                    <div 
+                      key={patient.id || `patient-${index}`} 
+                      className="flex items-center justify-between p-3 border rounded-lg bg-muted/50 hover:bg-muted/70 transition-colors"
+                      style={{ minHeight: '68px' }}
                     >
-                      Selecionar
-                    </Button>
-                  </div>
-                ))}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{patient.nome_completo}</p>
+                        <p className="text-sm text-muted-foreground truncate">
+                          {patient.convenio} • {patient.celular}
+                          {patient.telefone && ` • ${patient.telefone}`}
+                        </p>
+                      </div>
+                      <Button 
+                        size="sm" 
+                        onClick={() => selectPatient(patient)}
+                        className="ml-2 flex-shrink-0"
+                      >
+                        Selecionar
+                      </Button>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </ScrollArea>
+            </div>
             <div className="pt-2 border-t">
               <Button 
                 variant="outline" 
