@@ -226,37 +226,27 @@ export const PatientDataFormStable = React.memo(({
               </h4>
             </div>
             <div 
-              style={{ 
-                maxHeight: '300px !important',
-                height: 'auto',
-                overflowY: 'auto',
-                overflowX: 'hidden',
-                display: 'flex',
-                flexDirection: 'column'
-              }}
-              className="border rounded-md bg-background"
+              className="h-[300px] overflow-y-scroll overflow-x-hidden border rounded-md bg-background"
             >
-              <div className="flex-1" style={{ minHeight: '0' }}>
-                <div className="space-y-2 p-2">
-                  {foundPatients.map((patient, index) => (
-                    <div key={patient.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/50 flex-shrink-0">
-                      <div>
-                        <p className="font-medium">{patient.nome_completo}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {patient.convenio} • {patient.celular}
-                          {patient.telefone && ` • ${patient.telefone}`}
-                        </p>
-                      </div>
-                      <Button 
-                        size="sm" 
-                        onClick={() => selectPatient(patient)}
-                        className="ml-2"
-                      >
-                        Selecionar
-                      </Button>
+              <div className="space-y-2 p-2">
+                {foundPatients.map((patient, index) => (
+                  <div key={patient.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
+                    <div>
+                      <p className="font-medium">{patient.nome_completo}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {patient.convenio} • {patient.celular}
+                        {patient.telefone && ` • ${patient.telefone}`}
+                      </p>
                     </div>
-                  ))}
-                </div>
+                    <Button 
+                      size="sm" 
+                      onClick={() => selectPatient(patient)}
+                      className="ml-2"
+                    >
+                      Selecionar
+                    </Button>
+                  </div>
+                ))}
               </div>
             </div>
             <div className="pt-2 border-t mt-2">
