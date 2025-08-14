@@ -239,7 +239,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     };
 
     runValidation();
-  }, [appointments, validateAppointmentsData, fetchCriticalData, forceRefetch, lastValidationTime, toast]);
+  }, [appointments, validateAppointmentsData, fetchCriticalData, forceRefetch, lastValidationTime]);
 
   // Paginação
   const pagination = usePagination(appointments || [], { itemsPerPage });
