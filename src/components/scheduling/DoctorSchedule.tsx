@@ -58,37 +58,81 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
   const getAppointmentsForDate = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     
-    // Filtrar agendamentos com comparação robusta de IDs
     const filteredAppointments = appointments.filter(appointment => {
-      // Normalizar IDs para string e remover espaços
-      const appointmentDoctorId = String(appointment.medico_id || '').trim().toLowerCase();
-      const targetDoctorId = String(doctor.id || '').trim().toLowerCase();
-      const appointmentDate = String(appointment.data_agendamento || '').trim();
+      // Verificar se os dados básicos existem
+      if (!appointment.medico_id || !appointment.data_agendamento) {
+        return false;
+      }
       
-      // Comparação robusta
-      const doctorMatch = appointmentDoctorId === targetDoctorId;
+      // Comparação de data simples e direta
+      const appointmentDate = String(appointment.data_agendamento).trim();
       const dateMatch = appointmentDate === dateStr;
       
-      return doctorMatch && dateMatch;
-    });
-    
-    // Log simples apenas para setembro durante debug
-    if (dateStr.includes('2025-09') && filteredAppointments.length === 0) {
-      const septemberAppts = appointments.filter(apt => 
-        apt.data_agendamento?.includes('2025-09') && 
-        String(apt.medico_id).trim().toLowerCase() === String(doctor.id).trim().toLowerCase()
-      );
-      if (septemberAppts.length > 0) {
-        console.warn(`⚠️  Setembro appointments exist but not showing for ${dateStr}:`, septemberAppts.length);
+      if (!dateMatch) {
+        return false;
       }
-    }
+      
+      // Múltiplas estratégias de comparação de ID para garantir compatibilidade
+      const appointmentDoctorId = appointment.medico_id;
+      const targetDoctorId = doctor.id;
+      
+      // Strategy 1: Comparação direta
+      if (appointmentDoctorId === targetDoctorId) {
+        return true;
+      }
+      
+      // Strategy 2: Comparação como strings
+      if (String(appointmentDoctorId) === String(targetDoctorId)) {
+        return true;
+      }
+      
+      // Strategy 3: Comparação normalizada (trim + lowercase)
+      const normAppointmentId = String(appointmentDoctorId).trim().toLowerCase();
+      const normTargetId = String(targetDoctorId).trim().toLowerCase();
+      if (normAppointmentId === normTargetId) {
+        return true;
+      }
+      
+      // Strategy 4: Comparação por substring (caso haja caracteres especiais ocultos)
+      if (normAppointmentId.includes(normTargetId) || normTargetId.includes(normAppointmentId)) {
+        return true;
+      }
+      
+      return false;
+    });
     
     return filteredAppointments;
   };
 
-  // Função para verificar se uma data tem agendamentos
+  // Função para verificar se uma data tem agendamentos usando a mesma lógica robusta
   const hasAppointments = (date: Date) => {
-    return getAppointmentsForDate(date).length > 0;
+    const dateStr = format(date, 'yyyy-MM-dd');
+    
+    // Usar a mesma lógica de filtragem para consistência
+    return appointments.some(appointment => {
+      if (!appointment.medico_id || !appointment.data_agendamento) {
+        return false;
+      }
+      
+      const appointmentDate = String(appointment.data_agendamento).trim();
+      const dateMatch = appointmentDate === dateStr;
+      
+      if (!dateMatch) {
+        return false;
+      }
+      
+      // Usar as mesmas estratégias de comparação de ID
+      const appointmentDoctorId = appointment.medico_id;
+      const targetDoctorId = doctor.id;
+      
+      return (
+        appointmentDoctorId === targetDoctorId ||
+        String(appointmentDoctorId) === String(targetDoctorId) ||
+        String(appointmentDoctorId).trim().toLowerCase() === String(targetDoctorId).trim().toLowerCase() ||
+        String(appointmentDoctorId).trim().toLowerCase().includes(String(targetDoctorId).trim().toLowerCase()) ||
+        String(targetDoctorId).trim().toLowerCase().includes(String(appointmentDoctorId).trim().toLowerCase())
+      );
+    });
   };
 
   // Função para verificar se uma data está bloqueada
@@ -413,7 +457,17 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
             </div>
             <div>
               <p className="text-2xl font-bold">
-                {appointments.filter(apt => apt.medico_id === doctor.id && apt.status === 'agendado').length}
+                {appointments.filter(apt => {
+                  const appointmentDoctorId = apt.medico_id;
+                  const targetDoctorId = doctor.id;
+                  return (
+                    apt.status === 'agendado' && (
+                      appointmentDoctorId === targetDoctorId ||
+                      String(appointmentDoctorId) === String(targetDoctorId) ||
+                      String(appointmentDoctorId).trim().toLowerCase() === String(targetDoctorId).trim().toLowerCase()
+                    )
+                  );
+                }).length}
               </p>
               <p className="text-sm text-muted-foreground">Agendados</p>
             </div>
@@ -427,7 +481,17 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
             </div>
             <div>
               <p className="text-2xl font-bold">
-                {appointments.filter(apt => apt.medico_id === doctor.id && apt.status === 'confirmado').length}
+                {appointments.filter(apt => {
+                  const appointmentDoctorId = apt.medico_id;
+                  const targetDoctorId = doctor.id;
+                  return (
+                    apt.status === 'confirmado' && (
+                      appointmentDoctorId === targetDoctorId ||
+                      String(appointmentDoctorId) === String(targetDoctorId) ||
+                      String(appointmentDoctorId).trim().toLowerCase() === String(targetDoctorId).trim().toLowerCase()
+                    )
+                  );
+                }).length}
               </p>
               <p className="text-sm text-muted-foreground">Confirmados</p>
             </div>
@@ -441,7 +505,17 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
             </div>
             <div>
               <p className="text-2xl font-bold">
-                {appointments.filter(apt => apt.medico_id === doctor.id && apt.status === 'realizado').length}
+                {appointments.filter(apt => {
+                  const appointmentDoctorId = apt.medico_id;
+                  const targetDoctorId = doctor.id;
+                  return (
+                    apt.status === 'realizado' && (
+                      appointmentDoctorId === targetDoctorId ||
+                      String(appointmentDoctorId) === String(targetDoctorId) ||
+                      String(appointmentDoctorId).trim().toLowerCase() === String(targetDoctorId).trim().toLowerCase()
+                    )
+                  );
+                }).length}
               </p>
               <p className="text-sm text-muted-foreground">Realizados</p>
             </div>
@@ -455,7 +529,17 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
             </div>
             <div>
               <p className="text-2xl font-bold">
-                {appointments.filter(apt => apt.medico_id === doctor.id && apt.status === 'cancelado').length}
+                {appointments.filter(apt => {
+                  const appointmentDoctorId = apt.medico_id;
+                  const targetDoctorId = doctor.id;
+                  return (
+                    apt.status === 'cancelado' && (
+                      appointmentDoctorId === targetDoctorId ||
+                      String(appointmentDoctorId) === String(targetDoctorId) ||
+                      String(appointmentDoctorId).trim().toLowerCase() === String(targetDoctorId).trim().toLowerCase()
+                    )
+                  );
+                }).length}
               </p>
               <p className="text-sm text-muted-foreground">Cancelados</p>
             </div>
