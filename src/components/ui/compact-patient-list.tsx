@@ -1,4 +1,4 @@
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { UserCheck, Plus } from 'lucide-react';
@@ -101,6 +101,7 @@ export function CompactPatientList({
               </div>
             ))}
           </div>
+          <ScrollBar className="opacity-100 w-2 bg-muted/20 [&_[data-radix-scroll-area-thumb]]:bg-primary/50 hover:[&_[data-radix-scroll-area-thumb]]:bg-primary/70" />
         </ScrollArea>
         
         {showCreateNew && onCreateNew && (
