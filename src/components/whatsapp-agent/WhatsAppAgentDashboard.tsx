@@ -74,10 +74,14 @@ export const WhatsAppAgentDashboard = () => {
         
         response = await apiResponse.json();
       } else {
+        const helpMessage = intent === 'greeting' 
+          ? 'Olá! Posso ajudar você com:\n• Agendar consultas\n• Consultar agendamentos\n• Verificar disponibilidade\n• Cancelar ou remarcar consultas\n\nComo posso ajudar?'
+          : 'Não consegui entender sua solicitação. Tente ser mais específico sobre o que deseja fazer.';
+          
         response = {
           success: false,
-          message: 'Não consegui entender sua solicitação. Por favor, seja mais específico.',
-          error: 'Intent não detectado ou dados insuficientes'
+          message: helpMessage,
+          error: `Intent "${intent}" detectado mas dados insuficientes`
         };
       }
 
@@ -126,14 +130,25 @@ export const WhatsAppAgentDashboard = () => {
   };
 
   const detectIntent = (message: string): string => {
-    const lowerMsg = message.toLowerCase();
+    const lowerMsg = message.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     
-    if (lowerMsg.includes('agendar') || lowerMsg.includes('marcar')) return 'schedule';
-    if (lowerMsg.includes('consultar') || lowerMsg.includes('quando')) return 'check-patient';
-    if (lowerMsg.includes('remarcar') || lowerMsg.includes('mudar')) return 'reschedule';
-    if (lowerMsg.includes('cancelar')) return 'cancel';
-    if (lowerMsg.includes('horarios') || lowerMsg.includes('disponivel')) return 'availability';
-    if (lowerMsg.includes('buscar') || lowerMsg.includes('procurar')) return 'patient-search';
+    // Agendamento - palavras-chave mais específicas
+    if (lowerMsg.match(/\b(agendar|marcar|agenda|marcacao|consulta|appointment)\b/)) return 'schedule';
+    
+    // Consultar agendamentos
+    if (lowerMsg.match(/\b(consultar|quando|meus agendamentos|minhas consultas|verificar|check)\b/)) return 'check-patient';
+    
+    // Remarcar
+    if (lowerMsg.match(/\b(remarcar|mudar|alterar|trocar|reagendar|reschedule)\b/)) return 'reschedule';
+    
+    // Cancelar
+    if (lowerMsg.match(/\b(cancelar|cancel|desmarcar)\b/)) return 'cancel';
+    
+    // Disponibilidade
+    if (lowerMsg.match(/\b(horarios|disponivel|availability|livre|vago|agenda)\b/)) return 'availability';
+    
+    // Buscar pacientes
+    if (lowerMsg.match(/\b(buscar|procurar|encontrar|search)\b/)) return 'patient-search';
     
     return 'greeting';
   };
@@ -152,34 +167,87 @@ export const WhatsAppAgentDashboard = () => {
   };
 
   const extractDataFromMessage = (message: string, intent: string): any => {
-    // Simplified extraction - in real implementation this would be more sophisticated
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const futureDate = tomorrow.toISOString().split('T')[0];
+    
+    // Tentar extrair informações da mensagem
+    const lowerMsg = message.toLowerCase();
+    
+    // Extrair nome do médico se mencionado
+    const drMatch = lowerMsg.match(/dr\.?\s*([a-záãéêíóôõú\s]+)/i);
+    const medicoNome = drMatch ? `Dr. ${drMatch[1].trim()}` : "Dr. Max";
+    
+    // Extrair data se mencionada (formato dd/mm/yyyy ou similar)
+    const dateMatch = message.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+    let dataConsulta = futureDate;
+    if (dateMatch) {
+      const [, day, month, year] = dateMatch;
+      dataConsulta = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+    
+    // Extrair horário se mencionado
+    const timeMatch = message.match(/(\d{1,2}):?(\d{0,2})\s*(h|hrs|horas?)?/);
+    let horaConsulta = "14:00";
+    if (timeMatch) {
+      const [, hour, minute] = timeMatch;
+      horaConsulta = `${hour.padStart(2, '0')}:${(minute || '00').padStart(2, '0')}`;
+    }
+    
     switch (intent) {
       case 'schedule':
         return {
-          paciente_nome: "João Silva",
+          paciente_nome: "Paciente Teste",
           data_nascimento: "1990-01-15",
           convenio: "SUS",
           telefone: "11999999999",
           celular: "11999999999",
-          medico_nome: "Dr. Max",
-          atendimento_nome: "Teste Ergométrico",
-          data_consulta: "2025-01-20",
-          hora_consulta: "14:00",
-          observacoes: "Agendamento via simulador WhatsApp"
+          medico_nome: medicoNome,
+          atendimento_nome: "Consulta Geral",
+          data_consulta: dataConsulta,
+          hora_consulta: horaConsulta,
+          observacoes: `Agendamento via simulador WhatsApp - Mensagem original: "${message}"`
         };
       
       case 'check-patient':
         return {
-          paciente_nome: "João Silva",
+          paciente_nome: "Paciente Teste",
           data_nascimento: "1990-01-15",
           celular: "11999999999"
         };
       
       case 'availability':
+        // Detectar período
+        let periodo = "manha";
+        if (lowerMsg.includes('tarde') || lowerMsg.includes('14:') || lowerMsg.includes('15:') || lowerMsg.includes('16:')) {
+          periodo = "tarde";
+        }
+        
         return {
-          medico_nome: "Dr. Max",
-          data_consulta: "2025-01-20",
-          periodo: "manha"
+          medico_nome: medicoNome,
+          data_consulta: dataConsulta,
+          periodo: periodo
+        };
+      
+      case 'reschedule':
+        return {
+          agendamento_id: "uuid-exemplo",
+          nova_data: dataConsulta,
+          nova_hora: horaConsulta,
+          observacoes: `Remarcação via WhatsApp: ${message}`
+        };
+      
+      case 'cancel':
+        return {
+          agendamento_id: "uuid-exemplo",
+          motivo: `Cancelamento via WhatsApp: ${message}`
+        };
+      
+      case 'patient-search':
+        return {
+          busca: "Paciente Teste",
+          tipo: "nome"
         };
       
       default:
@@ -402,28 +470,76 @@ export const WhatsAppAgentDashboard = () => {
               </div>
 
               {/* Quick Examples */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                <Button
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => setCurrentMessage("Gostaria de agendar uma consulta com Dr. Max para dia 20/01/2025 às 14:00h")}
-                >
-                  Exemplo: Agendar
-                </Button>
-                <Button
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => setCurrentMessage("Quero consultar meus agendamentos, meu nome é João Silva")}
-                >
-                  Exemplo: Consultar
-                </Button>
-                <Button
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => setCurrentMessage("Quais horários estão disponíveis com Dr. Max no dia 20/01?")}
-                >
-                  Exemplo: Disponibilidade
-                </Button>
+              <div className="space-y-3">
+                <Label className="text-sm font-medium">Exemplos de Mensagens:</Label>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                  <Button
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setCurrentMessage("Quero agendar uma consulta com Dr. Max para amanhã às 14:00")}
+                    className="text-left justify-start h-auto p-3"
+                  >
+                    <div className="text-xs">
+                      <div className="font-medium">Agendar</div>
+                      <div className="text-muted-foreground">com horário específico</div>
+                    </div>
+                  </Button>
+                  <Button
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setCurrentMessage("Preciso consultar meus agendamentos")}
+                    className="text-left justify-start h-auto p-3"
+                  >
+                    <div className="text-xs">
+                      <div className="font-medium">Consultar</div>
+                      <div className="text-muted-foreground">meus agendamentos</div>
+                    </div>
+                  </Button>
+                  <Button
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setCurrentMessage("Que horários estão livres com Dr. Max amanhã?")}
+                    className="text-left justify-start h-auto p-3"
+                  >
+                    <div className="text-xs">
+                      <div className="font-medium">Disponibilidade</div>
+                      <div className="text-muted-foreground">verificar horários</div>
+                    </div>
+                  </Button>
+                  <Button
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setCurrentMessage("Preciso cancelar minha consulta")}
+                    className="text-left justify-start h-auto p-3"
+                  >
+                    <div className="text-xs">
+                      <div className="font-medium">Cancelar</div>
+                      <div className="text-muted-foreground">agendamento</div>
+                    </div>
+                  </Button>
+                  <Button
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setCurrentMessage("Quero remarcar para outro dia")}
+                    className="text-left justify-start h-auto p-3"
+                  >
+                    <div className="text-xs">
+                      <div className="font-medium">Remarcar</div>
+                      <div className="text-muted-foreground">nova data/hora</div>
+                    </div>
+                  </Button>
+                  <Button
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setCurrentMessage("Oi, como posso agendar?")}
+                    className="text-left justify-start h-auto p-3"
+                  >
+                    <div className="text-xs">
+                      <div className="font-medium">Ajuda</div>
+                      <div className="text-muted-foreground">saudação inicial</div>
+                    </div>
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -460,7 +576,16 @@ export const WhatsAppAgentDashboard = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="payload">Payload JSON</Label>
+                  <div className="flex justify-between items-center">
+                    <Label htmlFor="payload">Payload JSON</Label>
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => setTestPayload(JSON.stringify(examplePayloads[testEndpoint as keyof typeof examplePayloads] || {}, null, 2))}
+                    >
+                      Usar Exemplo
+                    </Button>
+                  </div>
                   <Textarea
                     id="payload"
                     placeholder="Insira o JSON do payload..."
