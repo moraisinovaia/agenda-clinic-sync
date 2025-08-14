@@ -6,8 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DateOfBirthInput } from '@/components/ui/date-of-birth-input';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { User, Search, UserCheck, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { User, UserCheck, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import { SchedulingFormData } from '@/types/scheduling';
 import { useUnifiedPatientSearch } from '@/hooks/useUnifiedPatientSearch';
 
@@ -161,14 +161,12 @@ export function PatientDataForm({
   };
 
   return (
-    <>
-      
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold flex items-center gap-2">
-          <User className="h-4 w-4" />
-          Dados do Paciente
-        </h3>
-      
+    <div className="space-y-4">
+      <h3 className="text-lg font-semibold flex items-center gap-2">
+        <User className="h-4 w-4" />
+        Dados do Paciente
+      </h3>
+    
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <Label htmlFor="nomeCompleto">Nome Completo *</Label>
@@ -198,8 +196,8 @@ export function PatientDataForm({
         </div>
       </div>
       
-      {/* Lista de pacientes encontrados */}
-      {showResults && (
+      {/* Lista de pacientes encontrados - COM SCROLLAREA FUNCIONAL */}
+      {showResults && foundPatients.length > 0 && (
         <Card className="mt-4">
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-3">
@@ -211,59 +209,52 @@ export function PatientDataForm({
                 }
               </h4>
             </div>
-            <div 
-              style={{
-                maxHeight: '300px',
-                overflowY: 'auto',
-                overflowX: 'hidden',
-                border: '1px solid hsl(var(--border))',
-                borderRadius: '6px',
-                padding: '12px',
-                backgroundColor: 'hsl(var(--background))'
-              }}
-              className="space-y-2 scrollbar-thin scrollbar-track-muted scrollbar-thumb-border hover:scrollbar-thumb-muted-foreground"
-            >
-              {foundPatients.map((patient, index) => (
-                <div 
-                  key={patient.id || `patient-${index}`} 
-                  className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent cursor-pointer group"
-                  onClick={() => selectPatient(patient)}
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                      <span className="font-medium truncate">{patient.nome_completo}</span>
-                    </div>
-                    <div className="text-sm text-muted-foreground mt-1 truncate">
-                      {patient.data_nascimento && (
-                        <span>Nascimento: {patient.data_nascimento}</span>
-                      )}
-                      {patient.convenio && (
-                        <span className="ml-3">Convênio: {patient.convenio}</span>
-                      )}
-                      {(patient.telefone || patient.celular) && (
-                        <span className="ml-3">
-                          {patient.telefone || patient.celular}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="ml-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      selectPatient(patient);
-                    }}
+            
+            <ScrollArea className="h-[300px] w-full rounded-md border p-4">
+              <div className="space-y-2">
+                {foundPatients.map((patient, index) => (
+                  <div 
+                    key={patient.id || `patient-${index}`} 
+                    className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent cursor-pointer group transition-colors"
+                    onClick={() => selectPatient(patient)}
                   >
-                    <UserCheck className="h-4 w-4 mr-1" />
-                    Selecionar
-                  </Button>
-                </div>
-              ))}
-            </div>
-            <div className="pt-2 border-t">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        <span className="font-medium truncate">{patient.nome_completo}</span>
+                      </div>
+                      <div className="text-sm text-muted-foreground mt-1 truncate">
+                        {patient.data_nascimento && (
+                          <span>Nascimento: {patient.data_nascimento}</span>
+                        )}
+                        {patient.convenio && (
+                          <span className="ml-3">Convênio: {patient.convenio}</span>
+                        )}
+                        {(patient.telefone || patient.celular) && (
+                          <span className="ml-3">
+                            {patient.telefone || patient.celular}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="ml-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        selectPatient(patient);
+                      }}
+                    >
+                      <UserCheck className="h-4 w-4 mr-1" />
+                      Selecionar
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+            
+            <div className="pt-3 border-t mt-3">
               <Button 
                 variant="outline" 
                 size="sm" 
@@ -294,7 +285,6 @@ export function PatientDataForm({
       )}
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        
         <div>
           <Label htmlFor="convenio">Convênio *</Label>
           <Select 
@@ -350,7 +340,6 @@ export function PatientDataForm({
           )}
         </div>
       </div>
-      </div>
-    </>
+    </div>
   );
 }
