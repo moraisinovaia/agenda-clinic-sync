@@ -11,6 +11,7 @@ import { MultipleSchedulingModal } from '@/components/scheduling/MultipleSchedul
 
 import { DoctorSchedule } from '@/components/scheduling/DoctorSchedule';
 import { AppointmentsList } from '@/components/scheduling/AppointmentsList';
+import { OptimizedAppointmentsList } from '@/components/scheduling/OptimizedAppointmentsList';
 import { BloqueioAgenda } from '@/components/scheduling/BloqueioAgenda';
 import { PreparosView } from '@/components/preparos/PreparosView';
 import { FilaEsperaForm } from '@/components/fila-espera/FilaEsperaForm';
@@ -516,13 +517,9 @@ const Index = () => {
               showBack={true}
               showHome={true}
             />
-            <AppointmentsList 
-              appointments={appointments}
+            <OptimizedAppointmentsList 
               doctors={doctors}
               onEditAppointment={handleEditAppointment}
-              onCancelAppointment={cancelAppointment}
-              onConfirmAppointment={handleConfirmAppointment}
-              onUnconfirmAppointment={handleUnconfirmAppointment}
             />
           </div>
         )}
