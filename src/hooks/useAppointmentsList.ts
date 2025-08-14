@@ -25,35 +25,12 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           throw error;
         }
 
-        // 🔍 DEBUG: Log dos dados RAW do banco
-        console.log('🔍 DEBUG - Dados RAW da RPC:', {
+        // Log básico dos dados
+        console.log('📊 Agendamentos carregados:', {
           total: appointmentsWithRelations?.length || 0,
-          primeiros3: appointmentsWithRelations?.slice(0, 3),
-          setembro2025: appointmentsWithRelations?.filter(apt => apt.data_agendamento?.startsWith('2025-09'))?.length || 0,
-          agendamentosSetembro: appointmentsWithRelations?.filter(apt => apt.data_agendamento === '2025-09-09') || [],
-          ultimosAgendamentos: appointmentsWithRelations?.slice(-5)
-        });
-        
-        // 🚨 DEBUG CRÍTICO: Log de TODOS os agendamentos de setembro 2025
-        const setembroAgendamentos = appointmentsWithRelations?.filter(apt => 
-          apt.data_agendamento >= '2025-09-01' && apt.data_agendamento <= '2025-09-30'
-        );
-        console.log('🚨 DEBUG CRÍTICO - TODOS os agendamentos de setembro 2025:', setembroAgendamentos);
-        
-        // 🚨 DEBUG CRÍTICO: Especificamente para Dr. Edson em setembro
-        const edsonSeptember = appointmentsWithRelations?.filter(apt => 
-          apt.medico_id === '58b3d6f1-98ff-46c0-8b30-f3281dce816e' &&
-          apt.data_agendamento >= '2025-09-01' && apt.data_agendamento <= '2025-09-30'
-        );
-        console.log('🚨 DEBUG CRÍTICO - Dr. Edson em setembro 2025:', {
-          total: edsonSeptember?.length || 0,
-          appointments: edsonSeptember?.map(apt => ({
-            id: apt.id,
-            data: apt.data_agendamento,
-            hora: apt.hora_agendamento,
-            paciente: apt.paciente_nome,
-            medico_id: apt.medico_id
-          }))
+          setembro2025: appointmentsWithRelations?.filter(apt => 
+            apt.data_agendamento >= '2025-09-01' && apt.data_agendamento <= '2025-09-30'
+          )?.length || 0
         });
 
         // Transformar para o formato esperado - SEM FILTROS ADICIONAIS

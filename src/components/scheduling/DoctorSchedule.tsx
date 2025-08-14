@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { format, addDays, startOfWeek, isSameDay, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Doctor, AppointmentWithRelations, Atendimento } from '@/types/scheduling';
@@ -23,6 +23,8 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { FilaEsperaForm } from '@/components/fila-espera/FilaEsperaForm';
 import { FilaEsperaFormData } from '@/types/fila-espera';
+import { setupAppointmentDebugFunctions } from '@/utils/appointment-debug';
+import { AppointmentQuickDebug } from '@/components/debug/AppointmentQuickDebug';
 
 
 interface DoctorScheduleProps {
@@ -54,94 +56,29 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
   });
   
   const [waitlistOpen, setWaitlistOpen] = useState(false);
+
+  // Setup debug functions quando appointments mudarem
+  useEffect(() => {
+    if (appointments.length > 0) {
+      setupAppointmentDebugFunctions(appointments);
+    }
+  }, [appointments]);
   
   const getAppointmentsForDate = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     
-    // 🚨 DIAGNÓSTICO COMPLETO - FINAL FIX
-    console.log('🚨 DIAGNÓSTICO FINAL - getAppointmentsForDate:', {
-      requestedDate: dateStr,
-      doctor: {
-        id: doctor.id,
-        name: doctor.nome,
-        idType: typeof doctor.id
-      },
-      appointments: {
-        total: appointments.length,
-        doctorSpecific: appointments.filter(apt => String(apt.medico_id) === String(doctor.id)).length,
-        dateSpecific: appointments.filter(apt => String(apt.data_agendamento) === dateStr).length,
-        bothMatch: appointments.filter(apt => 
-          String(apt.medico_id) === String(doctor.id) && 
-          String(apt.data_agendamento) === dateStr
-        ).length
-      }
-    });
-
-    // LISTAGEM DE TODOS OS AGENDAMENTOS DO DR. EDSON PARA DEBUG
-    const doctorAppointments = appointments.filter(apt => String(apt.medico_id) === String(doctor.id));
-    console.log(`📋 AGENDAMENTOS DE ${doctor.nome} (${doctorAppointments.length} total):`, 
-      doctorAppointments.map(apt => ({
-        id: apt.id.substring(0, 8),
-        data: apt.data_agendamento,
-        hora: apt.hora_agendamento,
-        paciente: apt.pacientes?.nome_completo?.substring(0, 20),
-        status: apt.status
-      }))
-    );
-
-    // LISTAGEM DE AGENDAMENTOS PARA A DATA ESPECÍFICA
-    const dateAppointments = appointments.filter(apt => String(apt.data_agendamento) === dateStr);
-    console.log(`📅 AGENDAMENTOS PARA ${dateStr} (${dateAppointments.length} total):`, 
-      dateAppointments.map(apt => ({
-        id: apt.id.substring(0, 8),
-        medico_id: apt.medico_id,
-        medico_nome: apt.medicos?.nome,
-        hora: apt.hora_agendamento,
-        paciente: apt.pacientes?.nome_completo?.substring(0, 20)
-      }))
-    );
-
-    // FILTRO PRINCIPAL COM LOG DETALHADO
+    // Filtrar agendamentos de forma robusta
     const filteredAppointments = appointments.filter(appointment => {
+      // Comparação robusta de IDs (suporta string e UUID)
       const appointmentDoctorId = String(appointment.medico_id || '').trim();
       const targetDoctorId = String(doctor.id || '').trim();
       const appointmentDate = String(appointment.data_agendamento || '').trim();
       
       const doctorMatch = appointmentDoctorId === targetDoctorId;
       const dateMatch = appointmentDate === dateStr;
-      const passes = doctorMatch && dateMatch;
       
-      if (passes) {
-        console.log(`✅ MATCH ENCONTRADO:`, {
-          appointmentId: appointment.id.substring(0, 8),
-          hora: appointment.hora_agendamento,
-          paciente: appointment.pacientes?.nome_completo,
-          status: appointment.status
-        });
-      }
-      
-      return passes;
+      return doctorMatch && dateMatch;
     });
-    
-    // 🚨 RESULTADO FINAL
-    console.log(`🎯 RESULTADO FINAL - ${filteredAppointments.length} agendamentos encontrados para ${doctor.nome} em ${dateStr}`);
-    
-    if (filteredAppointments.length === 0) {
-      console.log('❌ NENHUM AGENDAMENTO ENCONTRADO - Possíveis problemas:');
-      console.log('1. IDs não coincidem exatamente');
-      console.log('2. Data não coincide exatamente'); 
-      console.log('3. Realmente não há agendamentos para esta data/médico');
-      
-      // SUGESTÕES DE DATAS COM AGENDAMENTOS PARA ESTE MÉDICO
-      const doctorDates = [...new Set(
-        appointments
-          .filter(apt => String(apt.medico_id) === String(doctor.id))
-          .map(apt => apt.data_agendamento)
-          .filter(Boolean)
-          .sort()
-      )];
-      console.log(`📅 DATAS COM AGENDAMENTOS PARA ${doctor.nome}:`, doctorDates);
-    }
     
     return filteredAppointments;
   };
@@ -200,6 +137,8 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
 
   return (
     <div className="space-y-6">
+      {/* Debug temporário para diagnosticar problema do mês 09 */}
+      <AppointmentQuickDebug appointments={appointments} doctor={doctor} />
       <Card className="w-full">
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
