@@ -434,35 +434,57 @@ const Index = () => {
 
       <div className="container mx-auto px-4 py-6">
         {viewMode === 'doctors' && (
-          <div className="space-y-6">
+          <div className="space-y-8 animate-fade-in">
             {/* User Approval Panel for Admins */}
             {profile?.role === 'admin' && profile?.status === 'aprovado' && (
-              <UserApprovalPanel />
+              <div className="animate-scale-in">
+                <UserApprovalPanel />
+              </div>
             )}
             
-            {/* Header com ações principais */}
-            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold tracking-tight">Sistema de Agendamentos</h1>
-                <p className="text-muted-foreground">Gerencie agendamentos e consultas médicas</p>
+            {/* Hero Section com gradiente */}
+            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary/10 via-primary/5 to-background border">
+              <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
+              <div className="relative p-8 md:p-12">
+                <div className="flex flex-col lg:flex-row gap-8 items-start lg:items-center justify-between">
+                  <div className="space-y-4">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium">
+                      <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
+                      Sistema Ativo
+                    </div>
+                    <h1 className="text-4xl lg:text-5xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+                      Central de Agendamentos
+                    </h1>
+                    <p className="text-lg text-muted-foreground max-w-2xl">
+                      Gerencie consultas médicas com eficiência e organização. 
+                      Agende, confirme e acompanhe todos os atendimentos em uma única plataforma.
+                    </p>
+                  </div>
+                  <div className="shrink-0">
+                    <DashboardActions onViewChange={setViewMode} />
+                  </div>
+                </div>
               </div>
-              <DashboardActions onViewChange={setViewMode} />
             </div>
 
-            {/* Grid principal */}
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-              <div className="lg:col-span-3">
-                <DoctorsView
-                  doctors={doctors}
-                  searchTerm={searchTerm}
-                  onSearchChange={setSearchTerm}
-                  onScheduleDoctor={handleScheduleDoctor}
-                  onViewSchedule={handleViewSchedule}
-                />
+            {/* Grid principal com animação */}
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+              <div className="lg:col-span-3 space-y-6">
+                <div className="animate-fade-in" style={{animationDelay: '0.1s'}}>
+                  <DoctorsView
+                    doctors={doctors}
+                    searchTerm={searchTerm}
+                    onSearchChange={setSearchTerm}
+                    onScheduleDoctor={handleScheduleDoctor}
+                    onViewSchedule={handleViewSchedule}
+                  />
+                </div>
               </div>
               
               <div className="lg:col-span-1">
-                <SystemMonitor />
+                <div className="animate-fade-in" style={{animationDelay: '0.2s'}}>
+                  <SystemMonitor />
+                </div>
               </div>
             </div>
           </div>
