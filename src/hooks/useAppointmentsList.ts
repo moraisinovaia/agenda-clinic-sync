@@ -29,8 +29,16 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         console.log('🔍 DEBUG - Dados RAW da RPC:', {
           total: appointmentsWithRelations?.length || 0,
           primeiros3: appointmentsWithRelations?.slice(0, 3),
-          setembro2025: appointmentsWithRelations?.filter(apt => apt.data_agendamento?.startsWith('2025-09'))?.length || 0
+          setembro2025: appointmentsWithRelations?.filter(apt => apt.data_agendamento?.startsWith('2025-09'))?.length || 0,
+          agendamentosSetembro: appointmentsWithRelations?.filter(apt => apt.data_agendamento === '2025-09-09') || [],
+          ultimosAgendamentos: appointmentsWithRelations?.slice(-5)
         });
+        
+        // 🚨 DEBUG CRÍTICO: Log de TODOS os agendamentos de setembro 2025
+        const setembroAgendamentos = appointmentsWithRelations?.filter(apt => 
+          apt.data_agendamento >= '2025-09-01' && apt.data_agendamento <= '2025-09-30'
+        );
+        console.log('🚨 DEBUG CRÍTICO - TODOS os agendamentos de setembro 2025:', setembroAgendamentos);
 
         // Transformar para o formato esperado - SEM FILTROS ADICIONAIS
         const transformedAppointments = (appointmentsWithRelations || []).map(apt => {

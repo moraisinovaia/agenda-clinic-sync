@@ -11,13 +11,22 @@ export function useSupabaseScheduling() {
   const patientManagement = usePatientManagement();
   const appointmentCreation = useAtomicAppointmentCreation();
 
-  // ✅ ESTABILIZAR: Função de recarregamento consolidada
+  // ✅ ESTABILIZAR: Função de recarregamento consolidada com invalidação de cache
   const refetch = useCallback(async () => {
+    console.log('🔄 useSupabaseScheduling: Iniciando refetch consolidado');
+    console.log('🚨 FORÇANDO INVALIDAÇÃO COMPLETA DO CACHE!');
+    
+    // Invalidar caches antes do refetch
+    appointmentsList.invalidateCache();
+    
+    // Aguardar um pouco para garantir limpeza do cache
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     await Promise.all([
+      appointmentsList.forceRefetch(),
       schedulingData.refetch(),
-      appointmentsList.refetch(),
     ]);
-  }, [schedulingData.refetch, appointmentsList.refetch]);
+  }, [schedulingData.refetch, appointmentsList.refetch, appointmentsList.invalidateCache, appointmentsList.forceRefetch]);
 
   // ✅ CORREÇÃO DEFINITIVA: Invalidar cache SEMPRE após sucesso e garantir refetch
   const createAppointment = useCallback(async (formData: any, editingAppointmentId?: string, forceConflict = false) => {
