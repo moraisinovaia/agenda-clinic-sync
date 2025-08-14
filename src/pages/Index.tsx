@@ -440,17 +440,18 @@ const Index = () => {
               <UserApprovalPanel />
             )}
             
+            {/* Header com ações principais */}
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+              <div>
+                <h1 className="text-3xl font-bold tracking-tight">Sistema de Agendamentos</h1>
+                <p className="text-muted-foreground">Gerencie agendamentos e consultas médicas</p>
+              </div>
+              <DashboardActions onViewChange={setViewMode} />
+            </div>
+
+            {/* Grid principal */}
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
               <div className="lg:col-span-3">
-                <StatsCards doctors={doctors} appointments={appointments} />
-                
-                <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                  <div className="relative max-w-md">
-                    {/* This will be moved to DoctorsView component */}
-                  </div>
-                  <DashboardActions onViewChange={setViewMode} />
-                </div>
-
                 <DoctorsView
                   doctors={doctors}
                   searchTerm={searchTerm}
