@@ -41,6 +41,7 @@ export function PatientDataForm({
     selectedPatient,
     searchByBirthDate,
     searchByName,
+    searchHybrid,
     selectPatient: selectPatientFromHook,
     clearSearch,
     hideResults
@@ -93,22 +94,22 @@ export function PatientDataForm({
 
   const ageValidation = getAgeValidation();
 
-  // Buscar pacientes por data de nascimento
+  // Busca híbrida inteligente por data de nascimento e/ou nome
   useEffect(() => {
-    if (formData.dataNascimento && formData.dataNascimento.length === 10) {
-      searchByBirthDate(formData.dataNascimento);
-    }
-  }, [formData.dataNascimento, searchByBirthDate]);
+    const hasValidBirthDate = formData.dataNascimento && formData.dataNascimento.length === 10;
+    const hasValidName = formData.nomeCompleto && formData.nomeCompleto.trim().length >= 3;
+    const hasValidPhone = formData.celular && formData.celular.replace(/\D/g, '').length >= 8;
 
-  // Buscar pacientes por nome (3+ caracteres)
-  useEffect(() => {
-    if (formData.nomeCompleto && formData.nomeCompleto.trim().length >= 3) {
-      // Se também tem data preenchida, priorizar busca por data
-      if (!formData.dataNascimento || formData.dataNascimento.length < 10) {
-        searchByName(formData.nomeCompleto.trim());
-      }
+    if (hasValidBirthDate || hasValidName || hasValidPhone) {
+      searchHybrid(
+        hasValidBirthDate ? formData.dataNascimento : undefined,
+        hasValidName ? formData.nomeCompleto.trim() : undefined,
+        hasValidPhone ? formData.celular : undefined
+      );
+    } else {
+      hideResults();
     }
-  }, [formData.nomeCompleto, formData.dataNascimento, searchByName]);
+  }, [formData.dataNascimento, formData.nomeCompleto, formData.celular, searchHybrid, hideResults]);
 
   // Função para selecionar um paciente encontrado
   const selectPatient = (patient: any) => {
