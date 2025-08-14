@@ -211,47 +211,18 @@ export function PatientDataForm({
                 }
               </h4>
             </div>
-            {/* CONTAINER COM SCROLL FORÇADO - ESTILOS INLINE ROBUSTOS */}
             <div 
               style={{
-                maxHeight: foundPatients.length > 5 ? '300px' : 'auto',
-                minHeight: foundPatients.length > 5 ? '300px' : 'auto',
-                overflowY: foundPatients.length > 5 ? 'scroll' : 'auto',
+                maxHeight: '300px',
+                overflowY: 'auto',
                 overflowX: 'hidden',
                 border: '1px solid hsl(var(--border))',
                 borderRadius: '6px',
                 padding: '12px',
-                backgroundColor: 'hsl(var(--background))',
-                scrollbarWidth: 'thin',
-                scrollbarColor: 'hsl(var(--border)) hsl(var(--background))',
-                scrollbarGutter: 'stable',
-                WebkitOverflowScrolling: 'touch',
-                msOverflowStyle: 'scrollbar'
+                backgroundColor: 'hsl(var(--background))'
               }}
-              className="space-y-2"
+              className="space-y-2 scrollbar-thin scrollbar-track-muted scrollbar-thumb-border hover:scrollbar-thumb-muted-foreground"
             >
-              <style dangerouslySetInnerHTML={{
-                __html: `
-                  div[style*="maxHeight"] {
-                    scrollbar-width: thin !important;
-                  }
-                  div[style*="maxHeight"]::-webkit-scrollbar {
-                    width: 8px !important;
-                    display: block !important;
-                  }
-                  div[style*="maxHeight"]::-webkit-scrollbar-track {
-                    background: hsl(var(--muted)) !important;
-                    border-radius: 4px !important;
-                  }
-                  div[style*="maxHeight"]::-webkit-scrollbar-thumb {
-                    background: hsl(var(--border)) !important;
-                    border-radius: 4px !important;
-                  }
-                  div[style*="maxHeight"]::-webkit-scrollbar-thumb:hover {
-                    background: hsl(var(--muted-foreground)) !important;
-                  }
-                `
-              }} />
               {foundPatients.map((patient, index) => (
                 <div 
                   key={patient.id || `patient-${index}`} 
