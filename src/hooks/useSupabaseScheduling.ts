@@ -156,12 +156,24 @@ export function useSupabaseScheduling() {
   }, [appointmentsList.forceRefetch, schedulingData.refetch]);
 
   // ✅ MEMOIZAR: O objeto retornado para garantir referências estáveis
-  return useMemo(() => ({
-    // Dados
-    doctors: schedulingData.doctors,
-    atendimentos: schedulingData.atendimentos,
-    appointments: appointmentsList.appointments,
-    blockedDates: schedulingData.blockedDates,
+  return useMemo(() => {
+    // 🔍 DIAGNÓSTICO CRÍTICO: Log dos dados passados pelo useSupabaseScheduling
+    console.log('🔍 [SUPABASE-SCHEDULING] Dados sendo retornados:', {
+      appointmentsCount: appointmentsList.appointments.length,
+      appointmentsLoading: appointmentsList.loading,
+      schedulingLoading: schedulingData.loading,
+      statusBreakdown: appointmentsList.appointments.reduce((acc, apt) => {
+        acc[apt.status] = (acc[apt.status] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>)
+    });
+
+    return {
+      // Dados
+      doctors: schedulingData.doctors,
+      atendimentos: schedulingData.atendimentos,
+      appointments: appointmentsList.appointments,
+      blockedDates: schedulingData.blockedDates,
     
     // Estados de loading - apenas dos dados essenciais (NÃO incluir loading de criação para não desmontar a tela durante submissão)
     loading: schedulingData.loading || patientManagement.loading,
@@ -189,7 +201,8 @@ export function useSupabaseScheduling() {
     
     // 🔧 CRÍTICO: Validação de dados
     validateDataConsistency: criticalDataFetch.validateDataConsistency,
-  }), [
+    };
+  }, [
     // Dados
     schedulingData.doctors,
     schedulingData.atendimentos,
