@@ -67,6 +67,38 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
   const getAppointmentsForDate = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     
+    // 🔥 DEBUG CRÍTICO - Comparação de IDs
+    console.group(`🔥 DEBUG CRÍTICO - ${doctor.nome} em ${dateStr}`);
+    console.log('Doctor object recebido:', {
+      id: doctor.id,
+      nome: doctor.nome,
+      idType: typeof doctor.id,
+      idLength: String(doctor.id).length
+    });
+    
+    // Testar com agendamento específico de setembro
+    const septemberSample = appointments.find(apt => 
+      apt.data_agendamento >= '2025-09-01' && apt.data_agendamento <= '2025-09-30'
+    );
+    
+    if (septemberSample) {
+      console.log('Sample appointment setembro:', {
+        id: septemberSample.id,
+        medico_id: septemberSample.medico_id,
+        medico_nome: septemberSample.medicos?.nome,
+        data: septemberSample.data_agendamento,
+        medicoIdType: typeof septemberSample.medico_id,
+        medicoIdLength: String(septemberSample.medico_id).length
+      });
+      
+      console.log('Comparação direta:', {
+        'doctor.id === apt.medico_id': doctor.id === septemberSample.medico_id,
+        'String(doctor.id) === String(apt.medico_id)': String(doctor.id) === String(septemberSample.medico_id),
+        'doctor.id': doctor.id,
+        'apt.medico_id': septemberSample.medico_id
+      });
+    }
+    
     // Filtrar agendamentos de forma robusta
     const filteredAppointments = appointments.filter(appointment => {
       // Comparação robusta de IDs (suporta string e UUID)
@@ -77,8 +109,24 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
       const doctorMatch = appointmentDoctorId === targetDoctorId;
       const dateMatch = appointmentDate === dateStr;
       
+      // Log detalhado apenas se for setembro
+      if (appointmentDate.startsWith('2025-09')) {
+        console.log(`🔍 Setembro Test:`, {
+          appointmentId: appointment.id.substring(0, 8),
+          appointmentDate,
+          appointmentDoctorId,
+          targetDoctorId,
+          doctorMatch,
+          dateMatch,
+          passes: doctorMatch && dateMatch
+        });
+      }
+      
       return doctorMatch && dateMatch;
     });
+    
+    console.log(`📊 Resultado: ${filteredAppointments.length} agendamentos para ${dateStr}`);
+    console.groupEnd();
     
     return filteredAppointments;
   };
