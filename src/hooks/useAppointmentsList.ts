@@ -206,7 +206,15 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       if (now - lastValidationTime < 30000) return;
       
       try {
-        const validation = await validateAppointmentsData(appointments);
+        const validation = await validateAppointmentsData(appointments, (result) => {
+          // Toast de inconsistência
+          toast({
+            title: '⚠️ Dados inconsistentes detectados',
+            description: `Frontend: ${result.frontendCount} vs Banco: ${result.databaseCount} agendamentos`,
+            variant: 'destructive',
+          });
+        });
+        
         setLastValidationTime(now);
         
         // 🚨 Se dados estão inconsistentes, tentar recuperação automática
@@ -231,7 +239,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     };
 
     runValidation();
-  }, [appointments, validateAppointmentsData, fetchCriticalData, forceRefetch, lastValidationTime]);
+  }, [appointments, validateAppointmentsData, fetchCriticalData, forceRefetch, lastValidationTime, toast]);
 
   // Paginação
   const pagination = usePagination(appointments || [], { itemsPerPage });

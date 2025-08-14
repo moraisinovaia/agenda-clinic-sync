@@ -1,8 +1,6 @@
 import { useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { AppointmentWithRelations } from '@/types/scheduling';
-import { useToast } from '@/hooks/use-toast';
-
 interface DataValidationResult {
   isValid: boolean;
   frontendCount: number;
@@ -16,11 +14,10 @@ interface DataValidationResult {
  * Compara dados do frontend vs banco e detecta inconsistências
  */
 export function useDataValidation() {
-  const { toast } = useToast();
 
-  // 🔍 VALIDAÇÃO CRÍTICA: Comparar dados frontend vs banco
   const validateAppointmentsData = useCallback(async (
-    frontendAppointments: AppointmentWithRelations[]
+    frontendAppointments: AppointmentWithRelations[],
+    onInconsistency?: (result: DataValidationResult) => void
   ): Promise<DataValidationResult> => {
     try {
       console.log('🔍 [VALIDAÇÃO] Iniciando validação de integridade de dados...');
@@ -81,11 +78,10 @@ export function useDataValidation() {
       if (needsRefetch) {
         console.error('🚨 [VALIDAÇÃO] INCONSISTÊNCIA DETECTADA!', result);
         
-        toast({
-          title: '⚠️ Dados inconsistentes detectados',
-          description: `Frontend: ${frontendAgendados} vs Banco: ${databaseAgendados} agendamentos`,
-          variant: 'destructive',
-        });
+        // Chamar callback se fornecido ao invés de usar toast diretamente
+        if (onInconsistency) {
+          onInconsistency(result);
+        }
       }
 
       return result;
@@ -100,7 +96,7 @@ export function useDataValidation() {
         needsRefetch: true
       };
     }
-  }, [toast]);
+  }, []);
 
   // 🔄 RECUPERAÇÃO AUTOMÁTICA: Buscar dados direto do banco quando necessário
   const fetchCriticalData = useCallback(async (): Promise<AppointmentWithRelations[]> => {
