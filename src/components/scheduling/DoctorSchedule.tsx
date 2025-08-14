@@ -67,7 +67,7 @@ export function DoctorSchedule({
   
   const [waitlistOpen, setWaitlistOpen] = useState(false);
 
-  // Robust doctor ID comparison function
+  // Ultra-robust doctor ID comparison function with detailed debugging
   const isDoctorMatch = (appointmentDoctorId: any, targetDoctorId: any): boolean => {
     if (!appointmentDoctorId || !targetDoctorId) return false;
     
@@ -82,22 +82,110 @@ export function DoctorSchedule({
     // Normalized comparison (trim + lowercase)
     const normalizedAppointment = strAppointment.trim().toLowerCase();
     const normalizedTarget = strTarget.trim().toLowerCase();
-    return normalizedAppointment === normalizedTarget;
+    if (normalizedAppointment === normalizedTarget) return true;
+    
+    // Ultra-robust comparisons for edge cases
+    // Remove all whitespace and special chars, compare
+    const cleanAppointment = strAppointment.replace(/[\s\-\_]/g, '').toLowerCase();
+    const cleanTarget = strTarget.replace(/[\s\-\_]/g, '').toLowerCase();
+    if (cleanAppointment === cleanTarget) return true;
+    
+    // Substring match (in case of encoding issues)
+    if (strAppointment.includes(strTarget) || strTarget.includes(strAppointment)) {
+      const lengthDiff = Math.abs(strAppointment.length - strTarget.length);
+      if (lengthDiff <= 2) return true; // Allow small differences for encoding issues
+    }
+    
+    // Last resort: character-by-character comparison ignoring case and common substitutions
+    if (strAppointment.length === strTarget.length) {
+      let matches = 0;
+      const minLength = Math.min(strAppointment.length, strTarget.length);
+      
+      for (let i = 0; i < minLength; i++) {
+        const charA = strAppointment.charAt(i).toLowerCase();
+        const charT = strTarget.charAt(i).toLowerCase();
+        if (charA === charT || 
+            (charA === '0' && charT === 'o') || 
+            (charA === 'o' && charT === '0') ||
+            (charA === '1' && charT === 'l') || 
+            (charA === 'l' && charT === '1')) {
+          matches++;
+        }
+      }
+      
+      // If 95% of characters match, consider it a match
+      if (matches / minLength >= 0.95) return true;
+    }
+    
+    return false;
   };
 
   // Get appointments for a specific date
   const getAppointmentsForDate = (date: Date): AppointmentWithRelations[] => {
     const dateStr = format(date, 'yyyy-MM-dd');
     
-    return appointments.filter(appointment => {
+    // DEBUG - Específico para Dr. Edson e Setembro 2025
+    const isEdsonDebug = doctor.id === '58b3d6f1-98ff-46c0-8b30-f3281dce816e';
+    const isSetembroDebug = dateStr.startsWith('2025-09-');
+    
+    if (isEdsonDebug && isSetembroDebug) {
+      console.log('🔬 DEBUG EDSON SETEMBRO - getAppointmentsForDate:', {
+        dateStr,
+        doctorId: doctor.id,
+        doctorIdType: typeof doctor.id,
+        doctorIdLength: String(doctor.id).length,
+        totalAppointments: appointments.length,
+        appointmentsForDateCheck: appointments.filter(apt => String(apt.data_agendamento).trim() === dateStr).length
+      });
+    }
+    
+    const filteredAppointments = appointments.filter(appointment => {
       if (!appointment.data_agendamento) return false;
       
       const appointmentDate = String(appointment.data_agendamento).trim();
       const dateMatch = appointmentDate === dateStr;
       const doctorMatch = isDoctorMatch(appointment.medico_id, doctor.id);
       
+      // DEBUG - Log detalhado para Dr. Edson em Setembro
+      if (isEdsonDebug && dateMatch) {
+        console.log('🔬 DEBUG EDSON APPOINTMENT MATCH:', {
+          appointmentId: appointment.id,
+          appointmentDate,
+          appointmentMedicoId: appointment.medico_id,
+          appointmentMedicoIdType: typeof appointment.medico_id,
+          appointmentMedicoIdLength: String(appointment.medico_id).length,
+          targetDoctorId: doctor.id,
+          targetDoctorIdType: typeof doctor.id,
+          targetDoctorIdLength: String(doctor.id).length,
+          dateMatch,
+          doctorMatch,
+          finalMatch: dateMatch && doctorMatch,
+          pacienteNome: appointment.pacientes?.nome_completo,
+          // Comparação byte-a-byte
+          byteComparison: {
+            appointmentBytes: [...String(appointment.medico_id)].map(c => c.charCodeAt(0)),
+            doctorBytes: [...String(doctor.id)].map(c => c.charCodeAt(0)),
+            equal: [...String(appointment.medico_id)].every((char, i) => char.charCodeAt(0) === String(doctor.id).charCodeAt(i))
+          }
+        });
+      }
+      
       return dateMatch && doctorMatch;
     });
+    
+    if (isEdsonDebug && isSetembroDebug) {
+      console.log('🔬 DEBUG EDSON SETEMBRO - RESULTADO FINAL:', {
+        dateStr,
+        appointmentsFound: filteredAppointments.length,
+        appointmentDetails: filteredAppointments.map(apt => ({
+          id: apt.id,
+          paciente: apt.pacientes?.nome_completo,
+          hora: apt.hora_agendamento
+        }))
+      });
+    }
+    
+    return filteredAppointments;
   };
 
   // Check if a date has appointments
