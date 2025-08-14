@@ -199,7 +199,7 @@ export function PatientDataForm({
       {/* Lista de pacientes encontrados - COM SCROLLAREA FUNCIONAL */}
       {showResults && foundPatients.length > 0 && (
         <Card className="mt-4">
-          <CardContent className="p-4 max-h-[400px] overflow-hidden">
+          <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-3">
               <UserCheck className="h-4 w-4 text-green-600" />
               <h4 className="font-medium text-green-700">
@@ -210,8 +210,12 @@ export function PatientDataForm({
               </h4>
             </div>
             
-            <ScrollArea className="h-[300px] w-full rounded-md border p-4">
-              <div className="space-y-2">
+            <ScrollArea 
+              type="always" 
+              scrollHideDelay={0}
+              className="max-h-[360px] w-full rounded-md border p-4"
+            >
+              <div className="space-y-2 pr-2">
                 {foundPatients.map((patient, index) => (
                   <div 
                     key={patient.id || `patient-${index}`} 
