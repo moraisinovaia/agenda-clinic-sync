@@ -123,68 +123,21 @@ export function DoctorSchedule({
   // Get appointments for a specific date
   const getAppointmentsForDate = (date: Date): AppointmentWithRelations[] => {
     const dateStr = format(date, 'yyyy-MM-dd');
-    
-    // DEBUG - Específico para Dr. Edson e Setembro 2025
-    const isEdsonDebug = doctor.id === '58b3d6f1-98ff-46c0-8b30-f3281dce816e';
-    const isSetembroDebug = dateStr.startsWith('2025-09-');
-    
-    if (isEdsonDebug && isSetembroDebug) {
-      console.log('🔬 DEBUG EDSON SETEMBRO - getAppointmentsForDate:', {
-        dateStr,
-        doctorId: doctor.id,
-        doctorIdType: typeof doctor.id,
-        doctorIdLength: String(doctor.id).length,
-        totalAppointments: appointments.length,
-        appointmentsForDateCheck: appointments.filter(apt => String(apt.data_agendamento).trim() === dateStr).length
-      });
-    }
-    
-    const filteredAppointments = appointments.filter(appointment => {
-      if (!appointment.data_agendamento) return false;
+
+    const filteredAppointments = appointments.filter(apt => {
+      if (!apt.data_agendamento) return false;
       
-      const appointmentDate = String(appointment.data_agendamento).trim();
-      const dateMatch = appointmentDate === dateStr;
-      const doctorMatch = isDoctorMatch(appointment.medico_id, doctor.id);
-      
-      // DEBUG - Log detalhado para Dr. Edson em Setembro
-      if (isEdsonDebug && dateMatch) {
-        console.log('🔬 DEBUG EDSON APPOINTMENT MATCH:', {
-          appointmentId: appointment.id,
-          appointmentDate,
-          appointmentMedicoId: appointment.medico_id,
-          appointmentMedicoIdType: typeof appointment.medico_id,
-          appointmentMedicoIdLength: String(appointment.medico_id).length,
-          targetDoctorId: doctor.id,
-          targetDoctorIdType: typeof doctor.id,
-          targetDoctorIdLength: String(doctor.id).length,
-          dateMatch,
-          doctorMatch,
-          finalMatch: dateMatch && doctorMatch,
-          pacienteNome: appointment.pacientes?.nome_completo,
-          // Comparação byte-a-byte
-          byteComparison: {
-            appointmentBytes: [...String(appointment.medico_id)].map(c => c.charCodeAt(0)),
-            doctorBytes: [...String(doctor.id)].map(c => c.charCodeAt(0)),
-            equal: [...String(appointment.medico_id)].every((char, i) => char.charCodeAt(0) === String(doctor.id).charCodeAt(i))
-          }
-        });
-      }
-      
+      // Converte a data_agendamento para Date e formata igual à dateStr, 
+      // evitando problemas de fuso horário ou string mal formatada
+      const aptDateStr = format(new Date(apt.data_agendamento), 'yyyy-MM-dd');
+      const dateMatch = aptDateStr === dateStr;
+
+      // Força conversão para string e trim, evitando diferenças de tipo/espaço
+      const doctorMatch = String(apt.medico_id).trim() === String(doctor.id).trim();
+
       return dateMatch && doctorMatch;
     });
-    
-    if (isEdsonDebug && isSetembroDebug) {
-      console.log('🔬 DEBUG EDSON SETEMBRO - RESULTADO FINAL:', {
-        dateStr,
-        appointmentsFound: filteredAppointments.length,
-        appointmentDetails: filteredAppointments.map(apt => ({
-          id: apt.id,
-          paciente: apt.pacientes?.nome_completo,
-          hora: apt.hora_agendamento
-        }))
-      });
-    }
-    
+
     return filteredAppointments;
   };
 
