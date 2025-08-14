@@ -225,35 +225,49 @@ export const PatientDataFormStable = React.memo(({
                 }
               </h4>
             </div>
-            <div className="space-y-2">
-              {foundPatients.map((patient, index) => (
-                <div key={patient.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
-                  <div>
-                    <p className="font-medium">{patient.nome_completo}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {patient.convenio} • {patient.celular}
-                      {patient.telefone && ` • ${patient.telefone}`}
-                    </p>
-                  </div>
-                  <Button 
-                    size="sm" 
-                    onClick={() => selectPatient(patient)}
-                    className="ml-2"
-                  >
-                    Selecionar
-                  </Button>
+            <div 
+              style={{ 
+                maxHeight: '300px !important',
+                height: 'auto',
+                overflowY: 'auto',
+                overflowX: 'hidden',
+                display: 'flex',
+                flexDirection: 'column'
+              }}
+              className="border rounded-md bg-background"
+            >
+              <div className="flex-1" style={{ minHeight: '0' }}>
+                <div className="space-y-2 p-2">
+                  {foundPatients.map((patient, index) => (
+                    <div key={patient.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/50 flex-shrink-0">
+                      <div>
+                        <p className="font-medium">{patient.nome_completo}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {patient.convenio} • {patient.celular}
+                          {patient.telefone && ` • ${patient.telefone}`}
+                        </p>
+                      </div>
+                      <Button 
+                        size="sm" 
+                        onClick={() => selectPatient(patient)}
+                        className="ml-2"
+                      >
+                        Selecionar
+                      </Button>
+                    </div>
+                  ))}
                 </div>
-              ))}
-              <div className="pt-2 border-t">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={createNewPatient}
-                  className="w-full"
-                >
-                  Criar novo paciente com esta data
-                </Button>
               </div>
+            </div>
+            <div className="pt-2 border-t mt-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={createNewPatient}
+                className="w-full"
+              >
+                Criar novo paciente com esta data
+              </Button>
             </div>
           </CardContent>
         </Card>
