@@ -23,7 +23,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { FilaEsperaForm } from '@/components/fila-espera/FilaEsperaForm';
 import { FilaEsperaFormData } from '@/types/fila-espera';
-import { AppointmentDebugPanel } from '@/components/debug/AppointmentDebugPanel';
+
 
 interface DoctorScheduleProps {
   doctor: Doctor;
@@ -200,14 +200,6 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
 
   return (
     <div className="space-y-6">
-      {/* Debug Panel - Only show in development or when debugging */}
-      <AppointmentDebugPanel
-        appointments={appointments}
-        selectedDoctor={doctor}
-        selectedDate={selectedDate}
-        onForceRefresh={onForceRefresh}
-        visible={true}
-      />
       <Card className="w-full">
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
