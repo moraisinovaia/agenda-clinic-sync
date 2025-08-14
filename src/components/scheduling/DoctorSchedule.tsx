@@ -124,70 +124,18 @@ export function DoctorSchedule({
   const getAppointmentsForDate = (date: Date): AppointmentWithRelations[] => {
     const dateStr = format(date, 'yyyy-MM-dd');
 
-    // DEBUG - Para investigar problemas de filtragem
-    const isEdsonDebug = doctor.id === '58b3d6f1-98ff-46c0-8b30-f3281dce816e';
-    const isTargetDate = dateStr === '2025-09-09';
-    
-    if (isEdsonDebug && isTargetDate) {
-      console.log('🔍 DEBUG FILTRO - Iniciando para Dr. Edson em 2025-09-09:', {
-        dateStr,
-        doctorId: doctor.id,
-        totalAppointments: appointments.length,
-        appointmentsWithThisDoctor: appointments.filter(apt => 
-          String(apt.medico_id).trim() === String(doctor.id).trim()
-        ).length
-      });
-    }
-
     const filteredAppointments = appointments.filter(apt => {
       if (!apt.data_agendamento) return false;
       
-      // DEBUG - Investigar formato de data_agendamento
-      let aptDateStr: string;
-      try {
-        aptDateStr = format(new Date(apt.data_agendamento), 'yyyy-MM-dd');
-      } catch (error) {
-        if (isEdsonDebug && isTargetDate) {
-          console.log('❌ ERRO na conversão de data:', {
-            apt_id: apt.id,
-            data_agendamento: apt.data_agendamento,
-            data_type: typeof apt.data_agendamento,
-            error: error.message
-          });
-        }
-        return false;
-      }
-      
+      // Convert date_agendamento to proper date string for comparison
+      const aptDateStr = format(new Date(apt.data_agendamento), 'yyyy-MM-dd');
       const dateMatch = aptDateStr === dateStr;
-      const doctorMatch = String(apt.medico_id).trim() === String(doctor.id).trim();
 
-      // DEBUG - Log detalhado para cada agendamento relevante
-      if (isEdsonDebug && (dateMatch || apt.medico_id === doctor.id)) {
-        console.log('🔍 TESTE AGENDAMENTO:', {
-          apt_id: apt.id,
-          paciente: apt.pacientes?.nome_completo,
-          data_agendamento_raw: apt.data_agendamento,
-          data_agendamento_type: typeof apt.data_agendamento,
-          aptDateStr,
-          dateStr,
-          dateMatch,
-          medico_id_raw: apt.medico_id,
-          medico_id_type: typeof apt.medico_id,
-          doctor_id: doctor.id,
-          doctorMatch,
-          finalMatch: dateMatch && doctorMatch
-        });
-      }
+      // Robust doctor ID comparison
+      const doctorMatch = String(apt.medico_id).trim() === String(doctor.id).trim();
 
       return dateMatch && doctorMatch;
     });
-
-    if (isEdsonDebug && isTargetDate) {
-      console.log('🎯 RESULTADO FINAL Dr. Edson 2025-09-09:', {
-        appointmentsFound: filteredAppointments.length,
-        appointmentIds: filteredAppointments.map(apt => apt.id)
-      });
-    }
 
     return filteredAppointments;
   };
