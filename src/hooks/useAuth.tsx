@@ -100,7 +100,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     
     // Configurar listener de mudanças de autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         if (!isSubscribed) return;
         
         // Se estamos fazendo logout, ignorar completamente qualquer evento
@@ -129,7 +129,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           setUser(session?.user ?? null);
           
           if (session?.user) {
-            // Buscar perfil do usuário
+            // 🚨 CORREÇÃO DEADLOCK: Mover async operations para setTimeout(0)
             setTimeout(async () => {
               if (!isSubscribed || isLoggingOut.current) return;
               
@@ -143,7 +143,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                   console.log('⚠️ User not approved yet, status:', profileData.status);
                 }
               }
-            }, 100);
+            }, 0); // 🚨 CRÍTICO: setTimeout(0) para evitar deadlock
           } else {
             setProfile(null);
             setLoading(false);

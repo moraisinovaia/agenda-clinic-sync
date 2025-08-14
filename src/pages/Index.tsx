@@ -35,6 +35,7 @@ import {
 
 import { SystemMonitor } from '@/components/system/SystemMonitor';
 import { SchedulingErrorBoundary } from '@/components/error/SchedulingErrorBoundary';
+import { AdvancedDebugPanel } from '@/components/debug/AdvancedDebugPanel';
 
 import { useFilaEspera } from '@/hooks/useFilaEspera';
 import { useViewMode } from '@/hooks/useViewMode';
@@ -680,6 +681,13 @@ const Index = () => {
         atendimentos={atendimentos}
         availableConvenios={uniqueConvenios}
         onSuccess={handleMultipleAppointmentSuccess}
+      />
+
+      {/* 🚨 ADVANCED DEBUG PANEL - Para diagnosticar problema dos agendamentos */}
+      <AdvancedDebugPanel
+        appointments={appointments}
+        selectedDoctor={selectedDoctor}
+        currentDate={selectedAppointmentDate || lastAppointmentDate}
       />
     </div>
   );
