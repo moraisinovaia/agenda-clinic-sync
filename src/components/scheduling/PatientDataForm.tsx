@@ -206,13 +206,13 @@ export function PatientDataForm({
                 }
               </h4>
             </div>
-            <div className="max-h-40 overflow-y-auto border rounded-md bg-background" style={{ scrollbarWidth: 'thin', scrollbarColor: 'hsl(var(--primary)) hsl(var(--muted))' }}>
+            <ScrollArea className="h-60 w-full border rounded-md bg-background">
               <div className="space-y-2 p-2">
                 {foundPatients.map((patient, index) => (
-                  <div key={patient.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
-                    <div>
-                      <p className="font-medium">{patient.nome_completo}</p>
-                      <p className="text-sm text-muted-foreground">
+                  <div key={patient.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/50 hover:bg-muted/70 transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{patient.nome_completo}</p>
+                      <p className="text-sm text-muted-foreground truncate">
                         {patient.convenio} • {patient.celular}
                         {patient.telefone && ` • ${patient.telefone}`}
                       </p>
@@ -220,14 +220,14 @@ export function PatientDataForm({
                     <Button 
                       size="sm" 
                       onClick={() => selectPatient(patient)}
-                      className="ml-2"
+                      className="ml-2 flex-shrink-0"
                     >
                       Selecionar
                     </Button>
                   </div>
                 ))}
               </div>
-            </div>
+            </ScrollArea>
             <div className="pt-2 border-t">
               <Button 
                 variant="outline" 
