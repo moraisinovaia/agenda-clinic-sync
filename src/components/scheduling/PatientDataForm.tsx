@@ -199,7 +199,7 @@ export function PatientDataForm({
       {/* Lista de pacientes encontrados - COM SCROLLAREA FUNCIONAL */}
       {showResults && foundPatients.length > 0 && (
         <Card className="mt-4">
-          <CardContent className="p-4">
+          <CardContent className="p-4 max-h-[400px] overflow-hidden">
             <div className="flex items-center gap-2 mb-3">
               <UserCheck className="h-4 w-4 text-green-600" />
               <h4 className="font-medium text-green-700">
