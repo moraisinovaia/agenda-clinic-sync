@@ -5,49 +5,90 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// Função para enviar WhatsApp via Evolution API
-async function enviarWhatsAppEvolution(celular: string, mensagem: string) {
+// Função para enviar WhatsApp via Evolution API com retry automático
+async function enviarWhatsAppEvolution(celular: string, mensagem: string, retryCount: number = 0): Promise<any> {
+  const maxRetries = 3;
+  const baseDelay = 1000; // 1 segundo
+  
   try {
     const evolutionUrl = Deno.env.get('EVOLUTION_API_URL');
     const apiKey = Deno.env.get('EVOLUTION_API_KEY');
     const instanceName = Deno.env.get('EVOLUTION_INSTANCE_NAME');
 
-    if (!evolutionUrl || !apiKey || !instanceName) {
-      throw new Error('Configurações da Evolution API não encontradas nos secrets');
+    // Validações detalhadas de configuração
+    if (!evolutionUrl) {
+      throw new Error('EVOLUTION_API_URL não configurada nos secrets do Supabase');
+    }
+    if (!apiKey) {
+      throw new Error('EVOLUTION_API_KEY não configurada nos secrets do Supabase');  
+    }
+    if (!instanceName) {
+      throw new Error('EVOLUTION_INSTANCE_NAME não configurada nos secrets do Supabase');
     }
 
-    console.log(`📱 Enviando WhatsApp de confirmação para: ${celular}`);
-    console.log(`🔗 URL: ${evolutionUrl}/message/sendText/${instanceName}`);
+    console.log(`📱 [Tentativa ${retryCount + 1}/${maxRetries + 1}] Enviando WhatsApp para: ${celular}`);
+    console.log(`🔗 URL da API: ${evolutionUrl}/message/sendText/${instanceName}`);
 
-    // Limpar o número de caracteres especiais
+    // Limpar e formatar número
     const numeroLimpo = celular.replace(/\D/g, '');
+    
+    if (numeroLimpo.length < 10) {
+      throw new Error(`Número de telefone inválido: ${celular} (muito curto)`);
+    }
     
     // Adicionar código do país se não tiver
     const numeroCompleto = numeroLimpo.startsWith('55') ? numeroLimpo : `55${numeroLimpo}`;
+    
+    console.log(`📞 Número formatado: ${numeroCompleto}`);
+
+    const requestBody = {
+      number: numeroCompleto,
+      text: mensagem
+    };
 
     const response = await fetch(`${evolutionUrl}/message/sendText/${instanceName}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'apikey': apiKey
+        'apikey': apiKey,
+        'User-Agent': 'Supabase-Edge-Function'
       },
-      body: JSON.stringify({
-        number: numeroCompleto,
-        text: mensagem
-      })
+      body: JSON.stringify(requestBody),
+      signal: AbortSignal.timeout(15000) // 15 segundos timeout
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`❌ Erro ao enviar WhatsApp: ${response.status} - ${errorText}`);
-      throw new Error(`Evolution API error: ${response.status} - ${errorText}`);
+      const errorMsg = `Evolution API HTTP ${response.status}: ${errorText}`;
+      console.error(`❌ Erro HTTP da Evolution API: ${errorMsg}`);
+      
+      // Se erro 4xx, não retry (erro de cliente)
+      if (response.status >= 400 && response.status < 500 && retryCount === 0) {
+        throw new Error(`Erro de cliente (não será reprocessado): ${errorMsg}`);
+      }
+      
+      throw new Error(errorMsg);
     }
 
     const result = await response.json();
-    console.log('✅ WhatsApp de confirmação enviado com sucesso:', result);
+    console.log('✅ WhatsApp enviado com sucesso:', JSON.stringify(result, null, 2));
+    
     return result;
+    
   } catch (error) {
-    console.error('❌ Erro na integração Evolution API:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+    console.error(`❌ [Tentativa ${retryCount + 1}] Erro na Evolution API:`, errorMessage);
+    
+    // Implementar retry exponencial para erros de rede/temporários
+    if (retryCount < maxRetries && !errorMessage.includes('não será reprocessado') && !errorMessage.includes('inválido')) {
+      const delay = baseDelay * Math.pow(2, retryCount); // Exponential backoff
+      console.log(`⏳ Aguardando ${delay}ms antes da próxima tentativa...`);
+      
+      await new Promise(resolve => setTimeout(resolve, delay));
+      
+      return enviarWhatsAppEvolution(celular, mensagem, retryCount + 1);
+    }
+    
     throw error;
   }
 }

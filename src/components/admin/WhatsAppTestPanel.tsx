@@ -53,11 +53,11 @@ export function WhatsAppTestPanel() {
   const [celular, setCelular] = useState('87991311991');
   const { toast } = useToast();
   
-  // Auto-executar teste ao carregar
+  // Auto-executar teste avançado ao carregar
   React.useEffect(() => {
     const autoTest = async () => {
-      console.log('🚀 Executando teste automático do WhatsApp...');
-      await testDirectCall();
+      console.log('🚀 Executando teste automático avançado do WhatsApp...');
+      await testAdvancedDiagnostic();
     };
     
     // Executar após 2 segundos
@@ -221,6 +221,62 @@ export function WhatsAppTestPanel() {
     }
   };
 
+  const testAdvancedDiagnostic = async () => {
+    setLoading(true);
+    try {
+      // Primeiro fazer diagnóstico completo
+      const { data: diagData, error: diagError } = await supabase.functions.invoke('whatsapp-diagnostico');
+      
+      if (diagError) {
+        console.error('Erro no diagnóstico:', diagError);
+      } else if (diagData) {
+        console.log('📊 Diagnóstico:', diagData);
+        setDiagnosticResult(diagData as DiagnosticResult);
+        
+        toast({
+          title: "Diagnóstico executado",
+          description: `Status: ${diagData.overall_status}`,
+          variant: diagData.overall_status === 'healthy' ? "default" : "destructive",
+        });
+      }
+
+      // Se diagnóstico passou, fazer teste direto avançado
+      if (!diagError && diagData?.overall_status !== 'critical') {
+        const { data: testData, error: testError } = await supabase.functions.invoke('whatsapp-teste-direto', {
+          body: { celular }
+        });
+
+        if (testError) {
+          console.error('Erro no teste avançado:', testError);
+        } else if (testData) {
+          console.log('🧪 Teste avançado:', testData);
+          setTestResult({
+            test_id: testData.test_id || 'advanced-' + Date.now(),
+            success: testData.success || false,
+            response: testData,
+            message: testData.overall_message || 'Teste avançado executado'
+          });
+
+          toast({
+            title: testData.success ? "Teste avançado concluído!" : "Teste avançado falhou",
+            description: testData.overall_message,
+            variant: testData.success ? "default" : "destructive",
+          });
+        }
+      }
+      
+    } catch (error: any) {
+      console.error('Erro no teste avançado:', error);
+      toast({
+        title: "Erro no teste avançado",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getBadgeVariant = (level: string) => {
     switch (level) {
       case 'error': return 'destructive';
@@ -254,7 +310,16 @@ export function WhatsAppTestPanel() {
               />
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+              <Button 
+                onClick={testAdvancedDiagnostic}
+                disabled={loading}
+                className="w-full"
+              >
+                {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Settings className="h-4 w-4 mr-2" />}
+                Diagnóstico Completo
+              </Button>
+              
               <Button 
                 onClick={runDiagnostic}
                 disabled={loading}
@@ -262,7 +327,7 @@ export function WhatsAppTestPanel() {
                 className="w-full"
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Settings className="h-4 w-4 mr-2" />}
-                Diagnóstico
+                Diagnóstico Básico
               </Button>
               
               <Button 
@@ -288,10 +353,11 @@ export function WhatsAppTestPanel() {
               <Button 
                 onClick={testDirectCall}
                 disabled={loading}
+                variant="secondary"
                 className="w-full"
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle className="h-4 w-4 mr-2" />}
-                Teste Direto
+                Teste Simples
               </Button>
             </div>
           </div>

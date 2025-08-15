@@ -71,6 +71,12 @@ verify_jwt = false
 [functions.whatsapp-confirmacao]
 verify_jwt = false
 
+[functions.whatsapp-diagnostico]
+verify_jwt = false
+
+[functions.whatsapp-teste-direto]
+verify_jwt = false
+
 [functions.notification-scheduler]
 verify_jwt = false
 
