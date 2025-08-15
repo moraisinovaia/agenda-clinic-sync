@@ -49,21 +49,24 @@ export function WhatsAppTestPanel() {
   const [diagnosticResult, setDiagnosticResult] = useState<DiagnosticResult | null>(null);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [fallbackResult, setFallbackResult] = useState<FallbackResult | null>(null);
-  const [logs, setLogs] = useState<LogEntry[]>([]);
   const [celular, setCelular] = useState('87991311991');
+  const [autoTestExecuted, setAutoTestExecuted] = useState(false);
   const { toast } = useToast();
   
   // Auto-executar teste avançado ao carregar
   React.useEffect(() => {
-    const autoTest = async () => {
-      console.log('🚀 Executando teste simples automático do WhatsApp...');
-      await testSimplesAgora();
-    };
-    
-    // Executar após 2 segundos
-    const timer = setTimeout(autoTest, 2000);
-    return () => clearTimeout(timer);
-  }, []);
+    if (!autoTestExecuted) {
+      const autoTest = async () => {
+        console.log('🚀 Executando teste simples automático do WhatsApp...');
+        setAutoTestExecuted(true);
+        await testSimplesAgora();
+      };
+      
+      // Executar após 1 segundo
+      const timer = setTimeout(autoTest, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [autoTestExecuted]);
 
   const runDiagnostic = async () => {
     setLoading(true);
@@ -103,15 +106,7 @@ export function WhatsAppTestPanel() {
       const result = data as unknown as TestResult;
       setTestResult(result);
       
-      // Buscar logs recentes
-      const { data: logsData } = await supabase
-        .from('system_logs')
-        .select('*')
-        .like('context', '%WHATSAPP%')
-        .order('timestamp', { ascending: false })
-        .limit(5);
-      
-      setLogs((logsData || []) as LogEntry[]);
+      // Teste concluído, sem necessidade de buscar logs
       
       toast({
         title: result?.success ? "Teste enviado!" : "Teste falhou",
@@ -222,6 +217,8 @@ export function WhatsAppTestPanel() {
   };
 
   const testSimplesAgora = async () => {
+    console.log(`🧪 EXECUTANDO TESTE PARA ${celular}`);
+    setAutoTestExecuted(true);
     setLoading(true);
     try {
       console.log('🧪 Executando teste simples agora...');
@@ -301,6 +298,16 @@ export function WhatsAppTestPanel() {
                 onChange={(e) => setCelular(e.target.value)}
                 placeholder="87991311991"
               />
+            </div>
+            
+            <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <h3 className="font-semibold text-blue-800 dark:text-blue-200 mb-2">
+                🚀 Teste Automático Executando...
+              </h3>
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                Um teste será enviado automaticamente para <strong>{celular}</strong> em alguns segundos.
+                Aguarde a mensagem no WhatsApp!
+              </p>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -437,31 +444,6 @@ export function WhatsAppTestPanel() {
         </Card>
       )}
 
-      {logs.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Logs Recentes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {logs.map((log, index) => (
-                <div key={index} className="flex items-start gap-2 p-2 border rounded">
-                  <Badge variant={getBadgeVariant(log.level)}>
-                    {log.level}
-                  </Badge>
-                  <div className="flex-1">
-                    <div className="text-sm font-medium">{log.message}</div>
-                    <div className="text-xs text-muted-foreground">{log.context}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {new Date(log.timestamp).toLocaleString()}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

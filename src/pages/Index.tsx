@@ -46,6 +46,7 @@ import { AuthTest } from '@/components/AuthTest';
 import PendingApproval from '@/components/PendingApproval';
 import { WhatsAppAgentDashboard } from '@/components/whatsapp-agent/WhatsAppAgentDashboard';
 import { WhatsAppTestPanel } from '@/components/admin/WhatsAppTestPanel';
+import { WhatsAppTesteRapido } from '@/components/admin/WhatsAppTesteRapido';
 
 const Index = () => {
   const { user, profile, loading: authLoading, signOut } = useStableAuth();
@@ -402,6 +403,13 @@ const Index = () => {
       <div className="container mx-auto px-4 py-6">
         {viewMode === 'doctors' && (
           <div className="space-y-6">
+            {/* Admin Panel - Teste WhatsApp Rápido */}
+            {profile?.role === 'admin' && profile?.status === 'aprovado' && (
+              <div className="mb-6">
+                <WhatsAppTesteRapido />
+              </div>
+            )}
+            
             {/* User Approval Panel for Admins */}
             {profile?.role === 'admin' && profile?.status === 'aprovado' && (
               <>
