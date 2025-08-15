@@ -74,6 +74,9 @@ verify_jwt = false
 [functions.whatsapp-diagnostico]
 verify_jwt = false
 
+[functions.whatsapp-teste-simples]
+verify_jwt = false
+
 [functions.whatsapp-teste-direto]
 verify_jwt = false
 

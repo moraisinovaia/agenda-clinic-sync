@@ -56,8 +56,8 @@ export function WhatsAppTestPanel() {
   // Auto-executar teste avançado ao carregar
   React.useEffect(() => {
     const autoTest = async () => {
-      console.log('🚀 Executando teste automático avançado do WhatsApp...');
-      await testAdvancedDiagnostic();
+      console.log('🚀 Executando teste simples automático do WhatsApp...');
+      await testSimplesAgora();
     };
     
     // Executar após 2 segundos
@@ -221,54 +221,47 @@ export function WhatsAppTestPanel() {
     }
   };
 
-  const testAdvancedDiagnostic = async () => {
+  const testSimplesAgora = async () => {
     setLoading(true);
     try {
-      // Primeiro fazer diagnóstico completo
-      const { data: diagData, error: diagError } = await supabase.functions.invoke('whatsapp-diagnostico');
+      console.log('🧪 Executando teste simples agora...');
       
-      if (diagError) {
-        console.error('Erro no diagnóstico:', diagError);
-      } else if (diagData) {
-        console.log('📊 Diagnóstico:', diagData);
-        setDiagnosticResult(diagData as DiagnosticResult);
-        
-        toast({
-          title: "Diagnóstico executado",
-          description: `Status: ${diagData.overall_status}`,
-          variant: diagData.overall_status === 'healthy' ? "default" : "destructive",
-        });
+      const { data, error } = await supabase.functions.invoke('whatsapp-teste-simples', {
+        body: { celular }
+      });
+
+      if (error) {
+        console.error('Erro na invocação:', error);
+        throw error;
       }
 
-      // Se diagnóstico passou, fazer teste direto avançado
-      if (!diagError && diagData?.overall_status !== 'critical') {
-        const { data: testData, error: testError } = await supabase.functions.invoke('whatsapp-teste-direto', {
-          body: { celular }
-        });
+      const result = data as any;
+      
+      setTestResult({
+        test_id: 'simples-' + Date.now(),
+        success: result?.success || false,
+        response: result,
+        message: result?.message || result?.error || 'Teste simples executado'
+      });
 
-        if (testError) {
-          console.error('Erro no teste avançado:', testError);
-        } else if (testData) {
-          console.log('🧪 Teste avançado:', testData);
-          setTestResult({
-            test_id: testData.test_id || 'advanced-' + Date.now(),
-            success: testData.success || false,
-            response: testData,
-            message: testData.overall_message || 'Teste avançado executado'
-          });
-
-          toast({
-            title: testData.success ? "Teste avançado concluído!" : "Teste avançado falhou",
-            description: testData.overall_message,
-            variant: testData.success ? "default" : "destructive",
-          });
-        }
-      }
+      toast({
+        title: result?.success ? "✅ WhatsApp FUNCIONANDO!" : "❌ WhatsApp com problema",
+        description: result?.message || result?.error,
+        variant: result?.success ? "default" : "destructive",
+      });
       
     } catch (error: any) {
-      console.error('Erro no teste avançado:', error);
+      console.error('Erro no teste simples:', error);
+      
+      setTestResult({
+        test_id: 'error-' + Date.now(),
+        success: false,
+        response: error,
+        message: `Erro: ${error.message}`
+      });
+      
       toast({
-        title: "Erro no teste avançado",
+        title: "Erro no teste",
         description: error.message,
         variant: "destructive",
       });
@@ -310,54 +303,34 @@ export function WhatsAppTestPanel() {
               />
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Button 
-                onClick={testAdvancedDiagnostic}
+                onClick={testSimplesAgora}
                 disabled={loading}
-                className="w-full"
+                className="w-full bg-green-600 hover:bg-green-700"
               >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Settings className="h-4 w-4 mr-2" />}
-                Diagnóstico Completo
+                {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle className="h-4 w-4 mr-2" />}
+                🚀 TESTE AGORA
               </Button>
               
               <Button 
                 onClick={runDiagnostic}
                 disabled={loading}
-                variant="outline"
+                variant="secondary"
                 className="w-full"
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Settings className="h-4 w-4 mr-2" />}
-                Diagnóstico Básico
-              </Button>
-              
-              <Button 
-                onClick={testEdgeFunction}
-                disabled={loading}
-                variant="secondary"
-                className="w-full"
-              >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <MessageSquare className="h-4 w-4 mr-2" />}
-                Teste Trigger
-              </Button>
-              
-              <Button 
-                onClick={testFallback}
-                disabled={loading}
-                variant="secondary"
-                className="w-full"
-              >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Phone className="h-4 w-4 mr-2" />}
-                Teste Fallback
+                Diagnóstico
               </Button>
 
               <Button 
                 onClick={testDirectCall}
                 disabled={loading}
-                variant="secondary"
+                variant="outline"
                 className="w-full"
               >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle className="h-4 w-4 mr-2" />}
-                Teste Simples
+                {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <MessageSquare className="h-4 w-4 mr-2" />}
+                Teste Antigo
               </Button>
             </div>
           </div>
