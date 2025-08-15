@@ -47,6 +47,7 @@ import PendingApproval from '@/components/PendingApproval';
 import { WhatsAppAgentDashboard } from '@/components/whatsapp-agent/WhatsAppAgentDashboard';
 import { WhatsAppTestPanel } from '@/components/admin/WhatsAppTestPanel';
 import { WhatsAppTesteRapido } from '@/components/admin/WhatsAppTesteRapido';
+import { N8nWebhookButton } from '@/components/admin/N8nWebhookButton';
 
 const Index = () => {
   const { user, profile, loading: authLoading, signOut } = useStableAuth();
@@ -414,7 +415,10 @@ const Index = () => {
             {profile?.role === 'admin' && profile?.status === 'aprovado' && (
               <>
                 <UserApprovalPanel />
-                <WhatsAppTestPanel />
+                <div className="flex flex-wrap gap-4 mb-6">
+                  <WhatsAppTestPanel />
+                  <N8nWebhookButton />
+                </div>
               </>
             )}
             
