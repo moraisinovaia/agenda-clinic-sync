@@ -52,6 +52,18 @@ export function WhatsAppTestPanel() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [celular, setCelular] = useState('87991311991');
   const { toast } = useToast();
+  
+  // Auto-executar teste ao carregar
+  React.useEffect(() => {
+    const autoTest = async () => {
+      console.log('🚀 Executando teste automático do WhatsApp...');
+      await testDirectCall();
+    };
+    
+    // Executar após 2 segundos
+    const timer = setTimeout(autoTest, 2000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const runDiagnostic = async () => {
     setLoading(true);
