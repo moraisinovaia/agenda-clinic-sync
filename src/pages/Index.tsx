@@ -405,42 +405,45 @@ const Index = () => {
         {viewMode === 'doctors' && (
           <div className="space-y-6">
             
-            {/* Admin Panels */}
-            {profile?.role === 'admin' && profile?.status === 'aprovado' && (
-              <>
-                <UserApprovalPanel />
-                <ClienteManager />
-                <div className="flex flex-wrap gap-4 mb-6">
-                  <WhatsAppTestPanel />
-                  <N8nWebhookButton />
-                </div>
-              </>
-            )}
-            
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-              <div className="lg:col-span-3">
-                <StatsCards doctors={doctors} appointments={appointments} />
-                
-                <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                  <div className="relative max-w-md">
-                    {/* This will be moved to DoctorsView component */}
+            {/* Admin Panel - Apenas 3 módulos principais */}
+            {profile?.role === 'admin' && profile?.status === 'aprovado' ? (
+              <div className="space-y-6">
+                <div className="grid gap-6">
+                  <UserApprovalPanel />
+                  <ClienteManager />
+                  <div className="flex justify-center">
+                    <N8nWebhookButton />
                   </div>
-                  <DashboardActions onViewChange={setViewMode} />
                 </div>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                  <div className="lg:col-span-3">
+                    <StatsCards doctors={doctors} appointments={appointments} />
+                    
+                    <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                      <div className="relative max-w-md">
+                        {/* This will be moved to DoctorsView component */}
+                      </div>
+                      <DashboardActions onViewChange={setViewMode} />
+                    </div>
 
-                <DoctorsView
-                  doctors={doctors}
-                  searchTerm={searchTerm}
-                  onSearchChange={setSearchTerm}
-                  onScheduleDoctor={handleScheduleDoctor}
-                  onViewSchedule={handleViewSchedule}
-                />
+                    <DoctorsView
+                      doctors={doctors}
+                      searchTerm={searchTerm}
+                      onSearchChange={setSearchTerm}
+                      onScheduleDoctor={handleScheduleDoctor}
+                      onViewSchedule={handleViewSchedule}
+                    />
+                  </div>
+                  
+                  <div className="lg:col-span-1">
+                    <SystemMonitor />
+                  </div>
+                </div>
               </div>
-              
-              <div className="lg:col-span-1">
-                <SystemMonitor />
-              </div>
-            </div>
+            )}
           </div>
         )}
 
