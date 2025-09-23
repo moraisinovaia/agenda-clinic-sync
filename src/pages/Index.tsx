@@ -17,13 +17,11 @@ import { FilaEsperaForm } from '@/components/fila-espera/FilaEsperaForm';
 import { FilaEsperaList } from '@/components/fila-espera/FilaEsperaList';
 import { RelatorioAgenda } from '@/components/scheduling/RelatorioAgenda';
 
-import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
-import { DashboardActions } from '@/components/dashboard/DashboardActions';
 import { StatsCards } from '@/components/dashboard/StatsCards';
 import { SystemHealthDashboard } from '@/components/dashboard/SystemHealthDashboard';
 import { DoctorsView } from '@/components/dashboard/DoctorsView';
-
-import { ClientConfigurationPanel } from '@/components/settings/ClientConfigurationPanel';
+import { DashboardActions } from '@/components/dashboard/DashboardActions';
+import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { AlertSystem } from '@/components/alerts/AlertSystem';
 import { UserApprovalPanel } from '@/components/admin/UserApprovalPanel';
 import { 
@@ -48,7 +46,6 @@ import { AuthTest } from '@/components/AuthTest';
 import PendingApproval from '@/components/PendingApproval';
 import { WhatsAppAgentDashboard } from '@/components/whatsapp-agent/WhatsAppAgentDashboard';
 import { WhatsAppTestPanel } from '@/components/admin/WhatsAppTestPanel';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import { N8nWebhookButton } from '@/components/admin/N8nWebhookButton';
 
@@ -406,73 +403,44 @@ const Index = () => {
 
       <div className="container mx-auto px-4 py-6">
         {viewMode === 'doctors' && (
-          <Tabs defaultValue="agenda" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="agenda">Agenda</TabsTrigger>
-              <TabsTrigger value="configurations">Configurações</TabsTrigger>
-              <TabsTrigger value="system">Sistema</TabsTrigger>
-              <TabsTrigger value="doctors">Médicos</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="agenda" className="space-y-6">
-              
-              {/* User Approval Panel for Admins */}
-              {profile?.role === 'admin' && profile?.status === 'aprovado' && (
-                <>
-                  <UserApprovalPanel />
-                  <div className="flex flex-wrap gap-4 mb-6">
-                    <WhatsAppTestPanel />
-                    <N8nWebhookButton />
-                  </div>
-                </>
-              )}
-              
-              <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                <div className="lg:col-span-3">
-                  <StatsCards doctors={doctors} appointments={appointments} />
-                  
-                  <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                    <div className="relative max-w-md">
-                      {/* This will be moved to DoctorsView component */}
-                    </div>
-                    <DashboardActions onViewChange={setViewMode} />
-                  </div>
-
-                  <DoctorsView
-                    doctors={doctors}
-                    searchTerm={searchTerm}
-                    onSearchChange={setSearchTerm}
-                    onScheduleDoctor={handleScheduleDoctor}
-                    onViewSchedule={handleViewSchedule}
-                  />
+          <div className="space-y-6">
+            
+            {/* User Approval Panel for Admins */}
+            {profile?.role === 'admin' && profile?.status === 'aprovado' && (
+              <>
+                <UserApprovalPanel />
+                <div className="flex flex-wrap gap-4 mb-6">
+                  <WhatsAppTestPanel />
+                  <N8nWebhookButton />
                 </div>
+              </>
+            )}
+            
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+              <div className="lg:col-span-3">
+                <StatsCards doctors={doctors} appointments={appointments} />
                 
-                <div className="lg:col-span-1">
-                  <SystemMonitor />
+                <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                  <div className="relative max-w-md">
+                    {/* This will be moved to DoctorsView component */}
+                  </div>
+                  <DashboardActions onViewChange={setViewMode} />
                 </div>
+
+                <DoctorsView
+                  doctors={doctors}
+                  searchTerm={searchTerm}
+                  onSearchChange={setSearchTerm}
+                  onScheduleDoctor={handleScheduleDoctor}
+                  onViewSchedule={handleViewSchedule}
+                />
               </div>
-            </TabsContent>
-
-
-            <TabsContent value="configurations" className="space-y-6">
-              <ClientConfigurationPanel />
-            </TabsContent>
-
-            <TabsContent value="system" className="space-y-6">
-              <SystemHealthDashboard doctors={doctors} appointments={appointments} />
-            </TabsContent>
-
-            <TabsContent value="doctors" className="space-y-6">
-              <DoctorsView
-                doctors={doctors}
-                searchTerm={searchTerm}
-                onSearchChange={setSearchTerm}
-                onScheduleDoctor={handleScheduleDoctor}
-                onViewSchedule={handleViewSchedule}
-              />
-            </TabsContent>
-
-          </Tabs>
+              
+              <div className="lg:col-span-1">
+                <SystemMonitor />
+              </div>
+            </div>
+          </div>
         )}
 
         {viewMode === 'schedule' && selectedDoctor && (
