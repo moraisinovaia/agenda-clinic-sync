@@ -39,6 +39,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           updated_at: apt.updated_at,
           criado_por: apt.criado_por,
           criado_por_user_id: apt.criado_por_user_id,
+          cliente_id: '00000000-0000-0000-0000-000000000000', // Usar ID padrão temporário
           // Campos adicionais para cancelamento e confirmação
           cancelado_em: null,
           cancelado_por: null,
@@ -55,7 +56,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
             telefone: apt.paciente_telefone || '',
             data_nascimento: apt.paciente_data_nascimento || '',
             created_at: '',
-            updated_at: ''
+            updated_at: '',
+            cliente_id: '00000000-0000-0000-0000-000000000000' // Usar ID padrão temporário
           },
           medicos: {
             id: apt.medico_id,
@@ -70,7 +72,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
             horarios: null,
             idade_maxima: null,
             idade_minima: null,
-            observacoes: ''
+            observacoes: '',
+            cliente_id: '00000000-0000-0000-0000-000000000000' // Usar ID padrão temporário
           },
           atendimentos: {
             id: apt.atendimento_id,
@@ -89,7 +92,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
             observacoes: '',
             valor_convenio: 0,
             valor_particular: 0,
-            restricoes: null
+            restricoes: null,
+            cliente_id: '00000000-0000-0000-0000-000000000000' // Usar ID padrão temporário
           }
         }));
 

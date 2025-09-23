@@ -78,6 +78,7 @@ export const useFilaEspera = () => {
           data_preferida: formData.dataPreferida,
           periodo_preferido: formData.periodoPreferido,
           observacoes: formData.observacoes,
+          cliente_id: '00000000-0000-0000-0000-000000000000', // Usar ID padrão temporário
           prioridade: formData.prioridade,
           data_limite: formData.dataLimite,
           status: 'aguardando'

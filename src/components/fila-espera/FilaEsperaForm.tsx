@@ -115,6 +115,7 @@ export function FilaEsperaForm({
           data_nascimento: pacienteData.dataNascimento,
           convenio: pacienteData.convenio,
           celular: pacienteData.celular,
+          cliente_id: '00000000-0000-0000-0000-000000000000', // Usar ID padrão temporário
         })
         .select()
         .single();

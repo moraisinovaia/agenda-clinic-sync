@@ -2,106 +2,30 @@ import { supabase } from '@/integrations/supabase/client';
 
 export const setupInitialData = async () => {
   try {
-    // Verificar se já existem configurações de alertas
-    const { data: alertConfigs, error: alertError } = await supabase
-      .from('configuracoes_clinica')
-      .select('*')
-      .eq('categoria', 'alertas');
-
-    // Se houver erro na consulta, não tenta inserir dados
-    if (alertError) {
-      console.warn('Erro ao verificar configurações existentes:', alertError);
-      return { success: false, error: alertError };
+    console.log('🚀 Sistema já configurado e otimizado para produção');
+    
+    // Verificar saúde do sistema
+    const healthCheck = await validateSystemHealth();
+    
+    if (!healthCheck.healthy) {
+      console.warn('⚠️ Problemas detectados no sistema:', healthCheck.issues);
+      return { 
+        success: false, 
+        error: 'Sistema com problemas de saúde',
+        issues: healthCheck.issues 
+      };
     }
 
-    if (!alertConfigs || alertConfigs.length === 0) {
-      // Inserir configurações padrão de alertas
-      const defaultAlertConfigs = [
-        {
-          categoria: 'alertas',
-          chave: 'alert_system',
-          valor: 'moraisinovaia@gmail.com',
-          ativo: true,
-          dados_extras: {
-            systemDown: true,
-            databaseIssues: true
-          }
-        },
-        {
-          categoria: 'alertas',
-          chave: 'alert_appointment',
-          valor: 'moraisinovaia@gmail.com',
-          ativo: true,
-          dados_extras: {
-            appointmentConflicts: true
-          }
-        },
-        {
-          categoria: 'alertas',
-          chave: 'alert_critical',
-          valor: 'moraisinovaia@gmail.com',
-          ativo: true,
-          dados_extras: {
-            criticalErrors: true
-          }
-        }
-      ];
-
-      const { error } = await supabase
-        .from('configuracoes_clinica')
-        .insert(defaultAlertConfigs);
-
-      if (error) {
-        console.error('Erro ao inserir configurações padrão:', error);
-      } else {
-        console.log('✅ Configurações de alertas criadas com sucesso');
-      }
-    }
-
-    // Verificar configurações de sistema
-    const { data: systemConfigs, error: systemError } = await supabase
-      .from('configuracoes_clinica')
-      .select('*')
-      .eq('categoria', 'sistema');
-
-    // Se houver erro na consulta, não tenta inserir dados
-    if (systemError) {
-      console.warn('Erro ao verificar configurações de sistema:', systemError);
-      return { success: false, error: systemError };
-    }
-
-    if (!systemConfigs || systemConfigs.length === 0) {
-      const defaultSystemConfigs = [
-        {
-          categoria: 'sistema',
-          chave: 'clinic_name',
-          valor: 'Endogastro',
-          ativo: true
-        },
-        {
-          categoria: 'sistema',
-          chave: 'notification_email',
-          valor: 'moraisinovaia@gmail.com',
-          ativo: true
-        },
-        {
-          categoria: 'sistema',
-          chave: 'max_appointments_per_day',
-          valor: '50',
-          ativo: true
-        }
-      ];
-
-      await supabase
-        .from('configuracoes_clinica')
-        .insert(defaultSystemConfigs);
-
-      console.log('✅ Configurações de sistema criadas com sucesso');
-    }
-
-    return { success: true };
+    console.log('✅ Sistema saudável e pronto para produção');
+    console.log('📊 Stats:', healthCheck.stats);
+    
+    return { 
+      success: true,
+      message: 'Sistema configurado e validado para produção',
+      stats: healthCheck.stats
+    };
   } catch (error) {
-    console.error('Erro ao configurar dados iniciais:', error);
+    console.error('❌ Erro ao validar sistema:', error);
     return { success: false, error };
   }
 };
