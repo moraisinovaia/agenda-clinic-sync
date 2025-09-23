@@ -7,12 +7,13 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Edit2, Eye, Users, Calendar, UserCog } from 'lucide-react';
+import { Plus, Edit2, Eye, Users, Calendar, UserCog, ChevronDown, ChevronUp, Mail, Crown } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { Switch } from '@/components/ui/switch';
 import { useStableAuth } from '@/hooks/useStableAuth';
 import { executeWithAuthRetry } from '@/utils/authHelpers';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface Cliente {
   id: string;
@@ -20,6 +21,18 @@ interface Cliente {
   logo_url?: string;
   ativo: boolean;
   configuracoes?: any;
+  created_at: string;
+  updated_at: string;
+}
+
+interface UsuarioCliente {
+  id: string;
+  nome: string;
+  email: string;
+  username?: string;
+  role: string;
+  status: string;
+  ativo: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -34,6 +47,8 @@ interface ClienteStats {
 export const ClienteManager = () => {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [clienteStats, setClienteStats] = useState<Record<string, ClienteStats>>({});
+  const [clienteUsuarios, setClienteUsuarios] = useState<Record<string, UsuarioCliente[]>>({});
+  const [expandedClientes, setExpandedClientes] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -142,6 +157,47 @@ export const ClienteManager = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchClienteUsuarios = async (clienteId: string) => {
+    try {
+      const { data: usuarios, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('cliente_id', clienteId)
+        .order('nome');
+
+      if (error) {
+        console.error('Erro ao buscar usuários do cliente:', error);
+        return [];
+      }
+
+      return usuarios || [];
+    } catch (error) {
+      console.error('Erro ao buscar usuários do cliente:', error);
+      return [];
+    }
+  };
+
+  const toggleClienteExpansion = async (clienteId: string) => {
+    const newExpanded = new Set(expandedClientes);
+    
+    if (newExpanded.has(clienteId)) {
+      newExpanded.delete(clienteId);
+    } else {
+      newExpanded.add(clienteId);
+      
+      // Se não temos os usuários carregados, buscar agora
+      if (!clienteUsuarios[clienteId]) {
+        const usuarios = await fetchClienteUsuarios(clienteId);
+        setClienteUsuarios(prev => ({
+          ...prev,
+          [clienteId]: usuarios
+        }));
+      }
+    }
+    
+    setExpandedClientes(newExpanded);
   };
 
   useEffect(() => {
@@ -448,6 +504,111 @@ export const ClienteManager = () => {
                     </Button>
                   </div>
                 </div>
+
+                {/* Seção de Usuários Expansível */}
+                <Collapsible
+                  open={expandedClientes.has(cliente.id)}
+                  onOpenChange={() => toggleClienteExpansion(cliente.id)}
+                >
+                  <CollapsibleTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full mt-4 justify-between"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Users className="w-4 h-4" />
+                        Ver Usuários ({stats.total_usuarios})
+                      </span>
+                      {expandedClientes.has(cliente.id) ? (
+                        <ChevronUp className="w-4 h-4" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </CollapsibleTrigger>
+                  
+                  <CollapsibleContent className="mt-4">
+                    <div className="border rounded-lg p-4 bg-muted/50">
+                      <h4 className="font-medium mb-3">Usuários do Cliente</h4>
+                      
+                      {clienteUsuarios[cliente.id] ? (
+                        clienteUsuarios[cliente.id].length > 0 ? (
+                          <div className="space-y-2">
+                            {clienteUsuarios[cliente.id].map((usuario) => (
+                              <div
+                                key={usuario.id}
+                                className="flex items-center justify-between p-3 bg-background rounded-lg border"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                    {usuario.role === 'admin' ? (
+                                      <Crown className="w-4 h-4 text-primary" />
+                                    ) : (
+                                      <Users className="w-4 h-4 text-muted-foreground" />
+                                    )}
+                                  </div>
+                                  
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-medium">{usuario.nome}</span>
+                                      <Badge
+                                        variant={usuario.role === 'admin' ? 'default' : 'secondary'}
+                                        className="text-xs"
+                                      >
+                                        {usuario.role}
+                                      </Badge>
+                                      <Badge
+                                        variant={usuario.status === 'aprovado' ? 'default' : 
+                                                usuario.status === 'pendente' ? 'secondary' : 'destructive'}
+                                        className="text-xs"
+                                      >
+                                        {usuario.status}
+                                      </Badge>
+                                    </div>
+                                    
+                                    <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
+                                      <span className="flex items-center gap-1">
+                                        <Mail className="w-3 h-3" />
+                                        {usuario.email}
+                                      </span>
+                                      
+                                      {usuario.username && (
+                                        <span>@{usuario.username}</span>
+                                      )}
+                                      
+                                      <span>
+                                        Criado em {new Date(usuario.created_at).toLocaleDateString('pt-BR')}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                <div className="flex items-center gap-2">
+                                  <Badge
+                                    variant={usuario.ativo ? 'default' : 'secondary'}
+                                    className="text-xs"
+                                  >
+                                    {usuario.ativo ? 'Ativo' : 'Inativo'}
+                                  </Badge>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-center py-4 text-muted-foreground">
+                            <Users className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                            <p>Nenhum usuário cadastrado neste cliente.</p>
+                          </div>
+                        )
+                      ) : (
+                        <div className="text-center py-4 text-muted-foreground">
+                          Carregando usuários...
+                        </div>
+                      )}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
               </CardContent>
             </Card>
           );
