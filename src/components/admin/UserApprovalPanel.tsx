@@ -106,6 +106,7 @@ export function UserApprovalPanel() {
 
   const fetchClientes = async () => {
     try {
+      console.log('🔍 Buscando clientes...');
       const { data, error } = await supabase
         .from('clientes')
         .select('id, nome, ativo')
@@ -113,13 +114,14 @@ export function UserApprovalPanel() {
         .order('nome');
 
       if (error) {
-        console.error('Erro ao buscar clientes:', error);
+        console.error('❌ Erro ao buscar clientes:', error);
         return;
       }
 
+      console.log('✅ Clientes encontrados:', data);
       setClientes(data || []);
     } catch (error) {
-      console.error('Erro ao buscar clientes:', error);
+      console.error('❌ Erro ao buscar clientes:', error);
     }
   };
 
@@ -366,25 +368,37 @@ export function UserApprovalPanel() {
                       <TableCell>
                         <Badge variant="outline">{user.role}</Badge>
                       </TableCell>
-                      <TableCell>
-                        <Select
-                          value={selectedCliente[user.id] || ''}
-                          onValueChange={(value) => 
-                            setSelectedCliente(prev => ({ ...prev, [user.id]: value }))
-                          }
-                        >
-                          <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="Selecionar cliente" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {clientes.map((cliente) => (
-                              <SelectItem key={cliente.id} value={cliente.id}>
-                                {cliente.nome}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
+                       <TableCell>
+                         <div className="relative min-w-[180px]">
+                           <Select
+                             value={selectedCliente[user.id] || ''}
+                             onValueChange={(value) => {
+                               console.log('🎯 Cliente selecionado:', value);
+                               setSelectedCliente(prev => ({ ...prev, [user.id]: value }));
+                             }}
+                           >
+                             <SelectTrigger className="w-full">
+                               <SelectValue placeholder="Selecionar cliente" />
+                             </SelectTrigger>
+                             <SelectContent>
+                               {clientes.length === 0 ? (
+                                 <SelectItem value="loading" disabled>
+                                   Carregando clientes...
+                                 </SelectItem>
+                               ) : (
+                                 clientes.map((cliente) => (
+                                   <SelectItem 
+                                     key={cliente.id} 
+                                     value={cliente.id}
+                                   >
+                                     {cliente.nome}
+                                   </SelectItem>
+                                 ))
+                               )}
+                             </SelectContent>
+                           </Select>
+                         </div>
+                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Clock className="h-4 w-4 text-muted-foreground" />
