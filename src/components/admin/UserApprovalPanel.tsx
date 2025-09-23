@@ -12,6 +12,7 @@ import { useStableAuth } from '@/hooks/useStableAuth';
 
 interface PendingUser {
   id: string;
+  user_id: string;
   nome: string;
   email: string;
   username: string;
@@ -51,7 +52,7 @@ export function UserApprovalPanel() {
     try {
       // Usar a função segura para buscar usuários pendentes
       const { data, error } = await supabase
-        .rpc('get_pending_users_safe');
+        .rpc('get_pending_users');
 
       if (error) {
         console.error('Erro ao buscar usuários pendentes:', error);
@@ -153,8 +154,8 @@ export function UserApprovalPanel() {
   }, [isAdmin, isApproved]); // Dependências estáveis
 
   const handleApproveUser = async (userId: string) => {
-    if (!profile?.id) {
-      console.error('❌ Profile ID não encontrado:', profile);
+    if (!profile?.user_id) {
+      console.error('❌ Profile user_id não encontrado:', profile);
       toast({
         title: 'Erro de autenticação',
         description: 'Não foi possível identificar o administrador. Tente fazer login novamente.',
@@ -173,13 +174,13 @@ export function UserApprovalPanel() {
       return;
     }
 
-    console.log('🔄 Iniciando aprovação de usuário:', { userId, aprovadorId: profile.id, clienteId });
+    console.log('🔄 Iniciando aprovação de usuário:', { userId, aprovadorId: profile.user_id, clienteId });
     setProcessingUser(userId);
     
     try {
       const { data, error } = await supabase.rpc('aprovar_usuario', {
         p_user_id: userId,
-        p_aprovador_id: profile.id,
+        p_aprovador_id: profile.user_id,
         p_cliente_id: clienteId
       });
 
@@ -220,13 +221,13 @@ export function UserApprovalPanel() {
   };
 
   const handleRejectUser = async (userId: string) => {
-    if (!profile?.id) return;
+    if (!profile?.user_id) return;
 
     setProcessingUser(userId);
     try {
       const { data, error } = await supabase.rpc('rejeitar_usuario', {
         p_user_id: userId,
-        p_aprovador_id: profile.id
+        p_aprovador_id: profile.user_id
       });
 
       if (error || !(data as any)?.success) {
@@ -252,13 +253,13 @@ export function UserApprovalPanel() {
   };
 
   const handleConfirmEmail = async (email: string) => {
-    if (!profile?.id) return;
+    if (!profile?.user_id) return;
 
     setProcessingUser(email);
     try {
       const { data, error } = await supabase.rpc('confirmar_email_usuario_aprovado', {
         p_user_email: email,
-        p_admin_id: profile.id
+        p_admin_id: profile.user_id
       });
 
       if (error || !(data as any)?.success) {
@@ -413,7 +414,7 @@ export function UserApprovalPanel() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => handleApproveUser(user.id)}
+                            onClick={() => handleApproveUser(user.user_id)}
                             disabled={processingUser === user.id}
                             className="text-green-600 border-green-200 hover:bg-green-50"
                           >
@@ -427,7 +428,7 @@ export function UserApprovalPanel() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => handleRejectUser(user.id)}
+                            onClick={() => handleRejectUser(user.user_id)}
                             disabled={processingUser === user.id}
                             className="text-red-600 border-red-200 hover:bg-red-50"
                           >
