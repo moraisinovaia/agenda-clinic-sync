@@ -399,7 +399,7 @@ const Index = () => {
           <div className="space-y-6">
             
             {/* Admin Panels */}
-            {profile?.role === 'admin' && profile?.status === 'aprovado' && (
+            {profile?.role === 'admin' && profile?.status === 'aprovado' ? (
               <div className="space-y-6">
                 <UserApprovalPanel />
                 <ClienteManager />
@@ -407,15 +407,15 @@ const Index = () => {
                   <N8nWebhookButton />
                 </div>
               </div>
+            ) : (
+              <DoctorsView
+                doctors={doctors}
+                searchTerm={searchTerm}
+                onSearchChange={setSearchTerm}
+                onScheduleDoctor={handleScheduleDoctor}
+                onViewSchedule={handleViewSchedule}
+              />
             )}
-            
-            <DoctorsView
-              doctors={doctors}
-              searchTerm={searchTerm}
-              onSearchChange={setSearchTerm}
-              onScheduleDoctor={handleScheduleDoctor}
-              onViewSchedule={handleViewSchedule}
-            />
           </div>
         )}
 
