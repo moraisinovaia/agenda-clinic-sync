@@ -25,31 +25,31 @@ export const DashboardHeader = ({
   notificationCenter
 }: DashboardHeaderProps) => {
   return (
-    <div className="border-b bg-card">
-      <div className="container mx-auto px-4 py-6">
+    <div className="border-b bg-card shadow-sm">
+      <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <img 
               src={inovaiaLogo} 
               alt="INOVAIA Logo" 
-              className="h-16 w-auto"
+              className="h-12 w-auto"
             />
             <div>
-              <h1 className="text-3xl font-bold text-foreground">
+              <h1 className="text-2xl font-bold text-foreground">
                 INOVAIA
               </h1>
-              <p className="text-muted-foreground mt-1">
+              <p className="text-sm text-muted-foreground">
                 Sistema de Agendamentos Médicos
               </p>
               {profileName && (
-                <p className="text-sm text-primary font-medium">
-                  Recepcionista: {profileName}
+                <p className="text-sm font-medium text-foreground mt-1">
+                  <span className="text-muted-foreground">Recepcionista:</span> {profileName}
                 </p>
               )}
             </div>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <KeyboardShortcutsHelp />
             <ThemeToggle />
             <NotificationCenter />
@@ -58,6 +58,7 @@ export const DashboardHeader = ({
               <Button 
                 onClick={viewMode === 'nova-fila' ? onBackToFilaEspera : onBack} 
                 variant="outline"
+                size="sm"
               >
                 {viewMode === 'nova-fila' ? 'Voltar à Fila de Espera' : 'Voltar aos Médicos'}
               </Button>
@@ -69,6 +70,7 @@ export const DashboardHeader = ({
               onClick={onSignOut} 
               variant="outline"
               size="sm"
+              className="bg-red-50 hover:bg-red-100 text-red-700 border-red-200"
             >
               Sair
             </Button>
