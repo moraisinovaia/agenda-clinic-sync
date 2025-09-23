@@ -1214,7 +1214,7 @@ export type Database = {
     Functions: {
       aprovar_usuario: {
         Args:
-          | { p_aprovador_id: string; p_cliente_id: string; p_user_id: string }
+          | { p_aprovador_id: string; p_cliente_id?: string; p_user_id: string }
           | { p_aprovador_id: string; p_user_id: string }
         Returns: Json
       }
