@@ -10,6 +10,7 @@ type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list'
 interface DashboardHeaderProps {
   viewMode: ViewMode;
   profileName?: string;
+  profileRole?: string;
   onBack: () => void;
   onBackToFilaEspera: () => void;
   onSignOut: () => void;
@@ -18,7 +19,8 @@ interface DashboardHeaderProps {
 
 export const DashboardHeader = ({ 
   viewMode, 
-  profileName, 
+  profileName,
+  profileRole,
   onBack, 
   onBackToFilaEspera,
   onSignOut,
@@ -43,7 +45,7 @@ export const DashboardHeader = ({
               </p>
               {profileName && (
                 <p className="text-sm text-primary font-medium">
-                  Recepcionista: {profileName}
+                  {profileRole === 'admin' ? 'Administrador' : 'Recepcionista'}: {profileName}
                 </p>
               )}
             </div>

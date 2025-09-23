@@ -393,6 +393,7 @@ const Index = () => {
       <DashboardHeader
         viewMode={viewMode}
         profileName={profile?.nome}
+        profileRole={profile?.role}
         onBack={goBack}
         onBackToFilaEspera={goBackToFilaEspera}
         onSignOut={signOut}
