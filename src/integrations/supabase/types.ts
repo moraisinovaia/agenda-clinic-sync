@@ -799,6 +799,51 @@ export type Database = {
         }
         Relationships: []
       }
+      ipado_profiles: {
+        Row: {
+          aprovado_por: string | null
+          ativo: boolean | null
+          created_at: string | null
+          data_aprovacao: string | null
+          email: string
+          id: string
+          nome: string
+          role: string
+          status: string
+          updated_at: string | null
+          user_id: string
+          username: string | null
+        }
+        Insert: {
+          aprovado_por?: string | null
+          ativo?: boolean | null
+          created_at?: string | null
+          data_aprovacao?: string | null
+          email: string
+          id?: string
+          nome: string
+          role?: string
+          status?: string
+          updated_at?: string | null
+          user_id: string
+          username?: string | null
+        }
+        Update: {
+          aprovado_por?: string | null
+          ativo?: boolean | null
+          created_at?: string | null
+          data_aprovacao?: string | null
+          email?: string
+          id?: string
+          nome?: string
+          role?: string
+          status?: string
+          updated_at?: string | null
+          user_id?: string
+          username?: string | null
+        }
+        Relationships: []
+      }
       medicos: {
         Row: {
           ativo: boolean | null
