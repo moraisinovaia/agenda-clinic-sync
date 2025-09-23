@@ -92,7 +92,7 @@ export const useAlertSystem = () => {
     return await sendAlert({
       to: config.email,
       subject: '🚨 Sistema Fora do Ar',
-      message: 'O sistema INOVAIA está apresentando problemas de conectividade ou está fora do ar.',
+      message: 'O sistema Endogastro está apresentando problemas de conectividade ou está fora do ar.',
       alertType: 'system',
       data: {
         timestamp: new Date().toISOString(),

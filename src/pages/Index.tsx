@@ -45,9 +45,6 @@ import { NavigationHeader } from '@/components/ui/navigation-header';
 import { AuthTest } from '@/components/AuthTest';
 import PendingApproval from '@/components/PendingApproval';
 import { WhatsAppAgentDashboard } from '@/components/whatsapp-agent/WhatsAppAgentDashboard';
-import { WhatsAppTestPanel } from '@/components/admin/WhatsAppTestPanel';
-
-import { N8nWebhookButton } from '@/components/admin/N8nWebhookButton';
 
 const Index = () => {
   const { user, profile, loading: authLoading, signOut } = useStableAuth();
@@ -238,7 +235,7 @@ const Index = () => {
             <div className="absolute inset-0 h-12 w-12 animate-pulse rounded-full bg-primary/20 mx-auto"></div>
           </div>
           <div>
-            <p className="text-lg font-medium">INOVAIA</p>
+            <p className="text-lg font-medium">Endogastro</p>
             <p className="text-muted-foreground">Verificando autenticação...</p>
           </div>
         </div>
@@ -380,7 +377,7 @@ const Index = () => {
             <div className="absolute inset-0 h-12 w-12 animate-pulse rounded-full bg-primary/20 mx-auto"></div>
           </div>
           <div>
-            <p className="text-lg font-medium">INOVAIA</p>
+            <p className="text-lg font-medium">Endogastro</p>
             <p className="text-muted-foreground">Carregando dados da clínica...</p>
             <div className="mt-2 w-64 mx-auto bg-secondary rounded-full h-2">
               <div className="bg-primary h-2 rounded-full animate-pulse w-3/4"></div>
@@ -404,16 +401,9 @@ const Index = () => {
       <div className="container mx-auto px-4 py-6">
         {viewMode === 'doctors' && (
           <div className="space-y-6">
-            
             {/* User Approval Panel for Admins */}
             {profile?.role === 'admin' && profile?.status === 'aprovado' && (
-              <>
-                <UserApprovalPanel />
-                <div className="flex flex-wrap gap-4 mb-6">
-                  <WhatsAppTestPanel />
-                  <N8nWebhookButton />
-                </div>
-              </>
+              <UserApprovalPanel />
             )}
             
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">

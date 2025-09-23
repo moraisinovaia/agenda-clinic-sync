@@ -7,7 +7,7 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
+  // Allows to automatically instanciate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "12.2.3 (519615d)"
@@ -56,7 +56,6 @@ export type Database = {
           cancelado_em: string | null
           cancelado_por: string | null
           cancelado_por_user_id: string | null
-          cliente_id: string | null
           confirmado_em: string | null
           confirmado_por: string | null
           confirmado_por_user_id: string | null
@@ -78,7 +77,6 @@ export type Database = {
           cancelado_em?: string | null
           cancelado_por?: string | null
           cancelado_por_user_id?: string | null
-          cliente_id?: string | null
           confirmado_em?: string | null
           confirmado_por?: string | null
           confirmado_por_user_id?: string | null
@@ -100,7 +98,6 @@ export type Database = {
           cancelado_em?: string | null
           cancelado_por?: string | null
           cancelado_por_user_id?: string | null
-          cliente_id?: string | null
           confirmado_em?: string | null
           confirmado_por?: string | null
           confirmado_por_user_id?: string | null
@@ -290,7 +287,6 @@ export type Database = {
       atendimentos: {
         Row: {
           ativo: boolean | null
-          cliente_id: string
           codigo: string | null
           coparticipacao_unimed_20: number | null
           coparticipacao_unimed_40: number | null
@@ -308,7 +304,6 @@ export type Database = {
         }
         Insert: {
           ativo?: boolean | null
-          cliente_id: string
           codigo?: string | null
           coparticipacao_unimed_20?: number | null
           coparticipacao_unimed_40?: number | null
@@ -326,7 +321,6 @@ export type Database = {
         }
         Update: {
           ativo?: boolean | null
-          cliente_id?: string
           codigo?: string | null
           coparticipacao_unimed_20?: number | null
           coparticipacao_unimed_40?: number | null
@@ -350,18 +344,10 @@ export type Database = {
             referencedRelation: "medicos"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "fk_atendimentos_cliente"
-            columns: ["cliente_id"]
-            isOneToOne: false
-            referencedRelation: "clientes"
-            referencedColumns: ["id"]
-          },
         ]
       }
       bloqueios_agenda: {
         Row: {
-          cliente_id: string
           created_at: string
           criado_por: string
           criado_por_user_id: string | null
@@ -374,7 +360,6 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          cliente_id: string
           created_at?: string
           criado_por?: string
           criado_por_user_id?: string | null
@@ -387,7 +372,6 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          cliente_id?: string
           created_at?: string
           criado_por?: string
           criado_por_user_id?: string | null
@@ -398,44 +382,6 @@ export type Database = {
           motivo?: string
           status?: string
           updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fk_bloqueios_cliente"
-            columns: ["cliente_id"]
-            isOneToOne: false
-            referencedRelation: "clientes"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      clientes: {
-        Row: {
-          ativo: boolean | null
-          configuracoes: Json | null
-          created_at: string | null
-          id: string
-          logo_url: string | null
-          nome: string
-          updated_at: string | null
-        }
-        Insert: {
-          ativo?: boolean | null
-          configuracoes?: Json | null
-          created_at?: string | null
-          id?: string
-          logo_url?: string | null
-          nome: string
-          updated_at?: string | null
-        }
-        Update: {
-          ativo?: boolean | null
-          configuracoes?: Json | null
-          created_at?: string | null
-          id?: string
-          logo_url?: string | null
-          nome?: string
-          updated_at?: string | null
         }
         Relationships: []
       }
@@ -554,7 +500,6 @@ export type Database = {
         Row: {
           agendamento_id: string | null
           atendimento_id: string
-          cliente_id: string
           created_at: string
           data_limite: string | null
           data_preferida: string
@@ -572,7 +517,6 @@ export type Database = {
         Insert: {
           agendamento_id?: string | null
           atendimento_id: string
-          cliente_id: string
           created_at?: string
           data_limite?: string | null
           data_preferida: string
@@ -590,7 +534,6 @@ export type Database = {
         Update: {
           agendamento_id?: string | null
           atendimento_id?: string
-          cliente_id?: string
           created_at?: string
           data_limite?: string | null
           data_preferida?: string
@@ -633,13 +576,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_exames_combinaveis"
             referencedColumns: ["atendimento2_id"]
-          },
-          {
-            foreignKeyName: "fk_fila_cliente"
-            columns: ["cliente_id"]
-            isOneToOne: false
-            referencedRelation: "clientes"
-            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "fk_fila_medico"
@@ -788,7 +724,6 @@ export type Database = {
       medicos: {
         Row: {
           ativo: boolean | null
-          cliente_id: string
           convenios_aceitos: string[] | null
           convenios_restricoes: Json | null
           created_at: string | null
@@ -802,7 +737,6 @@ export type Database = {
         }
         Insert: {
           ativo?: boolean | null
-          cliente_id: string
           convenios_aceitos?: string[] | null
           convenios_restricoes?: Json | null
           created_at?: string | null
@@ -816,7 +750,6 @@ export type Database = {
         }
         Update: {
           ativo?: boolean | null
-          cliente_id?: string
           convenios_aceitos?: string[] | null
           convenios_restricoes?: Json | null
           created_at?: string | null
@@ -828,15 +761,7 @@ export type Database = {
           nome?: string
           observacoes?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "fk_medicos_cliente"
-            columns: ["cliente_id"]
-            isOneToOne: false
-            referencedRelation: "clientes"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       metricas_diarias: {
         Row: {
@@ -919,49 +844,9 @@ export type Database = {
         }
         Relationships: []
       }
-      notification_logs: {
-        Row: {
-          agendamento_id: string
-          created_at: string | null
-          error_message: string | null
-          id: string
-          is_for_staff: boolean | null
-          message: string
-          recipient: string
-          sent_at: string | null
-          status: string | null
-          type: string
-        }
-        Insert: {
-          agendamento_id: string
-          created_at?: string | null
-          error_message?: string | null
-          id?: string
-          is_for_staff?: boolean | null
-          message: string
-          recipient: string
-          sent_at?: string | null
-          status?: string | null
-          type: string
-        }
-        Update: {
-          agendamento_id?: string
-          created_at?: string | null
-          error_message?: string | null
-          id?: string
-          is_for_staff?: boolean | null
-          message?: string
-          recipient?: string
-          sent_at?: string | null
-          status?: string | null
-          type?: string
-        }
-        Relationships: []
-      }
       pacientes: {
         Row: {
           celular: string | null
-          cliente_id: string
           convenio: string
           created_at: string
           data_nascimento: string
@@ -972,7 +857,6 @@ export type Database = {
         }
         Insert: {
           celular?: string | null
-          cliente_id: string
           convenio: string
           created_at?: string
           data_nascimento: string
@@ -983,7 +867,6 @@ export type Database = {
         }
         Update: {
           celular?: string | null
-          cliente_id?: string
           convenio?: string
           created_at?: string
           data_nascimento?: string
@@ -992,19 +875,10 @@ export type Database = {
           telefone?: string | null
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "fk_pacientes_cliente"
-            columns: ["cliente_id"]
-            isOneToOne: false
-            referencedRelation: "clientes"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       preparos: {
         Row: {
-          cliente_id: string
           created_at: string | null
           dias_suspensao: number | null
           exame: string
@@ -1022,7 +896,6 @@ export type Database = {
           valor_particular: number | null
         }
         Insert: {
-          cliente_id: string
           created_at?: string | null
           dias_suspensao?: number | null
           exame: string
@@ -1040,7 +913,6 @@ export type Database = {
           valor_particular?: number | null
         }
         Update: {
-          cliente_id?: string
           created_at?: string | null
           dias_suspensao?: number | null
           exame?: string
@@ -1057,21 +929,12 @@ export type Database = {
           valor_convenio?: number | null
           valor_particular?: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "fk_preparos_cliente"
-            columns: ["cliente_id"]
-            isOneToOne: false
-            referencedRelation: "clientes"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       profiles: {
         Row: {
           aprovado_por: string | null
           ativo: boolean | null
-          cliente_id: string
           created_at: string | null
           data_aprovacao: string | null
           email: string
@@ -1086,7 +949,6 @@ export type Database = {
         Insert: {
           aprovado_por?: string | null
           ativo?: boolean | null
-          cliente_id: string
           created_at?: string | null
           data_aprovacao?: string | null
           email: string
@@ -1101,7 +963,6 @@ export type Database = {
         Update: {
           aprovado_por?: string | null
           ativo?: boolean | null
-          cliente_id?: string
           created_at?: string | null
           data_aprovacao?: string | null
           email?: string
@@ -1114,13 +975,6 @@ export type Database = {
           username?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "fk_profiles_cliente"
-            columns: ["cliente_id"]
-            isOneToOne: false
-            referencedRelation: "clientes"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "profiles_aprovado_por_fkey"
             columns: ["aprovado_por"]
@@ -1640,17 +1494,17 @@ export type Database = {
     }
     Functions: {
       aprovar_usuario: {
-        Args: { p_aprovador_id: string; p_user_id: string }
+        Args: { p_user_id: string; p_aprovador_id: string }
         Returns: Json
       }
       atualizar_dados_paciente: {
         Args: {
-          p_celular?: string
-          p_convenio: string
-          p_data_nascimento: string
-          p_nome_completo: string
           p_paciente_id: string
+          p_nome_completo: string
+          p_data_nascimento: string
+          p_convenio: string
           p_telefone?: string
+          p_celular?: string
         }
         Returns: Json
       }
@@ -1661,39 +1515,28 @@ export type Database = {
       buscar_agendamentos_otimizado: {
         Args: Record<PropertyKey, never>
         Returns: {
+          id: string
+          paciente_id: string
+          medico_id: string
           atendimento_id: string
-          atendimento_nome: string
-          atendimento_tipo: string
-          cancelado_em: string
-          cancelado_por: string
-          cancelado_por_user_id: string
-          confirmado_em: string
-          confirmado_por: string
-          confirmado_por_user_id: string
-          convenio: string
-          created_at: string
-          criado_por: string
-          criado_por_user_id: string
           data_agendamento: string
           hora_agendamento: string
-          id: string
-          medico_especialidade: string
-          medico_id: string
-          medico_nome: string
-          observacoes: string
-          paciente_celular: string
-          paciente_convenio: string
-          paciente_data_nascimento: string
-          paciente_id: string
-          paciente_nome: string
-          paciente_telefone: string
           status: string
+          observacoes: string
+          created_at: string
           updated_at: string
+          criado_por: string
+          criado_por_user_id: string
+          paciente_nome: string
+          paciente_convenio: string
+          paciente_celular: string
+          paciente_data_nascimento: string
+          paciente_telefone: string
+          medico_nome: string
+          medico_especialidade: string
+          atendimento_nome: string
+          atendimento_tipo: string
         }[]
-      }
-      bytea_to_text: {
-        Args: { data: string }
-        Returns: string
       }
       cancelar_agendamento_soft: {
         Args: {
@@ -1724,60 +1567,60 @@ export type Database = {
         Returns: Json
       }
       confirmar_email_usuario_aprovado: {
-        Args: { p_admin_id: string; p_user_email: string }
+        Args: { p_user_email: string; p_admin_id: string }
         Returns: Json
       }
       criar_agendamento_atomico: {
         Args:
           | {
-              p_agendamento_id_edicao?: string
-              p_atendimento_id: string
-              p_celular: string
+              p_nome_completo: string
+              p_data_nascimento: string
               p_convenio: string
+              p_telefone: string
+              p_celular: string
+              p_medico_id: string
+              p_atendimento_id: string
+              p_data_agendamento: string
+              p_hora_agendamento: string
+              p_observacoes?: string
               p_criado_por?: string
               p_criado_por_user_id?: string
-              p_data_agendamento: string
-              p_data_nascimento: string
-              p_force_conflict?: boolean
+              p_agendamento_id_edicao?: string
               p_force_update_patient?: boolean
-              p_hora_agendamento: string
-              p_medico_id: string
-              p_nome_completo: string
-              p_observacoes?: string
-              p_telefone: string
             }
           | {
-              p_agendamento_id_edicao?: string
-              p_atendimento_id: string
-              p_celular: string
+              p_nome_completo: string
+              p_data_nascimento: string
               p_convenio: string
+              p_telefone: string
+              p_celular: string
+              p_medico_id: string
+              p_atendimento_id: string
+              p_data_agendamento: string
+              p_hora_agendamento: string
+              p_observacoes?: string
               p_criado_por?: string
               p_criado_por_user_id?: string
-              p_data_agendamento: string
-              p_data_nascimento: string
+              p_agendamento_id_edicao?: string
               p_force_update_patient?: boolean
-              p_hora_agendamento: string
-              p_medico_id: string
-              p_nome_completo: string
-              p_observacoes?: string
-              p_telefone: string
+              p_force_conflict?: boolean
             }
         Returns: Json
       }
       criar_agendamento_multiplo: {
         Args: {
-          p_atendimento_ids: string[]
-          p_celular: string
+          p_nome_completo: string
+          p_data_nascimento: string
           p_convenio: string
+          p_telefone: string
+          p_celular: string
+          p_medico_id: string
+          p_atendimento_ids: string[]
+          p_data_agendamento: string
+          p_hora_agendamento: string
+          p_observacoes?: string
           p_criado_por?: string
           p_criado_por_user_id?: string
-          p_data_agendamento: string
-          p_data_nascimento: string
-          p_hora_agendamento: string
-          p_medico_id: string
-          p_nome_completo: string
-          p_observacoes?: string
-          p_telefone: string
         }
         Returns: Json
       }
@@ -1793,68 +1636,52 @@ export type Database = {
         }
         Returns: Json
       }
-      diagnosticar_whatsapp_sistema: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
-      enviar_whatsapp_fallback: {
-        Args: { p_agendamento_id: string }
-        Returns: Json
-      }
-      enviar_whatsapp_via_invoke: {
-        Args: { p_agendamento_id: string }
-        Returns: Json
-      }
       get_backup_cron_status: {
         Args: Record<PropertyKey, never>
         Returns: {
-          active: boolean
           job_name: string
           schedule: string
+          active: boolean
         }[]
       }
       get_current_user_profile: {
         Args: Record<PropertyKey, never>
         Returns: {
-          ativo: boolean
-          created_at: string
-          email: string
           id: string
-          nome: string
-          role: string
-          status: string
-          updated_at: string
           user_id: string
+          nome: string
+          email: string
+          role: string
+          ativo: boolean
           username: string
+          status: string
+          created_at: string
+          updated_at: string
         }[]
       }
       get_pending_users: {
         Args: Record<PropertyKey, never>
         Returns: {
-          aprovado_por_nome: string
-          created_at: string
-          email: string
           id: string
           nome: string
-          role: string
+          email: string
           username: string
+          role: string
+          created_at: string
+          aprovado_por_nome: string
         }[]
       }
       get_pending_users_safe: {
         Args: Record<PropertyKey, never>
         Returns: {
-          aprovado_por_nome: string
-          created_at: string
-          email: string
           id: string
           nome: string
-          role: string
+          email: string
           username: string
+          role: string
+          created_at: string
+          aprovado_por_nome: string
         }[]
-      }
-      get_user_cliente_id: {
-        Args: Record<PropertyKey, never>
-        Returns: string
       }
       get_user_role_safe: {
         Args: { p_user_id: string }
@@ -1891,57 +1718,6 @@ export type Database = {
       hnswhandler: {
         Args: { "": unknown }
         Returns: unknown
-      }
-      http: {
-        Args: { request: Database["public"]["CompositeTypes"]["http_request"] }
-        Returns: Database["public"]["CompositeTypes"]["http_response"]
-      }
-      http_delete: {
-        Args:
-          | { content: string; content_type: string; uri: string }
-          | { uri: string }
-        Returns: Database["public"]["CompositeTypes"]["http_response"]
-      }
-      http_get: {
-        Args: { data: Json; uri: string } | { uri: string }
-        Returns: Database["public"]["CompositeTypes"]["http_response"]
-      }
-      http_head: {
-        Args: { uri: string }
-        Returns: Database["public"]["CompositeTypes"]["http_response"]
-      }
-      http_header: {
-        Args: { field: string; value: string }
-        Returns: Database["public"]["CompositeTypes"]["http_header"]
-      }
-      http_list_curlopt: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          curlopt: string
-          value: string
-        }[]
-      }
-      http_patch: {
-        Args: { content: string; content_type: string; uri: string }
-        Returns: Database["public"]["CompositeTypes"]["http_response"]
-      }
-      http_post: {
-        Args:
-          | { content: string; content_type: string; uri: string }
-          | { data: Json; uri: string }
-        Returns: Database["public"]["CompositeTypes"]["http_response"]
-      }
-      http_put: {
-        Args: { content: string; content_type: string; uri: string }
-        Returns: Database["public"]["CompositeTypes"]["http_response"]
-      }
-      http_reset_curlopt: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      http_set_curlopt: {
-        Args: { curlopt: string; value: string }
-        Returns: boolean
       }
       is_admin_auditoria: {
         Args: Record<PropertyKey, never>
@@ -1981,34 +1757,34 @@ export type Database = {
       }
       l2_normalize: {
         Args: { "": string } | { "": unknown } | { "": unknown }
-        Returns: string
+        Returns: unknown
       }
       log_access_audit: {
-        Args: { p_action: string; p_details?: Json; p_resource: string }
+        Args: { p_action: string; p_resource: string; p_details?: Json }
         Returns: undefined
       }
       match_documents: {
-        Args: { filter?: Json; match_count?: number; query_embedding: string }
+        Args: { query_embedding: string; match_count?: number; filter?: Json }
         Returns: {
-          content: string
           id: number
+          content: string
           metadata: Json
           similarity: number
         }[]
       }
       rejeitar_usuario: {
-        Args: { p_aprovador_id: string; p_user_id: string }
+        Args: { p_user_id: string; p_aprovador_id: string }
         Returns: Json
       }
       relatorio_auditoria_periodo: {
-        Args: { data_fim: string; data_inicio: string }
+        Args: { data_inicio: string; data_fim: string }
         Returns: {
-          erros_por_tipo: Json
-          perguntas_criticas: number
-          taxa_sucesso: number
-          tempo_medio: number
-          total_alertas: number
           total_interacoes: number
+          taxa_sucesso: number
+          total_alertas: number
+          perguntas_criticas: number
+          tempo_medio: number
+          erros_por_tipo: Json
         }[]
       }
       sparsevec_out: {
@@ -2023,28 +1799,9 @@ export type Database = {
         Args: { "": unknown[] }
         Returns: number
       }
-      test_whatsapp_edge_function: {
-        Args: {
-          p_atendimento?: string
-          p_celular: string
-          p_data?: string
-          p_hora?: string
-          p_medico?: string
-          p_nome?: string
-        }
-        Returns: Json
-      }
-      text_to_bytea: {
-        Args: { data: string }
-        Returns: string
-      }
       toggle_backup_cron: {
         Args: { enable_cron: boolean }
         Returns: boolean
-      }
-      urlencode: {
-        Args: { data: Json } | { string: string } | { string: string }
-        Returns: string
       }
       user_can_access_system: {
         Args: Record<PropertyKey, never>
@@ -2052,10 +1809,10 @@ export type Database = {
       }
       validar_conflito_agendamento: {
         Args: {
-          p_agendamento_id_edicao?: string
+          p_medico_id: string
           p_data_agendamento: string
           p_hora_agendamento: string
-          p_medico_id: string
+          p_agendamento_id_edicao?: string
         }
         Returns: Json
       }
@@ -2088,23 +1845,7 @@ export type Database = {
       [_ in never]: never
     }
     CompositeTypes: {
-      http_header: {
-        field: string | null
-        value: string | null
-      }
-      http_request: {
-        method: unknown | null
-        uri: string | null
-        headers: Database["public"]["CompositeTypes"]["http_header"][] | null
-        content_type: string | null
-        content: string | null
-      }
-      http_response: {
-        status: number | null
-        content_type: string | null
-        headers: Database["public"]["CompositeTypes"]["http_header"][] | null
-        content: string | null
-      }
+      [_ in never]: never
     }
   }
 }

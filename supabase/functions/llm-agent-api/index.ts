@@ -118,8 +118,6 @@ async function handleSchedule(supabase: any, body: any) {
     }
 
     // Criar agendamento usando a função atômica
-    console.log(`📅 Criando agendamento para ${paciente_nome} com médico ${medico.nome}`);
-    
     const { data: result, error: agendamentoError } = await supabase
       .rpc('criar_agendamento_atomico', {
         p_nome_completo: paciente_nome,
@@ -131,27 +129,18 @@ async function handleSchedule(supabase: any, body: any) {
         p_atendimento_id: atendimento_id,
         p_data_agendamento: data_consulta,
         p_hora_agendamento: hora_consulta,
-        p_observacoes: observacoes || 'Agendamento via LLM Agent WhatsApp',
-        p_criado_por: 'LLM Agent WhatsApp',
-        p_criado_por_user_id: null,
-        p_agendamento_id_edicao: null,
-        p_force_update_patient: false,
-        p_force_conflict: false
+        p_observacoes: observacoes || null,
+        p_criado_por: 'llm-agent',
+        p_criado_por_user_id: null
       });
 
-    console.log('📋 Resultado da função:', { result, agendamentoError });
-
     if (agendamentoError) {
-      console.error('❌ Erro na função criar_agendamento_atomico:', agendamentoError);
       return errorResponse(`Erro ao agendar: ${agendamentoError.message}`);
     }
 
     if (!result?.success) {
-      console.error('❌ Função retornou erro:', result);
-      return errorResponse(`Erro ao agendar: ${result?.error || result?.message || 'Erro desconhecido'}`);
+      return errorResponse(`Erro ao agendar: ${result?.error || 'Erro desconhecido'}`);
     }
-
-    console.log('✅ Agendamento criado com sucesso:', result);
 
     return successResponse({
       message: `Consulta agendada com sucesso para ${paciente_nome}`,

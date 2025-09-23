@@ -71,7 +71,7 @@ export function InstallButton() {
       setIsInstallable(false);
     } else {
       // Fallback para navegadores sem suporte ao beforeinstallprompt
-      alert('Para instalar o app:\n\n1. Chrome/Edge: Menu > Instalar INOVAIA\n2. Firefox: Menu > Adicionar à tela inicial\n3. Safari: Compartilhar > Adicionar à tela inicial');
+      alert('Para instalar o app:\n\n1. Chrome/Edge: Menu > Instalar Endogastro\n2. Firefox: Menu > Adicionar à tela inicial\n3. Safari: Compartilhar > Adicionar à tela inicial');
     }
   };
 
