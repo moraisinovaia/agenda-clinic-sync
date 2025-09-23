@@ -1051,7 +1051,7 @@ export type Database = {
         Returns: boolean
       }
       is_admin_safe: {
-        Args: { check_user_id?: string }
+        Args: Record<PropertyKey, never> | { check_user_id?: string }
         Returns: boolean
       }
       is_admin_user: {
