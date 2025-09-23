@@ -191,102 +191,6 @@ export type Database = {
         }
         Relationships: []
       }
-      alertas_criticos: {
-        Row: {
-          acao_tomada: string | null
-          destinatarios: Json | null
-          erro_detectado: string | null
-          id: string
-          log_auditoria_id: string | null
-          notificado: boolean | null
-          notificado_em: string | null
-          pergunta: string | null
-          resolvido: boolean | null
-          resolvido_em: string | null
-          resolvido_por: string | null
-          resposta_problemática: string | null
-          severidade: number
-          timestamp: string | null
-          tipo: string
-          usuario_afetado: string | null
-        }
-        Insert: {
-          acao_tomada?: string | null
-          destinatarios?: Json | null
-          erro_detectado?: string | null
-          id?: string
-          log_auditoria_id?: string | null
-          notificado?: boolean | null
-          notificado_em?: string | null
-          pergunta?: string | null
-          resolvido?: boolean | null
-          resolvido_em?: string | null
-          resolvido_por?: string | null
-          resposta_problemática?: string | null
-          severidade?: number
-          timestamp?: string | null
-          tipo: string
-          usuario_afetado?: string | null
-        }
-        Update: {
-          acao_tomada?: string | null
-          destinatarios?: Json | null
-          erro_detectado?: string | null
-          id?: string
-          log_auditoria_id?: string | null
-          notificado?: boolean | null
-          notificado_em?: string | null
-          pergunta?: string | null
-          resolvido?: boolean | null
-          resolvido_em?: string | null
-          resolvido_por?: string | null
-          resposta_problemática?: string | null
-          severidade?: number
-          timestamp?: string | null
-          tipo?: string
-          usuario_afetado?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "alertas_criticos_log_auditoria_id_fkey"
-            columns: ["log_auditoria_id"]
-            isOneToOne: false
-            referencedRelation: "logs_auditoria_medica"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "alertas_criticos_log_auditoria_id_fkey"
-            columns: ["log_auditoria_id"]
-            isOneToOne: false
-            referencedRelation: "vw_auditoria_critica"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      alimentos_teste_hidrogenio: {
-        Row: {
-          categoria: string | null
-          evitados: string[] | null
-          id: string
-          observacoes: string | null
-          permitidos: string[] | null
-        }
-        Insert: {
-          categoria?: string | null
-          evitados?: string[] | null
-          id?: string
-          observacoes?: string | null
-          permitidos?: string[] | null
-        }
-        Update: {
-          categoria?: string | null
-          evitados?: string[] | null
-          id?: string
-          observacoes?: string | null
-          permitidos?: string[] | null
-        }
-        Relationships: []
-      }
       atendimentos: {
         Row: {
           ativo: boolean | null
@@ -586,117 +490,6 @@ export type Database = {
         }
         Relationships: []
       }
-      clinica_valores: {
-        Row: {
-          categoria: string
-          codigo_procedimento: string | null
-          created_at: string | null
-          forma_pagamento: string | null
-          id: number
-          observacoes: string | null
-          procedimento: string
-          valor_principal: number | null
-          valor_unimed_coparticipacao_20: number | null
-          valor_unimed_coparticipacao_40: number | null
-        }
-        Insert: {
-          categoria: string
-          codigo_procedimento?: string | null
-          created_at?: string | null
-          forma_pagamento?: string | null
-          id?: number
-          observacoes?: string | null
-          procedimento: string
-          valor_principal?: number | null
-          valor_unimed_coparticipacao_20?: number | null
-          valor_unimed_coparticipacao_40?: number | null
-        }
-        Update: {
-          categoria?: string
-          codigo_procedimento?: string | null
-          created_at?: string | null
-          forma_pagamento?: string | null
-          id?: number
-          observacoes?: string | null
-          procedimento?: string
-          valor_principal?: number | null
-          valor_unimed_coparticipacao_20?: number | null
-          valor_unimed_coparticipacao_40?: number | null
-        }
-        Relationships: []
-      }
-      config_sistema_auditoria: {
-        Row: {
-          ativo: boolean | null
-          atualizado_em: string | null
-          atualizado_por: string | null
-          categoria: string | null
-          chave: string
-          criado_em: string | null
-          descricao: string | null
-          editavel: boolean | null
-          requer_reinicio: boolean | null
-          tipo: string | null
-          valor: string
-        }
-        Insert: {
-          ativo?: boolean | null
-          atualizado_em?: string | null
-          atualizado_por?: string | null
-          categoria?: string | null
-          chave: string
-          criado_em?: string | null
-          descricao?: string | null
-          editavel?: boolean | null
-          requer_reinicio?: boolean | null
-          tipo?: string | null
-          valor: string
-        }
-        Update: {
-          ativo?: boolean | null
-          atualizado_em?: string | null
-          atualizado_por?: string | null
-          categoria?: string | null
-          chave?: string
-          criado_em?: string | null
-          descricao?: string | null
-          editavel?: boolean | null
-          requer_reinicio?: boolean | null
-          tipo?: string | null
-          valor?: string
-        }
-        Relationships: []
-      }
-      configuracoes_clinica: {
-        Row: {
-          ativo: boolean | null
-          categoria: string | null
-          chave: string
-          created_at: string | null
-          dados_extras: Json | null
-          id: string
-          valor: string
-        }
-        Insert: {
-          ativo?: boolean | null
-          categoria?: string | null
-          chave: string
-          created_at?: string | null
-          dados_extras?: Json | null
-          id?: string
-          valor: string
-        }
-        Update: {
-          ativo?: boolean | null
-          categoria?: string | null
-          chave?: string
-          created_at?: string | null
-          dados_extras?: Json | null
-          id?: string
-          valor?: string
-        }
-        Relationships: []
-      }
       fila_espera: {
         Row: {
           agendamento_id: string | null
@@ -851,87 +644,6 @@ export type Database = {
           },
         ]
       }
-      logs_auditoria_medica: {
-        Row: {
-          alertas_gerados: Json | null
-          ambiente: string | null
-          auditoria_completa: Json | null
-          categoria: string
-          dados_utilizados: Json | null
-          erros_detectados: Json | null
-          fonte_dados: string | null
-          hash_resposta: string | null
-          id: string
-          pergunta_normalizada: string | null
-          pergunta_original: string
-          precisao: string | null
-          processamento: string
-          requer_revisao: boolean | null
-          resposta_gerada: string
-          revisado_em: string | null
-          revisado_por: string | null
-          sucesso: boolean | null
-          timestamp: string | null
-          tipo_pergunta: string
-          usuario_nome: string | null
-          usuario_telefone: string | null
-          validacao_passou: boolean | null
-          versao_sistema: string | null
-        }
-        Insert: {
-          alertas_gerados?: Json | null
-          ambiente?: string | null
-          auditoria_completa?: Json | null
-          categoria: string
-          dados_utilizados?: Json | null
-          erros_detectados?: Json | null
-          fonte_dados?: string | null
-          hash_resposta?: string | null
-          id?: string
-          pergunta_normalizada?: string | null
-          pergunta_original: string
-          precisao?: string | null
-          processamento: string
-          requer_revisao?: boolean | null
-          resposta_gerada: string
-          revisado_em?: string | null
-          revisado_por?: string | null
-          sucesso?: boolean | null
-          timestamp?: string | null
-          tipo_pergunta: string
-          usuario_nome?: string | null
-          usuario_telefone?: string | null
-          validacao_passou?: boolean | null
-          versao_sistema?: string | null
-        }
-        Update: {
-          alertas_gerados?: Json | null
-          ambiente?: string | null
-          auditoria_completa?: Json | null
-          categoria?: string
-          dados_utilizados?: Json | null
-          erros_detectados?: Json | null
-          fonte_dados?: string | null
-          hash_resposta?: string | null
-          id?: string
-          pergunta_normalizada?: string | null
-          pergunta_original?: string
-          precisao?: string | null
-          processamento?: string
-          requer_revisao?: boolean | null
-          resposta_gerada?: string
-          revisado_em?: string | null
-          revisado_por?: string | null
-          sucesso?: boolean | null
-          timestamp?: string | null
-          tipo_pergunta?: string
-          usuario_nome?: string | null
-          usuario_telefone?: string | null
-          validacao_passou?: boolean | null
-          versao_sistema?: string | null
-        }
-        Relationships: []
-      }
       medicos: {
         Row: {
           ativo: boolean | null
@@ -984,87 +696,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      metricas_diarias: {
-        Row: {
-          alertas_criticos: number | null
-          alertas_gerados: number | null
-          atualizado_em: string | null
-          criticas_corretas: number | null
-          criticas_incorretas: number | null
-          data: string | null
-          erros: number | null
-          id: string
-          revisoes_concluidas: number | null
-          revisoes_necessarias: number | null
-          sucessos: number | null
-          taxa_sucesso: number | null
-          tempo_maximo_resposta: number | null
-          tempo_medio_resposta: number | null
-          total_conversacionais: number | null
-          total_criticas: number | null
-          total_informativas: number | null
-          total_interacoes: number | null
-        }
-        Insert: {
-          alertas_criticos?: number | null
-          alertas_gerados?: number | null
-          atualizado_em?: string | null
-          criticas_corretas?: number | null
-          criticas_incorretas?: number | null
-          data?: string | null
-          erros?: number | null
-          id?: string
-          revisoes_concluidas?: number | null
-          revisoes_necessarias?: number | null
-          sucessos?: number | null
-          taxa_sucesso?: number | null
-          tempo_maximo_resposta?: number | null
-          tempo_medio_resposta?: number | null
-          total_conversacionais?: number | null
-          total_criticas?: number | null
-          total_informativas?: number | null
-          total_interacoes?: number | null
-        }
-        Update: {
-          alertas_criticos?: number | null
-          alertas_gerados?: number | null
-          atualizado_em?: string | null
-          criticas_corretas?: number | null
-          criticas_incorretas?: number | null
-          data?: string | null
-          erros?: number | null
-          id?: string
-          revisoes_concluidas?: number | null
-          revisoes_necessarias?: number | null
-          sucessos?: number | null
-          taxa_sucesso?: number | null
-          tempo_maximo_resposta?: number | null
-          tempo_medio_resposta?: number | null
-          total_conversacionais?: number | null
-          total_criticas?: number | null
-          total_informativas?: number | null
-          total_interacoes?: number | null
-        }
-        Relationships: []
-      }
-      n8n_chat_histories: {
-        Row: {
-          id: number
-          message: Json
-          session_id: string
-        }
-        Insert: {
-          id?: number
-          message: Json
-          session_id: string
-        }
-        Update: {
-          id?: number
-          message?: Json
-          session_id?: string
-        }
-        Relationships: []
       }
       notification_logs: {
         Row: {
@@ -1284,33 +915,6 @@ export type Database = {
           },
         ]
       }
-      questionario_pre_colonoscopia: {
-        Row: {
-          id: string
-          obrigatorio: boolean | null
-          opcoes: string[] | null
-          ordem: number | null
-          pergunta: string
-          tipo_resposta: string | null
-        }
-        Insert: {
-          id?: string
-          obrigatorio?: boolean | null
-          opcoes?: string[] | null
-          ordem?: number | null
-          pergunta: string
-          tipo_resposta?: string | null
-        }
-        Update: {
-          id?: string
-          obrigatorio?: boolean | null
-          opcoes?: string[] | null
-          ordem?: number | null
-          pergunta?: string
-          tipo_resposta?: string | null
-        }
-        Relationships: []
-      }
       system_backups: {
         Row: {
           backup_type: string
@@ -1452,69 +1056,6 @@ export type Database = {
         }
         Relationships: []
       }
-      validacoes_detalhadas: {
-        Row: {
-          erro_detalhado: string | null
-          fonte_referencia: string | null
-          id: string
-          log_auditoria_id: string | null
-          objeto_validado: Json | null
-          regra_aplicada: string | null
-          resultado: boolean | null
-          tempo_validacao: number | null
-          timestamp: string | null
-          tipo_validacao: string
-          validador: string | null
-          valor_encontrado: string | null
-          valor_esperado: string | null
-        }
-        Insert: {
-          erro_detalhado?: string | null
-          fonte_referencia?: string | null
-          id?: string
-          log_auditoria_id?: string | null
-          objeto_validado?: Json | null
-          regra_aplicada?: string | null
-          resultado?: boolean | null
-          tempo_validacao?: number | null
-          timestamp?: string | null
-          tipo_validacao: string
-          validador?: string | null
-          valor_encontrado?: string | null
-          valor_esperado?: string | null
-        }
-        Update: {
-          erro_detalhado?: string | null
-          fonte_referencia?: string | null
-          id?: string
-          log_auditoria_id?: string | null
-          objeto_validado?: Json | null
-          regra_aplicada?: string | null
-          resultado?: boolean | null
-          tempo_validacao?: number | null
-          timestamp?: string | null
-          tipo_validacao?: string
-          validador?: string | null
-          valor_encontrado?: string | null
-          valor_esperado?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "validacoes_detalhadas_log_auditoria_id_fkey"
-            columns: ["log_auditoria_id"]
-            isOneToOne: false
-            referencedRelation: "logs_auditoria_medica"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "validacoes_detalhadas_log_auditoria_id_fkey"
-            columns: ["log_auditoria_id"]
-            isOneToOne: false
-            referencedRelation: "vw_auditoria_critica"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       valores_procedimentos: {
         Row: {
           categoria: string
@@ -1556,51 +1097,6 @@ export type Database = {
       }
     }
     Views: {
-      vw_agente_alertas: {
-        Row: {
-          categoria: string | null
-          chave: string | null
-          dados_extras: Json | null
-          prioridade: string | null
-          valor: string | null
-        }
-        Insert: {
-          categoria?: string | null
-          chave?: string | null
-          dados_extras?: Json | null
-          prioridade?: never
-          valor?: string | null
-        }
-        Update: {
-          categoria?: string | null
-          chave?: string | null
-          dados_extras?: Json | null
-          prioridade?: never
-          valor?: string | null
-        }
-        Relationships: []
-      }
-      vw_agente_convenios: {
-        Row: {
-          convenio: string | null
-          dados_extras: Json | null
-          informacao: string | null
-          tipo: string | null
-        }
-        Insert: {
-          convenio?: string | null
-          dados_extras?: Json | null
-          informacao?: never
-          tipo?: never
-        }
-        Update: {
-          convenio?: string | null
-          dados_extras?: Json | null
-          informacao?: never
-          tipo?: never
-        }
-        Relationships: []
-      }
       vw_agente_medicos: {
         Row: {
           convenios_aceitos: string[] | null
@@ -1656,56 +1152,6 @@ export type Database = {
         }
         Relationships: []
       }
-      vw_alertas_ativos: {
-        Row: {
-          categoria_original: string | null
-          erro_detectado: string | null
-          id: string | null
-          minutos_desde_criacao: number | null
-          notificado: boolean | null
-          pergunta: string | null
-          severidade: number | null
-          severidade_desc: string | null
-          timestamp: string | null
-          tipo: string | null
-          tipo_pergunta: string | null
-          usuario_afetado: string | null
-        }
-        Relationships: []
-      }
-      vw_auditoria_critica: {
-        Row: {
-          alertas_relacionados: number | null
-          categoria: string | null
-          erros_detectados: Json | null
-          hash_resposta: string | null
-          id: string | null
-          pergunta_original: string | null
-          resposta_gerada: string | null
-          status_revisao: string | null
-          sucesso: boolean | null
-          timestamp: string | null
-          tipo_pergunta: string | null
-          usuario_telefone: string | null
-          validacao_passou: boolean | null
-          validacoes_detalhes: string[] | null
-        }
-        Relationships: []
-      }
-      vw_dashboard_executivo: {
-        Row: {
-          alertas_hoje: number | null
-          interacoes_hoje: number | null
-          interacoes_mes: number | null
-          interacoes_semana: number | null
-          status_sistema: string | null
-          taxa_sucesso_hoje: number | null
-          taxa_sucesso_mes: number | null
-          taxa_sucesso_semana: number | null
-          ultima_atualizacao: string | null
-        }
-        Relationships: []
-      }
       vw_exames_combinaveis: {
         Row: {
           atendimento1_id: string | null
@@ -1728,49 +1174,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      vw_metricas_convenios: {
-        Row: {
-          convenio: string | null
-          perc_sem_medicos: number | null
-          taxa_acerto: number | null
-          total_com_medicos: number | null
-          total_corretas: number | null
-          total_perguntas_mes: number | null
-          total_sem_medicos: number | null
-        }
-        Relationships: []
-      }
-      vw_performance_sistema: {
-        Row: {
-          alertas_gerados: number | null
-          categoria: string | null
-          data: string | null
-          erros: number | null
-          sucessos: number | null
-          taxa_sucesso: number | null
-          tipo_pergunta: string | null
-          total_perguntas: number | null
-          validacoes_falha: number | null
-          validacoes_ok: number | null
-        }
-        Relationships: []
-      }
-      vw_relatorio_gerencial: {
-        Row: {
-          alertas_24h: number | null
-          alertas_pendentes: number | null
-          interacoes_conversacionais: number | null
-          interacoes_criticas: number | null
-          interacoes_informativas: number | null
-          periodo: string | null
-          precisao_critica: number | null
-          precisao_informativa: number | null
-          status_geral: string | null
-          tipo_mais_frequente: string | null
-          total_interacoes: number | null
-        }
-        Relationships: []
       }
       vw_usuarios_pendentes: {
         Row: {
@@ -1926,10 +1329,6 @@ export type Database = {
           p_observacoes?: string
           p_telefone: string
         }
-        Returns: Json
-      }
-      dashboard_tempo_real: {
-        Args: Record<PropertyKey, never>
         Returns: Json
       }
       desconfirmar_agendamento: {
@@ -2090,19 +1489,11 @@ export type Database = {
         Args: { curlopt: string; value: string }
         Returns: boolean
       }
-      is_admin_auditoria: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
       is_admin_safe: {
         Args: { p_user_id: string }
         Returns: boolean
       }
       is_admin_user: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      is_authenticated_user: {
         Args: Record<PropertyKey, never>
         Returns: boolean
       }
@@ -2146,17 +1537,6 @@ export type Database = {
       rejeitar_usuario: {
         Args: { p_aprovador_id: string; p_user_id: string }
         Returns: Json
-      }
-      relatorio_auditoria_periodo: {
-        Args: { data_fim: string; data_inicio: string }
-        Returns: {
-          erros_por_tipo: Json
-          perguntas_criticas: number
-          taxa_sucesso: number
-          tempo_medio: number
-          total_alertas: number
-          total_interacoes: number
-        }[]
       }
       sparsevec_out: {
         Args: { "": unknown }
