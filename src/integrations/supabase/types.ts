@@ -1461,6 +1461,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Json
       }
+      debug_user_access: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       desconfirmar_agendamento: {
         Args: {
           p_agendamento_id: string
