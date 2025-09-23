@@ -419,10 +419,10 @@ export function UserApprovalPanel() {
                             size="sm"
                             variant="outline"
                             onClick={() => handleApproveUser(user.user_id)}
-                            disabled={processingUser === user.id}
+                            disabled={processingUser === user.user_id}
                             className="text-green-600 border-green-200 hover:bg-green-50"
                           >
-                            {processingUser === user.id ? (
+                            {processingUser === user.user_id ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
                               <Check className="h-4 w-4" />
@@ -433,10 +433,10 @@ export function UserApprovalPanel() {
                             size="sm"
                             variant="outline"
                             onClick={() => handleRejectUser(user.user_id)}
-                            disabled={processingUser === user.id}
+                            disabled={processingUser === user.user_id}
                             className="text-red-600 border-red-200 hover:bg-red-50"
                           >
-                            {processingUser === user.id ? (
+                            {processingUser === user.user_id ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
                               <X className="h-4 w-4" />
