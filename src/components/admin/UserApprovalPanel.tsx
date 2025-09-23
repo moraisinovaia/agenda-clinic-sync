@@ -202,13 +202,13 @@ export function UserApprovalPanel() {
         description: 'O usuário foi aprovado e vinculado ao cliente',
       });
 
-      // Remover da lista local e recarregar dados
-      setPendingUsers(prev => prev.filter(user => user.id !== userId));
-      setSelectedCliente(prev => {
-        const newState = { ...prev };
-        delete newState[userId];
-        return newState;
-      });
+       // Remover da lista local e recarregar dados
+       setPendingUsers(prev => prev.filter(user => user.user_id !== userId));
+       setSelectedCliente(prev => {
+         const newState = { ...prev };
+         delete newState[userId];
+         return newState;
+       });
       fetchApprovedUsers();
     } catch (error: any) {
       toast({
@@ -240,8 +240,8 @@ export function UserApprovalPanel() {
         description: 'O acesso foi negado para este usuário',
       });
 
-      // Remover da lista local
-      setPendingUsers(prev => prev.filter(user => user.id !== userId));
+       // Remover da lista local
+       setPendingUsers(prev => prev.filter(user => user.user_id !== userId));
     } catch (error: any) {
       toast({
         title: 'Erro ao rejeitar',
@@ -373,10 +373,10 @@ export function UserApprovalPanel() {
                        <TableCell>
                          <div className="relative min-w-[180px]">
                            <Select
-                             value={selectedCliente[user.id] || ''}
+                             value={selectedCliente[user.user_id] || ''}
                              onValueChange={(value) => {
                                console.log('🎯 Cliente selecionado:', value);
-                               setSelectedCliente(prev => ({ ...prev, [user.id]: value }));
+                               setSelectedCliente(prev => ({ ...prev, [user.user_id]: value }));
                              }}
                            >
                              <SelectTrigger className="w-full">
