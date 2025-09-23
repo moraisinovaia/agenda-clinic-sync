@@ -1377,6 +1377,10 @@ export type Database = {
         }
         Returns: Json
       }
+      criar_usuario_teste_ipado: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       desconfirmar_agendamento: {
         Args: {
           p_agendamento_id: string

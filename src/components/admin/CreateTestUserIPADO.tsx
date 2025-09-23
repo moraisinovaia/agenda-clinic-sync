@@ -26,92 +26,26 @@ export function CreateTestUserIPADO() {
     setLoading(true);
     
     try {
-      console.log('🔄 Criando usuário teste para IPADO...');
+      console.log('🔄 Criando usuário teste para IPADO via RPC...');
       
-      // 1. Primeiro, verificar se já existe
-      const { data: existingUser } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('email', 'teste@ipado.com')
-        .single();
+      // Usar a nova função RPC robusta
+      const { data: result, error } = await supabase.rpc('criar_usuario_teste_ipado');
 
-      if (existingUser) {
-        toast({
-          title: 'Usuário já existe',
-          description: 'O usuário teste para IPADO já foi criado',
-        });
-        setTestUserCreated(true);
-        return;
+      if (error) {
+        throw new Error(`Erro na função RPC: ${error.message}`);
       }
 
-      // 2. Criar usuário via signup
-      const { data: signupData, error: signupError } = await supabase.auth.signUp({
-        email: 'teste@ipado.com',
-        password: 'senha123456',
-        options: {
-          data: {
-            nome: 'Usuário Teste IPADO',
-            username: 'teste_ipado'
-          }
-        }
-      });
+      const typedResult = result as any;
 
-      if (signupError) {
-        throw new Error(`Erro no signup: ${signupError.message}`);
+      if (!typedResult?.success) {
+        throw new Error(typedResult?.error || 'Erro desconhecido na criação do usuário');
       }
 
-      if (!signupData.user) {
-        throw new Error('Usuário não foi criado no signup');
-      }
-
-      console.log('✅ Usuário criado no auth:', signupData.user.id);
-
-      // 3. Aguardar um pouco para o perfil ser criado via trigger
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // 4. Buscar cliente IPADO
-      const { data: clienteData, error: clienteError } = await supabase
-        .from('clientes')
-        .select('id')
-        .eq('nome', 'IPADO')
-        .single();
-
-      if (clienteError || !clienteData) {
-        // Criar cliente IPADO se não existir
-        const { data: novoCliente, error: criarClienteError } = await supabase
-          .from('clientes')
-          .insert({
-            nome: 'IPADO',
-            ativo: true,
-            configuracoes: { tipo: 'clinica', sistema_origem: 'manual' }
-          })
-          .select()
-          .single();
-
-        if (criarClienteError) {
-          throw new Error(`Erro ao criar cliente IPADO: ${criarClienteError.message}`);
-        }
-
-        console.log('✅ Cliente IPADO criado:', novoCliente.id);
-      }
-
-      // 5. Aprovar usuário automaticamente usando a função RPC
-      const { data: approvalData, error: approvalError } = await supabase.rpc('aprovar_usuario', {
-        p_user_id: signupData.user.id,
-        p_aprovador_id: profile?.user_id,
-        p_cliente_id: null // Vai usar IPADO como padrão
-      });
-
-      if (approvalError || !(approvalData as any)?.success) {
-        console.error('Erro na aprovação:', approvalError, approvalData);
-        throw new Error(`Erro na aprovação: ${(approvalData as any)?.error || approvalError?.message}`);
-      }
-
-      console.log('✅ Usuário aprovado automaticamente');
+      console.log('✅ Resultado da criação:', typedResult);
 
       toast({
         title: 'Usuário teste criado!',
-        description: 'Email: teste@ipado.com | Senha: senha123456',
+        description: `Email: ${typedResult.credentials.email} | Senha: ${typedResult.credentials.password}`,
       });
 
       setTestUserCreated(true);
