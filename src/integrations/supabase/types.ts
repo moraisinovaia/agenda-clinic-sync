@@ -56,7 +56,7 @@ export type Database = {
           cancelado_em: string | null
           cancelado_por: string | null
           cancelado_por_user_id: string | null
-          cliente_id: string | null
+          cliente_id: string
           confirmado_em: string | null
           confirmado_por: string | null
           confirmado_por_user_id: string | null
@@ -78,7 +78,7 @@ export type Database = {
           cancelado_em?: string | null
           cancelado_por?: string | null
           cancelado_por_user_id?: string | null
-          cliente_id?: string | null
+          cliente_id: string
           confirmado_em?: string | null
           confirmado_por?: string | null
           confirmado_por_user_id?: string | null
@@ -100,7 +100,7 @@ export type Database = {
           cancelado_em?: string | null
           cancelado_por?: string | null
           cancelado_por_user_id?: string | null
-          cliente_id?: string | null
+          cliente_id?: string
           confirmado_em?: string | null
           confirmado_por?: string | null
           confirmado_por_user_id?: string | null
