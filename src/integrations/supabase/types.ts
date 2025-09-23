@@ -1438,6 +1438,7 @@ export type Database = {
           id: string
           nome: string
           role: string
+          user_id: string
           username: string
         }[]
       }
