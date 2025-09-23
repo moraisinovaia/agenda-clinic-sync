@@ -1135,42 +1135,6 @@ export type Database = {
           },
         ]
       }
-      super_admin_audit: {
-        Row: {
-          action: string
-          admin_id: string
-          created_at: string
-          details: Json | null
-          id: string
-          ip_address: string | null
-          target_client_id: string | null
-          target_user_id: string | null
-          user_agent: string | null
-        }
-        Insert: {
-          action: string
-          admin_id: string
-          created_at?: string
-          details?: Json | null
-          id?: string
-          ip_address?: string | null
-          target_client_id?: string | null
-          target_user_id?: string | null
-          user_agent?: string | null
-        }
-        Update: {
-          action?: string
-          admin_id?: string
-          created_at?: string
-          details?: Json | null
-          id?: string
-          ip_address?: string | null
-          target_client_id?: string | null
-          target_user_id?: string | null
-          user_agent?: string | null
-        }
-        Relationships: []
-      }
       system_logs: {
         Row: {
           context: string | null
@@ -1682,15 +1646,6 @@ export type Database = {
       log_access_audit: {
         Args: { p_action: string; p_details?: Json; p_resource: string }
         Returns: undefined
-      }
-      log_super_admin_action: {
-        Args: {
-          p_action: string
-          p_details?: Json
-          p_target_client_id?: string
-          p_target_user_id?: string
-        }
-        Returns: string
       }
       match_documents: {
         Args: { filter?: Json; match_count?: number; query_embedding: string }
