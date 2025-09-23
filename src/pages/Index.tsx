@@ -17,7 +17,10 @@ import { FilaEsperaForm } from '@/components/fila-espera/FilaEsperaForm';
 import { FilaEsperaList } from '@/components/fila-espera/FilaEsperaList';
 import { RelatorioAgenda } from '@/components/scheduling/RelatorioAgenda';
 
+import { StatsCards } from '@/components/dashboard/StatsCards';
+import { SystemHealthDashboard } from '@/components/dashboard/SystemHealthDashboard';
 import { DoctorsView } from '@/components/dashboard/DoctorsView';
+import { DashboardActions } from '@/components/dashboard/DashboardActions';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { UserApprovalPanel } from '@/components/admin/UserApprovalPanel';
 import { ClienteManager } from '@/components/admin/ClienteManager';
@@ -30,6 +33,7 @@ import {
   LazyWrapper 
 } from '@/components/performance/LazyComponents';
 
+import { SystemMonitor } from '@/components/system/SystemMonitor';
 import { SchedulingErrorBoundary } from '@/components/error/SchedulingErrorBoundary';
 
 import { useFilaEspera } from '@/hooks/useFilaEspera';
@@ -38,7 +42,10 @@ import { SchedulingFormData, AppointmentWithRelations } from '@/types/scheduling
 import { useStableAuth } from '@/hooks/useStableAuth';
 import { Button } from '@/components/ui/button';
 import { NavigationHeader } from '@/components/ui/navigation-header';
+import { AuthTest } from '@/components/AuthTest';
 import PendingApproval from '@/components/PendingApproval';
+import { WhatsAppAgentDashboard } from '@/components/whatsapp-agent/WhatsAppAgentDashboard';
+import { WhatsAppTestPanel } from '@/components/admin/WhatsAppTestPanel';
 
 import { N8nWebhookButton } from '@/components/admin/N8nWebhookButton';
 
@@ -399,66 +406,41 @@ const Index = () => {
           <div className="space-y-6">
             
             {/* Admin Panels */}
-            {profile?.role === 'admin' && profile?.status === 'aprovado' ? (
-              <div className="space-y-6">
+            {profile?.role === 'admin' && profile?.status === 'aprovado' && (
+              <>
                 <UserApprovalPanel />
                 <ClienteManager />
-                <div className="flex justify-start">
+                <div className="flex flex-wrap gap-4 mb-6">
+                  <WhatsAppTestPanel />
                   <N8nWebhookButton />
                 </div>
-              </div>
-            ) : (
-              <DoctorsView
-                doctors={doctors}
-                appointments={appointments}
-                searchTerm={searchTerm}
-                onSearchChange={setSearchTerm}
-                onScheduleDoctor={handleScheduleDoctor}
-                onViewSchedule={handleViewSchedule}
-                onDashboardAction={(action) => {
-                  switch(action) {
-                    case 'new-appointment':
-                      setViewMode('new-appointment');
-                      break;
-                    case 'multiple-appointment':
-                      setViewMode('multiple-appointment');
-                      break;
-                    case 'appointments-list':
-                      setViewMode('appointments-list');
-                      break;
-                    case 'canceled-appointments':
-                      setViewMode('canceled-appointments');
-                      break;
-                    case 'preparos':
-                      setViewMode('preparos');
-                      break;
-                    case 'fila-espera':
-                      setViewMode('fila-espera');
-                      break;
-                    case 'relatorio-agenda':
-                      setViewMode('relatorio-agenda');
-                      break;
-                    case 'bloqueio-agenda':
-                      setViewMode('bloqueio-agenda');
-                      break;
-                    case 'sistema-alertas':
-                      // TODO: Implementar sistema de alertas
-                      console.log('Sistema de alertas em desenvolvimento');
-                      break;
-                    case 'teste-auth':
-                      // TODO: Implementar teste de autenticação
-                      console.log('Teste de autenticação em desenvolvimento');
-                      break;
-                    case 'whatsapp-agent':
-                      // TODO: Implementar agente WhatsApp
-                      console.log('Agente WhatsApp em desenvolvimento');
-                      break;
-                    default:
-                      console.log('Ação não reconhecida:', action);
-                  }
-                }}
-              />
+              </>
             )}
+            
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+              <div className="lg:col-span-3">
+                <StatsCards doctors={doctors} appointments={appointments} />
+                
+                <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                  <div className="relative max-w-md">
+                    {/* This will be moved to DoctorsView component */}
+                  </div>
+                  <DashboardActions onViewChange={setViewMode} />
+                </div>
+
+                <DoctorsView
+                  doctors={doctors}
+                  searchTerm={searchTerm}
+                  onSearchChange={setSearchTerm}
+                  onScheduleDoctor={handleScheduleDoctor}
+                  onViewSchedule={handleViewSchedule}
+                />
+              </div>
+              
+              <div className="lg:col-span-1">
+                <SystemMonitor />
+              </div>
+            </div>
           </div>
         )}
 
@@ -657,6 +639,36 @@ const Index = () => {
           <BloqueioAgenda onBack={goBack} onRefresh={refetch} />
         )}
 
+        {viewMode === 'auth-test' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold">Teste de Autenticação</h2>
+                <p className="text-muted-foreground mt-1">
+                  Verifique o status completo da autenticação e sessão
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-center">
+              <AuthTest />
+            </div>
+          </div>
+        )}
+
+
+        {viewMode === 'whatsapp-agent' && (
+          <div className="space-y-6">
+            <NavigationHeader
+              title="Agente WhatsApp"
+              subtitle="Teste e monitore as funcionalidades do agente LLM para WhatsApp"
+              onBack={goBack}
+              onHome={() => setViewMode('doctors')}
+              showBack={true}
+              showHome={true}
+            />
+            <WhatsAppAgentDashboard />
+          </div>
+        )}
       </div>
 
       {/* Modal de Agendamento Múltiplo */}
