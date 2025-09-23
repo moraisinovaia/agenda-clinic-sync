@@ -23,6 +23,7 @@ import { DoctorsView } from '@/components/dashboard/DoctorsView';
 import { DashboardActions } from '@/components/dashboard/DashboardActions';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { UserApprovalPanel } from '@/components/admin/UserApprovalPanel';
+import { ClienteManager } from '@/components/admin/ClienteManager';
 import { 
   LazyDashboard, 
   LazySchedulingForm, 
@@ -404,10 +405,11 @@ const Index = () => {
         {viewMode === 'doctors' && (
           <div className="space-y-6">
             
-            {/* User Approval Panel for Admins */}
+            {/* Admin Panels */}
             {profile?.role === 'admin' && profile?.status === 'aprovado' && (
               <>
                 <UserApprovalPanel />
+                <ClienteManager />
                 <div className="flex flex-wrap gap-4 mb-6">
                   <WhatsAppTestPanel />
                   <N8nWebhookButton />
