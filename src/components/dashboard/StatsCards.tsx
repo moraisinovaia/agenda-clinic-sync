@@ -1,10 +1,7 @@
-import { Users, Calendar, Clock, AlertTriangle, TrendingUp, Activity } from 'lucide-react';
+import { Calendar, Users, CheckCircle, Clock, TrendingUp, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Doctor, AppointmentWithRelations } from '@/types/scheduling';
-import { format, isToday, isTomorrow, addDays } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 
 interface StatsCardsProps {
   doctors: Doctor[];
@@ -13,114 +10,107 @@ interface StatsCardsProps {
 
 export const StatsCards = ({ doctors, appointments }: StatsCardsProps) => {
   const today = new Date().toISOString().split('T')[0];
-  const tomorrow = addDays(new Date(), 1).toISOString().split('T')[0];
+  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   
-  const totalAppointments = appointments.length;
-  const todayAppointments = appointments.filter(apt => apt.data_agendamento === today).length;
-  const tomorrowAppointments = appointments.filter(apt => apt.data_agendamento === tomorrow).length;
-  const pendingAppointments = appointments.filter(apt => apt.status === 'agendado').length;
-  const confirmedAppointments = appointments.filter(apt => apt.status === 'confirmado').length;
-  const cancelledAppointments = appointments.filter(apt => apt.status === 'cancelado').length;
+  // Estatísticas calculadas
+  const activeDoctors = doctors.filter(d => d.ativo).length;
+  const todayAppointments = appointments.filter(apt => 
+    apt.data_agendamento === today && apt.status !== 'cancelado'
+  ).length;
+  const tomorrowAppointments = appointments.filter(apt => 
+    apt.data_agendamento === tomorrow && apt.status !== 'cancelado'
+  ).length;
+  const totalScheduled = appointments.filter(apt => 
+    apt.status === 'agendado' || apt.status === 'confirmado'
+  ).length;
+  const confirmedAppointments = appointments.filter(apt => 
+    apt.status === 'confirmado'
+  ).length;
   
-  // Calculate active doctors (with appointments today)
-  const activeDoctorsToday = new Set(
+  // Cálculo de ocupação de hoje
+  const doctorsWithAppointmentsToday = new Set(
     appointments
       .filter(apt => apt.data_agendamento === today && apt.status !== 'cancelado')
       .map(apt => apt.medico_id)
   ).size;
+  
+  const occupationPercentage = activeDoctors > 0 
+    ? Math.round((doctorsWithAppointmentsToday / activeDoctors) * 100)
+    : 0;
 
-  // Calculate occupation rate for today
-  const activeDoctors = doctors.filter(d => d.ativo).length;
-  const occupationRate = activeDoctors > 0 ? Math.round((activeDoctorsToday / activeDoctors) * 100) : 0;
+  const stats = [
+    {
+      title: "Médicos Ativos",
+      value: activeDoctors,
+      icon: Users,
+      color: "text-blue-600",
+      bgColor: "bg-blue-50",
+    },
+    {
+      title: "Hoje",
+      value: todayAppointments,
+      subtitle: `${doctorsWithAppointmentsToday} médicos ativados`,
+      icon: Calendar,
+      color: "text-green-600",
+      bgColor: "bg-green-50",
+    },
+    {
+      title: "Amanhã",
+      value: tomorrowAppointments,
+      icon: Calendar,
+      color: "text-purple-600",
+      bgColor: "bg-purple-50",
+    },
+    {
+      title: "Agendados",
+      value: totalScheduled,
+      icon: totalScheduled > 500 ? AlertTriangle : Clock,
+      color: totalScheduled > 500 ? "text-orange-600" : "text-indigo-600",
+      bgColor: totalScheduled > 500 ? "bg-orange-50" : "bg-indigo-50",
+      hasAlert: totalScheduled > 500,
+    },
+    {
+      title: "Confirmados",
+      value: confirmedAppointments,
+      icon: CheckCircle,
+      color: "text-emerald-600",
+      bgColor: "bg-emerald-50",
+    },
+    {
+      title: "Ocupação Hoje",
+      value: `${occupationPercentage}%`,
+      subtitle: `${doctorsWithAppointmentsToday}/${activeDoctors} médicos`,
+      icon: TrendingUp,
+      color: "text-cyan-600",
+      bgColor: "bg-cyan-50",
+    },
+  ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mb-8">
-      {/* Active Doctors */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            <Users className="h-6 w-6 text-primary" />
-            <div>
-              <p className="text-lg font-bold">{doctors.filter(d => d.ativo).length}</p>
-              <p className="text-xs text-muted-foreground">Médicos Ativos</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Today's Appointments */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            <Clock className="h-6 w-6 text-primary" />
-            <div>
-              <p className="text-lg font-bold">{todayAppointments}</p>
-              <p className="text-xs text-muted-foreground">Hoje</p>
-              {activeDoctorsToday > 0 && (
-                <p className="text-xs text-green-600">{activeDoctorsToday} médicos ativados</p>
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
+      {stats.map((stat, index) => (
+        <Card key={index} className={`relative ${stat.bgColor} border-0`}>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              {stat.title}
+            </CardTitle>
+            <div className="relative">
+              <stat.icon className={`h-4 w-4 ${stat.color}`} />
+              {stat.hasAlert && (
+                <AlertTriangle className="absolute -top-1 -right-1 h-3 w-3 text-orange-500" />
               )}
             </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Tomorrow's Appointments */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            <Calendar className="h-6 w-6 text-primary" />
-            <div>
-              <p className="text-lg font-bold">{tomorrowAppointments}</p>
-              <p className="text-xs text-muted-foreground">Amanhã</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Pending Appointments */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            <AlertTriangle className="h-6 w-6 text-yellow-500" />
-            <div>
-              <p className="text-lg font-bold">{pendingAppointments}</p>
-              <p className="text-xs text-muted-foreground">Agendados</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Confirmed Appointments */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            <Badge variant="default" className="h-6 w-6 rounded-full flex items-center justify-center text-xs">
-              ✓
-            </Badge>
-            <div>
-              <p className="text-lg font-bold">{confirmedAppointments}</p>
-              <p className="text-xs text-muted-foreground">Confirmados</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Occupation Rate */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Activity className="h-4 w-4 text-primary" />
-              <span className="text-xs font-medium">Ocupação Hoje</span>
-            </div>
-            <div className="text-lg font-bold">{occupationRate}%</div>
-            <Progress value={occupationRate} className="h-2" />
-            <p className="text-xs text-muted-foreground">
-              {activeDoctorsToday}/{activeDoctors} médicos
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-foreground">{stat.value}</div>
+            {stat.subtitle && (
+              <p className="text-xs text-muted-foreground mt-1">
+                {stat.subtitle}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      ))}
     </div>
   );
 };

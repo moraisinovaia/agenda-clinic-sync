@@ -410,10 +410,53 @@ const Index = () => {
             ) : (
               <DoctorsView
                 doctors={doctors}
+                appointments={appointments}
                 searchTerm={searchTerm}
                 onSearchChange={setSearchTerm}
                 onScheduleDoctor={handleScheduleDoctor}
                 onViewSchedule={handleViewSchedule}
+                onDashboardAction={(action) => {
+                  switch(action) {
+                    case 'new-appointment':
+                      setViewMode('new-appointment');
+                      break;
+                    case 'multiple-appointment':
+                      setViewMode('multiple-appointment');
+                      break;
+                    case 'appointments-list':
+                      setViewMode('appointments-list');
+                      break;
+                    case 'canceled-appointments':
+                      setViewMode('canceled-appointments');
+                      break;
+                    case 'preparos':
+                      setViewMode('preparos');
+                      break;
+                    case 'fila-espera':
+                      setViewMode('fila-espera');
+                      break;
+                    case 'relatorio-agenda':
+                      setViewMode('relatorio-agenda');
+                      break;
+                    case 'bloqueio-agenda':
+                      setViewMode('bloqueio-agenda');
+                      break;
+                    case 'sistema-alertas':
+                      // TODO: Implementar sistema de alertas
+                      console.log('Sistema de alertas em desenvolvimento');
+                      break;
+                    case 'teste-auth':
+                      // TODO: Implementar teste de autenticação
+                      console.log('Teste de autenticação em desenvolvimento');
+                      break;
+                    case 'whatsapp-agent':
+                      // TODO: Implementar agente WhatsApp
+                      console.log('Agente WhatsApp em desenvolvimento');
+                      break;
+                    default:
+                      console.log('Ação não reconhecida:', action);
+                  }
+                }}
               />
             )}
           </div>
