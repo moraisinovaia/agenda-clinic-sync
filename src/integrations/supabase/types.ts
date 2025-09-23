@@ -1191,6 +1191,14 @@ export type Database = {
           | { p_aprovador_id: string; p_user_id: string }
         Returns: Json
       }
+      atualizar_cliente_usuario: {
+        Args: {
+          p_admin_id?: string
+          p_novo_cliente_id: string
+          p_user_email: string
+        }
+        Returns: Json
+      }
       atualizar_dados_paciente: {
         Args: {
           p_celular?: string
