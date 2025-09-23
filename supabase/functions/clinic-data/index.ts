@@ -332,35 +332,6 @@ serve(async (req) => {
       );
     }
 
-    // GET /clinic-data/alimentos - Listar alimentos para teste de hidrogênio
-    if (method === 'GET' && pathParts[1] === 'alimentos') {
-      const { data: alimentos, error } = await supabase
-        .from('alimentos_teste_hidrogenio')
-        .select('*')
-        .order('categoria');
-
-      if (error) throw error;
-
-      return new Response(
-        JSON.stringify({ success: true, data: alimentos }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // GET /clinic-data/questionario - Listar questionário pré-colonoscopia
-    if (method === 'GET' && pathParts[1] === 'questionario') {
-      const { data: questionario, error } = await supabase
-        .from('questionario_pre_colonoscopia')
-        .select('*')
-        .order('ordem', { ascending: true });
-
-      if (error) throw error;
-
-      return new Response(
-        JSON.stringify({ success: true, data: questionario }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
 
     return new Response(
       JSON.stringify({ success: false, error: 'Endpoint não encontrado' }),

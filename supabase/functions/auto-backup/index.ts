@@ -100,7 +100,7 @@ serve(async (req) => {
       includeSchema: settings.auto_backup_include_schema === 'true',
       tables: settings.auto_backup_tables ? JSON.parse(settings.auto_backup_tables) : [
         'agendamentos', 'pacientes', 'medicos', 'atendimentos', 'profiles',
-        'bloqueios_agenda', 'fila_espera', 'preparos', 'configuracoes_clinica'
+        'bloqueios_agenda', 'fila_espera', 'preparos'
       ],
       compressionLevel: 1
     }

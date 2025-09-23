@@ -39,6 +39,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           updated_at: apt.updated_at,
           criado_por: apt.criado_por,
           criado_por_user_id: apt.criado_por_user_id,
+          cliente_id: 'default-client-id', // Valor padrão se não estiver presente no RPC
           // Campos adicionais para cancelamento e confirmação
           cancelado_em: null,
           cancelado_por: null,
@@ -55,7 +56,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
             telefone: apt.paciente_telefone || '',
             data_nascimento: apt.paciente_data_nascimento || '',
             created_at: '',
-            updated_at: ''
+            updated_at: '',
+            cliente_id: 'default-client-id' // Valor padrão se não estiver presente no RPC
           },
           medicos: {
             id: apt.medico_id,
@@ -70,7 +72,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
             horarios: null,
             idade_maxima: null,
             idade_minima: null,
-            observacoes: ''
+            observacoes: '',
+            cliente_id: 'default-client-id' // Valor padrão se não estiver presente no RPC
           },
           atendimentos: {
             id: apt.atendimento_id,
@@ -89,7 +92,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
             observacoes: '',
             valor_convenio: 0,
             valor_particular: 0,
-            restricoes: null
+            restricoes: null,
+            cliente_id: 'default-client-id' // Valor padrão se não estiver presente no RPC
           }
         }));
 

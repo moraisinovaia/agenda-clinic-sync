@@ -22,7 +22,6 @@ import { SystemHealthDashboard } from '@/components/dashboard/SystemHealthDashbo
 import { DoctorsView } from '@/components/dashboard/DoctorsView';
 import { DashboardActions } from '@/components/dashboard/DashboardActions';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
-import { AlertSystem } from '@/components/alerts/AlertSystem';
 import { UserApprovalPanel } from '@/components/admin/UserApprovalPanel';
 import { 
   LazyDashboard, 
@@ -135,8 +134,8 @@ const Index = () => {
     {
       key: 'a',
       ctrlKey: true,
-      action: () => setViewMode('alertas'),
-      description: 'Ctrl+A - Alertas'
+      action: () => setViewMode('doctors'),
+      description: 'Ctrl+A - Dashboard'
     },
     {
       key: 'f',
@@ -654,9 +653,6 @@ const Index = () => {
           </div>
         )}
 
-        {viewMode === 'alertas' && (
-          <AlertSystem />
-        )}
 
         {viewMode === 'whatsapp-agent' && (
           <div className="space-y-6">

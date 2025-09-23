@@ -69,6 +69,15 @@ export const useFilaEspera = () => {
   const adicionarFilaEspera = async (formData: FilaEsperaFormData) => {
     try {
       setLoading(true);
+      
+      // Primeiro, obter o cliente_id do usuário atual
+      const { data: clienteId, error: clienteError } = await supabase.rpc('get_user_cliente_id');
+      
+      if (clienteError || !clienteId) {
+        setError('Erro de autenticação: não foi possível identificar o cliente');
+        return;
+      }
+
       const { error } = await supabase
         .from('fila_espera')
         .insert({
@@ -80,7 +89,8 @@ export const useFilaEspera = () => {
           observacoes: formData.observacoes,
           prioridade: formData.prioridade,
           data_limite: formData.dataLimite,
-          status: 'aguardando'
+          status: 'aguardando',
+          cliente_id: clienteId,
         });
 
       if (error) {
