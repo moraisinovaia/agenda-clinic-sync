@@ -1542,6 +1542,10 @@ export type Database = {
           username: string
         }[]
       }
+      get_user_client_name: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
       get_user_cliente_id: {
         Args: Record<PropertyKey, never>
         Returns: string
