@@ -1,7 +1,7 @@
 {
-  "name": "Endogastro - Sistema de Agendamentos",
-  "short_name": "Endogastro",
-  "description": "Sistema de Agendamentos Médicos da Clínica Endogastro",
+  "name": "INOVAIA - Sistema de Agendamentos",
+  "short_name": "INOVAIA",
+  "description": "Sistema de Agendamentos Médicos - INOVAIA",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

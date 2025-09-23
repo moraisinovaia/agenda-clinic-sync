@@ -3,7 +3,7 @@ import { InstallButton } from '@/components/InstallButton';
 import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { KeyboardShortcutsHelp } from '@/components/ui/keyboard-shortcuts-help';
-import endogastroLogo from '@/assets/endogastro-logo.png';
+import inovaiaLogo from '@/assets/inovaia-logo.png';
 
 type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos' | 'fila-espera' | 'nova-fila' | 'bloqueio-agenda' | 'relatorio-agenda' | 'auth-test' | 'alertas' | 'multiple-appointment' | 'canceled-appointments' | 'whatsapp-agent';
 
@@ -30,13 +30,13 @@ export const DashboardHeader = ({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <img 
-              src={endogastroLogo} 
-              alt="Endogastro Logo" 
+              src={inovaiaLogo} 
+              alt="INOVAIA Logo" 
               className="h-16 w-auto"
             />
             <div>
               <h1 className="text-3xl font-bold text-foreground">
-                Endogastro
+                INOVAIA
               </h1>
               <p className="text-muted-foreground mt-1">
                 Sistema de Agendamentos Médicos
