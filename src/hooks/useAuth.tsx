@@ -18,6 +18,7 @@ interface Profile {
   ativo: boolean;
   status: string;
   username?: string;
+  cliente_id?: string;
   created_at: string;
   updated_at: string;
 }

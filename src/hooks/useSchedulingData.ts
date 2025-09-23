@@ -1,20 +1,48 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Doctor, Atendimento } from '@/types/scheduling';
+import { useStableAuth } from '@/hooks/useStableAuth';
 
 export function useSchedulingData() {
-  const [doctors, setDoctors] = useState<Doctor[]>([]);
-  const [atendimentos, setAtendimentos] = useState<Atendimento[]>([]);
+  const [doctors, setDoctors] = useState<any[]>([]);
+  const [atendimentos, setAtendimentos] = useState<any[]>([]);
   const [blockedDates, setBlockedDates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isIpadoClient, setIsIpadoClient] = useState<boolean | null>(null);
+  
+  const { profile } = useStableAuth();
+
+  // Verificar se o usuário é do cliente IPADO
+  const checkClientType = async () => {
+    if (!profile?.cliente_id) return false;
+    
+    try {
+      const { data: cliente, error } = await supabase
+        .from('clientes')
+        .select('nome')
+        .eq('id', profile.cliente_id)
+        .single();
+        
+      if (error) {
+        console.error('Erro ao verificar tipo de cliente:', error);
+        return false;
+      }
+      
+      return cliente?.nome === 'IPADO';
+    } catch (error) {
+      console.error('Erro ao verificar tipo de cliente:', error);
+      return false;
+    }
+  };
 
   // Buscar médicos ativos
   const fetchDoctors = async () => {
     try {
+      const tableName = isIpadoClient ? 'ipado_medicos' : 'medicos';
+      
       const { data, error } = await supabase
-        .from('medicos')
+        .from(tableName)
         .select('*')
         .eq('ativo', true)
         .order('nome');
@@ -32,8 +60,10 @@ export function useSchedulingData() {
   // Buscar atendimentos ativos
   const fetchAtendimentos = async () => {
     try {
+      const tableName = isIpadoClient ? 'ipado_atendimentos' : 'atendimentos';
+      
       const { data, error } = await supabase
-        .from('atendimentos')
+        .from(tableName)
         .select('*')
         .eq('ativo', true)
         .order('nome');
@@ -49,8 +79,10 @@ export function useSchedulingData() {
   // Buscar bloqueios de agenda
   const fetchBlockedDates = async () => {
     try {
+      const tableName = isIpadoClient ? 'ipado_bloqueios_agenda' : 'bloqueios_agenda';
+      
       const { data, error } = await supabase
-        .from('bloqueios_agenda')
+        .from(tableName)
         .select('*')
         .eq('status', 'ativo')
         .order('data_inicio');
@@ -87,9 +119,21 @@ export function useSchedulingData() {
   };
 
   useEffect(() => {
-    const loadData = async () => {
+    const initializeData = async () => {
+      if (!profile?.cliente_id) return;
+      
       setLoading(true);
       try {
+        // Primeiro verificar o tipo de cliente
+        const isIpado = await checkClientType();
+        setIsIpadoClient(isIpado);
+        
+        console.log(`🏥 Cliente detectado: ${isIpado ? 'IPADO' : 'INOVAIA'}`);
+        
+        // Aguardar um frame para garantir que isIpadoClient foi atualizado
+        await new Promise(resolve => setTimeout(resolve, 0));
+        
+        // Carregar dados usando as tabelas corretas
         await Promise.all([
           fetchDoctors(),
           fetchAtendimentos(),
@@ -100,8 +144,19 @@ export function useSchedulingData() {
       }
     };
 
-    loadData();
-  }, []);
+    initializeData();
+  }, [profile?.cliente_id]);
+
+  // Recarregar dados quando o tipo de cliente mudar
+  useEffect(() => {
+    if (isIpadoClient !== null && profile?.cliente_id) {
+      Promise.all([
+        fetchDoctors(),
+        fetchAtendimentos(),
+        fetchBlockedDates(),
+      ]);
+    }
+  }, [isIpadoClient]);
 
   return {
     doctors,

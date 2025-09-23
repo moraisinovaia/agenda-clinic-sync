@@ -206,7 +206,7 @@ const Index = () => {
 
   // Convênios únicos disponíveis - preservando capitalização original
   const uniqueConvenios = Array.from(
-    doctors.flatMap(doctor => doctor.convenios_aceitos || [])
+    doctors.flatMap((doctor: any) => (doctor.convenios_aceitos as string[]) || [])
       .reduce((map, convenio) => {
         const key = convenio.toLowerCase();
         if (!map.has(key)) {
@@ -215,7 +215,7 @@ const Index = () => {
         return map;
       }, new Map())
       .values()
-  ).filter(Boolean).sort();
+  ).filter(Boolean).sort() as string[];
   
   
   // Redirecionar para login se não autenticado
