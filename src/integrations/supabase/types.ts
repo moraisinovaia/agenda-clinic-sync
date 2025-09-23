@@ -14,42 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      access_audit: {
-        Row: {
-          action: string
-          created_at: string | null
-          details: Json | null
-          id: string
-          ip_address: unknown | null
-          resource: string
-          success: boolean | null
-          user_agent: string | null
-          user_id: string | null
-        }
-        Insert: {
-          action: string
-          created_at?: string | null
-          details?: Json | null
-          id?: string
-          ip_address?: unknown | null
-          resource: string
-          success?: boolean | null
-          user_agent?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          action?: string
-          created_at?: string | null
-          details?: Json | null
-          id?: string
-          ip_address?: unknown | null
-          resource?: string
-          success?: boolean | null
-          user_agent?: string | null
-          user_id?: string | null
-        }
-        Relationships: []
-      }
       agendamentos: {
         Row: {
           atendimento_id: string
@@ -154,42 +118,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      agendamentos_audit: {
-        Row: {
-          action: string
-          agendamento_id: string
-          changed_at: string | null
-          changed_by: string | null
-          id: string
-          ip_address: unknown | null
-          new_data: Json | null
-          old_data: Json | null
-          user_agent: string | null
-        }
-        Insert: {
-          action: string
-          agendamento_id: string
-          changed_at?: string | null
-          changed_by?: string | null
-          id?: string
-          ip_address?: unknown | null
-          new_data?: Json | null
-          old_data?: Json | null
-          user_agent?: string | null
-        }
-        Update: {
-          action?: string
-          agendamento_id?: string
-          changed_at?: string | null
-          changed_by?: string | null
-          id?: string
-          ip_address?: unknown | null
-          new_data?: Json | null
-          old_data?: Json | null
-          user_agent?: string | null
-        }
-        Relationships: []
       }
       atendimentos: {
         Row: {
@@ -306,56 +234,6 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "fk_bloqueios_cliente"
-            columns: ["cliente_id"]
-            isOneToOne: false
-            referencedRelation: "clientes"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      client_audit_logs: {
-        Row: {
-          action: string
-          cliente_id: string
-          created_at: string | null
-          id: string
-          ip_address: unknown | null
-          new_data: Json | null
-          old_data: Json | null
-          resource_id: string | null
-          resource_type: string
-          user_agent: string | null
-          user_id: string | null
-        }
-        Insert: {
-          action: string
-          cliente_id: string
-          created_at?: string | null
-          id?: string
-          ip_address?: unknown | null
-          new_data?: Json | null
-          old_data?: Json | null
-          resource_id?: string | null
-          resource_type: string
-          user_agent?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          action?: string
-          cliente_id?: string
-          created_at?: string | null
-          id?: string
-          ip_address?: unknown | null
-          new_data?: Json | null
-          old_data?: Json | null
-          resource_id?: string | null
-          resource_type?: string
-          user_agent?: string | null
-          user_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "client_audit_logs_cliente_id_fkey"
             columns: ["cliente_id"]
             isOneToOne: false
             referencedRelation: "clientes"
@@ -951,36 +829,6 @@ export type Database = {
           metadata?: Json | null
           status?: string
           table_count?: number | null
-        }
-        Relationships: []
-      }
-      system_health: {
-        Row: {
-          context: Json | null
-          created_at: string | null
-          id: string
-          metric_name: string
-          metric_unit: string | null
-          metric_value: number
-          timestamp: string | null
-        }
-        Insert: {
-          context?: Json | null
-          created_at?: string | null
-          id?: string
-          metric_name: string
-          metric_unit?: string | null
-          metric_value: number
-          timestamp?: string | null
-        }
-        Update: {
-          context?: Json | null
-          created_at?: string | null
-          id?: string
-          metric_name?: string
-          metric_unit?: string | null
-          metric_value?: number
-          timestamp?: string | null
         }
         Relationships: []
       }
