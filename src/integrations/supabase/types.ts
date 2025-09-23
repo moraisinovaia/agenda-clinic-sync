@@ -56,6 +56,7 @@ export type Database = {
           cancelado_em: string | null
           cancelado_por: string | null
           cancelado_por_user_id: string | null
+          cliente_id: string | null
           confirmado_em: string | null
           confirmado_por: string | null
           confirmado_por_user_id: string | null
@@ -77,6 +78,7 @@ export type Database = {
           cancelado_em?: string | null
           cancelado_por?: string | null
           cancelado_por_user_id?: string | null
+          cliente_id?: string | null
           confirmado_em?: string | null
           confirmado_por?: string | null
           confirmado_por_user_id?: string | null
@@ -98,6 +100,7 @@ export type Database = {
           cancelado_em?: string | null
           cancelado_por?: string | null
           cancelado_por_user_id?: string | null
+          cliente_id?: string | null
           confirmado_em?: string | null
           confirmado_por?: string | null
           confirmado_por_user_id?: string | null
@@ -287,6 +290,7 @@ export type Database = {
       atendimentos: {
         Row: {
           ativo: boolean | null
+          cliente_id: string | null
           codigo: string | null
           coparticipacao_unimed_20: number | null
           coparticipacao_unimed_40: number | null
@@ -304,6 +308,7 @@ export type Database = {
         }
         Insert: {
           ativo?: boolean | null
+          cliente_id?: string | null
           codigo?: string | null
           coparticipacao_unimed_20?: number | null
           coparticipacao_unimed_40?: number | null
@@ -321,6 +326,7 @@ export type Database = {
         }
         Update: {
           ativo?: boolean | null
+          cliente_id?: string | null
           codigo?: string | null
           coparticipacao_unimed_20?: number | null
           coparticipacao_unimed_40?: number | null
@@ -348,6 +354,7 @@ export type Database = {
       }
       bloqueios_agenda: {
         Row: {
+          cliente_id: string | null
           created_at: string
           criado_por: string
           criado_por_user_id: string | null
@@ -360,6 +367,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          cliente_id?: string | null
           created_at?: string
           criado_por?: string
           criado_por_user_id?: string | null
@@ -372,6 +380,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          cliente_id?: string | null
           created_at?: string
           criado_por?: string
           criado_por_user_id?: string | null
@@ -382,6 +391,36 @@ export type Database = {
           motivo?: string
           status?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      clientes: {
+        Row: {
+          ativo: boolean | null
+          configuracoes: Json | null
+          created_at: string | null
+          id: string
+          logo_url: string | null
+          nome: string
+          updated_at: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          configuracoes?: Json | null
+          created_at?: string | null
+          id?: string
+          logo_url?: string | null
+          nome: string
+          updated_at?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          configuracoes?: Json | null
+          created_at?: string | null
+          id?: string
+          logo_url?: string | null
+          nome?: string
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -500,6 +539,7 @@ export type Database = {
         Row: {
           agendamento_id: string | null
           atendimento_id: string
+          cliente_id: string | null
           created_at: string
           data_limite: string | null
           data_preferida: string
@@ -517,6 +557,7 @@ export type Database = {
         Insert: {
           agendamento_id?: string | null
           atendimento_id: string
+          cliente_id?: string | null
           created_at?: string
           data_limite?: string | null
           data_preferida: string
@@ -534,6 +575,7 @@ export type Database = {
         Update: {
           agendamento_id?: string | null
           atendimento_id?: string
+          cliente_id?: string | null
           created_at?: string
           data_limite?: string | null
           data_preferida?: string
@@ -724,6 +766,7 @@ export type Database = {
       medicos: {
         Row: {
           ativo: boolean | null
+          cliente_id: string | null
           convenios_aceitos: string[] | null
           convenios_restricoes: Json | null
           created_at: string | null
@@ -737,6 +780,7 @@ export type Database = {
         }
         Insert: {
           ativo?: boolean | null
+          cliente_id?: string | null
           convenios_aceitos?: string[] | null
           convenios_restricoes?: Json | null
           created_at?: string | null
@@ -750,6 +794,7 @@ export type Database = {
         }
         Update: {
           ativo?: boolean | null
+          cliente_id?: string | null
           convenios_aceitos?: string[] | null
           convenios_restricoes?: Json | null
           created_at?: string | null
@@ -886,6 +931,7 @@ export type Database = {
       pacientes: {
         Row: {
           celular: string | null
+          cliente_id: string | null
           convenio: string
           created_at: string
           data_nascimento: string
@@ -896,6 +942,7 @@ export type Database = {
         }
         Insert: {
           celular?: string | null
+          cliente_id?: string | null
           convenio: string
           created_at?: string
           data_nascimento: string
@@ -906,6 +953,7 @@ export type Database = {
         }
         Update: {
           celular?: string | null
+          cliente_id?: string | null
           convenio?: string
           created_at?: string
           data_nascimento?: string
@@ -918,6 +966,7 @@ export type Database = {
       }
       preparos: {
         Row: {
+          cliente_id: string | null
           created_at: string | null
           dias_suspensao: number | null
           exame: string
@@ -935,6 +984,7 @@ export type Database = {
           valor_particular: number | null
         }
         Insert: {
+          cliente_id?: string | null
           created_at?: string | null
           dias_suspensao?: number | null
           exame: string
@@ -952,6 +1002,7 @@ export type Database = {
           valor_particular?: number | null
         }
         Update: {
+          cliente_id?: string | null
           created_at?: string | null
           dias_suspensao?: number | null
           exame?: string
@@ -974,6 +1025,7 @@ export type Database = {
         Row: {
           aprovado_por: string | null
           ativo: boolean | null
+          cliente_id: string | null
           created_at: string | null
           data_aprovacao: string | null
           email: string
@@ -988,6 +1040,7 @@ export type Database = {
         Insert: {
           aprovado_por?: string | null
           ativo?: boolean | null
+          cliente_id?: string | null
           created_at?: string | null
           data_aprovacao?: string | null
           email: string
@@ -1002,6 +1055,7 @@ export type Database = {
         Update: {
           aprovado_por?: string | null
           ativo?: boolean | null
+          cliente_id?: string | null
           created_at?: string | null
           data_aprovacao?: string | null
           email?: string
