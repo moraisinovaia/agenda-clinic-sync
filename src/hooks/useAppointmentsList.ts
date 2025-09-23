@@ -6,19 +6,27 @@ import { useOptimizedQuery } from '@/hooks/useOptimizedQuery';
 import { usePagination } from '@/hooks/usePagination';
 import { usePerformanceMetrics } from '@/hooks/usePerformanceMetrics';
 import { logger } from '@/utils/logger';
+import { useClientTables } from '@/hooks/useClientTables';
 
 export function useAppointmentsList(itemsPerPage: number = 20) {
   const { toast } = useToast();
   const { measureApiCall } = usePerformanceMetrics();
+  const { checkClientType } = useClientTables();
 
   // ✅ ESTABILIZAR: Função de query totalmente estável
   const fetchAppointments = useCallback(async () => {
     logger.info('Iniciando busca de agendamentos', {}, 'APPOINTMENTS');
     
     return measureApiCall(async () => {
+        // Determinar qual função RPC usar baseado no cliente
+        const isIpado = await checkClientType();
+        const rpcFunction = isIpado ? 'buscar_agendamentos_otimizado_ipado' : 'buscar_agendamentos_otimizado';
+        
+        console.log(`🏥 Buscando agendamentos com função: ${rpcFunction} para cliente ${isIpado ? 'IPADO' : 'INOVAIA'}`);
+
         // Usar função RPC otimizada que já filtra cancelados e inclui relacionamentos
         const { data: appointmentsWithRelations, error } = await supabase
-          .rpc('buscar_agendamentos_otimizado');
+          .rpc(rpcFunction as any);
 
         if (error) {
           logger.error('Erro na consulta de agendamentos otimizada', error, 'APPOINTMENTS');
@@ -97,10 +105,10 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           }
         }));
 
-        logger.info('Agendamentos carregados com sucesso via RPC', { count: transformedAppointments.length }, 'APPOINTMENTS');
+        logger.info('Agendamentos carregados com sucesso via RPC', { count: transformedAppointments.length, rpcFunction }, 'APPOINTMENTS');
         return transformedAppointments;
       }, 'fetch_appointments', 'GET');
-  }, [measureApiCall]);
+  }, [measureApiCall, checkClientType]);
 
   // Usar cache otimizado para buscar agendamentos
   const { data: appointments, loading, error, refetch, invalidateCache, forceRefetch } = useOptimizedQuery<AppointmentWithRelations[]>(

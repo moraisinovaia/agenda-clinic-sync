@@ -2,10 +2,12 @@ import { useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Patient } from '@/types/scheduling';
 import { toast } from '@/components/ui/use-toast';
+import { useClientTables } from '@/hooks/useClientTables';
 
 export function usePatientManagement() {
   const [loading, setLoading] = useState(false);
   const cacheRef = useRef<{ [key: string]: Patient[] }>({});
+  const { getTables } = useClientTables();
 
   // Buscar pacientes por data de nascimento (ESTABILIZADA - SEM dependências instáveis)
   const searchPatientsByBirthDate = useCallback(async (birthDate: string): Promise<Patient[]> => {
@@ -21,8 +23,11 @@ export function usePatientManagement() {
     try {
       setLoading(true);
       
+      const tables = await getTables();
+      console.log(`🏥 Buscando pacientes por data na tabela: ${tables.pacientes}`);
+      
       const { data, error } = await supabase
-        .from('pacientes')
+        .from(tables.pacientes as any)
         .select('*')
         .eq('data_nascimento', birthDate)
         .order('updated_at', { ascending: false });
@@ -33,16 +38,16 @@ export function usePatientManagement() {
       }
 
       // Remover duplicatas baseado no nome completo e convênio para evitar pacientes repetidos
-      const uniquePatients = data ? data.reduce((acc, current) => {
-        const existing = acc.find(patient => 
+      const uniquePatients = data ? data.reduce((acc: Patient[], current: any) => {
+        const existing = acc.find((patient: Patient) => 
           patient.nome_completo.toLowerCase() === current.nome_completo.toLowerCase() &&
           patient.convenio === current.convenio
         );
         if (!existing) {
-          acc.push(current);
+          acc.push(current as Patient);
         }
         return acc;
-      }, [] as typeof data) : [];
+      }, [] as Patient[]) : [];
 
       // Armazenar no cache
       cacheRef.current[birthDate] = uniquePatients;
@@ -74,8 +79,12 @@ export function usePatientManagement() {
 
     try {
       setLoading(true);
+      
+      const tables = await getTables();
+      console.log(`🏥 Buscando pacientes por nome na tabela: ${tables.pacientes}`);
+      
       const { data, error } = await supabase
-        .from('pacientes')
+        .from(tables.pacientes as any)
         .select('*')
         .ilike('nome_completo', `%${trimmed}%`)
         .order('updated_at', { ascending: false })
@@ -86,14 +95,14 @@ export function usePatientManagement() {
         throw error;
       }
 
-      const uniquePatients = data ? data.reduce((acc, current) => {
-        const existing = acc.find(patient => 
+      const uniquePatients = data ? data.reduce((acc: Patient[], current: any) => {
+        const existing = acc.find((patient: Patient) => 
           patient.nome_completo.toLowerCase() === current.nome_completo.toLowerCase() &&
           patient.convenio === current.convenio
         );
-        if (!existing) acc.push(current);
+        if (!existing) acc.push(current as Patient);
         return acc;
-      }, [] as typeof data) : [];
+      }, [] as Patient[]) : [];
 
       cacheRef.current[cacheKey] = uniquePatients;
       return uniquePatients;

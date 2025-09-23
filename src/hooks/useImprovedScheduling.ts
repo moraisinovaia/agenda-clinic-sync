@@ -3,11 +3,13 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { SchedulingFormData } from '@/types/scheduling';
+import { useClientTables } from '@/hooks/useClientTables';
 
 export function useImprovedScheduling() {
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
+  const { getTables, checkClientType } = useClientTables();
 
   // Função para criar agendamento sem duplicação
   const createAppointment = async (formData: SchedulingFormData, forceConflict = false) => {
@@ -19,7 +21,13 @@ export function useImprovedScheduling() {
     try {
       console.log('🔄 Criando agendamento:', formData, { forceConflict });
 
-      const { data, error } = await supabase.rpc('criar_agendamento_atomico', {
+      // Determinar qual função RPC usar baseado no cliente
+      const isIpado = await checkClientType();
+      const rpcFunction = isIpado ? 'criar_agendamento_atomico_ipado' : 'criar_agendamento_atomico';
+      
+      console.log(`🏥 Usando função RPC: ${rpcFunction} para cliente ${isIpado ? 'IPADO' : 'INOVAIA'}`);
+
+      const { data, error } = await supabase.rpc(rpcFunction as any, {
         p_nome_completo: formData.nomeCompleto,
         p_data_nascimento: formData.dataNascimento,
         p_convenio: formData.convenio,
@@ -88,21 +96,31 @@ export function useImprovedScheduling() {
     try {
       console.log('🔄 Editando agendamento:', appointmentId, formData);
 
-      // Buscar dados atuais do agendamento para comparar
-      const { data: currentAppointment } = await supabase
-        .from('agendamentos')
-        .select(`
-          paciente_id,
-          pacientes!inner(nome_completo, data_nascimento, convenio, telefone, celular)
-        `)
-        .eq('id', appointmentId)
-        .single();
+      const tables = await getTables();
+      console.log(`🏥 Editando agendamento usando tabelas: agendamentos=${tables.agendamentos}, pacientes=${tables.pacientes}`);
 
-      if (!currentAppointment) {
+      // Buscar dados atuais do agendamento
+      const { data: currentAppointment, error: appointmentError } = await supabase
+        .from(tables.agendamentos as any)
+        .select('paciente_id')
+        .eq('id', appointmentId)
+        .single() as any;
+        
+      if (appointmentError || !currentAppointment) {
         throw new Error('Agendamento não encontrado');
       }
 
-      const currentPatient = currentAppointment.pacientes;
+      // Buscar dados do paciente atual
+      const { data: currentPatient, error: patientError } = await supabase
+        .from(tables.pacientes as any)
+        .select('nome_completo, data_nascimento, convenio, telefone, celular')
+        .eq('id', currentAppointment.paciente_id)
+        .single() as any;
+
+      if (patientError || !currentPatient) {
+        throw new Error('Dados do paciente não encontrados');
+      }
+
       let pacienteId = currentAppointment.paciente_id;
 
       // Verificar se dados do paciente mudaram
@@ -116,12 +134,12 @@ export function useImprovedScheduling() {
       if (patientDataChanged) {
         // Dados mudaram, buscar se já existe um paciente com os novos dados
         const { data: existingPatient } = await supabase
-          .from('pacientes')
+          .from(tables.pacientes as any)
           .select('id')
           .eq('nome_completo', formData.nomeCompleto)
           .eq('data_nascimento', formData.dataNascimento)
           .eq('convenio', formData.convenio)
-          .single();
+          .single() as any;
 
         if (existingPatient) {
           // Usar paciente existente
@@ -129,7 +147,7 @@ export function useImprovedScheduling() {
         } else {
           // Atualizar dados do paciente atual (não criar novo)
           const { error: updatePatientError } = await supabase
-            .from('pacientes')
+            .from(tables.pacientes as any)
             .update({
               nome_completo: formData.nomeCompleto,
               data_nascimento: formData.dataNascimento,
@@ -147,7 +165,7 @@ export function useImprovedScheduling() {
 
       // Atualizar o agendamento
       const { error: updateError } = await supabase
-        .from('agendamentos')
+        .from(tables.agendamentos as any)
         .update({
           paciente_id: pacienteId,
           medico_id: formData.medicoId,
@@ -183,9 +201,12 @@ export function useImprovedScheduling() {
   // Função para verificar conflitos de horário
   const checkTimeConflict = useCallback(async (doctorId: string, date: string, time: string, excludeAppointmentId?: string) => {
     try {
+      const tables = await getTables();
+      console.log(`🏥 Verificando conflitos na tabela: ${tables.agendamentos}`);
+      
       let query = supabase
-        .from('agendamentos')
-        .select('id, pacientes(nome_completo)')
+        .from(tables.agendamentos as any)
+        .select('id')
         .eq('medico_id', doctorId)
         .eq('data_agendamento', date)
         .eq('hora_agendamento', time)
@@ -195,7 +216,7 @@ export function useImprovedScheduling() {
         query = query.neq('id', excludeAppointmentId);
       }
 
-      const { data, error } = await query;
+      const { data, error } = await query as any;
 
       if (error) {
         console.error('Erro ao verificar conflito:', error);
@@ -207,7 +228,7 @@ export function useImprovedScheduling() {
       console.error('Erro ao verificar conflito:', error);
       return null;
     }
-  }, []);
+  }, [getTables]);
 
   return {
     loading,
