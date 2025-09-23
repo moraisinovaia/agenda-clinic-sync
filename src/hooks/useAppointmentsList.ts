@@ -16,6 +16,9 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     logger.info('Iniciando busca de agendamentos', {}, 'APPOINTMENTS');
     
     return measureApiCall(async () => {
+        // Obter cliente_id do usuário atual
+        const { data: userClienteId } = await supabase.rpc('get_user_cliente_id');
+        
         // Usar função RPC otimizada que já filtra cancelados e inclui relacionamentos
         const { data: appointmentsWithRelations, error } = await supabase
           .rpc('buscar_agendamentos_otimizado');
@@ -39,6 +42,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           updated_at: apt.updated_at,
           criado_por: apt.criado_por,
           criado_por_user_id: apt.criado_por_user_id,
+          cliente_id: userClienteId,
           // Campos adicionais para cancelamento e confirmação
           cancelado_em: null,
           cancelado_por: null,
@@ -55,22 +59,22 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
             telefone: apt.paciente_telefone || '',
             data_nascimento: apt.paciente_data_nascimento || '',
             created_at: '',
-            updated_at: ''
+            updated_at: '',
+            cliente_id: userClienteId
           },
           medicos: {
             id: apt.medico_id,
             nome: apt.medico_nome,
             especialidade: apt.medico_especialidade,
             ativo: true,
-            crm: '',
             created_at: '',
-            updated_at: '',
             convenios_aceitos: [],
             convenios_restricoes: null,
             horarios: null,
             idade_maxima: null,
             idade_minima: null,
-            observacoes: ''
+            observacoes: '',
+            cliente_id: userClienteId
           },
           atendimentos: {
             id: apt.atendimento_id,
@@ -80,16 +84,15 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
             medico_id: apt.medico_id,
             medico_nome: apt.medico_nome,
             created_at: '',
-            updated_at: '',
             codigo: '',
             coparticipacao_unimed_20: 0,
             coparticipacao_unimed_40: 0,
             forma_pagamento: 'convenio',
             horarios: null,
             observacoes: '',
-            valor_convenio: 0,
             valor_particular: 0,
-            restricoes: null
+            restricoes: null,
+            cliente_id: userClienteId
           }
         }));
 
