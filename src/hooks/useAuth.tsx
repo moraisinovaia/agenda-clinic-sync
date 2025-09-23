@@ -22,6 +22,23 @@ interface Profile {
   updated_at: string;
 }
 
+interface EmailStatusResponse {
+  exists_in_auth: boolean;
+  has_profile: boolean;
+  email_confirmed: boolean;
+  profile_status?: string;
+  user_id?: string;
+  status: 'can_register' | 'orphaned_user' | 'pending_approval' | 'approved_user' | 'rejected_user' | 'unknown_status';
+}
+
+interface RecoveryResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+  user_id?: string;
+  profile_created?: boolean;
+}
+
 interface AuthContextType {
   user: User | null;
   profile: Profile | null;
@@ -296,6 +313,58 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const signUp = async (email: string, password: string, nome: string, username: string) => {
     try {
+      // Primeiro, verificar o status do email
+      const { data: emailStatus } = await supabase
+        .rpc('verificar_status_email', { p_email: email });
+
+      const emailStatusData = emailStatus as unknown as EmailStatusResponse;
+
+      if (emailStatusData?.status === 'approved_user') {
+        toast({
+          title: "Email já cadastrado",
+          description: "Este email já possui uma conta aprovada. Tente fazer login.",
+          variant: "destructive",
+        });
+        return { error: new Error('Email já possui conta aprovada') };
+      }
+
+      if (emailStatusData?.status === 'pending_approval') {
+        toast({
+          title: "Cadastro pendente",
+          description: "Este email já possui um cadastro aguardando aprovação do administrador.",
+          variant: "destructive",
+        });
+        return { error: new Error('Cadastro pendente de aprovação') };
+      }
+
+      if (emailStatusData?.status === 'orphaned_user') {
+        // Tentar recuperar usuário órfão
+        const { data: recovery } = await supabase
+          .rpc('recuperar_usuario_orfao', {
+            p_email: email,
+            p_nome: nome,
+            p_role: 'recepcionista'
+          });
+
+        const recoveryData = recovery as unknown as RecoveryResponse;
+
+        if (recoveryData?.success) {
+          toast({
+            title: "Conta recuperada!",
+            description: "Sua conta foi recuperada e aprovada. Você pode fazer login agora.",
+            variant: "default",
+          });
+          return { error: null };
+        } else {
+          toast({
+            title: "Erro na recuperação",
+            description: recoveryData?.error || "Não foi possível recuperar a conta. Entre em contato com o administrador.",
+            variant: "destructive",
+          });
+          return { error: new Error(recoveryData?.error || 'Erro na recuperação de conta') };
+        }
+      }
+
       // Verificar se o username já existe
       try {
         const { data: existingProfile } = await supabase
@@ -331,11 +400,18 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       });
 
       if (error) {
+        console.error('❌ Erro no cadastro:', error);
+        
         let errorMessage = 'Erro ao criar conta';
-        if (error.message.includes('User already registered')) {
+        
+        if (error.message.includes('Email address') && error.message.includes('invalid')) {
+          errorMessage = "Email inválido ou já existe com problema no sistema. Entre em contato com o administrador.";
+        } else if (error.message.includes('User already registered')) {
           errorMessage = 'Este email já está cadastrado. Você pode fazer login.';
         } else if (error.message.includes('Password should be at least')) {
           errorMessage = 'A senha deve ter pelo menos 6 caracteres';
+        } else {
+          errorMessage = error.message;
         }
         
         toast({
@@ -350,7 +426,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       // Sucesso no cadastro
       toast({
         title: 'Conta criada com sucesso!',
-        description: 'Sua conta será enviada para aprovação.',
+        description: 'Sua conta será enviada para aprovação. Aguarde a confirmação por email.',
       });
 
       return { error: null };
@@ -358,7 +434,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       console.error('Erro inesperado no cadastro:', error);
       toast({
         title: 'Erro',
-        description: 'Erro inesperado ao criar conta',
+        description: 'Erro inesperado ao criar conta. Tente novamente.',
         variant: 'destructive',
       });
       return { error };

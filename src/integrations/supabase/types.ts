@@ -1552,6 +1552,16 @@ export type Database = {
           similarity: number
         }[]
       }
+      recuperar_usuario_orfao: {
+        Args: {
+          p_admin_id?: string
+          p_cliente_id?: string
+          p_email: string
+          p_nome: string
+          p_role?: string
+        }
+        Returns: Json
+      }
       rejeitar_usuario: {
         Args: { p_aprovador_id: string; p_user_id: string }
         Returns: Json
@@ -1631,6 +1641,10 @@ export type Database = {
       vector_typmod_in: {
         Args: { "": unknown[] }
         Returns: number
+      }
+      verificar_status_email: {
+        Args: { p_email: string }
+        Returns: Json
       }
     }
     Enums: {
