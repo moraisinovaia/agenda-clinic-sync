@@ -106,12 +106,16 @@ export function UserApprovalPanel() {
 
   const fetchClientes = async () => {
     try {
-      console.log('🔍 Buscando clientes...');
-      const { data, error } = await supabase
-        .from('clientes')
-        .select('id, nome, ativo')
-        .eq('ativo', true)
-        .order('nome');
+      console.log('🔍 Buscando clientes via RPC...');
+      
+      if (!profile?.id) {
+        console.error('❌ Profile ID não encontrado para buscar clientes');
+        return;
+      }
+
+      const { data, error } = await supabase.rpc('get_clientes_for_admin', {
+        requesting_user_id: profile.id
+      });
 
       if (error) {
         console.error('❌ Erro ao buscar clientes:', error);
