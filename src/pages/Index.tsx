@@ -44,10 +44,6 @@ import { Button } from '@/components/ui/button';
 import { NavigationHeader } from '@/components/ui/navigation-header';
 import { AuthTest } from '@/components/AuthTest';
 import PendingApproval from '@/components/PendingApproval';
-import { WhatsAppAgentDashboard } from '@/components/whatsapp-agent/WhatsAppAgentDashboard';
-import { WhatsAppTestPanel } from '@/components/admin/WhatsAppTestPanel';
-
-import { N8nWebhookButton } from '@/components/admin/N8nWebhookButton';
 
 const Index = () => {
   const { user, profile, loading: authLoading, signOut } = useStableAuth();
@@ -411,9 +407,6 @@ const Index = () => {
                 <div className="grid gap-6">
                   <UserApprovalPanel />
                   <ClienteManager />
-                  <div className="flex justify-center">
-                    <N8nWebhookButton />
-                  </div>
                 </div>
               </div>
             ) : (
@@ -659,19 +652,6 @@ const Index = () => {
         )}
 
 
-        {viewMode === 'whatsapp-agent' && (
-          <div className="space-y-6">
-            <NavigationHeader
-              title="Agente WhatsApp"
-              subtitle="Teste e monitore as funcionalidades do agente LLM para WhatsApp"
-              onBack={goBack}
-              onHome={() => setViewMode('doctors')}
-              showBack={true}
-              showHome={true}
-            />
-            <WhatsAppAgentDashboard />
-          </div>
-        )}
       </div>
 
       {/* Modal de Agendamento Múltiplo */}

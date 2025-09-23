@@ -1,7 +1,7 @@
 import { Calendar, Clock, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos' | 'fila-espera' | 'nova-fila' | 'bloqueio-agenda' | 'relatorio-agenda' | 'auth-test' | 'alertas' | 'multiple-appointment' | 'canceled-appointments' | 'whatsapp-agent';
+type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos' | 'fila-espera' | 'nova-fila' | 'bloqueio-agenda' | 'relatorio-agenda' | 'auth-test' | 'alertas' | 'multiple-appointment' | 'canceled-appointments';
 
 interface DashboardActionsProps {
   onViewChange: (view: ViewMode) => void;
@@ -94,13 +94,6 @@ export const DashboardActions = ({ onViewChange }: DashboardActionsProps) => {
         🔐 Teste de Autenticação
       </Button>
       
-      <Button 
-        onClick={() => onViewChange('whatsapp-agent')}
-        variant="outline"
-        className="flex items-center gap-2 whitespace-nowrap"
-      >
-        📱 Agente WhatsApp
-      </Button>
     </div>
   );
 };
