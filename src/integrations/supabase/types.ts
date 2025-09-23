@@ -1274,6 +1274,32 @@ export type Database = {
           updated_at: string
         }[]
       }
+      buscar_agendamentos_otimizado_ipado: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          atendimento_id: string
+          atendimento_nome: string
+          atendimento_tipo: string
+          created_at: string
+          criado_por: string
+          criado_por_user_id: string
+          data_agendamento: string
+          hora_agendamento: string
+          id: string
+          medico_especialidade: string
+          medico_id: string
+          medico_nome: string
+          observacoes: string
+          paciente_celular: string
+          paciente_convenio: string
+          paciente_data_nascimento: string
+          paciente_id: string
+          paciente_nome: string
+          paciente_telefone: string
+          status: string
+          updated_at: string
+        }[]
+      }
       bytea_to_text: {
         Args: { data: string }
         Returns: string
@@ -1345,6 +1371,24 @@ export type Database = {
               p_observacoes?: string
               p_telefone: string
             }
+        Returns: Json
+      }
+      criar_agendamento_atomico_ipado: {
+        Args: {
+          p_atendimento_id: string
+          p_celular: string
+          p_convenio: string
+          p_criado_por?: string
+          p_criado_por_user_id?: string
+          p_data_agendamento: string
+          p_data_nascimento: string
+          p_force_conflict?: boolean
+          p_hora_agendamento: string
+          p_medico_id: string
+          p_nome_completo: string
+          p_observacoes?: string
+          p_telefone: string
+        }
         Returns: Json
       }
       criar_agendamento_multiplo: {
