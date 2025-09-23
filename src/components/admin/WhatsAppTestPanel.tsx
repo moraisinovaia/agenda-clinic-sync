@@ -53,20 +53,20 @@ export function WhatsAppTestPanel() {
   const [autoTestExecuted, setAutoTestExecuted] = useState(false);
   const { toast } = useToast();
   
-  // Auto-executar teste avançado ao carregar - DESABILITADO para evitar erros no login
-  // React.useEffect(() => {
-  //   if (!autoTestExecuted) {
-  //     const autoTest = async () => {
-  //       console.log('🚀 Executando teste simples automático do WhatsApp...');
-  //       setAutoTestExecuted(true);
-  //       await testSimplesAgora();
-  //     };
+  // Auto-executar teste avançado ao carregar
+  React.useEffect(() => {
+    if (!autoTestExecuted) {
+      const autoTest = async () => {
+        console.log('🚀 Executando teste simples automático do WhatsApp...');
+        setAutoTestExecuted(true);
+        await testSimplesAgora();
+      };
       
-  //     // Executar após 1 segundo
-  //     const timer = setTimeout(autoTest, 1000);
-  //     return () => clearTimeout(timer);
-  //   }
-  // }, [autoTestExecuted]);
+      // Executar após 1 segundo
+      const timer = setTimeout(autoTest, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [autoTestExecuted]);
 
   const runDiagnostic = async () => {
     setLoading(true);
@@ -253,11 +253,7 @@ export function WhatsAppTestPanel() {
       setTestResult({
         test_id: 'error-' + Date.now(),
         success: false,
-        response: {
-          error: error.message,
-          name: error.name,
-          stack: error.stack
-        },
+        response: error,
         message: `Erro: ${error.message}`
       });
       
@@ -419,13 +415,7 @@ export function WhatsAppTestPanel() {
             <div className="space-y-2">
               <div><strong>Status:</strong> {testResult.success ? 'Sucesso' : 'Falha'}</div>
               <div><strong>Test ID:</strong> {testResult.test_id}</div>
-              <div><strong>Response:</strong> 
-                <pre className="text-xs bg-muted p-2 rounded mt-1 overflow-auto">
-                  {typeof testResult.response === 'object' 
-                    ? JSON.stringify(testResult.response, null, 2) 
-                    : String(testResult.response)}
-                </pre>
-              </div>
+              <div><strong>Response:</strong> {testResult.response}</div>
               <div><strong>Mensagem:</strong> {testResult.message}</div>
             </div>
           </CardContent>

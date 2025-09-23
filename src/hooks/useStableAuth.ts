@@ -16,9 +16,8 @@ export const useStableAuth = () => {
     isAuthenticated: !!user,
     isApproved: profile?.status === 'aprovado',
     isAdmin: profile?.role === 'admin' && profile?.status === 'aprovado',
-    isSuperAdmin: profile?.email === 'gabworais@gmail.com' && profile?.role === 'admin' && profile?.status === 'aprovado',
     loading
-  }), [user?.id, profile?.role, profile?.status, profile?.email, loading]);
+  }), [user?.id, profile?.role, profile?.status, loading]);
 
   return {
     ...stableValues,

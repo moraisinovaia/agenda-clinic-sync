@@ -6,193 +6,97 @@ import { useOptimizedQuery } from '@/hooks/useOptimizedQuery';
 import { usePagination } from '@/hooks/usePagination';
 import { usePerformanceMetrics } from '@/hooks/usePerformanceMetrics';
 import { logger } from '@/utils/logger';
-import { useClientTables } from '@/hooks/useClientTables';
-import { useStableAuth } from '@/hooks/useStableAuth';
 
 export function useAppointmentsList(itemsPerPage: number = 20) {
   const { toast } = useToast();
   const { measureApiCall } = usePerformanceMetrics();
-  const { getTables } = useClientTables();
-  const { isSuperAdmin } = useStableAuth();
 
-  // ✅ ESTABILIZAR: Função de query totalmente estável com tratamento robusto
+  // ✅ ESTABILIZAR: Função de query totalmente estável
   const fetchAppointments = useCallback(async () => {
     logger.info('Iniciando busca de agendamentos', {}, 'APPOINTMENTS');
     
     return measureApiCall(async () => {
-        try {
-          // Obter configuração de tabelas de forma robusta
-          const tables = await getTables();
-          const isIpado = tables.agendamentos === 'ipado_agendamentos';
-          
-          console.log(`🏥 Buscando agendamentos para cliente ${isIpado ? 'IPADO' : 'INOVAIA'}`);
-          console.log('📊 Usando tabelas:', tables);
+        // Usar função RPC otimizada que já filtra cancelados e inclui relacionamentos
+        const { data: appointmentsWithRelations, error } = await supabase
+          .rpc('buscar_agendamentos_otimizado');
 
-          // Para super-admin, verificar se há RPC específica, senão usar tabela direta
-          let appointmentsWithRelations;
-          
-          if (isIpado) {
-            // Verificar se existe RPC para IPADO
-            try {
-              const { data, error } = await supabase.rpc('buscar_agendamentos_otimizado_ipado' as any);
-              if (!error) {
-                appointmentsWithRelations = data;
-              } else {
-                throw error;
-              }
-            } catch (rpcError) {
-              console.log('⚠️ RPC IPADO não disponível, usando consulta direta');
-              // Fallback para consulta direta na tabela IPADO
-              const { data, error } = await supabase
-                .from('ipado_agendamentos' as any)
-                .select(`
-                  *,
-                  pacientes:ipado_pacientes(nome_completo, convenio, celular, telefone, data_nascimento),
-                  medicos:ipado_medicos(nome, especialidade),
-                  atendimentos:ipado_atendimentos(nome, tipo)
-                `)
-                .neq('status', 'cancelado')
-                .order('data_agendamento', { ascending: false })
-                .order('hora_agendamento', { ascending: false });
-                
-              if (error) throw error;
-              appointmentsWithRelations = data;
-            }
-          } else {
-            // INOVAIA - tentar RPC primeiro, depois fallback
-            try {
-              const { data, error } = await supabase.rpc('buscar_agendamentos_otimizado' as any);
-              if (!error) {
-                appointmentsWithRelations = data;
-              } else {
-                throw error;
-              }
-            } catch (rpcError) {
-              console.log('⚠️ RPC INOVAIA não disponível, usando consulta direta');
-              // Fallback para consulta direta na tabela INOVAIA
-              const { data, error } = await supabase
-                .from('agendamentos' as any)
-                .select(`
-                  *,
-                  pacientes:pacientes(nome_completo, convenio, celular, telefone, data_nascimento),
-                  medicos:medicos(nome, especialidade),
-                  atendimentos:atendimentos(nome, tipo)
-                `)
-                .neq('status', 'cancelado')
-                .order('data_agendamento', { ascending: false })
-                .order('hora_agendamento', { ascending: false });
-                
-              if (error) throw error;
-              appointmentsWithRelations = data;
-            }
-          }
-
-          if (!appointmentsWithRelations) {
-            console.log('⚠️ Nenhum agendamento retornado');
-            return [];
-          }
-
-          // Transformar para o formato esperado (funciona tanto para RPC quanto consulta direta)
-          const transformedAppointments = (appointmentsWithRelations || []).map(apt => {
-            // Se é resultado de RPC, os campos já vêm formatados
-            // Se é resultado de consulta direta, precisa acessar objetos relacionados
-            const pacienteData = apt.paciente_nome ? {
-              nome_completo: apt.paciente_nome,
-              convenio: apt.paciente_convenio,
-              celular: apt.paciente_celular,
-              telefone: apt.paciente_telefone || '',
-              data_nascimento: apt.paciente_data_nascimento || ''
-            } : apt.pacientes;
-            
-            const medicoData = apt.medico_nome ? {
-              nome: apt.medico_nome,
-              especialidade: apt.medico_especialidade
-            } : apt.medicos;
-            
-            const atendimentoData = apt.atendimento_nome ? {
-              nome: apt.atendimento_nome,
-              tipo: apt.atendimento_tipo
-            } : apt.atendimentos;
-
-            return {
-              id: apt.id,
-              paciente_id: apt.paciente_id,
-              medico_id: apt.medico_id,
-              atendimento_id: apt.atendimento_id,
-              data_agendamento: apt.data_agendamento,
-              hora_agendamento: apt.hora_agendamento,
-              status: apt.status,
-              observacoes: apt.observacoes,
-              created_at: apt.created_at,
-              updated_at: apt.updated_at,
-              criado_por: apt.criado_por,
-              criado_por_user_id: apt.criado_por_user_id,
-              cliente_id: apt.cliente_id || 'default-client-id',
-              // Campos adicionais para cancelamento e confirmação
-              cancelado_em: apt.cancelado_em || null,
-              cancelado_por: apt.cancelado_por || null,
-              cancelado_por_user_id: apt.cancelado_por_user_id || null,
-              confirmado_em: apt.confirmado_em || null,
-              confirmado_por: apt.confirmado_por || null,
-              confirmado_por_user_id: apt.confirmado_por_user_id || null,
-              convenio: pacienteData?.convenio,
-              pacientes: {
-                id: apt.paciente_id,
-                nome_completo: pacienteData?.nome_completo || '',
-                convenio: pacienteData?.convenio || '',
-                celular: pacienteData?.celular || '',
-                telefone: pacienteData?.telefone || '',
-                data_nascimento: pacienteData?.data_nascimento || '',
-                created_at: '',
-                updated_at: '',
-                cliente_id: apt.cliente_id || 'default-client-id'
-              },
-              medicos: {
-                id: apt.medico_id,
-                nome: medicoData?.nome || '',
-                especialidade: medicoData?.especialidade || '',
-                ativo: true,
-                crm: '',
-                created_at: '',
-                updated_at: '',
-                convenios_aceitos: [],
-                convenios_restricoes: null,
-                horarios: null,
-                idade_maxima: null,
-                idade_minima: null,
-                observacoes: '',
-                cliente_id: apt.cliente_id || 'default-client-id'
-              },
-              atendimentos: {
-                id: apt.atendimento_id,
-                nome: atendimentoData?.nome || '',
-                tipo: atendimentoData?.tipo || '',
-                ativo: true,
-                medico_id: apt.medico_id,
-                medico_nome: medicoData?.nome || '',
-                created_at: '',
-                updated_at: '',
-                codigo: '',
-                coparticipacao_unimed_20: 0,
-                coparticipacao_unimed_40: 0,
-                forma_pagamento: 'convenio',
-                horarios: null,
-                observacoes: '',
-                restricoes: null,
-                valor_particular: 0,
-                cliente_id: apt.cliente_id || 'default-client-id'
-              }
-            };
-          });
-
-          logger.info('Agendamentos carregados com sucesso', { count: transformedAppointments.length }, 'APPOINTMENTS');
-          return transformedAppointments;
-        } catch (error) {
-          logger.error('Erro ao buscar agendamentos', error, 'APPOINTMENTS');
+        if (error) {
+          logger.error('Erro na consulta de agendamentos otimizada', error, 'APPOINTMENTS');
           throw error;
         }
+
+        // Transformar para o formato esperado
+        const transformedAppointments = (appointmentsWithRelations || []).map(apt => ({
+          id: apt.id,
+          paciente_id: apt.paciente_id,
+          medico_id: apt.medico_id,
+          atendimento_id: apt.atendimento_id,
+          data_agendamento: apt.data_agendamento,
+          hora_agendamento: apt.hora_agendamento,
+          status: apt.status,
+          observacoes: apt.observacoes,
+          created_at: apt.created_at,
+          updated_at: apt.updated_at,
+          criado_por: apt.criado_por,
+          criado_por_user_id: apt.criado_por_user_id,
+          // Campos adicionais para cancelamento e confirmação
+          cancelado_em: null,
+          cancelado_por: null,
+          cancelado_por_user_id: null,
+          confirmado_em: null,
+          confirmado_por: null,
+          confirmado_por_user_id: null,
+          convenio: apt.paciente_convenio,
+          pacientes: {
+            id: apt.paciente_id,
+            nome_completo: apt.paciente_nome,
+            convenio: apt.paciente_convenio,
+            celular: apt.paciente_celular,
+            telefone: apt.paciente_telefone || '',
+            data_nascimento: apt.paciente_data_nascimento || '',
+            created_at: '',
+            updated_at: ''
+          },
+          medicos: {
+            id: apt.medico_id,
+            nome: apt.medico_nome,
+            especialidade: apt.medico_especialidade,
+            ativo: true,
+            crm: '',
+            created_at: '',
+            updated_at: '',
+            convenios_aceitos: [],
+            convenios_restricoes: null,
+            horarios: null,
+            idade_maxima: null,
+            idade_minima: null,
+            observacoes: ''
+          },
+          atendimentos: {
+            id: apt.atendimento_id,
+            nome: apt.atendimento_nome,
+            tipo: apt.atendimento_tipo,
+            ativo: true,
+            medico_id: apt.medico_id,
+            medico_nome: apt.medico_nome,
+            created_at: '',
+            updated_at: '',
+            codigo: '',
+            coparticipacao_unimed_20: 0,
+            coparticipacao_unimed_40: 0,
+            forma_pagamento: 'convenio',
+            horarios: null,
+            observacoes: '',
+            valor_convenio: 0,
+            valor_particular: 0,
+            restricoes: null
+          }
+        }));
+
+        logger.info('Agendamentos carregados com sucesso via RPC', { count: transformedAppointments.length }, 'APPOINTMENTS');
+        return transformedAppointments;
       }, 'fetch_appointments', 'GET');
-  }, [measureApiCall, getTables]);
+  }, [measureApiCall]);
 
   // Usar cache otimizado para buscar agendamentos
   const { data: appointments, loading, error, refetch, invalidateCache, forceRefetch } = useOptimizedQuery<AppointmentWithRelations[]>(

@@ -15,24 +15,27 @@ export const useBackupSystem = () => {
 
   const getBackupStatus = async () => {
     try {
-      // Sistema simplificado - consultar logs do sistema
-      const { data: lastLogData } = await supabase
-        .from('system_logs')
-        .select('timestamp, message')
-        .ilike('message', '%backup%')
-        .order('timestamp', { ascending: false })
+      // Buscar último backup
+      const { data: lastBackupData } = await supabase
+        .from('system_backups')
+        .select('created_at, backup_type')
+        .order('created_at', { ascending: false })
         .limit(1)
-        .maybeSingle();
+        .single();
 
-      // Buscar total de logs de backup
+      // Buscar total de backups
       const { count: totalBackups } = await supabase
-        .from('system_logs')
-        .select('*', { count: 'exact', head: true })
-        .ilike('message', '%backup%');
+        .from('system_backups')
+        .select('*', { count: 'exact', head: true });
+
+      // Buscar status do cron job
+      const { data: cronStatus } = await supabase
+        .rpc('get_backup_cron_status')
+        .single();
 
       setStatus({
-        lastBackup: lastLogData?.timestamp,
-        cronJobActive: false, // Simplificado por enquanto
+        lastBackup: lastBackupData?.created_at,
+        cronJobActive: cronStatus?.active || false,
         totalBackups: totalBackups || 0
       });
 

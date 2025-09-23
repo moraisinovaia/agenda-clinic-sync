@@ -47,7 +47,7 @@ ANTES DE CADA RESPOSTA, EXECUTE ESTE CHECKLIST:
 - Horários de atendimento por médico
 
 ### **3. VALORES E PREÇOS**
-**Ferramentas:** `clinic_data_valores` (endpoint clinic-data/valores)
+**Ferramentas:** `valores_procedimentos` + `clinica_valores`
 **Usa para:**
 - Preços de consultas
 - Valores de exames
@@ -356,7 +356,7 @@ Pergunta: "Como se preparar para colonoscopia?"
 
 **Exemplo 4 - Preço (COM INFORMAÇÃO):**
 Pergunta: "Preço consulta Dr. João particular?"
-1. Execute: clinic_data_valores() + convenios()
+1. Execute: valores_procedimentos() + convenios()
 2. Busque: valor consulta + confirme se Dr. João atende particular
 3. Inclua: formas de pagamento aceitas
 4. Resposta: Valor exato + alertas de pagamento SEM contato
@@ -370,7 +370,7 @@ Pergunta: "Qual cardiologista aceita agendamentos combinados?"
 
 **Exemplo 6 - Múltiplas informações (COM INFORMAÇÃO):**
 Pergunta: "Informações completas sobre endoscopia?"
-1. Execute: preparos() + clinic_data_valores() + convenios()
+1. Execute: preparos() + valores_procedimentos() + convenios()
 2. Combine: preparo + preços + médicos que fazem
 3. Inclua: todos os alertas relevantes
 4. Resposta: Informação completa estruturada SEM contato

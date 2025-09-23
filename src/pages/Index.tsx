@@ -22,8 +22,8 @@ import { SystemHealthDashboard } from '@/components/dashboard/SystemHealthDashbo
 import { DoctorsView } from '@/components/dashboard/DoctorsView';
 import { DashboardActions } from '@/components/dashboard/DashboardActions';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
+import { AlertSystem } from '@/components/alerts/AlertSystem';
 import { UserApprovalPanel } from '@/components/admin/UserApprovalPanel';
-import { ClienteManager } from '@/components/admin/ClienteManager';
 import { 
   LazyDashboard, 
   LazySchedulingForm, 
@@ -44,6 +44,10 @@ import { Button } from '@/components/ui/button';
 import { NavigationHeader } from '@/components/ui/navigation-header';
 import { AuthTest } from '@/components/AuthTest';
 import PendingApproval from '@/components/PendingApproval';
+import { WhatsAppAgentDashboard } from '@/components/whatsapp-agent/WhatsAppAgentDashboard';
+import { WhatsAppTestPanel } from '@/components/admin/WhatsAppTestPanel';
+
+import { N8nWebhookButton } from '@/components/admin/N8nWebhookButton';
 
 const Index = () => {
   const { user, profile, loading: authLoading, signOut } = useStableAuth();
@@ -131,8 +135,8 @@ const Index = () => {
     {
       key: 'a',
       ctrlKey: true,
-      action: () => setViewMode('doctors'),
-      description: 'Ctrl+A - Dashboard'
+      action: () => setViewMode('alertas'),
+      description: 'Ctrl+A - Alertas'
     },
     {
       key: 'f',
@@ -202,7 +206,7 @@ const Index = () => {
 
   // Convênios únicos disponíveis - preservando capitalização original
   const uniqueConvenios = Array.from(
-    doctors.flatMap((doctor: any) => (doctor.convenios_aceitos as string[]) || [])
+    doctors.flatMap(doctor => doctor.convenios_aceitos || [])
       .reduce((map, convenio) => {
         const key = convenio.toLowerCase();
         if (!map.has(key)) {
@@ -211,7 +215,7 @@ const Index = () => {
         return map;
       }, new Map())
       .values()
-  ).filter(Boolean).sort() as string[];
+  ).filter(Boolean).sort();
   
   
   // Redirecionar para login se não autenticado
@@ -401,42 +405,41 @@ const Index = () => {
         {viewMode === 'doctors' && (
           <div className="space-y-6">
             
-            {/* Admin Panel - Apenas 3 módulos principais */}
-            {profile?.role === 'admin' && profile?.status === 'aprovado' ? (
-              <div className="space-y-6">
-                <div className="grid gap-6">
-                  <UserApprovalPanel />
-                  <ClienteManager />
+            {/* User Approval Panel for Admins */}
+            {profile?.role === 'admin' && profile?.status === 'aprovado' && (
+              <>
+                <UserApprovalPanel />
+                <div className="flex flex-wrap gap-4 mb-6">
+                  <WhatsAppTestPanel />
+                  <N8nWebhookButton />
                 </div>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                  <div className="lg:col-span-3">
-                    <StatsCards doctors={doctors} appointments={appointments} />
-                    
-                    <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                      <div className="relative max-w-md">
-                        {/* This will be moved to DoctorsView component */}
-                      </div>
-                      <DashboardActions onViewChange={setViewMode} />
-                    </div>
-
-                    <DoctorsView
-                      doctors={doctors}
-                      searchTerm={searchTerm}
-                      onSearchChange={setSearchTerm}
-                      onScheduleDoctor={handleScheduleDoctor}
-                      onViewSchedule={handleViewSchedule}
-                    />
-                  </div>
-                  
-                  <div className="lg:col-span-1">
-                    <SystemMonitor />
-                  </div>
-                </div>
-              </div>
+              </>
             )}
+            
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+              <div className="lg:col-span-3">
+                <StatsCards doctors={doctors} appointments={appointments} />
+                
+                <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                  <div className="relative max-w-md">
+                    {/* This will be moved to DoctorsView component */}
+                  </div>
+                  <DashboardActions onViewChange={setViewMode} />
+                </div>
+
+                <DoctorsView
+                  doctors={doctors}
+                  searchTerm={searchTerm}
+                  onSearchChange={setSearchTerm}
+                  onScheduleDoctor={handleScheduleDoctor}
+                  onViewSchedule={handleViewSchedule}
+                />
+              </div>
+              
+              <div className="lg:col-span-1">
+                <SystemMonitor />
+              </div>
+            </div>
           </div>
         )}
 
@@ -651,7 +654,23 @@ const Index = () => {
           </div>
         )}
 
+        {viewMode === 'alertas' && (
+          <AlertSystem />
+        )}
 
+        {viewMode === 'whatsapp-agent' && (
+          <div className="space-y-6">
+            <NavigationHeader
+              title="Agente WhatsApp"
+              subtitle="Teste e monitore as funcionalidades do agente LLM para WhatsApp"
+              onBack={goBack}
+              onHome={() => setViewMode('doctors')}
+              showBack={true}
+              showHome={true}
+            />
+            <WhatsAppAgentDashboard />
+          </div>
+        )}
       </div>
 
       {/* Modal de Agendamento Múltiplo */}

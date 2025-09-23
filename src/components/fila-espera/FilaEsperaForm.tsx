@@ -108,18 +108,6 @@ export function FilaEsperaForm({
     }
 
     try {
-      // Primeiro, obter o cliente_id do usuário atual
-      const { data: clienteId, error: clienteError } = await supabase.rpc('get_user_cliente_id');
-      
-      if (clienteError || !clienteId) {
-        toast({
-          title: 'Erro de autenticação',
-          description: 'Não foi possível identificar o cliente. Faça login novamente.',
-          variant: 'destructive',
-        });
-        return;
-      }
-
       const { data, error } = await supabase
         .from('pacientes')
         .insert({
@@ -127,7 +115,6 @@ export function FilaEsperaForm({
           data_nascimento: pacienteData.dataNascimento,
           convenio: pacienteData.convenio,
           celular: pacienteData.celular,
-          cliente_id: clienteId,
         })
         .select()
         .single();
