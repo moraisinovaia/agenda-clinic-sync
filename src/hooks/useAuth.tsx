@@ -18,7 +18,7 @@ interface Profile {
   ativo: boolean;
   status: string;
   username?: string;
-  cliente_id?: string;
+  cliente_id: string; // Removido o "?" pois agora sempre terá cliente_id
   created_at: string;
   updated_at: string;
 }

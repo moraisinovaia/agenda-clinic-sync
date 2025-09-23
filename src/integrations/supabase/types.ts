@@ -1394,6 +1394,7 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: {
           ativo: boolean
+          cliente_id: string
           created_at: string
           email: string
           id: string
