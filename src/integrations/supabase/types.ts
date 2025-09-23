@@ -227,53 +227,6 @@ export type Database = {
           },
         ]
       }
-      client_configurations: {
-        Row: {
-          category: string
-          cliente_id: string
-          created_at: string | null
-          description: string | null
-          editable: boolean | null
-          id: string
-          key: string
-          updated_at: string | null
-          value: string
-          value_type: string | null
-        }
-        Insert: {
-          category: string
-          cliente_id: string
-          created_at?: string | null
-          description?: string | null
-          editable?: boolean | null
-          id?: string
-          key: string
-          updated_at?: string | null
-          value: string
-          value_type?: string | null
-        }
-        Update: {
-          category?: string
-          cliente_id?: string
-          created_at?: string | null
-          description?: string | null
-          editable?: boolean | null
-          id?: string
-          key?: string
-          updated_at?: string | null
-          value?: string
-          value_type?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "client_configurations_cliente_id_fkey"
-            columns: ["cliente_id"]
-            isOneToOne: false
-            referencedRelation: "clientes"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       clientes: {
         Row: {
           ativo: boolean | null
@@ -777,45 +730,6 @@ export type Database = {
           type?: string | null
           updated_at?: string | null
           value?: string
-        }
-        Relationships: []
-      }
-      valores_procedimentos: {
-        Row: {
-          categoria: string
-          codigo_procedimento: string | null
-          created_at: string | null
-          forma_pagamento: string | null
-          id: number
-          observacoes: string | null
-          procedimento: string
-          valor_principal: number | null
-          valor_unimed_coparticipacao_20: number | null
-          valor_unimed_coparticipacao_40: number | null
-        }
-        Insert: {
-          categoria: string
-          codigo_procedimento?: string | null
-          created_at?: string | null
-          forma_pagamento?: string | null
-          id?: number
-          observacoes?: string | null
-          procedimento: string
-          valor_principal?: number | null
-          valor_unimed_coparticipacao_20?: number | null
-          valor_unimed_coparticipacao_40?: number | null
-        }
-        Update: {
-          categoria?: string
-          codigo_procedimento?: string | null
-          created_at?: string | null
-          forma_pagamento?: string | null
-          id?: number
-          observacoes?: string | null
-          procedimento?: string
-          valor_principal?: number | null
-          valor_unimed_coparticipacao_20?: number | null
-          valor_unimed_coparticipacao_40?: number | null
         }
         Relationships: []
       }
