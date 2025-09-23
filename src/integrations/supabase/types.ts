@@ -821,61 +821,7 @@ export type Database = {
       }
     }
     Views: {
-      vw_agente_medicos: {
-        Row: {
-          convenios_aceitos: string[] | null
-          convenios_restricoes: Json | null
-          coparticipacao_20: number | null
-          coparticipacao_40: number | null
-          especialidade: string | null
-          forma_pagamento: string | null
-          horarios: Json | null
-          idade_minima: number | null
-          medico: string | null
-          nome_atendimento: string | null
-          obs_atendimento: string | null
-          obs_medico: string | null
-          tipo_atendimento: string | null
-          valor_particular: number | null
-        }
-        Relationships: []
-      }
-      vw_agente_preparos: {
-        Row: {
-          dias_suspensao: number | null
-          exame: string | null
-          instrucoes: Json | null
-          itens_levar: string | null
-          jejum_horas: number | null
-          medicacao_suspender: string | null
-          nome: string | null
-          observacoes_especiais: string | null
-          restricoes_alimentares: string | null
-        }
-        Insert: {
-          dias_suspensao?: number | null
-          exame?: string | null
-          instrucoes?: Json | null
-          itens_levar?: string | null
-          jejum_horas?: number | null
-          medicacao_suspender?: string | null
-          nome?: string | null
-          observacoes_especiais?: string | null
-          restricoes_alimentares?: string | null
-        }
-        Update: {
-          dias_suspensao?: number | null
-          exame?: string | null
-          instrucoes?: Json | null
-          itens_levar?: string | null
-          jejum_horas?: number | null
-          medicacao_suspender?: string | null
-          nome?: string | null
-          observacoes_especiais?: string | null
-          restricoes_alimentares?: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       aprovar_usuario: {
