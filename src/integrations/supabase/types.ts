@@ -1366,6 +1366,21 @@ export type Database = {
         Args: { p_agendamento_id: string }
         Returns: Json
       }
+      get_approved_users_safe: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          created_at: string
+          data_aprovacao: string
+          email: string
+          email_confirmed: boolean
+          id: string
+          nome: string
+          role: string
+          status: string
+          user_id: string
+          username: string
+        }[]
+      }
       get_backup_cron_status: {
         Args: Record<PropertyKey, never>
         Returns: {

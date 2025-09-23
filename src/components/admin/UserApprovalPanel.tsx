@@ -40,61 +40,81 @@ export function UserApprovalPanel() {
 
   const fetchPendingUsers = async () => {
     try {
-      // Usar a função segura para buscar usuários pendentes
+      console.log('🔍 Buscando usuários pendentes...');
+      
+      // Usar a função RPC corrigida
       const { data, error } = await supabase
         .rpc('get_pending_users_safe');
 
       if (error) {
-        console.error('Erro ao buscar usuários pendentes:', error);
+        console.error('❌ Erro ao buscar usuários pendentes:', error);
         toast({
           title: 'Erro',
-          description: 'Não foi possível carregar usuários pendentes',
+          description: 'Não foi possível carregar usuários pendentes: ' + error.message,
           variant: 'destructive',
         });
+        setPendingUsers([]);
         return;
       }
 
+      console.log('✅ Usuários pendentes encontrados:', data?.length || 0);
       setPendingUsers(data || []);
     } catch (error) {
-      console.error('Erro ao buscar usuários pendentes:', error);
+      console.error('❌ Erro inesperado ao buscar usuários pendentes:', error);
       toast({
         title: 'Erro',
-        description: 'Erro inesperado ao carregar usuários',
+        description: 'Erro inesperado ao carregar usuários pendentes',
         variant: 'destructive',
       });
+      setPendingUsers([]);
     }
   };
 
   const fetchApprovedUsers = async () => {
     try {
-      // Query simplificada - a política RLS já exclui o usuário atual
-      const { data: profilesData, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, nome, email, username, role, status, created_at, data_aprovacao, user_id')
-        .eq('status', 'aprovado')
-        .order('data_aprovacao', { ascending: false });
+      console.log('🔍 Buscando usuários aprovados...');
+      
+      // Usar a função RPC que já inclui verificação de email
+      const { data, error } = await supabase
+        .rpc('get_approved_users_safe');
 
-      if (profilesError) {
-        console.error('Erro ao buscar usuários aprovados:', profilesError);
-        toast({
-          title: 'Aviso',
-          description: 'Não foi possível carregar alguns usuários aprovados',
-          variant: 'default',
-        });
-        setApprovedUsers([]);
+      if (error) {
+        console.error('❌ Erro ao buscar usuários aprovados:', error);
+        // Fallback para query direta se a RPC falhar
+        console.log('🔄 Tentando query direta como fallback...');
+        
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('profiles')
+          .select('id, nome, email, username, role, status, created_at, data_aprovacao, user_id')
+          .eq('status', 'aprovado')
+          .order('data_aprovacao', { ascending: false });
+
+        if (fallbackError) {
+          console.error('❌ Erro também no fallback:', fallbackError);
+          toast({
+            title: 'Aviso',
+            description: 'Não foi possível carregar usuários aprovados',
+            variant: 'default',
+          });
+          setApprovedUsers([]);
+          return;
+        }
+
+        // Usar dados do fallback
+        const usersWithEmailStatus: ApprovedUser[] = (fallbackData || []).map(user => ({
+          ...user,
+          email_confirmed: true // Assumir confirmado por não conseguir verificar
+        }));
+
+        setApprovedUsers(usersWithEmailStatus);
+        console.log('✅ Usuários aprovados carregados via fallback:', usersWithEmailStatus.length);
         return;
       }
 
-      // Assumir que email está confirmado (já que corrigimos isso no backend)
-      const usersWithEmailStatus = (profilesData || []).map(profile => ({
-        ...profile,
-        email_confirmed: true // Simplificado - assumindo confirmado
-      }));
-
-      setApprovedUsers(usersWithEmailStatus);
-      console.log('✅ Usuários aprovados carregados:', usersWithEmailStatus.length);
+      console.log('✅ Usuários aprovados encontrados:', data?.length || 0);
+      setApprovedUsers(data || []);
     } catch (error) {
-      console.error('Erro inesperado ao buscar usuários aprovados:', error);
+      console.error('❌ Erro inesperado ao buscar usuários aprovados:', error);
       setApprovedUsers([]);
     }
   };
@@ -103,13 +123,18 @@ export function UserApprovalPanel() {
   useEffect(() => {
     let isMounted = true;
     
+    console.log('🔄 UserApprovalPanel useEffect - isAdmin:', isAdmin, 'isApproved:', isApproved, 'profile:', profile?.nome);
+    
     const loadData = async () => {
       // Só admins podem ver este painel
       if (isAdmin && isApproved) {
+        console.log('✅ Usuário é admin aprovado, carregando dados...');
         await Promise.all([
           fetchPendingUsers(),
           fetchApprovedUsers()
         ]);
+      } else {
+        console.log('⚠️ Usuário não é admin aprovado, não carregando dados');
       }
       
       if (isMounted) {
@@ -120,6 +145,7 @@ export function UserApprovalPanel() {
     if (profile) { // Só executa quando profile está definido
       loadData();
     } else {
+      console.log('⚠️ Profile ainda não definido, aguardando...');
       setLoading(false);
     }
 
