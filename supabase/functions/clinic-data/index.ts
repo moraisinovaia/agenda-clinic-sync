@@ -319,15 +319,26 @@ serve(async (req) => {
     // GET /clinic-data/valores - Listar valores de procedimentos
     if (method === 'GET' && pathParts[1] === 'valores') {
       const { data: valores, error } = await supabase
-        .from('valores_procedimentos')
-        .select('*')
-        .order('categoria', { ascending: true })
-        .order('procedimento', { ascending: true });
+        .from('atendimentos')
+        .select('nome, tipo, valor_particular, coparticipacao_unimed_20, coparticipacao_unimed_40, forma_pagamento')
+        .eq('ativo', true)
+        .order('tipo', { ascending: true })
+        .order('nome', { ascending: true });
 
       if (error) throw error;
 
+      // Transformar dados para manter compatibilidade
+      const valoresFormatados = valores?.map(item => ({
+        procedimento: item.nome,
+        categoria: item.tipo,
+        valor_principal: item.valor_particular,
+        valor_unimed_coparticipacao_20: item.coparticipacao_unimed_20,
+        valor_unimed_coparticipacao_40: item.coparticipacao_unimed_40,
+        forma_pagamento: item.forma_pagamento
+      })) || [];
+
       return new Response(
-        JSON.stringify({ success: true, data: valores }),
+        JSON.stringify({ success: true, data: valoresFormatados }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
