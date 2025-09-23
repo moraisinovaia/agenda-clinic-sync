@@ -67,17 +67,20 @@ export function UserApprovalPanel() {
 
   const fetchApprovedUsers = async () => {
     try {
-      // Usar query mais segura sem dependências circulares
+      // Query simplificada - a política RLS já exclui o usuário atual
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
         .select('id, nome, email, username, role, status, created_at, data_aprovacao, user_id')
         .eq('status', 'aprovado')
-        .neq('user_id', (await supabase.auth.getUser()).data.user?.id || '') // Excluir próprio usuário
         .order('data_aprovacao', { ascending: false });
 
       if (profilesError) {
-        // Não mostrar erro se for relacionado a RLS - apenas log
-        console.warn('Aviso ao buscar usuários aprovados:', profilesError);
+        console.error('Erro ao buscar usuários aprovados:', profilesError);
+        toast({
+          title: 'Aviso',
+          description: 'Não foi possível carregar alguns usuários aprovados',
+          variant: 'default',
+        });
         setApprovedUsers([]);
         return;
       }
@@ -89,9 +92,10 @@ export function UserApprovalPanel() {
       }));
 
       setApprovedUsers(usersWithEmailStatus);
+      console.log('✅ Usuários aprovados carregados:', usersWithEmailStatus.length);
     } catch (error) {
-      console.warn('Aviso ao buscar usuários aprovados:', error);
-      setApprovedUsers([]); // Falhar silenciosamente para evitar loops
+      console.error('Erro inesperado ao buscar usuários aprovados:', error);
+      setApprovedUsers([]);
     }
   };
 
