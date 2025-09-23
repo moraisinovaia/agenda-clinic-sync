@@ -1405,16 +1405,12 @@ export type Database = {
           schedule: string
         }[]
       }
-      get_clientes_for_admin: {
-        Args: { requesting_user_id: string }
+      get_clientes_simple: {
+        Args: Record<PropertyKey, never>
         Returns: {
           ativo: boolean
-          configuracoes: Json
-          created_at: string
           id: string
-          logo_url: string
           nome: string
-          updated_at: string
         }[]
       }
       get_current_user_profile: {
