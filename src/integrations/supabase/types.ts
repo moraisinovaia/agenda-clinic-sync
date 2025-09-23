@@ -290,7 +290,7 @@ export type Database = {
       atendimentos: {
         Row: {
           ativo: boolean | null
-          cliente_id: string | null
+          cliente_id: string
           codigo: string | null
           coparticipacao_unimed_20: number | null
           coparticipacao_unimed_40: number | null
@@ -308,7 +308,7 @@ export type Database = {
         }
         Insert: {
           ativo?: boolean | null
-          cliente_id?: string | null
+          cliente_id: string
           codigo?: string | null
           coparticipacao_unimed_20?: number | null
           coparticipacao_unimed_40?: number | null
@@ -326,7 +326,7 @@ export type Database = {
         }
         Update: {
           ativo?: boolean | null
-          cliente_id?: string | null
+          cliente_id?: string
           codigo?: string | null
           coparticipacao_unimed_20?: number | null
           coparticipacao_unimed_40?: number | null
@@ -350,11 +350,18 @@ export type Database = {
             referencedRelation: "medicos"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "fk_atendimentos_cliente"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
         ]
       }
       bloqueios_agenda: {
         Row: {
-          cliente_id: string | null
+          cliente_id: string
           created_at: string
           criado_por: string
           criado_por_user_id: string | null
@@ -367,7 +374,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          cliente_id?: string | null
+          cliente_id: string
           created_at?: string
           criado_por?: string
           criado_por_user_id?: string | null
@@ -380,7 +387,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          cliente_id?: string | null
+          cliente_id?: string
           created_at?: string
           criado_por?: string
           criado_por_user_id?: string | null
@@ -392,7 +399,15 @@ export type Database = {
           status?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_bloqueios_cliente"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       clientes: {
         Row: {
@@ -539,7 +554,7 @@ export type Database = {
         Row: {
           agendamento_id: string | null
           atendimento_id: string
-          cliente_id: string | null
+          cliente_id: string
           created_at: string
           data_limite: string | null
           data_preferida: string
@@ -557,7 +572,7 @@ export type Database = {
         Insert: {
           agendamento_id?: string | null
           atendimento_id: string
-          cliente_id?: string | null
+          cliente_id: string
           created_at?: string
           data_limite?: string | null
           data_preferida: string
@@ -575,7 +590,7 @@ export type Database = {
         Update: {
           agendamento_id?: string | null
           atendimento_id?: string
-          cliente_id?: string | null
+          cliente_id?: string
           created_at?: string
           data_limite?: string | null
           data_preferida?: string
@@ -618,6 +633,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_exames_combinaveis"
             referencedColumns: ["atendimento2_id"]
+          },
+          {
+            foreignKeyName: "fk_fila_cliente"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "fk_fila_medico"
@@ -766,7 +788,7 @@ export type Database = {
       medicos: {
         Row: {
           ativo: boolean | null
-          cliente_id: string | null
+          cliente_id: string
           convenios_aceitos: string[] | null
           convenios_restricoes: Json | null
           created_at: string | null
@@ -780,7 +802,7 @@ export type Database = {
         }
         Insert: {
           ativo?: boolean | null
-          cliente_id?: string | null
+          cliente_id: string
           convenios_aceitos?: string[] | null
           convenios_restricoes?: Json | null
           created_at?: string | null
@@ -794,7 +816,7 @@ export type Database = {
         }
         Update: {
           ativo?: boolean | null
-          cliente_id?: string | null
+          cliente_id?: string
           convenios_aceitos?: string[] | null
           convenios_restricoes?: Json | null
           created_at?: string | null
@@ -806,7 +828,15 @@ export type Database = {
           nome?: string
           observacoes?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_medicos_cliente"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       metricas_diarias: {
         Row: {
@@ -931,7 +961,7 @@ export type Database = {
       pacientes: {
         Row: {
           celular: string | null
-          cliente_id: string | null
+          cliente_id: string
           convenio: string
           created_at: string
           data_nascimento: string
@@ -942,7 +972,7 @@ export type Database = {
         }
         Insert: {
           celular?: string | null
-          cliente_id?: string | null
+          cliente_id: string
           convenio: string
           created_at?: string
           data_nascimento: string
@@ -953,7 +983,7 @@ export type Database = {
         }
         Update: {
           celular?: string | null
-          cliente_id?: string | null
+          cliente_id?: string
           convenio?: string
           created_at?: string
           data_nascimento?: string
@@ -962,11 +992,19 @@ export type Database = {
           telefone?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_pacientes_cliente"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       preparos: {
         Row: {
-          cliente_id: string | null
+          cliente_id: string
           created_at: string | null
           dias_suspensao: number | null
           exame: string
@@ -984,7 +1022,7 @@ export type Database = {
           valor_particular: number | null
         }
         Insert: {
-          cliente_id?: string | null
+          cliente_id: string
           created_at?: string | null
           dias_suspensao?: number | null
           exame: string
@@ -1002,7 +1040,7 @@ export type Database = {
           valor_particular?: number | null
         }
         Update: {
-          cliente_id?: string | null
+          cliente_id?: string
           created_at?: string | null
           dias_suspensao?: number | null
           exame?: string
@@ -1019,13 +1057,21 @@ export type Database = {
           valor_convenio?: number | null
           valor_particular?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_preparos_cliente"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
           aprovado_por: string | null
           ativo: boolean | null
-          cliente_id: string | null
+          cliente_id: string
           created_at: string | null
           data_aprovacao: string | null
           email: string
@@ -1040,7 +1086,7 @@ export type Database = {
         Insert: {
           aprovado_por?: string | null
           ativo?: boolean | null
-          cliente_id?: string | null
+          cliente_id: string
           created_at?: string | null
           data_aprovacao?: string | null
           email: string
@@ -1055,7 +1101,7 @@ export type Database = {
         Update: {
           aprovado_por?: string | null
           ativo?: boolean | null
-          cliente_id?: string | null
+          cliente_id?: string
           created_at?: string | null
           data_aprovacao?: string | null
           email?: string
@@ -1068,6 +1114,13 @@ export type Database = {
           username?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_profiles_cliente"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "profiles_aprovado_por_fkey"
             columns: ["aprovado_por"]
@@ -1798,6 +1851,10 @@ export type Database = {
           role: string
           username: string
         }[]
+      }
+      get_user_cliente_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string
       }
       get_user_role_safe: {
         Args: { p_user_id: string }
