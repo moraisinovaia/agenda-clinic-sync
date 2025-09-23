@@ -1004,7 +1004,7 @@ export type Database = {
         Row: {
           aprovado_por: string | null
           ativo: boolean | null
-          cliente_id: string
+          cliente_id: string | null
           created_at: string | null
           data_aprovacao: string | null
           email: string
@@ -1019,7 +1019,7 @@ export type Database = {
         Insert: {
           aprovado_por?: string | null
           ativo?: boolean | null
-          cliente_id: string
+          cliente_id?: string | null
           created_at?: string | null
           data_aprovacao?: string | null
           email: string
@@ -1034,7 +1034,7 @@ export type Database = {
         Update: {
           aprovado_por?: string | null
           ativo?: boolean | null
-          cliente_id?: string
+          cliente_id?: string | null
           created_at?: string | null
           data_aprovacao?: string | null
           email?: string
@@ -1141,7 +1141,9 @@ export type Database = {
     }
     Functions: {
       aprovar_usuario: {
-        Args: { p_aprovador_id: string; p_user_id: string }
+        Args:
+          | { p_aprovador_id: string; p_cliente_id: string; p_user_id: string }
+          | { p_aprovador_id: string; p_user_id: string }
         Returns: Json
       }
       atualizar_dados_paciente: {

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, Check, X, Users, Clock, CheckCircle, XCircle, Mail, MailCheck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -30,9 +31,17 @@ interface ApprovedUser {
   data_aprovacao: string;
 }
 
+interface Cliente {
+  id: string;
+  nome: string;
+  ativo: boolean;
+}
+
 export function UserApprovalPanel() {
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([]);
   const [approvedUsers, setApprovedUsers] = useState<ApprovedUser[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [selectedCliente, setSelectedCliente] = useState<{[key: string]: string}>({});
   const [loading, setLoading] = useState(true);
   const [processingUser, setProcessingUser] = useState<string | null>(null);
   const { toast } = useToast();
@@ -95,6 +104,25 @@ export function UserApprovalPanel() {
     }
   };
 
+  const fetchClientes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('clientes')
+        .select('id, nome, ativo')
+        .eq('ativo', true)
+        .order('nome');
+
+      if (error) {
+        console.error('Erro ao buscar clientes:', error);
+        return;
+      }
+
+      setClientes(data || []);
+    } catch (error) {
+      console.error('Erro ao buscar clientes:', error);
+    }
+  };
+
   // Usar useEffect mais estável que não causa loops
   useEffect(() => {
     let isMounted = true;
@@ -104,7 +132,8 @@ export function UserApprovalPanel() {
       if (isAdmin && isApproved) {
         await Promise.all([
           fetchPendingUsers(),
-          fetchApprovedUsers()
+          fetchApprovedUsers(),
+          fetchClientes()
         ]);
       }
       
@@ -135,13 +164,24 @@ export function UserApprovalPanel() {
       return;
     }
 
-    console.log('🔄 Iniciando aprovação de usuário:', { userId, aprovadorId: profile.id });
+    const clienteId = selectedCliente[userId];
+    if (!clienteId) {
+      toast({
+        title: 'Cliente não selecionado',
+        description: 'Selecione um cliente antes de aprovar o usuário',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    console.log('🔄 Iniciando aprovação de usuário:', { userId, aprovadorId: profile.id, clienteId });
     setProcessingUser(userId);
     
     try {
       const { data, error } = await supabase.rpc('aprovar_usuario', {
         p_user_id: userId,
-        p_aprovador_id: profile.id
+        p_aprovador_id: profile.id,
+        p_cliente_id: clienteId
       });
 
       console.log('📡 Resposta da função aprovar_usuario:', { data, error });
@@ -158,11 +198,16 @@ export function UserApprovalPanel() {
 
       toast({
         title: 'Usuário aprovado',
-        description: 'O usuário foi aprovado e pode acessar o sistema',
+        description: 'O usuário foi aprovado e vinculado ao cliente',
       });
 
       // Remover da lista local e recarregar dados
       setPendingUsers(prev => prev.filter(user => user.id !== userId));
+      setSelectedCliente(prev => {
+        const newState = { ...prev };
+        delete newState[userId];
+        return newState;
+      });
       fetchApprovedUsers();
     } catch (error: any) {
       toast({
@@ -307,6 +352,7 @@ export function UserApprovalPanel() {
                     <TableHead>Email</TableHead>
                     <TableHead>Usuário</TableHead>
                     <TableHead>Função</TableHead>
+                    <TableHead>Cliente</TableHead>
                     <TableHead>Solicitado em</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
@@ -319,6 +365,25 @@ export function UserApprovalPanel() {
                       <TableCell>{user.username}</TableCell>
                       <TableCell>
                         <Badge variant="outline">{user.role}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Select
+                          value={selectedCliente[user.id] || ''}
+                          onValueChange={(value) => 
+                            setSelectedCliente(prev => ({ ...prev, [user.id]: value }))
+                          }
+                        >
+                          <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="Selecionar cliente" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {clientes.map((cliente) => (
+                              <SelectItem key={cliente.id} value={cliente.id}>
+                                {cliente.nome}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
