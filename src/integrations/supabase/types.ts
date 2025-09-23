@@ -90,20 +90,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "agendamentos_atendimento_id_fkey"
-            columns: ["atendimento_id"]
-            isOneToOne: false
-            referencedRelation: "vw_exames_combinaveis"
-            referencedColumns: ["atendimento1_id"]
-          },
-          {
-            foreignKeyName: "agendamentos_atendimento_id_fkey"
-            columns: ["atendimento_id"]
-            isOneToOne: false
-            referencedRelation: "vw_exames_combinaveis"
-            referencedColumns: ["atendimento2_id"]
-          },
-          {
             foreignKeyName: "agendamentos_medico_id_fkey"
             columns: ["medico_id"]
             isOneToOne: false
@@ -288,56 +274,6 @@ export type Database = {
           },
         ]
       }
-      client_usage_metrics: {
-        Row: {
-          agendamentos_cancelados: number | null
-          agendamentos_confirmados: number | null
-          agendamentos_criados: number | null
-          cliente_id: string
-          created_at: string | null
-          id: string
-          metric_date: string
-          pacientes_cadastrados: number | null
-          total_agendamentos: number | null
-          updated_at: string | null
-          usuarios_ativos: number | null
-        }
-        Insert: {
-          agendamentos_cancelados?: number | null
-          agendamentos_confirmados?: number | null
-          agendamentos_criados?: number | null
-          cliente_id: string
-          created_at?: string | null
-          id?: string
-          metric_date?: string
-          pacientes_cadastrados?: number | null
-          total_agendamentos?: number | null
-          updated_at?: string | null
-          usuarios_ativos?: number | null
-        }
-        Update: {
-          agendamentos_cancelados?: number | null
-          agendamentos_confirmados?: number | null
-          agendamentos_criados?: number | null
-          cliente_id?: string
-          created_at?: string | null
-          id?: string
-          metric_date?: string
-          pacientes_cadastrados?: number | null
-          total_agendamentos?: number | null
-          updated_at?: string | null
-          usuarios_ativos?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "client_usage_metrics_cliente_id_fkey"
-            columns: ["cliente_id"]
-            isOneToOne: false
-            referencedRelation: "clientes"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       clientes: {
         Row: {
           ativo: boolean | null
@@ -437,20 +373,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "atendimentos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_fila_atendimento"
-            columns: ["atendimento_id"]
-            isOneToOne: false
-            referencedRelation: "vw_exames_combinaveis"
-            referencedColumns: ["atendimento1_id"]
-          },
-          {
-            foreignKeyName: "fk_fila_atendimento"
-            columns: ["atendimento_id"]
-            isOneToOne: false
-            referencedRelation: "vw_exames_combinaveis"
-            referencedColumns: ["atendimento2_id"]
           },
           {
             foreignKeyName: "fk_fila_cliente"
@@ -784,53 +706,7 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "profiles_aprovado_por_fkey"
-            columns: ["aprovado_por"]
-            isOneToOne: false
-            referencedRelation: "vw_usuarios_pendentes"
-            referencedColumns: ["id"]
-          },
         ]
-      }
-      system_backups: {
-        Row: {
-          backup_type: string
-          config: Json | null
-          created_at: string | null
-          data_size: number | null
-          error_message: string | null
-          expires_at: string | null
-          id: string
-          metadata: Json | null
-          status: string
-          table_count: number | null
-        }
-        Insert: {
-          backup_type: string
-          config?: Json | null
-          created_at?: string | null
-          data_size?: number | null
-          error_message?: string | null
-          expires_at?: string | null
-          id?: string
-          metadata?: Json | null
-          status: string
-          table_count?: number | null
-        }
-        Update: {
-          backup_type?: string
-          config?: Json | null
-          created_at?: string | null
-          data_size?: number | null
-          error_message?: string | null
-          expires_at?: string | null
-          id?: string
-          metadata?: Json | null
-          status?: string
-          table_count?: number | null
-        }
-        Relationships: []
       }
       system_logs: {
         Row: {
@@ -997,41 +873,6 @@ export type Database = {
           nome?: string | null
           observacoes_especiais?: string | null
           restricoes_alimentares?: string | null
-        }
-        Relationships: []
-      }
-      vw_exames_combinaveis: {
-        Row: {
-          atendimento1_id: string | null
-          atendimento1_nome: string | null
-          atendimento1_tipo: string | null
-          atendimento2_id: string | null
-          atendimento2_nome: string | null
-          atendimento2_tipo: string | null
-          compativel: boolean | null
-          medico_id: string | null
-          medico_nome: string | null
-          motivo_compatibilidade: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "atendimentos_medico_id_fkey"
-            columns: ["medico_id"]
-            isOneToOne: false
-            referencedRelation: "medicos"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      vw_usuarios_pendentes: {
-        Row: {
-          aprovado_por_nome: string | null
-          created_at: string | null
-          email: string | null
-          id: string | null
-          nome: string | null
-          role: string | null
-          username: string | null
         }
         Relationships: []
       }
