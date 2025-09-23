@@ -402,35 +402,38 @@ const Index = () => {
       <div className="container mx-auto px-4 py-6">
         {viewMode === 'doctors' && (
           <div className="space-y-6">
-            {/* User Approval Panel for Admins */}
-            {profile?.role === 'admin' && profile?.status === 'aprovado' && (
+            {/* Admin view - apenas gerenciamento de usuários */}
+            {profile?.role === 'admin' && profile?.status === 'aprovado' ? (
               <UserApprovalPanel />
-            )}
-            
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-              <div className="lg:col-span-3">
-                <StatsCards doctors={doctors} appointments={appointments} />
-                
-                <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                  <div className="relative max-w-md">
-                    {/* This will be moved to DoctorsView component */}
-                  </div>
-                  <DashboardActions onViewChange={setViewMode} />
-                </div>
+            ) : (
+              // Receptionist view - dashboard completo
+              <>
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                  <div className="lg:col-span-3">
+                    <StatsCards doctors={doctors} appointments={appointments} />
+                    
+                    <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                      <div className="relative max-w-md">
+                        {/* This will be moved to DoctorsView component */}
+                      </div>
+                      <DashboardActions onViewChange={setViewMode} />
+                    </div>
 
-                <DoctorsView
-                  doctors={doctors}
-                  searchTerm={searchTerm}
-                  onSearchChange={setSearchTerm}
-                  onScheduleDoctor={handleScheduleDoctor}
-                  onViewSchedule={handleViewSchedule}
-                />
-              </div>
-              
-              <div className="lg:col-span-1">
-                <SystemMonitor />
-              </div>
-            </div>
+                    <DoctorsView
+                      doctors={doctors}
+                      searchTerm={searchTerm}
+                      onSearchChange={setSearchTerm}
+                      onScheduleDoctor={handleScheduleDoctor}
+                      onViewSchedule={handleViewSchedule}
+                    />
+                  </div>
+                  
+                  <div className="lg:col-span-1">
+                    <SystemMonitor />
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
 
