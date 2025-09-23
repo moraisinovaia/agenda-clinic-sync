@@ -244,15 +244,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const signIn = async (emailOrUsername: string, password: string) => {
     try {
-      let email = emailOrUsername;
+      let email = emailOrUsername.trim();
       
       // Se não contém @, assume que é username e busca o email
-      if (!emailOrUsername.includes('@')) {
+      if (!emailOrUsername.trim().includes('@')) {
         try {
           const { data: profile, error: profileError } = await supabase
             .from('profiles')
             .select('email')
-            .eq('username', emailOrUsername)
+            .eq('username', emailOrUsername.trim())
             .maybeSingle();
             
           if (profileError || !profile) {
@@ -268,7 +268,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         } catch (profileSearchError) {
           // Se falhar na busca por username, tratar como email mesmo
           console.warn('Erro ao buscar username, usando como email:', profileSearchError);
-          email = emailOrUsername;
+          email = emailOrUsername.trim();
         }
       }
 
