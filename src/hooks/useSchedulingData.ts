@@ -37,9 +37,10 @@ export function useSchedulingData() {
   };
 
   // Buscar médicos ativos
-  const fetchDoctors = async () => {
+  const fetchDoctors = async (isIpado: boolean) => {
     try {
-      const tableName = isIpadoClient ? 'ipado_medicos' : 'medicos';
+      const tableName = isIpado ? 'ipado_medicos' : 'medicos';
+      console.log(`🏥 Buscando médicos da tabela: ${tableName}`);
       
       const { data, error } = await supabase
         .from(tableName)
@@ -50,6 +51,7 @@ export function useSchedulingData() {
       if (error) throw error;
       setDoctors(data || []);
       setError(null);
+      console.log(`✅ Encontrados ${data?.length || 0} médicos na tabela ${tableName}`);
     } catch (error) {
       console.error('Erro ao buscar médicos:', error);
       setError('Erro ao carregar médicos');
@@ -58,9 +60,10 @@ export function useSchedulingData() {
   };
 
   // Buscar atendimentos ativos
-  const fetchAtendimentos = async () => {
+  const fetchAtendimentos = async (isIpado: boolean) => {
     try {
-      const tableName = isIpadoClient ? 'ipado_atendimentos' : 'atendimentos';
+      const tableName = isIpado ? 'ipado_atendimentos' : 'atendimentos';
+      console.log(`🏥 Buscando atendimentos da tabela: ${tableName}`);
       
       const { data, error } = await supabase
         .from(tableName)
@@ -70,6 +73,7 @@ export function useSchedulingData() {
 
       if (error) throw error;
       setAtendimentos(data || []);
+      console.log(`✅ Encontrados ${data?.length || 0} atendimentos na tabela ${tableName}`);
     } catch (error) {
       console.error('Erro ao buscar atendimentos:', error);
       setAtendimentos([]);
@@ -77,9 +81,10 @@ export function useSchedulingData() {
   };
 
   // Buscar bloqueios de agenda
-  const fetchBlockedDates = async () => {
+  const fetchBlockedDates = async (isIpado: boolean) => {
     try {
-      const tableName = isIpadoClient ? 'ipado_bloqueios_agenda' : 'bloqueios_agenda';
+      const tableName = isIpado ? 'ipado_bloqueios_agenda' : 'bloqueios_agenda';
+      console.log(`🏥 Buscando bloqueios da tabela: ${tableName}`);
       
       const { data, error } = await supabase
         .from(tableName)
@@ -89,6 +94,7 @@ export function useSchedulingData() {
 
       if (error) throw error;
       setBlockedDates(data || []);
+      console.log(`✅ Encontrados ${data?.length || 0} bloqueios na tabela ${tableName}`);
     } catch (error) {
       console.error('Erro ao buscar bloqueios:', error);
       setBlockedDates([]);
@@ -130,14 +136,11 @@ export function useSchedulingData() {
         
         console.log(`🏥 Cliente detectado: ${isIpado ? 'IPADO' : 'INOVAIA'}`);
         
-        // Aguardar um frame para garantir que isIpadoClient foi atualizado
-        await new Promise(resolve => setTimeout(resolve, 0));
-        
-        // Carregar dados usando as tabelas corretas
+        // Carregar dados usando as tabelas corretas diretamente
         await Promise.all([
-          fetchDoctors(),
-          fetchAtendimentos(),
-          fetchBlockedDates(),
+          fetchDoctors(isIpado),
+          fetchAtendimentos(isIpado),
+          fetchBlockedDates(isIpado),
         ]);
       } finally {
         setLoading(false);
@@ -151,9 +154,9 @@ export function useSchedulingData() {
   useEffect(() => {
     if (isIpadoClient !== null && profile?.cliente_id) {
       Promise.all([
-        fetchDoctors(),
-        fetchAtendimentos(),
-        fetchBlockedDates(),
+        fetchDoctors(isIpadoClient),
+        fetchAtendimentos(isIpadoClient),
+        fetchBlockedDates(isIpadoClient),
       ]);
     }
   }, [isIpadoClient]);
@@ -167,6 +170,15 @@ export function useSchedulingData() {
     getAtendimentosByDoctor,
     isDateBlocked,
     getBlockedDatesByDoctor,
-    refetch: () => Promise.all([fetchDoctors(), fetchAtendimentos(), fetchBlockedDates()]),
+    refetch: () => {
+      if (isIpadoClient !== null) {
+        return Promise.all([
+          fetchDoctors(isIpadoClient), 
+          fetchAtendimentos(isIpadoClient), 
+          fetchBlockedDates(isIpadoClient)
+        ]);
+      }
+      return Promise.resolve();
+    },
   };
 }
