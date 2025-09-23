@@ -13,6 +13,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useRememberMe } from '@/hooks/useRememberMe';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { OnboardingButton } from '@/components/OnboardingButton';
 
 export default function Auth() {
   const { user, loading, signIn, signUp } = useAuth();
@@ -666,6 +667,16 @@ export default function Auth() {
               </form>
             </TabsContent>
           </Tabs>
+          
+          {/* Divisor */}
+          <div className="my-6 flex items-center">
+            <div className="flex-1 h-px bg-border"></div>
+            <span className="px-3 text-xs text-muted-foreground">OU</span>
+            <div className="flex-1 h-px bg-border"></div>
+          </div>
+          
+          {/* Botão de Onboarding */}
+          <OnboardingButton />
         </CardContent>
       </Card>
     </div>
