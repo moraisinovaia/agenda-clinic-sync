@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      access_audit: {
+        Row: {
+          action: string
+          created_at: string | null
+          details: Json | null
+          id: string
+          resource: string
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          resource: string
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          resource?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       agendamentos: {
         Row: {
           atendimento_id: string
