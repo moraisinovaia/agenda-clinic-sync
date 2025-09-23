@@ -22,7 +22,7 @@ import { DashboardActions } from '@/components/dashboard/DashboardActions';
 import { StatsCards } from '@/components/dashboard/StatsCards';
 import { SystemHealthDashboard } from '@/components/dashboard/SystemHealthDashboard';
 import { DoctorsView } from '@/components/dashboard/DoctorsView';
-import { MultiTenantDashboard } from '@/components/dashboard/MultiTenantDashboard';
+
 import { ClientConfigurationPanel } from '@/components/settings/ClientConfigurationPanel';
 import { AlertSystem } from '@/components/alerts/AlertSystem';
 import { UserApprovalPanel } from '@/components/admin/UserApprovalPanel';
@@ -407,9 +407,8 @@ const Index = () => {
       <div className="container mx-auto px-4 py-6">
         {viewMode === 'doctors' && (
           <Tabs defaultValue="agenda" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-5">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="agenda">Agenda</TabsTrigger>
-              <TabsTrigger value="multitenant">Multi-Tenant</TabsTrigger>
               <TabsTrigger value="configurations">Configurações</TabsTrigger>
               <TabsTrigger value="system">Sistema</TabsTrigger>
               <TabsTrigger value="doctors">Médicos</TabsTrigger>
@@ -454,9 +453,6 @@ const Index = () => {
               </div>
             </TabsContent>
 
-            <TabsContent value="multitenant" className="space-y-6">
-              <MultiTenantDashboard />
-            </TabsContent>
 
             <TabsContent value="configurations" className="space-y-6">
               <ClientConfigurationPanel />
