@@ -48,8 +48,6 @@ import { AuthTest } from '@/components/AuthTest';
 import PendingApproval from '@/components/PendingApproval';
 import { WhatsAppAgentDashboard } from '@/components/whatsapp-agent/WhatsAppAgentDashboard';
 import { WhatsAppTestPanel } from '@/components/admin/WhatsAppTestPanel';
-import { NotificationCenter } from '@/components/notifications/NotificationCenter';
-import { SmartNotificationDashboard } from '@/components/notifications/SmartNotificationDashboard';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import { N8nWebhookButton } from '@/components/admin/N8nWebhookButton';
@@ -409,13 +407,12 @@ const Index = () => {
       <div className="container mx-auto px-4 py-6">
         {viewMode === 'doctors' && (
           <Tabs defaultValue="agenda" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-6">
+            <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="agenda">Agenda</TabsTrigger>
               <TabsTrigger value="multitenant">Multi-Tenant</TabsTrigger>
               <TabsTrigger value="configurations">Configurações</TabsTrigger>
               <TabsTrigger value="system">Sistema</TabsTrigger>
               <TabsTrigger value="doctors">Médicos</TabsTrigger>
-              <TabsTrigger value="notifications">Notificações</TabsTrigger>
             </TabsList>
 
             <TabsContent value="agenda" className="space-y-6">
@@ -479,10 +476,6 @@ const Index = () => {
               />
             </TabsContent>
 
-            <TabsContent value="notifications" className="space-y-6">
-              <NotificationCenter />
-              <SmartNotificationDashboard />
-            </TabsContent>
           </Tabs>
         )}
 
