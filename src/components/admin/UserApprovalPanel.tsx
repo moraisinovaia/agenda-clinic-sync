@@ -47,11 +47,6 @@ export function UserApprovalPanel() {
   const { toast } = useToast();
   const { profile, isAdmin, isApproved } = useStableAuth();
 
-  // Debug para monitorar estado dos clientes
-  useEffect(() => {
-    console.log('🎯 Estado clientes atualizado:', clientes);
-  }, [clientes]);
-
   const fetchPendingUsers = async () => {
     try {
       // Usar a função segura para buscar usuários pendentes
@@ -120,18 +115,13 @@ export function UserApprovalPanel() {
 
       if (error) {
         console.error('❌ Erro ao buscar clientes:', error);
-        setClientes([]); // Setar array vazio em caso de erro
         return;
       }
 
       console.log('✅ Clientes encontrados:', data);
-      console.log('📊 Total de clientes:', data?.length || 0);
-      
-      // Forçar atualização do estado
-      setClientes(Array.isArray(data) ? data : []);
+      setClientes(data || []);
     } catch (error) {
-      console.error('❌ Erro inesperado ao buscar clientes:', error);
-      setClientes([]); // Setar array vazio em caso de erro
+      console.error('❌ Erro ao buscar clientes:', error);
     }
   };
 
@@ -142,19 +132,11 @@ export function UserApprovalPanel() {
     const loadData = async () => {
       // Só admins podem ver este painel
       if (isAdmin && isApproved) {
-        console.log('🔄 Carregando dados do painel...');
-        try {
-          await Promise.all([
-            fetchPendingUsers(),
-            fetchApprovedUsers(),
-            fetchClientes()
-          ]);
-          console.log('✅ Todos os dados carregados');
-        } catch (error) {
-          console.error('❌ Erro ao carregar dados:', error);
-        }
-      } else {
-        console.log('⚠️ Usuário não é admin aprovado:', { isAdmin, isApproved });
+        await Promise.all([
+          fetchPendingUsers(),
+          fetchApprovedUsers(),
+          fetchClientes()
+        ]);
       }
       
       if (isMounted) {
@@ -335,38 +317,8 @@ export function UserApprovalPanel() {
           Gerenciamento de Usuários
         </CardTitle>
       </CardHeader>
-        <CardContent>
-          <div className="mb-4">
-            <Button 
-              onClick={async () => {
-                console.log('🧪 Teste manual de busca de clientes');
-                try {
-                  const { data, error } = await supabase
-                    .from('clientes')
-                    .select('id, nome, ativo')
-                    .eq('ativo', true)
-                    .order('nome');
-                  
-                  console.log('📊 Resultado do teste:', { data, error });
-                  if (data) {
-                    setClientes(data);
-                    toast({
-                      title: 'Clientes carregados!',
-                      description: `${data.length} clientes encontrados`,
-                    });
-                  }
-                } catch (err) {
-                  console.error('❌ Erro no teste:', err);
-                }
-              }}
-              variant="outline"
-              size="sm"
-            >
-              🧪 Testar Busca de Clientes ({clientes.length})
-            </Button>
-          </div>
-          
-          <Tabs defaultValue="pending" className="w-full">
+      <CardContent>
+        <Tabs defaultValue="pending" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="pending" className="flex items-center gap-2">
               <Clock className="h-4 w-4" />
@@ -418,10 +370,6 @@ export function UserApprovalPanel() {
                       </TableCell>
                        <TableCell>
                          <div className="relative min-w-[180px]">
-                           {(() => {
-                             console.log('🎯 Estado clientes no render:', clientes);
-                             return null;
-                           })()}
                            <Select
                              value={selectedCliente[user.id] || ''}
                              onValueChange={(value) => {
