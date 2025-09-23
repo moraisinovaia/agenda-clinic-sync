@@ -11,6 +11,7 @@ import { Plus, Edit2, Eye, Users, Calendar, UserCog } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { Switch } from '@/components/ui/switch';
+import { useStableAuth } from '@/hooks/useStableAuth';
 
 interface Cliente {
   id: string;
@@ -33,6 +34,7 @@ export const ClienteManager = () => {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [clienteStats, setClienteStats] = useState<Record<string, ClienteStats>>({});
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
   const [formData, setFormData] = useState({
@@ -41,42 +43,67 @@ export const ClienteManager = () => {
     configuracoes: {}
   });
   const { toast } = useToast();
+  const { isAdmin, loading: authLoading, isAuthenticated } = useStableAuth();
 
   const fetchClientes = async () => {
+    // Verificar se o usuário está autenticado e é admin antes de fazer a consulta
+    if (!isAuthenticated || !isAdmin) {
+      setError('Acesso negado. Apenas administradores podem ver esta página.');
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
+      setError(null);
+      
       const { data: clientesData, error } = await supabase
         .from('clientes')
         .select('*')
         .order('nome');
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro na consulta de clientes:', error);
+        throw new Error(`Erro ao buscar clientes: ${error.message}`);
+      }
 
       setClientes(clientesData || []);
 
       // Buscar estatísticas para cada cliente
       const stats: Record<string, ClienteStats> = {};
       for (const cliente of clientesData || []) {
-        const [medicosRes, pacientesRes, agendamentosRes, usuariosRes] = await Promise.all([
-          supabase.from('medicos').select('id', { count: 'exact' }).eq('cliente_id', cliente.id),
-          supabase.from('pacientes').select('id', { count: 'exact' }).eq('cliente_id', cliente.id),
-          supabase.from('agendamentos').select('id', { count: 'exact' }).eq('cliente_id', cliente.id),
-          supabase.from('profiles').select('id', { count: 'exact' }).eq('cliente_id', cliente.id)
-        ]);
+        try {
+          const [medicosRes, pacientesRes, agendamentosRes, usuariosRes] = await Promise.all([
+            supabase.from('medicos').select('id', { count: 'exact' }).eq('cliente_id', cliente.id),
+            supabase.from('pacientes').select('id', { count: 'exact' }).eq('cliente_id', cliente.id),
+            supabase.from('agendamentos').select('id', { count: 'exact' }).eq('cliente_id', cliente.id),
+            supabase.from('profiles').select('id', { count: 'exact' }).eq('cliente_id', cliente.id)
+          ]);
 
-        stats[cliente.id] = {
-          total_medicos: medicosRes.count || 0,
-          total_pacientes: pacientesRes.count || 0,
-          total_agendamentos: agendamentosRes.count || 0,
-          total_usuarios: usuariosRes.count || 0
-        };
+          stats[cliente.id] = {
+            total_medicos: medicosRes.count || 0,
+            total_pacientes: pacientesRes.count || 0,
+            total_agendamentos: agendamentosRes.count || 0,
+            total_usuarios: usuariosRes.count || 0
+          };
+        } catch (statsError) {
+          console.warn(`Erro ao buscar estatísticas do cliente ${cliente.id}:`, statsError);
+          stats[cliente.id] = {
+            total_medicos: 0,
+            total_pacientes: 0,
+            total_agendamentos: 0,
+            total_usuarios: 0
+          };
+        }
       }
       setClienteStats(stats);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao buscar clientes:', error);
+      const errorMessage = error.message || 'Erro desconhecido ao carregar clientes';
+      setError(errorMessage);
       toast({
         title: "Erro",
-        description: "Erro ao carregar clientes",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -85,8 +112,11 @@ export const ClienteManager = () => {
   };
 
   useEffect(() => {
-    fetchClientes();
-  }, []);
+    // Só executar quando a autenticação estiver carregada
+    if (!authLoading) {
+      fetchClientes();
+    }
+  }, [authLoading, isAuthenticated, isAdmin]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -187,6 +217,47 @@ export const ClienteManager = () => {
     setDialogOpen(true);
   };
 
+  // Mostrar loading enquanto a autenticação está carregando
+  if (authLoading) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center">Verificando autenticação...</div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Verificar se o usuário tem permissão
+  if (!isAuthenticated || !isAdmin) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center text-destructive">
+            Acesso negado. Apenas administradores podem acessar esta página.
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Mostrar erro se houver
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center">
+            <div className="text-destructive mb-4">{error}</div>
+            <Button onClick={fetchClientes} variant="outline">
+              Tentar Novamente
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Mostrar loading dos dados
   if (loading) {
     return (
       <Card>
