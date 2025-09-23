@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2, Clock, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { waitForSession, ensureValidSession } from '@/utils/authHelpers';
 
 interface AuthGuardProps {
   children: ReactNode;
@@ -11,27 +12,35 @@ interface AuthGuardProps {
 export function AuthGuard({ children }: AuthGuardProps) {
   const { user, session, loading, profile } = useAuth();
   const [retryCount, setRetryCount] = useState(0);
+  const [sessionReady, setSessionReady] = useState(false);
 
-  // Auto-retry em caso de erro de carregamento (DESABILITADO para evitar loops)
-  // useEffect(() => {
-  //   if (!loading && !user && !session && retryCount < 3) {
-  //     const timer = setTimeout(() => {
-  //       setRetryCount(prev => prev + 1);
-  //       window.location.reload();
-  //     }, 2000);
-  //     return () => clearTimeout(timer);
-  //   }
-  // }, [loading, user, session, retryCount]);
+  // Aguardar que a sessão esteja completamente carregada
+  useEffect(() => {
+    if (!loading && user) {
+      const checkSession = async () => {
+        try {
+          const isReady = await waitForSession(3000);
+          await ensureValidSession();
+          setSessionReady(isReady);
+        } catch (error) {
+          console.error('Erro ao verificar sessão:', error);
+          setSessionReady(false);
+        }
+      };
+      
+      checkSession();
+    }
+  }, [user, loading]);
 
   // Loading state melhorado
-  if (loading || (!user && retryCount > 0)) {
+  if (loading || (user && !sessionReady)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-4">
           <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
           <div className="space-y-2">
             <p className="text-muted-foreground">
-              {retryCount > 0 ? 'Reconectando...' : 'Verificando autenticação...'}
+              {!sessionReady && user ? 'Carregando sessão...' : 'Verificando autenticação...'}
             </p>
             {retryCount > 0 && (
               <p className="text-xs text-muted-foreground">

@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { useToast } from '@/hooks/use-toast';
 import { Switch } from '@/components/ui/switch';
 import { useStableAuth } from '@/hooks/useStableAuth';
+import { executeWithAuthRetry } from '@/utils/authHelpers';
 
 interface Cliente {
   id: string;
@@ -57,35 +58,67 @@ export const ClienteManager = () => {
       setLoading(true);
       setError(null);
       
-      const { data: clientesData, error } = await supabase
-        .from('clientes')
-        .select('*')
-        .order('nome');
-
-      if (error) {
-        console.error('Erro na consulta de clientes:', error);
-        throw new Error(`Erro ao buscar clientes: ${error.message}`);
+      // Primeiro tentar usar a função SECURITY DEFINER como fallback
+      let clientesData = null;
+      let error = null;
+      
+      // Aguardar que a sessão esteja completamente carregada
+      const session = await supabase.auth.getSession();
+      if (!session.data.session?.user?.id) {
+        throw new Error('Sessão não encontrada. Faça login novamente.');
+      }
+      
+      try {
+        // Tentar usar a função segura primeiro
+        const { data: functionData, error: functionError } = await supabase
+          .rpc('get_clientes_for_admin', { 
+            requesting_user_id: session.data.session.user.id 
+          });
+          
+        if (!functionError && functionData) {
+          clientesData = functionData;
+        } else {
+          throw new Error(functionError?.message || 'Erro na função segura');
+        }
+      } catch (functionError) {
+        console.warn('Função segura falhou, tentando consulta direta:', functionError);
+        
+        // Fallback para consulta direta
+        const { data, error: directError } = await supabase
+          .from('clientes')
+          .select('*')
+          .order('nome');
+          
+        if (directError) {
+          throw new Error(`Erro ao buscar clientes: ${directError.message}`);
+        }
+        
+        clientesData = data;
       }
 
       setClientes(clientesData || []);
 
-      // Buscar estatísticas para cada cliente
+      // Buscar estatísticas para cada cliente com retry
       const stats: Record<string, ClienteStats> = {};
       for (const cliente of clientesData || []) {
         try {
-          const [medicosRes, pacientesRes, agendamentosRes, usuariosRes] = await Promise.all([
-            supabase.from('medicos').select('id', { count: 'exact' }).eq('cliente_id', cliente.id),
-            supabase.from('pacientes').select('id', { count: 'exact' }).eq('cliente_id', cliente.id),
-            supabase.from('agendamentos').select('id', { count: 'exact' }).eq('cliente_id', cliente.id),
-            supabase.from('profiles').select('id', { count: 'exact' }).eq('cliente_id', cliente.id)
-          ]);
+          const statsData = await executeWithAuthRetry(async () => {
+            const [medicosRes, pacientesRes, agendamentosRes, usuariosRes] = await Promise.all([
+              supabase.from('medicos').select('id', { count: 'exact' }).eq('cliente_id', cliente.id),
+              supabase.from('pacientes').select('id', { count: 'exact' }).eq('cliente_id', cliente.id),
+              supabase.from('agendamentos').select('id', { count: 'exact' }).eq('cliente_id', cliente.id),
+              supabase.from('profiles').select('id', { count: 'exact' }).eq('cliente_id', cliente.id)
+            ]);
 
-          stats[cliente.id] = {
-            total_medicos: medicosRes.count || 0,
-            total_pacientes: pacientesRes.count || 0,
-            total_agendamentos: agendamentosRes.count || 0,
-            total_usuarios: usuariosRes.count || 0
-          };
+            return {
+              total_medicos: medicosRes.count || 0,
+              total_pacientes: pacientesRes.count || 0,
+              total_agendamentos: agendamentosRes.count || 0,
+              total_usuarios: usuariosRes.count || 0
+            };
+          });
+
+          stats[cliente.id] = statsData;
         } catch (statsError) {
           console.warn(`Erro ao buscar estatísticas do cliente ${cliente.id}:`, statsError);
           stats[cliente.id] = {

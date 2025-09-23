@@ -908,6 +908,18 @@ export type Database = {
           schedule: string
         }[]
       }
+      get_clientes_for_admin: {
+        Args: { requesting_user_id: string }
+        Returns: {
+          ativo: boolean
+          configuracoes: Json
+          created_at: string
+          id: string
+          logo_url: string
+          nome: string
+          updated_at: string
+        }[]
+      }
       get_current_user_profile: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -1044,6 +1056,10 @@ export type Database = {
       }
       is_admin_user: {
         Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      is_admin_with_user_id: {
+        Args: { check_user_id: string }
         Returns: boolean
       }
       is_current_user_admin: {

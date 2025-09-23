@@ -2,6 +2,12 @@ import { useState, useEffect, createContext, useContext, useRef } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { waitForSession, ensureValidSession } from '@/utils/authHelpers';
+
+// Import debug para desenvolvimento
+if (process.env.NODE_ENV === 'development') {
+  import('@/utils/authDebug');
+}
 
 interface Profile {
   id: string;
@@ -60,6 +66,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     try {
       console.log('🔍 Fetching profile for user:', userId);
       
+      // Aguardar que a sessão esteja completamente carregada
+      await waitForSession(2000);
+      
       // Primeiro, tenta usar a função SECURITY DEFINER
       const { data: functionData, error: functionError } = await supabase
         .rpc('get_current_user_profile');
@@ -67,6 +76,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       if (!functionError && functionData && functionData.length > 0) {
         console.log('✅ Profile fetched via function:', functionData[0]);
         return functionData[0] as Profile;
+      }
+
+      console.warn('⚠️ Function failed, trying direct query:', functionError?.message);
+
+      // Garantir que a sessão está válida antes da consulta direta
+      const sessionValid = await ensureValidSession();
+      if (!sessionValid) {
+        console.error('❌ Sessão inválida para consulta direta');
+        return null;
       }
 
       // Fallback para query direta se a função falhar
@@ -78,7 +96,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
       if (error) {
         console.warn('⚠️ Error fetching profile:', error.message);
-        return null; // Return null instead of creating fake profile
+        return null;
       }
 
       if (!data) {
@@ -86,7 +104,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         return null;
       }
 
-      console.log('✅ Profile fetched:', data);
+      console.log('✅ Profile fetched via direct query:', data);
       return data;
     } catch (error) {
       console.error('❌ Unexpected error fetching profile:', error);
