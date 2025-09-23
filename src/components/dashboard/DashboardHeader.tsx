@@ -3,6 +3,7 @@ import { InstallButton } from '@/components/InstallButton';
 import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { KeyboardShortcutsHelp } from '@/components/ui/keyboard-shortcuts-help';
+import { ClientSelector } from '@/components/admin/ClientSelector';
 import inovaiaLogo from '@/assets/inovaia-logo.png';
 
 type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos' | 'fila-espera' | 'nova-fila' | 'bloqueio-agenda' | 'relatorio-agenda' | 'auth-test' | 'alertas' | 'multiple-appointment' | 'canceled-appointments' | 'whatsapp-agent';
@@ -50,6 +51,7 @@ export const DashboardHeader = ({
           </div>
           
           <div className="flex items-center gap-2">
+            <ClientSelector />
             <KeyboardShortcutsHelp />
             <ThemeToggle />
             <NotificationCenter />

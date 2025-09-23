@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useStableAuth } from '@/hooks/useStableAuth';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -14,7 +14,8 @@ export interface ClientTables {
 }
 
 export function useClientTables() {
-  const { profile } = useStableAuth();
+  const { profile, isSuperAdmin } = useStableAuth();
+  const [selectedClient, setSelectedClient] = useState<'INOVAIA' | 'IPADO' | null>(null);
 
   // Check if user belongs to IPADO client
   const checkClientType = async (): Promise<boolean> => {
@@ -57,14 +58,25 @@ export function useClientTables() {
 
   // Memoized function to get tables for current user
   const getTables = useMemo(() => async (): Promise<ClientTables> => {
+    // Super admin pode escolher o cliente
+    if (isSuperAdmin && selectedClient) {
+      const isIpado = selectedClient === 'IPADO';
+      console.log(`🏥 Super-admin acessando: ${selectedClient}`);
+      return getTableNames(isIpado);
+    }
+    
+    // Usuário normal - detectar cliente automaticamente
     const isIpado = await checkClientType();
     console.log(`🏥 Cliente detectado: ${isIpado ? 'IPADO' : 'INOVAIA'}`);
     return getTableNames(isIpado);
-  }, [profile?.cliente_id]);
+  }, [profile?.cliente_id, isSuperAdmin, selectedClient]);
 
   return {
     getTables,
     checkClientType,
-    getTableNames
+    getTableNames,
+    isSuperAdmin,
+    selectedClient,
+    setSelectedClient
   };
 }
