@@ -56,7 +56,7 @@ export type Database = {
           cancelado_em: string | null
           cancelado_por: string | null
           cancelado_por_user_id: string | null
-          cliente_id: string | null
+          cliente_id: string
           confirmado_em: string | null
           confirmado_por: string | null
           confirmado_por_user_id: string | null
@@ -78,7 +78,7 @@ export type Database = {
           cancelado_em?: string | null
           cancelado_por?: string | null
           cancelado_por_user_id?: string | null
-          cliente_id?: string | null
+          cliente_id: string
           confirmado_em?: string | null
           confirmado_por?: string | null
           confirmado_por_user_id?: string | null
@@ -100,7 +100,7 @@ export type Database = {
           cancelado_em?: string | null
           cancelado_por?: string | null
           cancelado_por_user_id?: string | null
-          cliente_id?: string | null
+          cliente_id?: string
           confirmado_em?: string | null
           confirmado_por?: string | null
           confirmado_por_user_id?: string | null
@@ -402,6 +402,153 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "fk_bloqueios_cliente"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_audit_logs: {
+        Row: {
+          action: string
+          cliente_id: string
+          created_at: string | null
+          id: string
+          ip_address: unknown | null
+          new_data: Json | null
+          old_data: Json | null
+          resource_id: string | null
+          resource_type: string
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          cliente_id: string
+          created_at?: string | null
+          id?: string
+          ip_address?: unknown | null
+          new_data?: Json | null
+          old_data?: Json | null
+          resource_id?: string | null
+          resource_type: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          cliente_id?: string
+          created_at?: string | null
+          id?: string
+          ip_address?: unknown | null
+          new_data?: Json | null
+          old_data?: Json | null
+          resource_id?: string | null
+          resource_type?: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_audit_logs_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_configurations: {
+        Row: {
+          category: string
+          cliente_id: string
+          created_at: string | null
+          description: string | null
+          editable: boolean | null
+          id: string
+          key: string
+          updated_at: string | null
+          value: string
+          value_type: string | null
+        }
+        Insert: {
+          category: string
+          cliente_id: string
+          created_at?: string | null
+          description?: string | null
+          editable?: boolean | null
+          id?: string
+          key: string
+          updated_at?: string | null
+          value: string
+          value_type?: string | null
+        }
+        Update: {
+          category?: string
+          cliente_id?: string
+          created_at?: string | null
+          description?: string | null
+          editable?: boolean | null
+          id?: string
+          key?: string
+          updated_at?: string | null
+          value?: string
+          value_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_configurations_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_usage_metrics: {
+        Row: {
+          agendamentos_cancelados: number | null
+          agendamentos_confirmados: number | null
+          agendamentos_criados: number | null
+          cliente_id: string
+          created_at: string | null
+          id: string
+          metric_date: string
+          pacientes_cadastrados: number | null
+          total_agendamentos: number | null
+          updated_at: string | null
+          usuarios_ativos: number | null
+        }
+        Insert: {
+          agendamentos_cancelados?: number | null
+          agendamentos_confirmados?: number | null
+          agendamentos_criados?: number | null
+          cliente_id: string
+          created_at?: string | null
+          id?: string
+          metric_date?: string
+          pacientes_cadastrados?: number | null
+          total_agendamentos?: number | null
+          updated_at?: string | null
+          usuarios_ativos?: number | null
+        }
+        Update: {
+          agendamentos_cancelados?: number | null
+          agendamentos_confirmados?: number | null
+          agendamentos_criados?: number | null
+          cliente_id?: string
+          created_at?: string | null
+          id?: string
+          metric_date?: string
+          pacientes_cadastrados?: number | null
+          total_agendamentos?: number | null
+          updated_at?: string | null
+          usuarios_ativos?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_usage_metrics_cliente_id_fkey"
             columns: ["cliente_id"]
             isOneToOne: false
             referencedRelation: "clientes"
@@ -2041,6 +2188,10 @@ export type Database = {
       toggle_backup_cron: {
         Args: { enable_cron: boolean }
         Returns: boolean
+      }
+      update_client_metrics: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       urlencode: {
         Args: { data: Json } | { string: string } | { string: string }
