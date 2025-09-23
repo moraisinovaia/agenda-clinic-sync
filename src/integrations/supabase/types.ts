@@ -1333,6 +1333,15 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Json
       }
+      criar_perfil_admin_orfao: {
+        Args: {
+          p_admin_id?: string
+          p_nome: string
+          p_role?: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
       desconfirmar_agendamento: {
         Args: {
           p_agendamento_id: string
@@ -1538,6 +1547,16 @@ export type Database = {
       l2_normalize: {
         Args: { "": string } | { "": unknown } | { "": unknown }
         Returns: string
+      }
+      listar_usuarios_orfaos: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          created_at: string
+          email: string
+          email_confirmed_at: string
+          last_sign_in_at: string
+          user_id: string
+        }[]
       }
       log_access_audit: {
         Args: { p_action: string; p_details?: Json; p_resource: string }
