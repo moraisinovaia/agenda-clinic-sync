@@ -397,6 +397,408 @@ export type Database = {
           },
         ]
       }
+      ipado_agendamentos: {
+        Row: {
+          atendimento_id: string
+          cancelado_em: string | null
+          cancelado_por: string | null
+          cancelado_por_user_id: string | null
+          confirmado_em: string | null
+          confirmado_por: string | null
+          confirmado_por_user_id: string | null
+          convenio: string | null
+          created_at: string | null
+          criado_por: string
+          criado_por_user_id: string | null
+          data_agendamento: string
+          hora_agendamento: string
+          id: string
+          medico_id: string
+          observacoes: string | null
+          paciente_id: string
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          atendimento_id: string
+          cancelado_em?: string | null
+          cancelado_por?: string | null
+          cancelado_por_user_id?: string | null
+          confirmado_em?: string | null
+          confirmado_por?: string | null
+          confirmado_por_user_id?: string | null
+          convenio?: string | null
+          created_at?: string | null
+          criado_por?: string
+          criado_por_user_id?: string | null
+          data_agendamento: string
+          hora_agendamento: string
+          id?: string
+          medico_id: string
+          observacoes?: string | null
+          paciente_id: string
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          atendimento_id?: string
+          cancelado_em?: string | null
+          cancelado_por?: string | null
+          cancelado_por_user_id?: string | null
+          confirmado_em?: string | null
+          confirmado_por?: string | null
+          confirmado_por_user_id?: string | null
+          convenio?: string | null
+          created_at?: string | null
+          criado_por?: string
+          criado_por_user_id?: string | null
+          data_agendamento?: string
+          hora_agendamento?: string
+          id?: string
+          medico_id?: string
+          observacoes?: string | null
+          paciente_id?: string
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ipado_agendamentos_atendimento_id_fkey"
+            columns: ["atendimento_id"]
+            isOneToOne: false
+            referencedRelation: "ipado_atendimentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ipado_agendamentos_medico_id_fkey"
+            columns: ["medico_id"]
+            isOneToOne: false
+            referencedRelation: "ipado_medicos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ipado_agendamentos_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "ipado_pacientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ipado_atendimentos: {
+        Row: {
+          ativo: boolean | null
+          codigo: string | null
+          coparticipacao_unimed_20: number | null
+          coparticipacao_unimed_40: number | null
+          created_at: string | null
+          forma_pagamento: string | null
+          horarios: Json | null
+          id: string
+          medico_id: string | null
+          medico_nome: string | null
+          nome: string
+          observacoes: string | null
+          restricoes: string | null
+          tipo: string
+          valor_particular: number | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          codigo?: string | null
+          coparticipacao_unimed_20?: number | null
+          coparticipacao_unimed_40?: number | null
+          created_at?: string | null
+          forma_pagamento?: string | null
+          horarios?: Json | null
+          id?: string
+          medico_id?: string | null
+          medico_nome?: string | null
+          nome: string
+          observacoes?: string | null
+          restricoes?: string | null
+          tipo: string
+          valor_particular?: number | null
+        }
+        Update: {
+          ativo?: boolean | null
+          codigo?: string | null
+          coparticipacao_unimed_20?: number | null
+          coparticipacao_unimed_40?: number | null
+          created_at?: string | null
+          forma_pagamento?: string | null
+          horarios?: Json | null
+          id?: string
+          medico_id?: string | null
+          medico_nome?: string | null
+          nome?: string
+          observacoes?: string | null
+          restricoes?: string | null
+          tipo?: string
+          valor_particular?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ipado_atendimentos_medico_id_fkey"
+            columns: ["medico_id"]
+            isOneToOne: false
+            referencedRelation: "ipado_medicos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ipado_bloqueios_agenda: {
+        Row: {
+          created_at: string | null
+          criado_por: string
+          criado_por_user_id: string | null
+          data_fim: string
+          data_inicio: string
+          id: string
+          medico_id: string
+          motivo: string
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          criado_por?: string
+          criado_por_user_id?: string | null
+          data_fim: string
+          data_inicio: string
+          id?: string
+          medico_id: string
+          motivo: string
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          criado_por?: string
+          criado_por_user_id?: string | null
+          data_fim?: string
+          data_inicio?: string
+          id?: string
+          medico_id?: string
+          motivo?: string
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ipado_bloqueios_agenda_medico_id_fkey"
+            columns: ["medico_id"]
+            isOneToOne: false
+            referencedRelation: "ipado_medicos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ipado_fila_espera: {
+        Row: {
+          agendamento_id: string | null
+          atendimento_id: string
+          created_at: string | null
+          data_limite: string | null
+          data_preferida: string
+          id: string
+          medico_id: string
+          observacoes: string | null
+          paciente_id: string
+          periodo_preferido: string | null
+          prioridade: number | null
+          status: string | null
+          tentativas_contato: number | null
+          ultimo_contato: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          agendamento_id?: string | null
+          atendimento_id: string
+          created_at?: string | null
+          data_limite?: string | null
+          data_preferida: string
+          id?: string
+          medico_id: string
+          observacoes?: string | null
+          paciente_id: string
+          periodo_preferido?: string | null
+          prioridade?: number | null
+          status?: string | null
+          tentativas_contato?: number | null
+          ultimo_contato?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          agendamento_id?: string | null
+          atendimento_id?: string
+          created_at?: string | null
+          data_limite?: string | null
+          data_preferida?: string
+          id?: string
+          medico_id?: string
+          observacoes?: string | null
+          paciente_id?: string
+          periodo_preferido?: string | null
+          prioridade?: number | null
+          status?: string | null
+          tentativas_contato?: number | null
+          ultimo_contato?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ipado_fila_espera_atendimento_id_fkey"
+            columns: ["atendimento_id"]
+            isOneToOne: false
+            referencedRelation: "ipado_atendimentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ipado_fila_espera_medico_id_fkey"
+            columns: ["medico_id"]
+            isOneToOne: false
+            referencedRelation: "ipado_medicos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ipado_fila_espera_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "ipado_pacientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ipado_medicos: {
+        Row: {
+          ativo: boolean | null
+          convenios_aceitos: string[] | null
+          convenios_restricoes: Json | null
+          created_at: string | null
+          especialidade: string
+          horarios: Json | null
+          id: string
+          idade_maxima: number | null
+          idade_minima: number | null
+          nome: string
+          observacoes: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          convenios_aceitos?: string[] | null
+          convenios_restricoes?: Json | null
+          created_at?: string | null
+          especialidade: string
+          horarios?: Json | null
+          id?: string
+          idade_maxima?: number | null
+          idade_minima?: number | null
+          nome: string
+          observacoes?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          convenios_aceitos?: string[] | null
+          convenios_restricoes?: Json | null
+          created_at?: string | null
+          especialidade?: string
+          horarios?: Json | null
+          id?: string
+          idade_maxima?: number | null
+          idade_minima?: number | null
+          nome?: string
+          observacoes?: string | null
+        }
+        Relationships: []
+      }
+      ipado_pacientes: {
+        Row: {
+          celular: string | null
+          convenio: string
+          created_at: string | null
+          data_nascimento: string
+          id: string
+          nome_completo: string
+          telefone: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          celular?: string | null
+          convenio: string
+          created_at?: string | null
+          data_nascimento: string
+          id?: string
+          nome_completo: string
+          telefone?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          celular?: string | null
+          convenio?: string
+          created_at?: string | null
+          data_nascimento?: string
+          id?: string
+          nome_completo?: string
+          telefone?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      ipado_preparos: {
+        Row: {
+          created_at: string | null
+          dias_suspensao: number | null
+          exame: string
+          forma_pagamento: string | null
+          id: string
+          instrucoes: Json | null
+          itens_levar: string | null
+          jejum_horas: number | null
+          medicacao_suspender: string | null
+          nome: string
+          observacoes_especiais: string | null
+          observacoes_valor: string | null
+          restricoes_alimentares: string | null
+          valor_convenio: number | null
+          valor_particular: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          dias_suspensao?: number | null
+          exame: string
+          forma_pagamento?: string | null
+          id?: string
+          instrucoes?: Json | null
+          itens_levar?: string | null
+          jejum_horas?: number | null
+          medicacao_suspender?: string | null
+          nome: string
+          observacoes_especiais?: string | null
+          observacoes_valor?: string | null
+          restricoes_alimentares?: string | null
+          valor_convenio?: number | null
+          valor_particular?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          dias_suspensao?: number | null
+          exame?: string
+          forma_pagamento?: string | null
+          id?: string
+          instrucoes?: Json | null
+          itens_levar?: string | null
+          jejum_horas?: number | null
+          medicacao_suspender?: string | null
+          nome?: string
+          observacoes_especiais?: string | null
+          observacoes_valor?: string | null
+          restricoes_alimentares?: string | null
+          valor_convenio?: number | null
+          valor_particular?: number | null
+        }
+        Relationships: []
+      }
       medicos: {
         Row: {
           ativo: boolean | null
