@@ -1405,7 +1405,7 @@ export type Database = {
           schedule: string
         }[]
       }
-      get_clientes_simple: {
+      get_clientes_admin: {
         Args: Record<PropertyKey, never>
         Returns: {
           ativo: boolean

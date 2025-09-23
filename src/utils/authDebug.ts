@@ -82,17 +82,15 @@ export const debugAuthState = async () => {
     if (session?.user?.id) {
       try {
         const { data: clientesData, error: clientesError } = await supabase
-          .rpc('get_clientes_for_admin', { 
-            requesting_user_id: session.user.id 
-          });
+          .rpc('get_clientes_admin');
 
-        console.log('🏢 Teste get_clientes_for_admin:', {
+        console.log('🏢 Teste get_clientes_admin:', {
           success: !!clientesData,
-          count: clientesData?.length || 0,
+          count: Array.isArray(clientesData) ? clientesData.length : 0,
           error: clientesError?.message || 'Nenhum erro'
         });
       } catch (clientesErr: any) {
-        console.log('❌ Erro em get_clientes_for_admin:', clientesErr.message);
+        console.log('❌ Erro em get_clientes_admin:', clientesErr.message);
       }
     }
 

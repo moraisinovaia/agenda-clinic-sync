@@ -86,9 +86,7 @@ export const ClienteManager = () => {
       try {
         // Tentar usar a função segura primeiro
         const { data: functionData, error: functionError } = await supabase
-          .rpc('get_clientes_for_admin', { 
-            requesting_user_id: session.data.session.user.id 
-          });
+          .rpc('get_clientes_admin');
           
         if (!functionError && functionData) {
           clientesData = functionData;
