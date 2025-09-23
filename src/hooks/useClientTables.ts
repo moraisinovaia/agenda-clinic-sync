@@ -15,13 +15,32 @@ export interface ClientTables {
 
 export function useClientTables() {
   const { profile, isSuperAdmin } = useStableAuth();
-  const [selectedClient, setSelectedClient] = useState<'INOVAIA' | 'IPADO' | null>(null);
+  const [selectedClient, setSelectedClient] = useState<'INOVAIA' | 'IPADO' | null>(() => {
+    // Recuperar seleção persistida do localStorage para super-admin
+    if (typeof window !== 'undefined' && isSuperAdmin) {
+      const saved = localStorage.getItem('superadmin_selected_client');
+      return saved as ('INOVAIA' | 'IPADO') | null;
+    }
+    return null;
+  });
+
+  // Função para setar cliente com persistência
+  const setSelectedClientWithPersistence = useCallback((client: 'INOVAIA' | 'IPADO' | null) => {
+    setSelectedClient(client);
+    if (typeof window !== 'undefined' && isSuperAdmin) {
+      if (client) {
+        localStorage.setItem('superadmin_selected_client', client);
+      } else {
+        localStorage.removeItem('superadmin_selected_client');
+      }
+    }
+  }, [isSuperAdmin]);
 
   // Check if user belongs to IPADO client with improved error handling
   const checkClientType = useCallback(async (): Promise<boolean> => {
     // Super admin bypass - não precisa verificar cliente
     if (isSuperAdmin) {
-      console.log('🔑 Super-admin detectado - pulando verificação de cliente');
+      console.log('🔑 Super-admin detectado - usando cliente selecionado:', selectedClient);
       return selectedClient === 'IPADO';
     }
 
@@ -46,7 +65,7 @@ export function useClientTables() {
       }
       
       const isIpado = data?.nome === 'IPADO';
-      console.log(`🏥 Cliente verificado: ${isIpado ? 'IPADO' : 'INOVAIA'}`);
+      console.log(`🏥 Cliente verificado: ${isIpado ? 'IPADO' : 'INOVAIA'}`, { profile: profile?.email });
       return isIpado;
     } catch (error) {
       console.error('❌ Erro crítico ao verificar tipo do cliente:', error);
@@ -105,6 +124,6 @@ export function useClientTables() {
     getTableNames,
     isSuperAdmin,
     selectedClient,
-    setSelectedClient
+    setSelectedClient: setSelectedClientWithPersistence
   };
 }

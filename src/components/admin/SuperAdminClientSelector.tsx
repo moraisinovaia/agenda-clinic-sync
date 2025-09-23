@@ -15,8 +15,13 @@ export const SuperAdminClientSelector = () => {
   const handleClientSelect = (client: 'INOVAIA' | 'IPADO') => {
     setSelectedClient(client);
     toast.success(`Cliente alterado para ${client}`, {
-      description: 'As tabelas do sistema foram atualizadas'
+      description: 'Recarregando página para aplicar mudanças...'
     });
+    
+    // Forçar reload da página para aplicar mudanças
+    setTimeout(() => {
+      window.location.reload();
+    }, 1000);
   };
 
   return (

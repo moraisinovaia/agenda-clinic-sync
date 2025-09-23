@@ -44,12 +44,12 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
               console.log('⚠️ RPC IPADO não disponível, usando consulta direta');
               // Fallback para consulta direta na tabela IPADO
               const { data, error } = await supabase
-                .from(tables.agendamentos)
+                .from('ipado_agendamentos' as any)
                 .select(`
                   *,
-                  pacientes:${tables.pacientes}(nome_completo, convenio, celular, telefone, data_nascimento),
-                  medicos:${tables.medicos}(nome, especialidade),
-                  atendimentos:${tables.atendimentos}(nome, tipo)
+                  pacientes:ipado_pacientes(nome_completo, convenio, celular, telefone, data_nascimento),
+                  medicos:ipado_medicos(nome, especialidade),
+                  atendimentos:ipado_atendimentos(nome, tipo)
                 `)
                 .neq('status', 'cancelado')
                 .order('data_agendamento', { ascending: false })
@@ -71,12 +71,12 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
               console.log('⚠️ RPC INOVAIA não disponível, usando consulta direta');
               // Fallback para consulta direta na tabela INOVAIA
               const { data, error } = await supabase
-                .from(tables.agendamentos)
+                .from('agendamentos' as any)
                 .select(`
                   *,
-                  pacientes:${tables.pacientes}(nome_completo, convenio, celular, telefone, data_nascimento),
-                  medicos:${tables.medicos}(nome, especialidade),
-                  atendimentos:${tables.atendimentos}(nome, tipo)
+                  pacientes:pacientes(nome_completo, convenio, celular, telefone, data_nascimento),
+                  medicos:medicos(nome, especialidade),
+                  atendimentos:atendimentos(nome, tipo)
                 `)
                 .neq('status', 'cancelado')
                 .order('data_agendamento', { ascending: false })
