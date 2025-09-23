@@ -17,11 +17,13 @@ import { FilaEsperaForm } from '@/components/fila-espera/FilaEsperaForm';
 import { FilaEsperaList } from '@/components/fila-espera/FilaEsperaList';
 import { RelatorioAgenda } from '@/components/scheduling/RelatorioAgenda';
 
+import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
+import { DashboardActions } from '@/components/dashboard/DashboardActions';
 import { StatsCards } from '@/components/dashboard/StatsCards';
 import { SystemHealthDashboard } from '@/components/dashboard/SystemHealthDashboard';
 import { DoctorsView } from '@/components/dashboard/DoctorsView';
-import { DashboardActions } from '@/components/dashboard/DashboardActions';
-import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
+import { MultiTenantDashboard } from '@/components/dashboard/MultiTenantDashboard';
+import { ClientConfigurationPanel } from '@/components/settings/ClientConfigurationPanel';
 import { AlertSystem } from '@/components/alerts/AlertSystem';
 import { UserApprovalPanel } from '@/components/admin/UserApprovalPanel';
 import { 
@@ -46,6 +48,9 @@ import { AuthTest } from '@/components/AuthTest';
 import PendingApproval from '@/components/PendingApproval';
 import { WhatsAppAgentDashboard } from '@/components/whatsapp-agent/WhatsAppAgentDashboard';
 import { WhatsAppTestPanel } from '@/components/admin/WhatsAppTestPanel';
+import { NotificationCenter } from '@/components/notifications/NotificationCenter';
+import { SmartNotificationDashboard } from '@/components/notifications/SmartNotificationDashboard';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import { N8nWebhookButton } from '@/components/admin/N8nWebhookButton';
 
@@ -403,44 +408,82 @@ const Index = () => {
 
       <div className="container mx-auto px-4 py-6">
         {viewMode === 'doctors' && (
-          <div className="space-y-6">
-            
-            {/* User Approval Panel for Admins */}
-            {profile?.role === 'admin' && profile?.status === 'aprovado' && (
-              <>
-                <UserApprovalPanel />
-                <div className="flex flex-wrap gap-4 mb-6">
-                  <WhatsAppTestPanel />
-                  <N8nWebhookButton />
-                </div>
-              </>
-            )}
-            
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-              <div className="lg:col-span-3">
-                <StatsCards doctors={doctors} appointments={appointments} />
-                
-                <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                  <div className="relative max-w-md">
-                    {/* This will be moved to DoctorsView component */}
-                  </div>
-                  <DashboardActions onViewChange={setViewMode} />
-                </div>
+          <Tabs defaultValue="agenda" className="space-y-6">
+            <TabsList className="grid w-full grid-cols-6">
+              <TabsTrigger value="agenda">Agenda</TabsTrigger>
+              <TabsTrigger value="multitenant">Multi-Tenant</TabsTrigger>
+              <TabsTrigger value="configurations">Configurações</TabsTrigger>
+              <TabsTrigger value="system">Sistema</TabsTrigger>
+              <TabsTrigger value="doctors">Médicos</TabsTrigger>
+              <TabsTrigger value="notifications">Notificações</TabsTrigger>
+            </TabsList>
 
-                <DoctorsView
-                  doctors={doctors}
-                  searchTerm={searchTerm}
-                  onSearchChange={setSearchTerm}
-                  onScheduleDoctor={handleScheduleDoctor}
-                  onViewSchedule={handleViewSchedule}
-                />
-              </div>
+            <TabsContent value="agenda" className="space-y-6">
               
-              <div className="lg:col-span-1">
-                <SystemMonitor />
+              {/* User Approval Panel for Admins */}
+              {profile?.role === 'admin' && profile?.status === 'aprovado' && (
+                <>
+                  <UserApprovalPanel />
+                  <div className="flex flex-wrap gap-4 mb-6">
+                    <WhatsAppTestPanel />
+                    <N8nWebhookButton />
+                  </div>
+                </>
+              )}
+              
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                <div className="lg:col-span-3">
+                  <StatsCards doctors={doctors} appointments={appointments} />
+                  
+                  <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                    <div className="relative max-w-md">
+                      {/* This will be moved to DoctorsView component */}
+                    </div>
+                    <DashboardActions onViewChange={setViewMode} />
+                  </div>
+
+                  <DoctorsView
+                    doctors={doctors}
+                    searchTerm={searchTerm}
+                    onSearchChange={setSearchTerm}
+                    onScheduleDoctor={handleScheduleDoctor}
+                    onViewSchedule={handleViewSchedule}
+                  />
+                </div>
+                
+                <div className="lg:col-span-1">
+                  <SystemMonitor />
+                </div>
               </div>
-            </div>
-          </div>
+            </TabsContent>
+
+            <TabsContent value="multitenant" className="space-y-6">
+              <MultiTenantDashboard />
+            </TabsContent>
+
+            <TabsContent value="configurations" className="space-y-6">
+              <ClientConfigurationPanel />
+            </TabsContent>
+
+            <TabsContent value="system" className="space-y-6">
+              <SystemHealthDashboard doctors={doctors} appointments={appointments} />
+            </TabsContent>
+
+            <TabsContent value="doctors" className="space-y-6">
+              <DoctorsView
+                doctors={doctors}
+                searchTerm={searchTerm}
+                onSearchChange={setSearchTerm}
+                onScheduleDoctor={handleScheduleDoctor}
+                onViewSchedule={handleViewSchedule}
+              />
+            </TabsContent>
+
+            <TabsContent value="notifications" className="space-y-6">
+              <NotificationCenter />
+              <SmartNotificationDashboard />
+            </TabsContent>
+          </Tabs>
         )}
 
         {viewMode === 'schedule' && selectedDoctor && (
