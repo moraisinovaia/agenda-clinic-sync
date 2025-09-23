@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { useStableAuth } from '@/hooks/useStableAuth';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -17,9 +17,19 @@ export function useClientTables() {
   const { profile, isSuperAdmin } = useStableAuth();
   const [selectedClient, setSelectedClient] = useState<'INOVAIA' | 'IPADO' | null>(null);
 
-  // Check if user belongs to IPADO client
-  const checkClientType = async (): Promise<boolean> => {
-    if (!profile?.cliente_id) return false;
+  // Check if user belongs to IPADO client with improved error handling
+  const checkClientType = useCallback(async (): Promise<boolean> => {
+    // Super admin bypass - não precisa verificar cliente
+    if (isSuperAdmin) {
+      console.log('🔑 Super-admin detectado - pulando verificação de cliente');
+      return selectedClient === 'IPADO';
+    }
+
+    // Se não tem cliente_id, assumir INOVAIA
+    if (!profile?.cliente_id) {
+      console.log('⚠️ Sem cliente_id definido - assumindo INOVAIA');
+      return false;
+    }
     
     try {
       const { data, error } = await supabase
@@ -30,15 +40,21 @@ export function useClientTables() {
       
       if (error) {
         console.error('❌ Erro ao verificar tipo do cliente:', error);
+        // Fallback: assumir INOVAIA se houver erro
+        console.log('🔄 Fallback: assumindo INOVAIA devido ao erro');
         return false;
       }
       
-      return data?.nome === 'IPADO';
+      const isIpado = data?.nome === 'IPADO';
+      console.log(`🏥 Cliente verificado: ${isIpado ? 'IPADO' : 'INOVAIA'}`);
+      return isIpado;
     } catch (error) {
-      console.error('❌ Erro ao verificar tipo do cliente:', error);
+      console.error('❌ Erro crítico ao verificar tipo do cliente:', error);
+      // Fallback crítico: assumir INOVAIA
+      console.log('🔄 Fallback crítico: assumindo INOVAIA');
       return false;
     }
-  };
+  }, [profile?.cliente_id, isSuperAdmin, selectedClient]);
 
   // Get table names based on client
   const getTableNames = (isIpado: boolean): ClientTables => {
@@ -56,20 +72,32 @@ export function useClientTables() {
     };
   };
 
-  // Memoized function to get tables for current user
-  const getTables = useMemo(() => async (): Promise<ClientTables> => {
-    // Super admin pode escolher o cliente
-    if (isSuperAdmin && selectedClient) {
-      const isIpado = selectedClient === 'IPADO';
-      console.log(`🏥 Super-admin acessando: ${selectedClient}`);
+  // Memoized function to get tables for current user with improved error handling
+  const getTables = useCallback(async (): Promise<ClientTables> => {
+    try {
+      // Super admin pode escolher o cliente
+      if (isSuperAdmin) {
+        if (selectedClient) {
+          const isIpado = selectedClient === 'IPADO';
+          console.log(`🔑 Super-admin acessando: ${selectedClient}`);
+          return getTableNames(isIpado);
+        } else {
+          // Super admin sem cliente selecionado - padrão INOVAIA
+          console.log('🔑 Super-admin sem cliente selecionado - usando INOVAIA como padrão');
+          return getTableNames(false);
+        }
+      }
+      
+      // Usuário normal - detectar cliente automaticamente
+      const isIpado = await checkClientType();
       return getTableNames(isIpado);
+    } catch (error) {
+      console.error('❌ Erro crítico em getTables:', error);
+      // Fallback final: sempre retornar INOVAIA
+      console.log('🔄 Fallback final: retornando tabelas INOVAIA');
+      return getTableNames(false);
     }
-    
-    // Usuário normal - detectar cliente automaticamente
-    const isIpado = await checkClientType();
-    console.log(`🏥 Cliente detectado: ${isIpado ? 'IPADO' : 'INOVAIA'}`);
-    return getTableNames(isIpado);
-  }, [profile?.cliente_id, isSuperAdmin, selectedClient]);
+  }, [profile?.cliente_id, isSuperAdmin, selectedClient, checkClientType]);
 
   return {
     getTables,

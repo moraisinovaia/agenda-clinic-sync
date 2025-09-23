@@ -1,7 +1,8 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useStableAuth } from '@/hooks/useStableAuth';
+import { useClientTables } from '@/hooks/useClientTables';
 
 export function useSchedulingData() {
   const [doctors, setDoctors] = useState<any[]>([]);
@@ -9,37 +10,44 @@ export function useSchedulingData() {
   const [blockedDates, setBlockedDates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isIpadoClient, setIsIpadoClient] = useState<boolean | null>(null);
+  const [currentTables, setCurrentTables] = useState<any>(null);
   
-  const { profile } = useStableAuth();
+  const { profile, isSuperAdmin } = useStableAuth();
+  const { getTables } = useClientTables();
 
-  // Verificar se o usuário é do cliente IPADO
-  const checkClientType = async () => {
-    if (!profile?.cliente_id) return false;
+  // Função robusta para obter as tabelas corretas
+  const getCurrentTables = useCallback(async () => {
+    try {
+      console.log('🔍 Obtendo configuração de tabelas...');
+      const tables = await getTables();
+      console.log('✅ Tabelas obtidas:', tables);
+      setCurrentTables(tables);
+      return tables;
+    } catch (error) {
+      console.error('❌ Erro ao obter tabelas:', error);
+      // Fallback: usar tabelas INOVAIA como padrão
+      const fallbackTables = {
+        medicos: 'medicos',
+        atendimentos: 'atendimentos',
+        bloqueios_agenda: 'bloqueios_agenda',
+        pacientes: 'pacientes',
+        agendamentos: 'agendamentos',
+        fila_espera: 'fila_espera',
+        preparos: 'preparos',
+        profiles: 'profiles'
+      };
+      console.log('🔄 Usando fallback - tabelas INOVAIA');
+      setCurrentTables(fallbackTables);
+      return fallbackTables;
+    }
+  }, [getTables]);
+
+  // Buscar médicos ativos usando as tabelas corretas
+  const fetchDoctors = async (tables: any) => {
+    if (!tables) return;
     
     try {
-      const { data: cliente, error } = await supabase
-        .from('clientes')
-        .select('nome')
-        .eq('id', profile.cliente_id)
-        .single();
-        
-      if (error) {
-        console.error('Erro ao verificar tipo de cliente:', error);
-        return false;
-      }
-      
-      return cliente?.nome === 'IPADO';
-    } catch (error) {
-      console.error('Erro ao verificar tipo de cliente:', error);
-      return false;
-    }
-  };
-
-  // Buscar médicos ativos
-  const fetchDoctors = async (isIpado: boolean) => {
-    try {
-      const tableName = isIpado ? 'ipado_medicos' : 'medicos';
+      const tableName = tables.medicos;
       console.log(`🏥 Buscando médicos da tabela: ${tableName}`);
       
       const { data, error } = await supabase
@@ -59,10 +67,12 @@ export function useSchedulingData() {
     }
   };
 
-  // Buscar atendimentos ativos
-  const fetchAtendimentos = async (isIpado: boolean) => {
+  // Buscar atendimentos ativos usando as tabelas corretas
+  const fetchAtendimentos = async (tables: any) => {
+    if (!tables) return;
+    
     try {
-      const tableName = isIpado ? 'ipado_atendimentos' : 'atendimentos';
+      const tableName = tables.atendimentos;
       console.log(`🏥 Buscando atendimentos da tabela: ${tableName}`);
       
       const { data, error } = await supabase
@@ -80,10 +90,12 @@ export function useSchedulingData() {
     }
   };
 
-  // Buscar bloqueios de agenda
-  const fetchBlockedDates = async (isIpado: boolean) => {
+  // Buscar bloqueios de agenda usando as tabelas corretas
+  const fetchBlockedDates = async (tables: any) => {
+    if (!tables) return;
+    
     try {
-      const tableName = isIpado ? 'ipado_bloqueios_agenda' : 'bloqueios_agenda';
+      const tableName = tables.bloqueios_agenda;
       console.log(`🏥 Buscando bloqueios da tabela: ${tableName}`);
       
       const { data, error } = await supabase
@@ -124,42 +136,77 @@ export function useSchedulingData() {
     );
   };
 
+  // Carregar dados iniciais com tratamento robusto para super-admin
   useEffect(() => {
     const initializeData = async () => {
-      if (!profile?.cliente_id) return;
-      
+      console.log('🚀 Iniciando carregamento de dados...');
+      console.log('👤 Profile:', { 
+        cliente_id: profile?.cliente_id, 
+        email: profile?.email, 
+        isSuperAdmin 
+      });
+
       setLoading(true);
+      setError(null);
+      
       try {
-        // Primeiro verificar o tipo de cliente
-        const isIpado = await checkClientType();
-        setIsIpadoClient(isIpado);
-        
-        console.log(`🏥 Cliente detectado: ${isIpado ? 'IPADO' : 'INOVAIA'}`);
-        
-        // Carregar dados usando as tabelas corretas diretamente
-        await Promise.all([
-          fetchDoctors(isIpado),
-          fetchAtendimentos(isIpado),
-          fetchBlockedDates(isIpado),
-        ]);
+        // Para super-admin ou usuários sem cliente_id, tentar obter tabelas via useClientTables
+        if (isSuperAdmin || !profile?.cliente_id) {
+          console.log('🔑 Super-admin ou usuário sem cliente_id - usando getTables()');
+          const tables = await getCurrentTables();
+          if (tables) {
+            await Promise.all([
+              fetchDoctors(tables),
+              fetchAtendimentos(tables),
+              fetchBlockedDates(tables),
+            ]);
+          }
+        } else {
+          // Usuário normal com cliente_id - obter tabelas também
+          console.log('👤 Usuário normal com cliente_id - usando getTables()');
+          const tables = await getCurrentTables();
+          if (tables) {
+            await Promise.all([
+              fetchDoctors(tables),
+              fetchAtendimentos(tables),
+              fetchBlockedDates(tables),
+            ]);
+          }
+        }
+      } catch (error) {
+        console.error('❌ Erro durante inicialização:', error);
+        setError('Erro ao carregar dados do sistema');
       } finally {
         setLoading(false);
+        console.log('✅ Carregamento de dados finalizado');
       }
     };
 
-    initializeData();
-  }, [profile?.cliente_id]);
-
-  // Recarregar dados quando o tipo de cliente mudar
-  useEffect(() => {
-    if (isIpadoClient !== null && profile?.cliente_id) {
-      Promise.all([
-        fetchDoctors(isIpadoClient),
-        fetchAtendimentos(isIpadoClient),
-        fetchBlockedDates(isIpadoClient),
-      ]);
+    // Sempre executar inicialização se há profile (mesmo sem cliente_id)
+    if (profile) {
+      initializeData();
     }
-  }, [isIpadoClient]);
+  }, [profile, isSuperAdmin, getCurrentTables]);
+
+  // Recarregar quando as tabelas mudarem (super-admin trocando cliente)
+  useEffect(() => {
+    const reloadData = async () => {
+      if (currentTables && !loading) {
+        console.log('🔄 Tabelas mudaram - recarregando dados...');
+        try {
+          await Promise.all([
+            fetchDoctors(currentTables),
+            fetchAtendimentos(currentTables),
+            fetchBlockedDates(currentTables),
+          ]);
+        } catch (error) {
+          console.error('❌ Erro ao recarregar dados:', error);
+        }
+      }
+    };
+
+    reloadData();
+  }, [currentTables]);
 
   return {
     doctors,
@@ -170,14 +217,27 @@ export function useSchedulingData() {
     getAtendimentosByDoctor,
     isDateBlocked,
     getBlockedDatesByDoctor,
-    refetch: () => {
-      if (isIpadoClient !== null) {
+    refetch: async () => {
+      console.log('🔄 Refetch solicitado...');
+      if (currentTables) {
+        console.log('📊 Recarregando dados com tabelas:', currentTables);
         return Promise.all([
-          fetchDoctors(isIpadoClient), 
-          fetchAtendimentos(isIpadoClient), 
-          fetchBlockedDates(isIpadoClient)
+          fetchDoctors(currentTables), 
+          fetchAtendimentos(currentTables), 
+          fetchBlockedDates(currentTables)
         ]);
+      } else {
+        console.log('🔄 Sem tabelas definidas - obtendo configuração...');
+        const tables = await getCurrentTables();
+        if (tables) {
+          return Promise.all([
+            fetchDoctors(tables), 
+            fetchAtendimentos(tables), 
+            fetchBlockedDates(tables)
+          ]);
+        }
       }
+      console.log('❌ Refetch falhou - sem configuração de tabelas');
       return Promise.resolve();
     },
   };
