@@ -1870,7 +1870,7 @@ export type Database = {
       }
       l2_normalize: {
         Args: { "": string } | { "": unknown } | { "": unknown }
-        Returns: unknown
+        Returns: string
       }
       log_access_audit: {
         Args: { p_action: string; p_details?: Json; p_resource: string }
