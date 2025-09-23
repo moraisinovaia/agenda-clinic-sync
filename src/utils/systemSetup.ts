@@ -75,7 +75,7 @@ export const setupInitialData = async () => {
         {
           categoria: 'sistema',
           chave: 'clinic_name',
-          valor: 'Endogastro',
+          valor: 'INOVAIA',
           ativo: true
         },
         {
