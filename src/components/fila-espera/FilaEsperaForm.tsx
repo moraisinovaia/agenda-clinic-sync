@@ -115,6 +115,7 @@ export function FilaEsperaForm({
           data_nascimento: pacienteData.dataNascimento,
           convenio: pacienteData.convenio,
           celular: pacienteData.celular,
+          cliente_id: (await supabase.rpc('get_user_cliente_id')).data,
         })
         .select()
         .single();

@@ -80,7 +80,8 @@ export const useFilaEspera = () => {
           observacoes: formData.observacoes,
           prioridade: formData.prioridade,
           data_limite: formData.dataLimite,
-          status: 'aguardando'
+          status: 'aguardando',
+          cliente_id: (await supabase.rpc('get_user_cliente_id')).data,
         });
 
       if (error) {
