@@ -9,6 +9,7 @@ import { Loader2, Check, X, Users, Clock, CheckCircle, XCircle, Mail, MailCheck 
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useStableAuth } from '@/hooks/useStableAuth';
+import { CreateTestUserIPADO } from './CreateTestUserIPADO';
 
 interface PendingUser {
   id: string;
@@ -308,14 +309,17 @@ export function UserApprovalPanel() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Users className="h-5 w-5" />
-          Gerenciamento de Usuários
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
+    <div className="space-y-6">
+      <CreateTestUserIPADO />
+      
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            Gerenciamento de Usuários
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
         <Tabs defaultValue="pending" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="pending" className="flex items-center gap-2">
@@ -527,5 +531,6 @@ export function UserApprovalPanel() {
         </Tabs>
       </CardContent>
     </Card>
+    </div>
   );
 }
