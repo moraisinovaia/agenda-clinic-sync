@@ -227,10 +227,10 @@ export function FilaEsperaForm({
                           className="w-full text-left p-2 hover:bg-muted rounded text-sm border border-transparent hover:border-primary/20"
                         >
                           <div className="font-medium">{patient.nome_completo}</div>
-                          <div className="text-muted-foreground">
-                            {patient.data_nascimento} • {patient.convenio}
-                            {patient.celular && ` • ${patient.celular}`}
-                          </div>
+                           <div className="text-muted-foreground">
+                             {patient.data_nascimento} • {patient.convenios.map(c => c.convenio).join(', ')}
+                             {patient.celular && ` • ${patient.celular}`}
+                           </div>
                         </button>
                       ))}
                     </div>

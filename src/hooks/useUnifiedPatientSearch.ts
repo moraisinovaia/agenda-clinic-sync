@@ -1,13 +1,14 @@
 import { useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Patient } from '@/types/scheduling';
+import { ConsolidatedPatient, consolidatePatients } from '@/types/consolidated-patient';
 import { toast } from '@/components/ui/use-toast';
 
 interface PatientSearchState {
   loading: boolean;
-  foundPatients: Patient[];
+  foundPatients: ConsolidatedPatient[];
   showResults: boolean;
-  selectedPatient: Patient | null;
+  selectedPatient: ConsolidatedPatient | null;
 }
 
 export function useUnifiedPatientSearch() {
@@ -19,7 +20,7 @@ export function useUnifiedPatientSearch() {
   });
 
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const cacheRef = useRef<{ [key: string]: Patient[] }>({});
+  const cacheRef = useRef<{ [key: string]: ConsolidatedPatient[] }>({});
 
   // Função unificada de busca que evita chamadas duplicadas
   const performSearch = useCallback(async (query: string, type: 'birthDate' | 'name') => {
@@ -78,26 +79,19 @@ export function useUnifiedPatientSearch() {
         data = results || [];
       }
 
-      // Remover duplicatas
-      const uniquePatients = data.reduce((acc, current) => {
-        const existing = acc.find(patient => 
-          patient.nome_completo.toLowerCase() === current.nome_completo.toLowerCase() &&
-          patient.convenio === current.convenio
-        );
-        if (!existing) acc.push(current);
-        return acc;
-      }, [] as Patient[]);
+      // Consolidar pacientes por nome_completo + data_nascimento
+      const consolidatedPatients = consolidatePatients(data);
 
       // Armazenar no cache
-      cacheRef.current[cacheKey] = uniquePatients;
+      cacheRef.current[cacheKey] = consolidatedPatients;
 
       setState(prev => ({
         ...prev,
-        foundPatients: uniquePatients,
-        showResults: uniquePatients.length > 0,
+        foundPatients: consolidatedPatients,
+        showResults: consolidatedPatients.length > 0,
       }));
 
-      return uniquePatients;
+      return consolidatedPatients;
 
     } catch (error) {
       console.error('❌ Erro ao buscar pacientes:', error);
@@ -145,7 +139,7 @@ export function useUnifiedPatientSearch() {
   }, [performSearch]);
 
   // Selecionar paciente e limpar resultados
-  const selectPatient = useCallback((patient: Patient) => {
+  const selectPatient = useCallback((patient: ConsolidatedPatient) => {
     setState(prev => ({
       ...prev,
       selectedPatient: patient,

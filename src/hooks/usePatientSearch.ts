@@ -1,11 +1,12 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Patient } from '@/types/scheduling';
+import { ConsolidatedPatient, consolidatePatients } from '@/types/consolidated-patient';
 import { useToast } from '@/hooks/use-toast';
 
 export function usePatientSearch() {
   const [loading, setLoading] = useState(false);
-  const [foundPatients, setFoundPatients] = useState<Patient[]>([]);
+  const [foundPatients, setFoundPatients] = useState<ConsolidatedPatient[]>([]);
   const { toast } = useToast();
 
   const searchPatients = useCallback(async (birthDate: string) => {
@@ -28,20 +29,11 @@ export function usePatientSearch() {
         throw error;
       }
 
-      // Remover duplicatas
-      const uniquePatients = data ? data.reduce((acc, current) => {
-        const existing = acc.find(patient => 
-          patient.nome_completo.toLowerCase() === current.nome_completo.toLowerCase() &&
-          patient.convenio === current.convenio
-        );
-        if (!existing) {
-          acc.push(current);
-        }
-        return acc;
-      }, [] as typeof data) : [];
+      // Consolidar pacientes por nome_completo + data_nascimento
+      const consolidatedPatients = consolidatePatients(data || []);
 
-      setFoundPatients(uniquePatients);
-      return uniquePatients;
+      setFoundPatients(consolidatedPatients);
+      return consolidatedPatients;
     } catch (error) {
       console.error('❌ Erro ao buscar pacientes:', error);
       toast({
@@ -60,7 +52,7 @@ export function usePatientSearch() {
     const trimmed = name?.trim();
     if (!trimmed || trimmed.length < 3) {
       setFoundPatients([]);
-      return [] as Patient[];
+      return [] as ConsolidatedPatient[];
     }
 
     try {
@@ -77,19 +69,10 @@ export function usePatientSearch() {
         throw error;
       }
 
-      const uniquePatients = data ? data.reduce((acc, current) => {
-        const existing = acc.find(patient => 
-          patient.nome_completo.toLowerCase() === current.nome_completo.toLowerCase() &&
-          patient.convenio === current.convenio
-        );
-        if (!existing) {
-          acc.push(current);
-        }
-        return acc;
-      }, [] as typeof data) : [];
+      const consolidatedPatients = consolidatePatients(data || []);
 
-      setFoundPatients(uniquePatients);
-      return uniquePatients as Patient[];
+      setFoundPatients(consolidatedPatients);
+      return consolidatedPatients as ConsolidatedPatient[];
     } catch (error) {
       console.error('❌ Erro ao buscar pacientes por nome:', error);
       toast({
@@ -98,7 +81,7 @@ export function usePatientSearch() {
         variant: 'destructive',
       });
       setFoundPatients([]);
-      return [] as Patient[];
+      return [] as ConsolidatedPatient[];
     } finally {
       setLoading(false);
     }

@@ -1,14 +1,15 @@
 import { useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Patient } from '@/types/scheduling';
+import { ConsolidatedPatient, consolidatePatients } from '@/types/consolidated-patient';
 import { toast } from '@/components/ui/use-toast';
 
 export function usePatientManagement() {
   const [loading, setLoading] = useState(false);
-  const cacheRef = useRef<{ [key: string]: Patient[] }>({});
+  const cacheRef = useRef<{ [key: string]: ConsolidatedPatient[] }>({});
 
   // Buscar pacientes por data de nascimento (ESTABILIZADA - SEM dependências instáveis)
-  const searchPatientsByBirthDate = useCallback(async (birthDate: string): Promise<Patient[]> => {
+  const searchPatientsByBirthDate = useCallback(async (birthDate: string): Promise<ConsolidatedPatient[]> => {
     if (!birthDate || birthDate.length !== 10) {
       return [];
     }
@@ -32,22 +33,13 @@ export function usePatientManagement() {
         throw error;
       }
 
-      // Remover duplicatas baseado no nome completo e convênio para evitar pacientes repetidos
-      const uniquePatients = data ? data.reduce((acc, current) => {
-        const existing = acc.find(patient => 
-          patient.nome_completo.toLowerCase() === current.nome_completo.toLowerCase() &&
-          patient.convenio === current.convenio
-        );
-        if (!existing) {
-          acc.push(current);
-        }
-        return acc;
-      }, [] as typeof data) : [];
+      // Consolidar pacientes por nome_completo + data_nascimento
+      const consolidatedPatients = consolidatePatients(data || []);
 
       // Armazenar no cache
-      cacheRef.current[birthDate] = uniquePatients;
+      cacheRef.current[birthDate] = consolidatedPatients;
       
-      return uniquePatients;
+      return consolidatedPatients;
     } catch (error) {
       console.error('❌ Erro ao buscar pacientes:', error);
       // Usar toast diretamente sem colocar nas dependências
@@ -63,7 +55,7 @@ export function usePatientManagement() {
   }, []); // SEM dependências - função completamente estável
 
   // Buscar pacientes por nome (mín. 3 caracteres)
-  const searchPatientsByName = useCallback(async (name: string): Promise<Patient[]> => {
+  const searchPatientsByName = useCallback(async (name: string): Promise<ConsolidatedPatient[]> => {
     const trimmed = name?.trim();
     if (!trimmed || trimmed.length < 3) return [];
 
@@ -86,17 +78,10 @@ export function usePatientManagement() {
         throw error;
       }
 
-      const uniquePatients = data ? data.reduce((acc, current) => {
-        const existing = acc.find(patient => 
-          patient.nome_completo.toLowerCase() === current.nome_completo.toLowerCase() &&
-          patient.convenio === current.convenio
-        );
-        if (!existing) acc.push(current);
-        return acc;
-      }, [] as typeof data) : [];
+      const consolidatedPatients = consolidatePatients(data || []);
 
-      cacheRef.current[cacheKey] = uniquePatients;
-      return uniquePatients;
+      cacheRef.current[cacheKey] = consolidatedPatients;
+      return consolidatedPatients;
     } catch (error) {
       console.error('❌ Erro ao buscar pacientes por nome:', error);
       toast({
