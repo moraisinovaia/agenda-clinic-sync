@@ -35,6 +35,7 @@ interface SimpleSchedulingFormProps {
   preSelectedDate?: string;
   adicionarFilaEspera: (data: FilaEsperaFormData) => Promise<boolean>;
   onMultipleSuccess?: (data: MultipleAppointmentData) => void;
+  onFillLastPatient?: (fn: () => void) => void;
 }
 
 
@@ -53,7 +54,8 @@ export const SimpleSchedulingForm = React.memo(function SimpleSchedulingForm({
   preSelectedDoctor,
   preSelectedDate,
   adicionarFilaEspera,
-  onMultipleSuccess
+  onMultipleSuccess,
+  onFillLastPatient
 }: SimpleSchedulingFormProps) {
   // Preparar dados iniciais para edição
   const initialEditData = editingAppointment ? {
@@ -211,6 +213,7 @@ export const SimpleSchedulingForm = React.memo(function SimpleSchedulingForm({
                 availableConvenios={availableConvenios}
                 medicoSelected={medicoSelected}
                 selectedDoctor={selectedDoctor}
+                onFillLastPatient={onFillLastPatient}
               />
 
               <AppointmentDataForm

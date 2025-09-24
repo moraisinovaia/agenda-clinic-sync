@@ -53,6 +53,9 @@ const Index = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [multipleSchedulingOpen, setMultipleSchedulingOpen] = useState(false);
   
+  // Ref para função de preencher último paciente (F12)
+  const fillLastPatientRef = useRef<(() => void) | null>(null);
+  
   const {
     viewMode,
     setViewMode,
@@ -150,6 +153,15 @@ const Index = () => {
         }
       },
       description: 'Esc - Voltar/Fechar'
+    },
+    {
+      key: 'F12',
+      action: () => {
+        if ((viewMode === 'new-appointment' || viewMode === 'edit-appointment') && fillLastPatientRef.current) {
+          fillLastPatientRef.current();
+        }
+      },
+      description: 'F12 - Preencher último paciente agendado'
     }
   ];
 
@@ -496,6 +508,9 @@ const Index = () => {
                 preSelectedDate={selectedAppointmentDate || undefined}
                 adicionarFilaEspera={adicionarFilaEspera}
                 onMultipleSuccess={handleMultipleAppointmentSuccess}
+                onFillLastPatient={(fn: () => void) => {
+                  fillLastPatientRef.current = fn;
+                }}
               />
             </SchedulingErrorBoundary>
           </div>

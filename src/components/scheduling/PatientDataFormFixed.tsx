@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -9,6 +9,9 @@ import { DateOfBirthInput } from '@/components/ui/date-of-birth-input';
 import { User, Search, UserCheck, AlertCircle, CheckCircle } from 'lucide-react';
 import { SchedulingFormData } from '@/types/scheduling';
 import { useUnifiedPatientSearch } from '@/hooks/useUnifiedPatientSearch';
+import { useLastScheduledPatient } from '@/hooks/useLastScheduledPatient';
+import { ConsolidatedPatient } from '@/types/consolidated-patient';
+import { toast } from 'sonner';
 
 interface PatientDataFormFixedProps {
   formData: SchedulingFormData;
@@ -21,6 +24,7 @@ interface PatientDataFormFixedProps {
     idade_maxima?: number;
     convenios_aceitos?: string[];
   };
+  onFillLastPatient?: (fn: () => void) => void;
 }
 
 export function PatientDataFormFixed({ 
@@ -28,7 +32,8 @@ export function PatientDataFormFixed({
   setFormData, 
   availableConvenios, 
   medicoSelected,
-  selectedDoctor
+  selectedDoctor,
+  onFillLastPatient
 }: PatientDataFormFixedProps) {
   const { 
     loading: searchingPatients, 
@@ -40,6 +45,11 @@ export function PatientDataFormFixed({
     clearSearch,
     hideResults
   } = useUnifiedPatientSearch();
+
+  const {
+    loading: loadingLastPatient,
+    fetchLastScheduledPatient
+  } = useLastScheduledPatient();
 
   // Calcular idade do paciente
   const calculateAge = (birthDate: string) => {
@@ -165,6 +175,26 @@ export function PatientDataFormFixed({
   const createNewPatient = () => {
     hideResults();
   };
+
+  // Função para preencher com último paciente (F12)
+  const fillLastPatientData = async () => {
+    try {
+      const lastPatient = await fetchLastScheduledPatient();
+      if (lastPatient) {
+        selectPatient(lastPatient);
+        toast.success(`Dados do paciente ${lastPatient.nome_completo} preenchidos`);
+      }
+    } catch (error) {
+      console.error('Erro ao preencher último paciente:', error);
+    }
+  };
+
+  // Expor função para uso externo (F12)
+  React.useEffect(() => {
+    if (onFillLastPatient) {
+      onFillLastPatient(fillLastPatientData);
+    }
+  }, [onFillLastPatient, fillLastPatientData]);
 
   // Função para aplicar máscara de telefone
   const formatPhone = (value: string) => {
