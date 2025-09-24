@@ -208,18 +208,38 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const signIn = async (emailOrUsername: string, password: string) => {
     try {
+      console.log('🔐 Tentativa de login com:', emailOrUsername);
       let email = emailOrUsername;
       
       // Se não contém @, assume que é username e busca o email
       if (!emailOrUsername.includes('@')) {
+        console.log('📝 Identificado como username, buscando email...');
         try {
+          // Primeiro, tentar buscar o username
+          console.log('🔍 Executando query para buscar username:', emailOrUsername);
+          
           const { data: profile, error: profileError } = await supabase
             .from('profiles')
-            .select('email')
+            .select('email, username, status')
             .eq('username', emailOrUsername)
             .maybeSingle();
             
-          if (profileError || !profile) {
+          console.log('📊 Resultado da busca por username:');
+          console.log('  - Data:', profile);
+          console.log('  - Error:', profileError);
+          
+          if (profileError) {
+            console.error('❌ Erro ao buscar username:', profileError);
+            toast({
+              title: 'Erro no login',
+              description: `Erro ao verificar usuário: ${profileError.message}`,
+              variant: 'destructive',
+            });
+            return { error: profileError };
+          }
+          
+          if (!profile) {
+            console.warn('⚠️ Username não encontrado no banco de dados');
             toast({
               title: 'Erro no login',
               description: 'Nome de usuário não encontrado',
@@ -228,20 +248,28 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             return { error: new Error('Nome de usuário não encontrado') };
           }
           
+          console.log('✅ Username encontrado, email:', profile.email);
+          console.log('🏷️ Status do usuário:', profile.status);
           email = profile.email;
+          
         } catch (profileSearchError) {
-          // Se falhar na busca por username, tratar como email mesmo
-          console.warn('Erro ao buscar username, usando como email:', profileSearchError);
+          console.error('❌ Erro inesperado ao buscar username:', profileSearchError);
+          // Se falhar na busca por username, tentar usar como email mesmo
+          console.log('🔄 Tentando usar como email...');
           email = emailOrUsername;
         }
+      } else {
+        console.log('📧 Identificado como email, prosseguindo com login...');
       }
 
+      console.log('🚀 Tentando fazer login com email:', email);
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) {
+        console.error('❌ Erro no login:', error);
         let errorMessage = 'Erro ao fazer login';
         if (error.message.includes('Invalid login credentials')) {
           errorMessage = 'Email/usuário ou senha incorretos';
@@ -249,6 +277,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           errorMessage = 'Email não confirmado. Verifique sua caixa de entrada.';
         }
         
+        console.log('📱 Mostrando toast de erro:', errorMessage);
         toast({
           title: 'Erro no login',
           description: errorMessage,
@@ -258,6 +287,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         return { error };
       }
 
+      console.log('✅ Login realizado com sucesso!');
       // APENAS mostrar sucesso se não houve erro
       toast({
         title: 'Login realizado com sucesso!',
@@ -266,7 +296,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
       return { error: null };
     } catch (error) {
-      console.error('Erro inesperado no login:', error);
+      console.error('❌ Erro inesperado no login:', error);
       toast({
         title: 'Erro',
         description: 'Erro inesperado ao fazer login',
