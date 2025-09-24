@@ -123,14 +123,6 @@ export function PatientDataFormFixed({
     }
   }, [formData.dataNascimento, searchByBirthDate]);
 
-  // Auto-selecionar paciente único se encontrado apenas um
-  useEffect(() => {
-    if (foundPatients.length === 1 && showResults) {
-      console.log('🎯 Apenas um paciente encontrado, auto-selecionando...');
-      autoSelectPatient(foundPatients[0]);
-    }
-  }, [foundPatients, showResults]);
-
   // Buscar por nome quando ele muda e não há data válida
   useEffect(() => {
     const hasValidBirthDate = formData.dataNascimento && formData.dataNascimento.length === 10;
@@ -139,20 +131,8 @@ export function PatientDataFormFixed({
     }
   }, [formData.nomeCompleto, formData.dataNascimento, searchByName]);
 
-  // Função para auto-selecionar paciente com convênio mais recente
-  const autoSelectPatient = (patient: any) => {
-    // Pegar o convênio mais recente (primeiro da lista já ordenada)
-    const mostRecentConvenio = patient.convenios[0];
-    
-    console.log('🎯 Auto-selecionando paciente:', patient.nome_completo, 'Convênio mais recente:', mostRecentConvenio.convenio);
-    
-    // Verificar se o médico aceita este convênio
-    const doctorAcceptsConvenio = !selectedDoctor?.convenios_aceitos || 
-      selectedDoctor.convenios_aceitos.length === 0 ||
-      selectedDoctor.convenios_aceitos.some(convenio => 
-        convenio.toLowerCase() === mostRecentConvenio.convenio.toLowerCase()
-      );
-    
+  // Função para selecionar um paciente encontrado
+  const selectPatient = (patient: any) => {
     // Preencher dados do formulário
     setFormData(prev => ({
       ...prev,
@@ -160,17 +140,12 @@ export function PatientDataFormFixed({
       dataNascimento: patient.data_nascimento,
       telefone: patient.telefone || '',
       celular: patient.celular,
-      convenio: doctorAcceptsConvenio ? mostRecentConvenio.convenio : '',
+      convenio: patient.convenio,
     }));
     
     // Registrar seleção e esconder resultados
     selectSearchedPatient(patient);
-    
-    console.log('🎯 Convênio aceito pelo médico:', doctorAcceptsConvenio);
   };
-
-  // Função para selecionar um paciente encontrado (compatibilidade)
-  const selectPatient = (patient: any) => autoSelectPatient(patient);
 
   // Função para criar novo paciente (manter dados atuais)
   const createNewPatient = () => {
@@ -250,50 +225,24 @@ export function PatientDataFormFixed({
               className="h-[300px] overflow-y-scroll overflow-x-hidden border rounded-md bg-background"
             >
               <div className="space-y-2 p-2">
-                {foundPatients.map((patient, index) => {
-                  const mostRecentConvenio = patient.convenios[0];
-                  const doctorAcceptsConvenio = !selectedDoctor?.convenios_aceitos || 
-                    selectedDoctor.convenios_aceitos.length === 0 ||
-                    selectedDoctor.convenios_aceitos.some(convenio => 
-                      convenio.toLowerCase() === mostRecentConvenio.convenio.toLowerCase()
-                    );
-                  
-                  return (
-                    <div 
-                      key={patient.id} 
-                      className="p-3 border rounded-lg bg-muted/50 cursor-pointer hover:bg-muted/70 transition-colors"
-                      onClick={() => selectPatient(patient)}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <p className="font-medium">{patient.nome_completo}</p>
-                          <p className="text-sm text-muted-foreground">
-                            Convênio mais recente: <span className="font-medium">{mostRecentConvenio.convenio}</span> • {patient.celular}
-                            {patient.telefone && ` • ${patient.telefone}`}
-                          </p>
-                          {patient.convenios.length > 1 && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              + {patient.convenios.length - 1} outros convênios
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {doctorAcceptsConvenio ? (
-                            <div className="flex items-center gap-1 text-green-600">
-                              <CheckCircle className="h-4 w-4" />
-                              <span className="text-xs">Compatível</span>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1 text-yellow-600">
-                              <AlertCircle className="h-4 w-4" />
-                              <span className="text-xs">Selecionar convênio</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                {foundPatients.map((patient, index) => (
+                  <div key={patient.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
+                    <div>
+                      <p className="font-medium">{patient.nome_completo}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {patient.convenios.map(c => c.convenio).join(', ')} • {patient.celular}
+                        {patient.telefone && ` • ${patient.telefone}`}
+                      </p>
                     </div>
-                  );
-                })}
+                    <Button 
+                      size="sm" 
+                      onClick={() => selectPatient(patient)}
+                      className="ml-2"
+                    >
+                      Selecionar
+                    </Button>
+                  </div>
+                ))}
               </div>
             </div>
             <div className="pt-2 border-t mt-2">
@@ -355,26 +304,13 @@ export function PatientDataFormFixed({
               <SelectValue placeholder={medicoSelected ? "Selecione o convênio" : "Primeiro selecione um médico"} />
             </SelectTrigger>
             <SelectContent>
-              {/* Filtrar convênios apenas pelos aceitos pelo médico se houver restrição */}
-              {(selectedDoctor?.convenios_aceitos && selectedDoctor.convenios_aceitos.length > 0 
-                ? availableConvenios.filter(convenio => 
-                    selectedDoctor.convenios_aceitos!.some(aceito => 
-                      aceito.toLowerCase() === convenio.toLowerCase()
-                    )
-                  )
-                : availableConvenios
-              ).map((convenio) => (
+              {availableConvenios.map((convenio) => (
                 <SelectItem key={convenio} value={convenio}>
                   {convenio}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          {selectedDoctor?.convenios_aceitos && selectedDoctor.convenios_aceitos.length > 0 && (
-            <p className="text-xs text-muted-foreground mt-1">
-              Mostrando apenas convênios aceitos por {selectedDoctor.nome}
-            </p>
-          )}
         </div>
         
         <div>
