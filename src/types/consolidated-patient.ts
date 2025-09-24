@@ -40,7 +40,7 @@ export function consolidatePatients(patients: Patient[], lastConvenios?: Record<
       }
     } else {
       // Primeiro registro deste paciente
-      const patientKey = `${patient.nome_completo}-${patient.data_nascimento}`;
+      const patientKey = `${patient.nome_completo.toLowerCase().trim()}-${patient.data_nascimento}`;
       const ultimoConvenio = lastConvenios?.[patientKey] || patient.convenio;
       
       consolidated.set(key, {

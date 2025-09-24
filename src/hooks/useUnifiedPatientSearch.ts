@@ -95,12 +95,13 @@ export function useUnifiedPatientSearch() {
       if (lastAppointments) {
         const patientToKeyMap: Record<string, string> = {};
         patients.forEach(p => {
-          patientToKeyMap[p.id] = `${p.nome_completo}-${p.data_nascimento}`;
+          patientToKeyMap[p.id] = `${p.nome_completo.toLowerCase().trim()}-${p.data_nascimento}`;
         });
 
         lastAppointments.forEach(appointment => {
           const patientKey = patientToKeyMap[appointment.paciente_id];
-          if (patientKey && !lastConvenios[patientKey] && appointment.convenio) {
+          if (patientKey && appointment.convenio) {
+            // Sempre atualizar com o convênio mais recente
             lastConvenios[patientKey] = appointment.convenio;
           }
         });
