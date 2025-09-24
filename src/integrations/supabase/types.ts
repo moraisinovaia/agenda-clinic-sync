@@ -1413,6 +1413,10 @@ export type Database = {
           username: string
         }[]
       }
+      get_email_by_username: {
+        Args: { p_username: string }
+        Returns: string
+      }
       get_pending_users: {
         Args: Record<PropertyKey, never>
         Returns: {

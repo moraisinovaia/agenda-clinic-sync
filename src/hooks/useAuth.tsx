@@ -215,30 +215,29 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       if (!emailOrUsername.includes('@')) {
         console.log('📝 Identificado como username, buscando email...');
         try {
-          // Primeiro, tentar buscar o username
-          console.log('🔍 Executando query para buscar username:', emailOrUsername);
+          // Usar a função SECURITY DEFINER para contornar RLS
+          console.log('🔍 Executando função get_email_by_username:', emailOrUsername);
           
-          const { data: profile, error: profileError } = await supabase
-            .from('profiles')
-            .select('email, username, status')
-            .eq('username', emailOrUsername)
-            .maybeSingle();
+          const { data: emailResult, error: emailError } = await supabase
+            .rpc('get_email_by_username', { 
+              p_username: emailOrUsername.trim() 
+            });
             
-          console.log('📊 Resultado da busca por username:');
-          console.log('  - Data:', profile);
-          console.log('  - Error:', profileError);
+          console.log('📊 Resultado da função get_email_by_username:');
+          console.log('  - Data:', emailResult);
+          console.log('  - Error:', emailError);
           
-          if (profileError) {
-            console.error('❌ Erro ao buscar username:', profileError);
+          if (emailError) {
+            console.error('❌ Erro ao buscar username via função:', emailError);
             toast({
               title: 'Erro no login',
-              description: `Erro ao verificar usuário: ${profileError.message}`,
+              description: `Erro ao verificar usuário: ${emailError.message}`,
               variant: 'destructive',
             });
-            return { error: profileError };
+            return { error: emailError };
           }
           
-          if (!profile) {
+          if (!emailResult) {
             console.warn('⚠️ Username não encontrado no banco de dados');
             toast({
               title: 'Erro no login',
@@ -248,9 +247,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             return { error: new Error('Nome de usuário não encontrado') };
           }
           
-          console.log('✅ Username encontrado, email:', profile.email);
-          console.log('🏷️ Status do usuário:', profile.status);
-          email = profile.email;
+          console.log('✅ Username encontrado, email:', emailResult);
+          email = emailResult;
           
         } catch (profileSearchError) {
           console.error('❌ Erro inesperado ao buscar username:', profileSearchError);
