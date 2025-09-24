@@ -1086,6 +1086,51 @@ export type Database = {
         }
         Relationships: []
       }
+      temp_medicos_backup: {
+        Row: {
+          ativo: boolean | null
+          cliente_id: string | null
+          convenios_aceitos: string[] | null
+          convenios_restricoes: Json | null
+          created_at: string | null
+          especialidade: string | null
+          horarios: Json | null
+          id: string | null
+          idade_maxima: number | null
+          idade_minima: number | null
+          nome: string | null
+          observacoes: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          cliente_id?: string | null
+          convenios_aceitos?: string[] | null
+          convenios_restricoes?: Json | null
+          created_at?: string | null
+          especialidade?: string | null
+          horarios?: Json | null
+          id?: string | null
+          idade_maxima?: number | null
+          idade_minima?: number | null
+          nome?: string | null
+          observacoes?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          cliente_id?: string | null
+          convenios_aceitos?: string[] | null
+          convenios_restricoes?: Json | null
+          created_at?: string | null
+          especialidade?: string | null
+          horarios?: Json | null
+          id?: string | null
+          idade_maxima?: number | null
+          idade_minima?: number | null
+          nome?: string | null
+          observacoes?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       v_historico_endogastro: {
