@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { format, addDays, startOfWeek, isSameDay, parse } from 'date-fns';
+import { format, addDays, startOfWeek, isSameDay, parse, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Doctor, AppointmentWithRelations, Atendimento } from '@/types/scheduling';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -53,17 +53,35 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   
   const getAppointmentsForDate = (date: Date) => {
-    const dateStr = format(date, 'yyyy-MM-dd');
-    return appointments.filter(
+    // Normalizar a data para evitar problemas de timezone
+    const normalizedDate = startOfDay(date);
+    const dateStr = format(normalizedDate, 'yyyy-MM-dd');
+    
+    const filtered = appointments.filter(
       appointment => 
         appointment.medico_id === doctor.id && 
         appointment.data_agendamento === dateStr
     );
+    
+    return filtered;
   };
 
   // Função para verificar se uma data tem agendamentos
   const hasAppointments = (date: Date) => {
-    return getAppointmentsForDate(date).length > 0;
+    const normalizedDate = startOfDay(date);
+    const dateStr = format(normalizedDate, 'yyyy-MM-dd');
+    
+    // Debug detalhado
+    console.log(`🔍 hasAppointments verificando data: ${dateStr}`);
+    console.log(`📋 Total appointments para médico ${doctor.id}:`, appointments.filter(apt => apt.medico_id === doctor.id).length);
+    console.log(`📅 Appointments para esta data:`, appointments.filter(apt => 
+      apt.medico_id === doctor.id && apt.data_agendamento === dateStr
+    ));
+    
+    const appointmentsForDate = getAppointmentsForDate(date);
+    console.log(`✅ hasAppointments retornando:`, appointmentsForDate.length > 0);
+    
+    return appointmentsForDate.length > 0;
   };
 
   // Função para verificar se uma data está bloqueada
@@ -169,7 +187,7 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                     textDecoration: 'line-through'
                   }
                 }}
-                key={`calendar-${appointments?.length || 0}-${doctor.id}`} // Force re-render when appointments change
+                key={`calendar-${appointments?.length || 0}-${doctor.id}-${JSON.stringify(appointments?.filter(apt => apt.medico_id === doctor.id)?.map(apt => apt.data_agendamento))}`} // Force re-render when appointments change
               />
               <div className="text-xs text-muted-foreground space-y-1">
                 <div className="flex items-center gap-1">
