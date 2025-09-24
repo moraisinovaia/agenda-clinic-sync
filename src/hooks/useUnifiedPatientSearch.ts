@@ -48,78 +48,95 @@ export function useUnifiedPatientSearch() {
         ...prev,
         foundPatients: cachedResults,
         showResults: cachedResults.length > 0,
+        loading: false
       }));
       return cachedResults;
     }
 
+    setState(prev => ({ ...prev, loading: true }));
+
     try {
-      setState(prev => ({ ...prev, loading: true }));
-      
-      let data: Patient[] = [];
+      let searchQuery = supabase.from('pacientes').select('*');
 
       if (type === 'birthDate') {
-        const { data: results, error } = await supabase
-          .from('pacientes')
-          .select('*')
-          .eq('data_nascimento', query)
-          .order('updated_at', { ascending: false });
-        
-        if (error) throw error;
-        data = results || [];
-      } else if (type === 'name') {
-        const trimmedQuery = query.trim();
-        const { data: results, error } = await supabase
-          .from('pacientes')
-          .select('*')
-          .ilike('nome_completo', `%${trimmedQuery}%`)
-          .order('updated_at', { ascending: false })
-          .limit(20);
-        
-        if (error) throw error;
-        data = results || [];
+        searchQuery = searchQuery.eq('data_nascimento', query);
+      } else {
+        searchQuery = searchQuery.ilike('nome_completo', `%${query.trim()}%`);
       }
 
-      // Consolidar pacientes por nome_completo + data_nascimento
-      const consolidatedPatients = consolidatePatients(data);
+      const { data: patients, error } = await searchQuery.limit(20).order('updated_at', { ascending: false });
 
-      // Armazenar no cache
+      if (error) {
+        console.error('Erro ao buscar pacientes:', error);
+        toast({
+          title: "Erro ao buscar pacientes",
+          description: error.message,
+          variant: "destructive",
+        });
+        setState(prev => ({ ...prev, foundPatients: [], showResults: false, loading: false }));
+        return [];
+      }
+
+      if (!patients || patients.length === 0) {
+        setState(prev => ({ ...prev, foundPatients: [], showResults: false, loading: false }));
+        return [];
+      }
+
+      // Buscar últimos convênios usados em agendamentos
+      const { data: lastAppointments } = await supabase
+        .from('agendamentos')
+        .select('paciente_id, convenio, data_agendamento, hora_agendamento')
+        .in('paciente_id', patients.map(p => p.id))
+        .order('data_agendamento', { ascending: false })
+        .order('hora_agendamento', { ascending: false });
+
+      // Mapear último convênio por paciente
+      const lastConvenios: Record<string, string> = {};
+      if (lastAppointments) {
+        const patientToKeyMap: Record<string, string> = {};
+        patients.forEach(p => {
+          patientToKeyMap[p.id] = `${p.nome_completo}-${p.data_nascimento}`;
+        });
+
+        lastAppointments.forEach(appointment => {
+          const patientKey = patientToKeyMap[appointment.paciente_id];
+          if (patientKey && !lastConvenios[patientKey] && appointment.convenio) {
+            lastConvenios[patientKey] = appointment.convenio;
+          }
+        });
+      }
+
+      const consolidatedPatients = consolidatePatients(patients as Patient[], lastConvenios);
+      
+      // Salvar no cache
       cacheRef.current[cacheKey] = consolidatedPatients;
 
       setState(prev => ({
         ...prev,
         foundPatients: consolidatedPatients,
         showResults: consolidatedPatients.length > 0,
+        loading: false
       }));
 
       return consolidatedPatients;
-
     } catch (error) {
-      console.error('❌ Erro ao buscar pacientes:', error);
+      console.error('Erro inesperado ao buscar pacientes:', error);
       toast({
-        title: 'Erro',
-        description: 'Não foi possível buscar os pacientes',
-        variant: 'destructive',
+        title: "Erro inesperado",
+        description: "Ocorreu um erro ao buscar pacientes. Tente novamente.",
+        variant: "destructive",
       });
-
-      setState(prev => ({
-        ...prev,
-        foundPatients: [],
-        showResults: false,
-      }));
+      setState(prev => ({ ...prev, foundPatients: [], showResults: false, loading: false }));
       return [];
-    } finally {
-      setState(prev => ({ ...prev, loading: false }));
     }
   }, []);
 
   // Buscar por data de nascimento com debounce
   const searchByBirthDate = useCallback((birthDate: string) => {
-    // Cancelar timeout anterior
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
 
-    // Aplicar debounce
     searchTimeoutRef.current = setTimeout(() => {
       performSearch(birthDate, 'birthDate');
     }, 300);
@@ -127,28 +144,25 @@ export function useUnifiedPatientSearch() {
 
   // Buscar por nome com debounce
   const searchByName = useCallback((name: string) => {
-    // Cancelar timeout anterior
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
 
-    // Aplicar debounce
     searchTimeoutRef.current = setTimeout(() => {
-      performSearch(name, 'name');
+      performSearch(name, 'name');  
     }, 500);
   }, [performSearch]);
 
-  // Selecionar paciente e limpar resultados
+  // Selecionar paciente
   const selectPatient = useCallback((patient: ConsolidatedPatient) => {
     setState(prev => ({
       ...prev,
       selectedPatient: patient,
-      showResults: false,
-      foundPatients: [],
+      showResults: false
     }));
   }, []);
 
-  // Limpar busca e resultados
+  // Limpar busca
   const clearSearch = useCallback(() => {
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
@@ -160,18 +174,21 @@ export function useUnifiedPatientSearch() {
       showResults: false,
       selectedPatient: null,
     });
+    
+    // Limpar cache também
+    cacheRef.current = {};
   }, []);
 
-  // Esconder resultados (mas manter cache)
+  // Esconder resultados sem limpar
   const hideResults = useCallback(() => {
-    setState(prev => ({ ...prev, showResults: false }));
+    setState(prev => ({
+      ...prev,
+      showResults: false
+    }));
   }, []);
 
   return {
-    loading: state.loading,
-    foundPatients: state.foundPatients,
-    showResults: state.showResults,
-    selectedPatient: state.selectedPatient,
+    ...state,
     searchByBirthDate,
     searchByName,
     selectPatient,

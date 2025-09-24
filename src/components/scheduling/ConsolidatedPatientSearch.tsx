@@ -1,7 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { ConsolidatedPatient, PatientConvenio } from '@/types/consolidated-patient';
 import { useUnifiedPatientSearch } from '@/hooks/useUnifiedPatientSearch';
-import { ConvenioSelector } from './ConvenioSelector';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,7 +21,6 @@ export function ConsolidatedPatientSearch({
   const [searchType, setSearchType] = useState<'birthDate' | 'name'>('birthDate');
   const [birthDate, setBirthDate] = useState(initialBirthDate);
   const [name, setName] = useState(initialName);
-  const [selectedPatient, setSelectedPatient] = useState<ConsolidatedPatient | null>(null);
   
   const {
     loading,
@@ -55,38 +53,16 @@ export function ConsolidatedPatientSearch({
     }
   }, [searchByName, clearSearch]);
 
-  // Selecionar paciente para escolher convênio
+  // Selecionar paciente
   const handlePatientSelect = useCallback((patient: ConsolidatedPatient) => {
-    if (patient.convenios.length === 1) {
-      // Se há apenas um convênio, selecionar automaticamente
-      onPatientWithConvenioSelect(patient, patient.convenios[0]);
-    } else {
-      // Se há múltiplos convênios, mostrar seletor
-      setSelectedPatient(patient);
-    }
+    // Como agora temos apenas um convênio (o último usado), selecionar automaticamente
+    onPatientWithConvenioSelect(patient, { 
+      id: patient.id, 
+      convenio: patient.ultimo_convenio || '', 
+      created_at: patient.created_at, 
+      updated_at: patient.updated_at 
+    });
   }, [onPatientWithConvenioSelect]);
-
-  // Confirmar seleção do convênio
-  const handleConvenioSelect = useCallback((patient: ConsolidatedPatient, convenio: PatientConvenio) => {
-    onPatientWithConvenioSelect(patient, convenio);
-    setSelectedPatient(null);
-  }, [onPatientWithConvenioSelect]);
-
-  // Voltar à busca
-  const handleBack = useCallback(() => {
-    setSelectedPatient(null);
-  }, []);
-
-  // Se um paciente foi selecionado e tem múltiplos convênios, mostrar o seletor
-  if (selectedPatient) {
-    return (
-      <ConvenioSelector
-        patient={selectedPatient}
-        onConvenioSelect={handleConvenioSelect}
-        onBack={handleBack}
-      />
-    );
-  }
 
   return (
     <Card className="w-full">
@@ -188,12 +164,7 @@ export function ConsolidatedPatientSearch({
                       Data: {patient.data_nascimento}
                     </div>
                     <div className="text-sm text-muted-foreground">
-                      Convênios: {patient.convenios.map(c => c.convenio).join(', ')}
-                      {patient.convenios.length > 1 && (
-                        <span className="ml-1 px-2 py-0.5 bg-primary/10 text-primary text-xs rounded">
-                          {patient.convenios.length} opções
-                        </span>
-                      )}
+                      Último convênio: {patient.ultimo_convenio || 'Não informado'}
                     </div>
                     {patient.celular && (
                       <div className="text-sm text-muted-foreground">

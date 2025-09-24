@@ -230,7 +230,7 @@ export function PatientDataFormFixed({
                     <div>
                       <p className="font-medium">{patient.nome_completo}</p>
                       <p className="text-sm text-muted-foreground">
-                        {patient.convenios.map(c => c.convenio).join(', ')} • {patient.celular}
+                        {patient.ultimo_convenio || 'Convênio não informado'} • {patient.celular}
                         {patient.telefone && ` • ${patient.telefone}`}
                       </p>
                     </div>

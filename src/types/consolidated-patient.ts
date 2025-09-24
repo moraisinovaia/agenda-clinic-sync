@@ -1,13 +1,13 @@
 import { Patient } from './scheduling';
 
-// Tipo para representar um paciente consolidado com múltiplos convênios
+// Tipo para representar um paciente consolidado com último convênio usado em agendamento
 export interface ConsolidatedPatient {
   id: string; // ID do registro mais recente
   nome_completo: string;
   data_nascimento: string;
   telefone?: string;
   celular?: string;
-  convenios: PatientConvenio[]; // Lista de convênios disponíveis para este paciente
+  ultimo_convenio: string | null; // Último convênio usado em agendamento
   created_at: string;
   updated_at: string;
   cliente_id: string;
@@ -20,8 +20,8 @@ export interface PatientConvenio {
   updated_at: string;
 }
 
-// Função utilitária para consolidar pacientes duplicados
-export function consolidatePatients(patients: Patient[]): ConsolidatedPatient[] {
+// Função utilitária para consolidar pacientes com último convênio usado
+export function consolidatePatients(patients: Patient[], lastConvenios?: Record<string, string>): ConsolidatedPatient[] {
   const consolidated = new Map<string, ConsolidatedPatient>();
 
   patients.forEach(patient => {
@@ -29,40 +29,27 @@ export function consolidatePatients(patients: Patient[]): ConsolidatedPatient[] 
     const key = `${patient.nome_completo.toLowerCase().trim()}-${patient.data_nascimento}`;
     
     if (consolidated.has(key)) {
-      // Paciente já existe, adicionar convênio à lista
+      // Paciente já existe, usar o registro mais recente como base
       const existing = consolidated.get(key)!;
       
-      // Verificar se este convênio já não está na lista
-      if (!existing.convenios.some(c => c.convenio === patient.convenio)) {
-        existing.convenios.push({
-          id: patient.id,
-          convenio: patient.convenio,
-          created_at: patient.created_at,
-          updated_at: patient.updated_at,
-        });
-        
-        // Usar o registro mais recente como base
-        if (new Date(patient.updated_at) > new Date(existing.updated_at)) {
-          existing.id = patient.id;
-          existing.telefone = patient.telefone;
-          existing.celular = patient.celular;
-          existing.updated_at = patient.updated_at;
-        }
+      if (new Date(patient.updated_at) > new Date(existing.updated_at)) {
+        existing.id = patient.id;
+        existing.telefone = patient.telefone;
+        existing.celular = patient.celular;
+        existing.updated_at = patient.updated_at;
       }
     } else {
       // Primeiro registro deste paciente
+      const patientKey = `${patient.nome_completo}-${patient.data_nascimento}`;
+      const ultimoConvenio = lastConvenios?.[patientKey] || patient.convenio;
+      
       consolidated.set(key, {
         id: patient.id,
         nome_completo: patient.nome_completo,
         data_nascimento: patient.data_nascimento,
         telefone: patient.telefone,
         celular: patient.celular,
-        convenios: [{
-          id: patient.id,
-          convenio: patient.convenio,
-          created_at: patient.created_at,
-          updated_at: patient.updated_at,
-        }],
+        ultimo_convenio: ultimoConvenio,
         created_at: patient.created_at,
         updated_at: patient.updated_at,
         cliente_id: patient.cliente_id,
@@ -70,23 +57,20 @@ export function consolidatePatients(patients: Patient[]): ConsolidatedPatient[] 
     }
   });
 
-  return Array.from(consolidated.values()).map(patient => ({
-    ...patient,
-    convenios: patient.convenios.sort((a, b) => b.updated_at.localeCompare(a.updated_at))
-  }));
+  return Array.from(consolidated.values());
 }
 
-// Função para converter ConsolidatedPatient + PatientConvenio de volta para Patient
-export function consolidatedToPatient(consolidated: ConsolidatedPatient, convenio: PatientConvenio): Patient {
+// Função para converter ConsolidatedPatient de volta para Patient
+export function consolidatedToPatient(consolidated: ConsolidatedPatient): Patient {
   return {
-    id: convenio.id, // Usar o ID específico do convênio selecionado
+    id: consolidated.id,
     nome_completo: consolidated.nome_completo,
     data_nascimento: consolidated.data_nascimento,
     telefone: consolidated.telefone,
     celular: consolidated.celular,
-    convenio: convenio.convenio,
-    created_at: convenio.created_at,
-    updated_at: convenio.updated_at,
+    convenio: consolidated.ultimo_convenio || '',
+    created_at: consolidated.created_at,
+    updated_at: consolidated.updated_at,
     cliente_id: consolidated.cliente_id,
   };
 }

@@ -17,7 +17,7 @@ export function PatientSearchExample({ onPatientSelected }: PatientSearchExample
     convenio: PatientConvenio
   ) => {
     // Converter de volta para Patient tradicional
-    const patient = consolidatedToPatient(consolidatedPatient, convenio);
+    const patient = consolidatedToPatient(consolidatedPatient);
     setSelectedPatient(patient);
     onPatientSelected?.(patient);
   };

@@ -228,7 +228,7 @@ export function FilaEsperaForm({
                         >
                           <div className="font-medium">{patient.nome_completo}</div>
                            <div className="text-muted-foreground">
-                             {patient.data_nascimento} • {patient.convenios.map(c => c.convenio).join(', ')}
+                             {patient.data_nascimento} • {patient.ultimo_convenio || 'Convênio não informado'}
                              {patient.celular && ` • ${patient.celular}`}
                            </div>
                         </button>
