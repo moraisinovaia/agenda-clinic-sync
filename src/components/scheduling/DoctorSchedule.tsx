@@ -41,12 +41,28 @@ interface DoctorScheduleProps {
 }
 
 export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDateBlocked, onCancelAppointment, onConfirmAppointment, onUnconfirmAppointment, onEditAppointment, onNewAppointment, initialDate, atendimentos, adicionarFilaEspera, searchPatientsByBirthDate }: DoctorScheduleProps) {
-  // Usar initialDate se fornecida, senão usar data atual
+  // Usar initialDate se fornecida, senão usar data do primeiro agendamento do médico, senão data atual
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     if (initialDate) {
       // Parse da data no formato YYYY-MM-DD para evitar problemas de timezone
+      console.log('🎯 DoctorSchedule: Usando initialDate fornecida:', initialDate);
       return parse(initialDate, 'yyyy-MM-dd', new Date());
     }
+    
+    // Se não há initialDate, tentar usar a data do agendamento mais recente do médico
+    if (appointments && appointments.length > 0) {
+      const doctorAppointments = appointments.filter(apt => apt.medico_id === doctor.id);
+      if (doctorAppointments.length > 0) {
+        // Usar o agendamento mais recente
+        const mostRecentAppointment = doctorAppointments.sort((a, b) => 
+          new Date(b.data_agendamento).getTime() - new Date(a.data_agendamento).getTime()
+        )[0];
+        console.log('🎯 DoctorSchedule: Usando data do agendamento mais recente:', mostRecentAppointment.data_agendamento);
+        return parse(mostRecentAppointment.data_agendamento, 'yyyy-MM-dd', new Date());
+      }
+    }
+    
+    console.log('🎯 DoctorSchedule: Usando data atual como fallback');
     return new Date();
   });
   
@@ -190,6 +206,7 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                 mode="single"
                 selected={selectedDate}
                 onSelect={(date) => date && setSelectedDate(date)}
+                defaultMonth={selectedDate} // Força navegação para o mês da data selecionada
                 locale={ptBR}
                 className="rounded-md border-none p-0 scale-90"
                 modifiers={{
@@ -204,7 +221,7 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                   hasAppointments: "calendar-has-appointments !bg-primary !text-primary-foreground !font-bold hover:!bg-primary/90",
                   hasBlocks: "calendar-has-blocks !bg-destructive !text-destructive-foreground !font-bold line-through hover:!bg-destructive/90"
                 }}
-                key={`calendar-${Date.now()}-${doctor.id}-${appointments?.filter(apt => apt.medico_id === doctor.id)?.length || 0}`} // Force re-render with timestamp
+                key={`calendar-${doctor.id}-${selectedDate.getTime()}-${appointments?.filter(apt => apt.medico_id === doctor.id)?.length || 0}`} // Force re-render with selected date
               />
               <div className="text-xs text-muted-foreground space-y-1">
                 <div className="flex items-center gap-1">
