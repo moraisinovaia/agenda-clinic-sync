@@ -133,6 +133,28 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
 
   return (
     <div className="space-y-6">
+      {/* CSS customizado para destacar datas com agendamentos */}
+      <style>{`
+        .calendar-has-appointments {
+          background-color: hsl(var(--primary)) !important;
+          color: hsl(var(--primary-foreground)) !important;
+          font-weight: bold !important;
+          border-radius: 6px !important;
+        }
+        .calendar-has-appointments:hover {
+          background-color: hsl(var(--primary) / 0.9) !important;
+        }
+        .calendar-has-blocks {
+          background-color: hsl(var(--destructive)) !important;
+          color: hsl(var(--destructive-foreground)) !important;
+          font-weight: bold !important;
+          text-decoration: line-through !important;
+          border-radius: 6px !important;
+        }
+        .calendar-has-blocks:hover {
+          background-color: hsl(var(--destructive) / 0.9) !important;
+        }
+      `}</style>
       <Card className="w-full">
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
@@ -171,23 +193,18 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                 locale={ptBR}
                 className="rounded-md border-none p-0 scale-90"
                 modifiers={{
-                  hasAppointments: (date) => hasAppointments(date),
+                  hasAppointments: (date) => {
+                    const result = hasAppointments(date);
+                    console.log(`📅 Calendar modifier hasAppointments para ${format(date, 'yyyy-MM-dd')}: ${result}`);
+                    return result;
+                  },
                   hasBlocks: (date) => hasBlocks(date)
                 }}
-                modifiersStyles={{
-                  hasAppointments: {
-                    backgroundColor: 'hsl(var(--primary))',
-                    color: 'hsl(var(--primary-foreground))',
-                    fontWeight: 'bold'
-                  },
-                  hasBlocks: {
-                    backgroundColor: 'hsl(var(--destructive))',
-                    color: 'hsl(var(--destructive-foreground))',
-                    fontWeight: 'bold',
-                    textDecoration: 'line-through'
-                  }
+                modifiersClassNames={{
+                  hasAppointments: "calendar-has-appointments !bg-primary !text-primary-foreground !font-bold hover:!bg-primary/90",
+                  hasBlocks: "calendar-has-blocks !bg-destructive !text-destructive-foreground !font-bold line-through hover:!bg-destructive/90"
                 }}
-                key={`calendar-${appointments?.length || 0}-${doctor.id}-${JSON.stringify(appointments?.filter(apt => apt.medico_id === doctor.id)?.map(apt => apt.data_agendamento))}`} // Force re-render when appointments change
+                key={`calendar-${Date.now()}-${doctor.id}-${appointments?.filter(apt => apt.medico_id === doctor.id)?.length || 0}`} // Force re-render with timestamp
               />
               <div className="text-xs text-muted-foreground space-y-1">
                 <div className="flex items-center gap-1">
