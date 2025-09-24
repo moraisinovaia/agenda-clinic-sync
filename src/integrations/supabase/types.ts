@@ -1333,6 +1333,20 @@ export type Database = {
               p_observacoes?: string
               p_telefone: string
             }
+          | {
+              p_atendimento_id: string
+              p_celular: string
+              p_convenio: string
+              p_criado_por?: string
+              p_criado_por_user_id?: string
+              p_data_agendamento: string
+              p_data_nascimento: string
+              p_hora_agendamento: string
+              p_medico_id: string
+              p_nome_completo: string
+              p_observacoes?: string
+              p_telefone: string
+            }
         Returns: Json
       }
       criar_agendamento_atomico_ipado: {
