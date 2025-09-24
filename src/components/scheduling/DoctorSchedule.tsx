@@ -169,6 +169,7 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                     textDecoration: 'line-through'
                   }
                 }}
+                key={`calendar-${appointments?.length || 0}-${doctor.id}`} // Force re-render when appointments change
               />
               <div className="text-xs text-muted-foreground space-y-1">
                 <div className="flex items-center gap-1">

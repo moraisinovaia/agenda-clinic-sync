@@ -32,12 +32,13 @@ export function useSupabaseScheduling() {
       if (result && result.success !== false) {
         console.log('✅ Sucesso CONFIRMADO - invalidando cache e refetch automático');
         
-        // Invalidar cache E fazer refetch para garantir dados atualizados
+        // Invalidar cache imediatamente - o realtime fará o resto
         appointmentsList.invalidateCache?.();
-        await schedulingData.refetch();
-        await appointmentsList.refetch();
         
-        console.log('🔄 Cache invalidated and data refreshed - appointments should now be visible');
+        // Aguardar um pouco para o realtime processar
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        console.log('🔄 Cache invalidado - realtime updates farão o refetch automático');
       } else {
         console.log('⚠️ Resultado indefinido ou falha - NÃO invalidando cache');
         console.log('🔍 Result details:', JSON.stringify(result, null, 2));
@@ -48,7 +49,7 @@ export function useSupabaseScheduling() {
       console.log('❌ Erro capturado - PRESERVANDO cache e formulário:', error);
       throw error; // Repassar erro SEM afetar estado
     }
-  }, [appointmentCreation.createAppointment, appointmentsList, schedulingData]);
+  }, [appointmentCreation.createAppointment, appointmentsList]);
 
   // ✅ ESTABILIZAR: Envolver cancelAppointment para usar a funcionalidade existente
   const cancelAppointment = useCallback(async (appointmentId: string) => {

@@ -5,6 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useOptimizedQuery } from '@/hooks/useOptimizedQuery';
 import { usePagination } from '@/hooks/usePagination';
 import { usePerformanceMetrics } from '@/hooks/usePerformanceMetrics';
+import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 import { logger } from '@/utils/logger';
 
 export function useAppointmentsList(itemsPerPage: number = 20) {
@@ -112,6 +113,27 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       staleTime: 30 * 1000 // 30 segundos
     }
   );
+
+  // ✅ REALTIME: Configurar atualizações em tempo real para agendamentos
+  useRealtimeUpdates({
+    table: 'agendamentos',
+    onInsert: (payload) => {
+      console.log('🔄 useAppointmentsList: New appointment inserted', payload);
+      refetch(); // Refetch automatico quando novo agendamento é criado
+      toast({
+        title: "Novo agendamento",
+        description: "Um novo agendamento foi criado e o calendário foi atualizado!",
+      });
+    },
+    onUpdate: (payload) => {
+      console.log('🔄 useAppointmentsList: Appointment updated', payload);
+      refetch(); // Refetch automatico quando agendamento é atualizado
+    },
+    onDelete: (payload) => {
+      console.log('🔄 useAppointmentsList: Appointment deleted', payload);
+      refetch(); // Refetch automatico quando agendamento é deletado
+    }
+  });
 
   // Paginação
   const pagination = usePagination(appointments || [], { itemsPerPage });
