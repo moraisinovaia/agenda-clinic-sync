@@ -133,6 +133,20 @@ export function PatientDataFormFixed({
 
   // Função para selecionar um paciente encontrado
   const selectPatient = (patient: any) => {
+    const patientConvenio = patient.ultimo_convenio || '';
+    
+    // Verificar se o médico aceita o convênio do paciente
+    let convenioToSet = patientConvenio;
+    if (selectedDoctor?.convenios_aceitos && patientConvenio) {
+      const convenioAceito = selectedDoctor.convenios_aceitos.some(convenio => 
+        convenio.toLowerCase() === patientConvenio.toLowerCase()
+      );
+      // Se médico não aceita, limpar o convênio para forçar seleção manual
+      if (!convenioAceito) {
+        convenioToSet = '';
+      }
+    }
+    
     // Preencher dados do formulário
     setFormData(prev => ({
       ...prev,
@@ -140,7 +154,7 @@ export function PatientDataFormFixed({
       dataNascimento: patient.data_nascimento,
       telefone: patient.telefone || '',
       celular: patient.celular,
-      convenio: patient.convenio,
+      convenio: convenioToSet,
     }));
     
     // Registrar seleção e esconder resultados
