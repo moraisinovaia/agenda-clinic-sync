@@ -1,12 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-// Função temporária para WhatsApp (substitui o import que estava causando erro)
-async function enviarWhatsAppEvolution(recipient: string, message: string) {
-  // Por enquanto, apenas log - pode ser implementado depois
-  console.log(`📱 WhatsApp para ${recipient}: ${message.substring(0, 100)}...`);
-  return { success: true, message: 'Simulado - WhatsApp não implementado ainda' };
-}
+import { enviarWhatsAppEvolution } from '../scheduling-api/_lib/whatsapp.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
