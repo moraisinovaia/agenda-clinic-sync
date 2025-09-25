@@ -212,10 +212,9 @@ async function handleSchedule(supabase: any, body: any) {
         p_observacoes: observacoes || 'Agendamento via LLM Agent WhatsApp',
         p_criado_por: 'LLM Agent WhatsApp',
         p_criado_por_user_id: null,
+        p_cliente_id: cliente.id,
         p_agendamento_id_edicao: null,
-        p_force_update_patient: false,
-        p_force_conflict: false,
-        p_cliente_id: cliente.id
+        p_forcar_conflito: false
       });
 
     console.log('📋 Resultado da função:', { result, agendamentoError });
