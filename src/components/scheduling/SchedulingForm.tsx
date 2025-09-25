@@ -232,7 +232,16 @@ export function SchedulingForm({
                     key={`calendar-${selectedDoctor.id}`}
                     mode="single"
                     selected={selectedCalendarDate}
-                    onSelect={(date) => date && setSelectedCalendarDate(date)}
+                    onSelect={(date) => {
+                      if (date) {
+                        setSelectedCalendarDate(date);
+                        // Sincronizar automaticamente com o campo "Data" do formulário
+                        setFormData(prev => ({
+                          ...prev,
+                          dataAgendamento: format(date, 'yyyy-MM-dd')
+                        }));
+                      }
+                    }}
                     locale={ptBR}
                     className="rounded-md border shadow-sm bg-background p-3 pointer-events-auto"
                     disabled={hasBlocksOnDate}
