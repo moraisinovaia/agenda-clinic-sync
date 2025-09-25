@@ -204,6 +204,8 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Erro no backup automático:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
+    const errorStack = error instanceof Error ? error.stack : undefined
     
     // Log do erro
     try {
@@ -217,16 +219,16 @@ serve(async (req) => {
         .insert([{
           timestamp: new Date().toISOString(),
           level: 'error',
-          message: `Falha no backup automático: ${error.message}`,
+          message: `Falha no backup automático: ${errorMessage}`,
           context: 'AUTO_BACKUP_ERROR',
-          data: { error: error.message, stack: error.stack }
+          data: { error: errorMessage, stack: errorStack }
         }])
     } catch (logError) {
       console.error('Erro ao fazer log:', logError)
     }
 
     return new Response(
-      JSON.stringify({ error: 'Falha no backup automático', details: error.message }),
+      JSON.stringify({ error: 'Falha no backup automático', details: errorMessage }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }

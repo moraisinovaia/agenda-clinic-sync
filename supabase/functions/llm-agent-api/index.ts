@@ -229,7 +229,8 @@ async function handleSchedule(supabase: any, body: any) {
     });
 
   } catch (error) {
-    return errorResponse(`Erro ao processar agendamento: ${error.message}`);
+    const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
+    return errorResponse(`Erro ao processar agendamento: ${errorMessage}`);
   }
 }
 
@@ -320,7 +321,8 @@ async function handleCheckPatient(supabase: any, body: any) {
     });
 
   } catch (error) {
-    return errorResponse(`Erro ao verificar paciente: ${error.message}`);
+    const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
+    return errorResponse(`Erro ao verificar paciente: ${errorMessage}`);
   }
 }
 
@@ -402,7 +404,8 @@ async function handleReschedule(supabase: any, body: any) {
     });
 
   } catch (error) {
-    return errorResponse(`Erro ao remarcar consulta: ${error.message}`);
+    const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
+    return errorResponse(`Erro ao remarcar consulta: ${errorMessage}`);
   }
 }
 
@@ -467,7 +470,8 @@ async function handleCancel(supabase: any, body: any) {
     });
 
   } catch (error) {
-    return errorResponse(`Erro ao cancelar consulta: ${error.message}`);
+    const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
+    return errorResponse(`Erro ao cancelar consulta: ${errorMessage}`);
   }
 }
 
@@ -532,7 +536,8 @@ async function handleAvailability(supabase: any, body: any) {
     });
 
   } catch (error) {
-    return errorResponse(`Erro ao verificar disponibilidade: ${error.message}`);
+    const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
+    return errorResponse(`Erro ao verificar disponibilidade: ${errorMessage}`);
   }
 }
 
@@ -580,7 +585,8 @@ async function handlePatientSearch(supabase: any, body: any) {
     });
 
   } catch (error) {
-    return errorResponse(`Erro ao buscar pacientes: ${error.message}`);
+    const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
+    return errorResponse(`Erro ao buscar pacientes: ${errorMessage}`);
   }
 }
 

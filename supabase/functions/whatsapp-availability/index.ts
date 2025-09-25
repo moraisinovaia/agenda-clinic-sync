@@ -174,10 +174,11 @@ serve(async (req: Request): Promise<Response> => {
 
   } catch (error) {
     console.error('Error in whatsapp-availability function:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
     
     return new Response(
       JSON.stringify({
-        error: error.message,
+        error: errorMessage,
         message: "❌ Erro ao consultar disponibilidade. Tente novamente em alguns instantes ou entre em contato conosco.",
         available: false
       }),

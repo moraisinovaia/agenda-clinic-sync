@@ -169,7 +169,19 @@ serve(async (req) => {
       }
 
       // Remover duplicatas e ordenar
-      const uniqueSlots = slots.reduce((acc, current) => {
+      interface SlotType {
+        time: string;
+        tipo: string;
+        available: boolean;
+        schedule: {
+          inicio: string;
+          fim: string;
+          tipo: string;
+          vagas: number;
+        };
+      }
+      
+      const uniqueSlots = slots.reduce((acc: SlotType[], current: SlotType) => {
         const existing = acc.find(slot => slot.time === current.time && slot.tipo === current.tipo);
         if (!existing) {
           acc.push(current);
@@ -247,8 +259,8 @@ serve(async (req) => {
       if (error) throw error;
 
       // Remover duplicatas baseado no nome completo e convênio
-      const uniquePatients = patients ? patients.reduce((acc, current) => {
-        const existing = acc.find(patient => 
+      const uniquePatients = patients ? patients.reduce((acc: typeof patients, current: any) => {
+        const existing = acc.find((patient: any) => 
           patient.nome_completo.toLowerCase() === current.nome_completo.toLowerCase() &&
           patient.convenio === current.convenio
         );

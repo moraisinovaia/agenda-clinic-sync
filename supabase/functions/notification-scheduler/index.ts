@@ -418,26 +418,28 @@ async function getNotificationAnalytics(supabase: any) {
   // Processar analytics
   const stats = {
     total_sent: analytics?.length || 0,
-    by_type: {},
-    by_status: {},
+    by_type: {} as Record<string, number>,
+    by_status: {} as Record<string, number>,
     success_rate: 0,
-    daily_stats: {}
+    daily_stats: {} as Record<string, number>
   };
 
   analytics?.forEach((log: any) => {
     // Por tipo
-    stats.by_type[log.type as string] = ((stats.by_type as any)[log.type] || 0) + 1;
+    const type = log.type as string;
+    stats.by_type[type] = (stats.by_type[type] || 0) + 1;
     
     // Por status
-    stats.by_status[log.status as string] = ((stats.by_status as any)[log.status] || 0) + 1;
+    const status = log.status as string;
+    stats.by_status[status] = (stats.by_status[status] || 0) + 1;
     
     // Por dia
     const day = log.sent_at.split('T')[0];
-    stats.daily_stats[day] = ((stats.daily_stats as any)[day] || 0) + 1;
+    stats.daily_stats[day] = (stats.daily_stats[day] || 0) + 1;
   });
 
   stats.success_rate = stats.total_sent > 0 
-    ? Math.round(((stats.by_status as any)['sent'] || 0) / stats.total_sent * 100) 
+    ? Math.round((stats.by_status['sent'] || 0) / stats.total_sent * 100) 
     : 0;
 
   return new Response(
