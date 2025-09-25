@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-// WhatsApp function removed - using edge function instead
+import { enviarWhatsAppEvolution } from '../scheduling-api/_lib/whatsapp.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -165,7 +165,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('❌ Erro no Notification Scheduler:', error);
     return new Response(
-      JSON.stringify({ success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' }),
+      JSON.stringify({ success: false, error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
@@ -344,7 +344,7 @@ async function sendNotification(supabase: any, notification: any) {
   }
 
   // Enviar via WhatsApp
-  // Remove WhatsApp function call - using edge function instead
+  await enviarWhatsAppEvolution(recipient, message);
 
   // Registrar log
   await supabase
@@ -418,20 +418,18 @@ async function getNotificationAnalytics(supabase: any) {
   // Processar analytics
   const stats = {
     total_sent: analytics?.length || 0,
-    by_type: {} as Record<string, number>,
-    by_status: {} as Record<string, number>,
+    by_type: {},
+    by_status: {},
     success_rate: 0,
-    daily_stats: {} as Record<string, number>
+    daily_stats: {}
   };
 
-  analytics?.forEach((log: any) => {
+  analytics?.forEach(log => {
     // Por tipo
-    const type = log.type as string;
-    stats.by_type[type] = (stats.by_type[type] || 0) + 1;
+    stats.by_type[log.type] = (stats.by_type[log.type] || 0) + 1;
     
     // Por status
-    const status = log.status as string;
-    stats.by_status[status] = (stats.by_status[status] || 0) + 1;
+    stats.by_status[log.status] = (stats.by_status[log.status] || 0) + 1;
     
     // Por dia
     const day = log.sent_at.split('T')[0];

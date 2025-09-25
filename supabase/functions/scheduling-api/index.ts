@@ -68,9 +68,8 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('❌ Erro na API:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
     return new Response(
-      JSON.stringify({ success: false, error: errorMessage }),
+      JSON.stringify({ success: false, error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

@@ -218,7 +218,7 @@ Digite um comando para começar! 😊`
           resposta = '💰 *Nossos valores de consultas e exames:*\n\n';
         }
         
-        valores.forEach((valor: any) => {
+        valores.forEach(valor => {
           resposta += `📋 **${valor.nome}**\n`;
           if (valor.valor_particular) {
             resposta += `• Particular: R$ ${valor.valor_particular}\n`;
@@ -332,7 +332,7 @@ Vou te ajudar a agendar sua consulta! 😊
             .eq('ativo', true);
             
           let medicosTexto = '👨‍⚕️ *Escolha o médico:*\n\n';
-          medicos?.forEach((medico: any, index: any) => {
+          medicos?.forEach((medico, index) => {
             medicosTexto += `${index + 1}. *${medico.nome}* - ${medico.especialidade}\n`;
           });
           medicosTexto += `\nDigite o *número* do médico desejado:`;
@@ -370,7 +370,7 @@ Vou te ajudar a agendar sua consulta! 😊
           }
           
           let atendimentosTexto = `✅ Médico: ${dados.medico.nome}\n\n🔬 *Escolha o tipo de atendimento:*\n\n`;
-          atendimentos.forEach((atend: any, index: any) => {
+          atendimentos.forEach((atend, index) => {
             atendimentosTexto += `${index + 1}. *${atend.nome}* (${atend.tipo})\n`;
           });
           atendimentosTexto += `\nDigite o *número* do atendimento desejado:`;
@@ -635,7 +635,7 @@ Digite *agendar* para fazer um novo agendamento.`
         
         let resposta = `📋 *Agendamentos de ${nome}:*\n\n`;
         
-        agendamentos.forEach((agend: any, index: any) => {
+        agendamentos.forEach((agend, index) => {
           const data = new Date(agend.data_agendamento).toLocaleDateString('pt-BR');
           resposta += `${index + 1}. 📅 ${data} às ${agend.hora_agendamento}\n`;
           resposta += `   👨‍⚕️ Dr(a). ${agend.medicos.nome}\n`;
@@ -703,7 +703,7 @@ Digite *agendar* para fazer um novo agendamento.`
           }
           
           let resposta = `📋 *Escolha qual agendamento remarcar:*\n\n`;
-          agendamentos.forEach((agend: any, index: any) => {
+          agendamentos.forEach((agend, index) => {
             const data = new Date(agend.data_agendamento).toLocaleDateString('pt-BR');
             resposta += `${index + 1}. ${data} às ${agend.hora_agendamento}\n`;
             resposta += `   👨‍⚕️ Dr(a). ${agend.medicos.nome}\n`;
@@ -902,7 +902,7 @@ Para cancelar seu agendamento, preciso do seu *nome completo*:`
           }
           
           let resposta = `📋 *Escolha qual agendamento cancelar:*\n\n`;
-          agendamentos.forEach((agend: any, index: any) => {
+          agendamentos.forEach((agend, index) => {
             const data = new Date(agend.data_agendamento).toLocaleDateString('pt-BR');
             resposta += `${index + 1}. ${data} às ${agend.hora_agendamento}\n`;
             resposta += `   👨‍⚕️ Dr(a). ${agend.medicos.nome}\n`;
@@ -1092,11 +1092,10 @@ serve(async (req) => {
   } catch (error) {
     console.error('❌ Erro no WhatsApp Agent:', error);
     
-    const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: errorMessage 
+        error: error.message 
       }),
       { 
         status: 500, 

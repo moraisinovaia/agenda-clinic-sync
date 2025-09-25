@@ -169,19 +169,7 @@ serve(async (req) => {
       }
 
       // Remover duplicatas e ordenar
-      interface SlotType {
-        time: string;
-        tipo: string;
-        available: boolean;
-        schedule: {
-          inicio: string;
-          fim: string;
-          tipo: string;
-          vagas: number;
-        };
-      }
-      
-      const uniqueSlots = slots.reduce((acc: SlotType[], current: SlotType) => {
+      const uniqueSlots = slots.reduce((acc, current) => {
         const existing = acc.find(slot => slot.time === current.time && slot.tipo === current.tipo);
         if (!existing) {
           acc.push(current);
@@ -259,8 +247,8 @@ serve(async (req) => {
       if (error) throw error;
 
       // Remover duplicatas baseado no nome completo e convênio
-      const uniquePatients = patients ? patients.reduce((acc: typeof patients, current: any) => {
-        const existing = acc.find((patient: any) => 
+      const uniquePatients = patients ? patients.reduce((acc, current) => {
+        const existing = acc.find(patient => 
           patient.nome_completo.toLowerCase() === current.nome_completo.toLowerCase() &&
           patient.convenio === current.convenio
         );
@@ -382,7 +370,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('❌ Erro na API de dados da clínica:', error);
     return new Response(
-      JSON.stringify({ success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' }),
+      JSON.stringify({ success: false, error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
