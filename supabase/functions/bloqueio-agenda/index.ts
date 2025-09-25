@@ -222,7 +222,8 @@ serve(async (req) => {
       data_inicio: dataInicio,
       data_fim: dataFim,
       motivo: motivo,
-      criado_por: 'recepcionista'
+      criado_por: 'recepcionista',
+      cliente_id: '2bfb98b5-ae41-4f96-8ba7-acc797c22054' // ID da clínica IPADO
     };
     
     console.log('📝 Inserindo bloqueio:', insertData);
