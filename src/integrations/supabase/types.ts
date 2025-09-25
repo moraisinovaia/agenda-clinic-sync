@@ -1299,57 +1299,23 @@ export type Database = {
         Returns: Json
       }
       criar_agendamento_atomico: {
-        Args:
-          | {
-              p_agendamento_id_edicao?: string
-              p_atendimento_id: string
-              p_celular: string
-              p_cliente_id?: string
-              p_convenio: string
-              p_criado_por?: string
-              p_criado_por_user_id?: string
-              p_data_agendamento: string
-              p_data_nascimento: string
-              p_forcar_conflito?: boolean
-              p_hora_agendamento: string
-              p_medico_id: string
-              p_nome_completo: string
-              p_observacoes?: string
-              p_telefone: string
-            }
-          | {
-              p_agendamento_id_edicao?: string
-              p_atendimento_id: string
-              p_celular: string
-              p_convenio: string
-              p_criado_por?: string
-              p_criado_por_user_id?: string
-              p_data_agendamento: string
-              p_data_nascimento: string
-              p_force_conflict?: boolean
-              p_force_update_patient?: boolean
-              p_hora_agendamento: string
-              p_medico_id: string
-              p_nome_completo: string
-              p_observacoes?: string
-              p_telefone: string
-            }
-          | {
-              p_agendamento_id_edicao?: string
-              p_atendimento_id: string
-              p_celular: string
-              p_convenio: string
-              p_criado_por?: string
-              p_criado_por_user_id?: string
-              p_data_agendamento: string
-              p_data_nascimento: string
-              p_force_update_patient?: boolean
-              p_hora_agendamento: string
-              p_medico_id: string
-              p_nome_completo: string
-              p_observacoes?: string
-              p_telefone: string
-            }
+        Args: {
+          p_agendamento_id_edicao?: string
+          p_atendimento_id: string
+          p_celular: string
+          p_cliente_id?: string
+          p_convenio: string
+          p_criado_por?: string
+          p_criado_por_user_id?: string
+          p_data_agendamento: string
+          p_data_nascimento: string
+          p_forcar_conflito?: boolean
+          p_hora_agendamento: string
+          p_medico_id: string
+          p_nome_completo: string
+          p_observacoes?: string
+          p_telefone: string
+        }
         Returns: Json
       }
       criar_agendamento_atomico_ipado: {
