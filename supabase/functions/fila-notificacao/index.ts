@@ -152,7 +152,7 @@ _Esta é uma oportunidade única da fila de espera._`
   } catch (error) {
     console.error('Erro geral:', error)
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: (error as any).message }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,

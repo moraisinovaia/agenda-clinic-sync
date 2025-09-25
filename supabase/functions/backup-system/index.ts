@@ -153,7 +153,7 @@ async function createBackup(req: Request, supabase: any) {
         created_at: timestamp,
         status: 'failed',
         backup_type: 'manual',
-        error_message: error.message
+        error_message: (error as any).message
       }])
       .catch(console.error)
 
