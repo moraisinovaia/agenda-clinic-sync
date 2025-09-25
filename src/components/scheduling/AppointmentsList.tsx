@@ -208,18 +208,12 @@ export function AppointmentsList({ appointments, doctors, onEditAppointment, onC
                         </div>
                       </TableCell>
                       <TableCell className="text-sm max-w-[140px]">
-                        {appointment.alterado_por_user_id ? (
-                          <>
-                            <div className="text-xs">
-                              {formatInTimeZone(new Date(appointment.updated_at), BRAZIL_TIMEZONE, 'dd/MM/yyyy HH:mm', { locale: ptBR })}
-                            </div>
-                            <div className="text-xs text-muted-foreground truncate">
-                              por {appointment.alterado_por_profile?.nome || 'Usuário'}
-                            </div>
-                          </>
-                        ) : (
-                          <div className="text-xs text-muted-foreground">
-                            Nunca alterado
+                        <div className="text-xs">
+                          {formatInTimeZone(new Date(appointment.updated_at), BRAZIL_TIMEZONE, 'dd/MM/yyyy HH:mm', { locale: ptBR })}
+                        </div>
+                        {appointment.alterado_por_profile?.nome && (
+                          <div className="text-xs text-muted-foreground truncate">
+                            por {appointment.alterado_por_profile.nome}
                           </div>
                         )}
                       </TableCell>

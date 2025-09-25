@@ -330,20 +330,16 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                               
                               {/* Última alteração */}
                               <TableCell className="w-[120px] text-[10px]">
-                                {appointment.alterado_por_user_id ? (
-                                  <div className="space-y-1">
-                                    <div>
-                                      {formatInTimeZone(new Date(appointment.updated_at), BRAZIL_TIMEZONE, 'dd/MM/yy HH:mm', { locale: ptBR })}
-                                    </div>
+                                <div className="space-y-1">
+                                  <div>
+                                    {formatInTimeZone(new Date(appointment.updated_at), BRAZIL_TIMEZONE, 'dd/MM/yy HH:mm', { locale: ptBR })}
+                                  </div>
+                                  {appointment.alterado_por_profile?.nome && (
                                     <div className="text-muted-foreground">
-                                      por {appointment.alterado_por_profile?.nome || 'Usuário'}
+                                      por {appointment.alterado_por_profile.nome}
                                     </div>
-                                  </div>
-                                ) : (
-                                  <div className="text-muted-foreground">
-                                    Nunca alterado
-                                  </div>
-                                )}
+                                  )}
+                                </div>
                               </TableCell>
                               
                               {/* Ações */}
