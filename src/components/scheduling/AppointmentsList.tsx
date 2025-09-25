@@ -1,6 +1,7 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatInTimeZone } from 'date-fns-tz';
+import { differenceInYears } from 'date-fns';
 import { BRAZIL_TIMEZONE } from '@/utils/timezone';
 import { AppointmentWithRelations } from '@/types/scheduling';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -135,12 +136,13 @@ export function AppointmentsList({ appointments, doctors, onEditAppointment, onC
                       <TableHead className="font-semibold min-w-[100px]">Status</TableHead>
                       <TableHead className="font-semibold min-w-[100px]">Data</TableHead>
                       <TableHead className="font-semibold min-w-[80px]">Hora</TableHead>
-                      <TableHead className="font-semibold min-w-[200px]">Paciente</TableHead>
+                      <TableHead className="font-semibold min-w-[200px]">Paciente / Idade</TableHead>
                       <TableHead className="font-semibold min-w-[120px]">Telefone</TableHead>
                       <TableHead className="font-semibold min-w-[150px]">Médico</TableHead>
                       <TableHead className="font-semibold min-w-[100px]">Convênio</TableHead>
                       <TableHead className="font-semibold min-w-[120px]">Tipo</TableHead>
-                      <TableHead className="font-semibold min-w-[120px]">Agendado por</TableHead>
+                      <TableHead className="font-semibold min-w-[140px]">Registrado em</TableHead>
+                      <TableHead className="font-semibold min-w-[140px]">Última alteração</TableHead>
                       <TableHead className="font-semibold text-center min-w-[120px] sticky right-0 bg-muted/50">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -161,6 +163,11 @@ export function AppointmentsList({ appointments, doctors, onEditAppointment, onC
                       <TableCell className="max-w-[200px]">
                         <div className="font-medium truncate">
                           {appointment.pacientes?.nome_completo || 'Paciente não encontrado'}
+                          {appointment.pacientes?.data_nascimento && (
+                            <span className="ml-2 text-xs text-muted-foreground">
+                              ({differenceInYears(new Date(), new Date(appointment.pacientes.data_nascimento))} anos)
+                            </span>
+                          )}
                         </div>
                         {appointment.observacoes && (
                           <div className="text-xs text-muted-foreground truncate mt-1">
@@ -192,10 +199,23 @@ export function AppointmentsList({ appointments, doctors, onEditAppointment, onC
                           {appointment.atendimentos?.nome || 'N/A'}
                         </div>
                       </TableCell>
-                      <TableCell className="text-sm">
-                        {appointment.criado_por_profile?.nome || 
-                         appointment.criado_por || 
-                         'Recepcionista'}
+                      <TableCell className="text-sm max-w-[140px]">
+                        <div className="text-xs">
+                          {formatInTimeZone(new Date(appointment.created_at), BRAZIL_TIMEZONE, 'dd/MM/yyyy HH:mm', { locale: ptBR })}
+                        </div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          por {appointment.criado_por_profile?.nome || appointment.criado_por || 'Sistema'}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm max-w-[140px]">
+                        <div className="text-xs">
+                          {formatInTimeZone(new Date(appointment.updated_at), BRAZIL_TIMEZONE, 'dd/MM/yyyy HH:mm', { locale: ptBR })}
+                        </div>
+                        {appointment.alterado_por_profile?.nome && (
+                          <div className="text-xs text-muted-foreground truncate">
+                            por {appointment.alterado_por_profile.nome}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="sticky right-0 bg-background/95 backdrop-blur-sm">
                         <div className="flex items-center justify-center gap-1">

@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       agendamentos: {
         Row: {
+          alterado_por_user_id: string | null
           atendimento_id: string
           cancelado_em: string | null
           cancelado_por: string | null
@@ -38,6 +39,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          alterado_por_user_id?: string | null
           atendimento_id: string
           cancelado_em?: string | null
           cancelado_por?: string | null
@@ -60,6 +62,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          alterado_por_user_id?: string | null
           atendimento_id?: string
           cancelado_em?: string | null
           cancelado_por?: string | null
@@ -1186,6 +1189,10 @@ export type Database = {
       buscar_agendamentos_otimizado: {
         Args: Record<PropertyKey, never>
         Returns: {
+          alterado_por_profile_email: string
+          alterado_por_profile_nome: string
+          alterado_por_profile_role: string
+          alterado_por_user_id: string
           atendimento_id: string
           atendimento_nome: string
           atendimento_tipo: string

@@ -40,6 +40,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           updated_at: apt.updated_at,
           criado_por: apt.criado_por,
           criado_por_user_id: apt.criado_por_user_id,
+          alterado_por_user_id: apt.alterado_por_user_id,
           cliente_id: '00000000-0000-0000-0000-000000000000', // Usar ID padrão temporário
           // Campos adicionais para cancelamento e confirmação
           cancelado_em: apt.cancelado_em,
@@ -56,6 +57,17 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
             nome: apt.profile_nome,
             email: apt.profile_email || '',
             role: apt.profile_role || 'recepcionista',
+            ativo: true,
+            created_at: apt.created_at || '',
+            updated_at: apt.updated_at || ''
+          } : null,
+          // Informações do perfil de quem alterou o agendamento
+          alterado_por_profile: apt.alterado_por_profile_nome ? {
+            id: apt.alterado_por_user_id || '',
+            user_id: apt.alterado_por_user_id || '',
+            nome: apt.alterado_por_profile_nome,
+            email: apt.alterado_por_profile_email || '',
+            role: apt.alterado_por_profile_role || 'recepcionista',
             ativo: true,
             created_at: apt.created_at || '',
             updated_at: apt.updated_at || ''
