@@ -172,12 +172,12 @@ serve(async (req: Request): Promise<Response> => {
       }
     );
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error in whatsapp-availability function:', error);
     
     return new Response(
       JSON.stringify({
-        error: error.message,
+        error: error?.message || 'Erro desconhecido',
         message: "❌ Erro ao consultar disponibilidade. Tente novamente em alguns instantes ou entre em contato conosco.",
         available: false
       }),

@@ -134,13 +134,13 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Erro na configuração:', error);
     
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error.message,
+        error: error?.message || 'Erro desconhecido',
         timestamp: new Date().toISOString()
       }),
       { 

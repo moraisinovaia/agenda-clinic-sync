@@ -82,9 +82,9 @@ serve(async (req) => {
 
     return errorResponse('Método não permitido. Use POST.');
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Erro na LLM Agent API:', error);
-    return errorResponse(`Erro interno: ${error.message}`);
+    return errorResponse(`Erro interno: ${error?.message || 'Erro desconhecido'}`);
   }
 })
 
@@ -228,8 +228,8 @@ async function handleSchedule(supabase: any, body: any) {
       hora: hora_consulta
     });
 
-  } catch (error) {
-    return errorResponse(`Erro ao processar agendamento: ${error.message}`);
+  } catch (error: any) {
+    return errorResponse(`Erro ao processar agendamento: ${error?.message || 'Erro desconhecido'}`);
   }
 }
 
@@ -266,7 +266,7 @@ async function handleCheckPatient(supabase: any, body: any) {
         .ilike('nome_completo', `%${paciente_nome}%`);
 
       if (pacientes && pacientes.length > 0) {
-        const paciente_ids = pacientes.map(p => p.id);
+        const paciente_ids = pacientes.map((p: any) => p.id);
         query = query.in('paciente_id', paciente_ids);
       }
     }
@@ -281,13 +281,13 @@ async function handleCheckPatient(supabase: any, body: any) {
     let filteredAgendamentos = agendamentos || [];
     
     if (data_nascimento) {
-      filteredAgendamentos = filteredAgendamentos.filter(a => 
+      filteredAgendamentos = filteredAgendamentos.filter((a: any) =>
         a.pacientes?.data_nascimento === data_nascimento
       );
     }
 
     if (celular) {
-      filteredAgendamentos = filteredAgendamentos.filter(a => 
+      filteredAgendamentos = filteredAgendamentos.filter((a: any) => 
         a.pacientes?.celular?.includes(celular.replace(/\D/g, ''))
       );
     }
@@ -300,7 +300,7 @@ async function handleCheckPatient(supabase: any, body: any) {
       });
     }
 
-    const consultas = filteredAgendamentos.map(a => ({
+    const consultas = filteredAgendamentos.map((a: any) => ({
       id: a.id,
       paciente: a.pacientes?.nome_completo,
       medico: a.medicos?.nome,
@@ -319,8 +319,8 @@ async function handleCheckPatient(supabase: any, body: any) {
       total: consultas.length
     });
 
-  } catch (error) {
-    return errorResponse(`Erro ao verificar paciente: ${error.message}`);
+  } catch (error: any) {
+    return errorResponse(`Erro ao verificar paciente: ${error?.message || 'Erro desconhecido'}`);
   }
 }
 
@@ -401,8 +401,8 @@ async function handleReschedule(supabase: any, body: any) {
       nova_hora
     });
 
-  } catch (error) {
-    return errorResponse(`Erro ao remarcar consulta: ${error.message}`);
+  } catch (error: any) {
+    return errorResponse(`Erro ao remarcar consulta: ${error?.message || 'Erro desconhecido'}`);
   }
 }
 
@@ -466,8 +466,8 @@ async function handleCancel(supabase: any, body: any) {
       motivo
     });
 
-  } catch (error) {
-    return errorResponse(`Erro ao cancelar consulta: ${error.message}`);
+  } catch (error: any) {
+    return errorResponse(`Erro ao cancelar consulta: ${error?.message || 'Erro desconhecido'}`);
   }
 }
 
@@ -500,7 +500,7 @@ async function handleAvailability(supabase: any, body: any) {
       .eq('data_agendamento', data_consulta)
       .in('status', ['agendado', 'confirmado']);
 
-    const horariosOcupados = agendamentos?.map(a => a.hora_agendamento) || [];
+    const horariosOcupados = agendamentos?.map((a: any) => a.hora_agendamento) || [];
 
     // Gerar horários disponíveis (08:00 às 18:00, intervalos de 30min)
     const horarios = [];
@@ -531,8 +531,8 @@ async function handleAvailability(supabase: any, body: any) {
       total: horarios.length
     });
 
-  } catch (error) {
-    return errorResponse(`Erro ao verificar disponibilidade: ${error.message}`);
+  } catch (error: any) {
+    return errorResponse(`Erro ao verificar disponibilidade: ${error?.message || 'Erro desconhecido'}`);
   }
 }
 
@@ -579,8 +579,8 @@ async function handlePatientSearch(supabase: any, body: any) {
       total: pacientes?.length || 0
     });
 
-  } catch (error) {
-    return errorResponse(`Erro ao buscar pacientes: ${error.message}`);
+  } catch (error: any) {
+    return errorResponse(`Erro ao buscar pacientes: ${error?.message || 'Erro desconhecido'}`);
   }
 }
 

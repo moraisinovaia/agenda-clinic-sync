@@ -149,10 +149,10 @@ _Esta é uma oportunidade única da fila de espera._`
       },
     )
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Erro geral:', error)
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error?.message || 'Erro desconhecido' }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,

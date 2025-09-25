@@ -197,10 +197,10 @@ serve(async (req) => {
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error) {
-    console.error('❌ Erro no Notification Scheduler:', error);
+  } catch (error: any) {
+    console.error('❌ Erro na API:', error);
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ success: false, error: error?.message || 'Erro desconhecido' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
@@ -451,15 +451,15 @@ async function getNotificationAnalytics(supabase: any) {
   }
 
   // Processar analytics
-  const stats = {
+  const stats: any = {
     total_sent: analytics?.length || 0,
-    by_type: {},
-    by_status: {},
+    by_type: {} as any,
+    by_status: {} as any,
     success_rate: 0,
-    daily_stats: {}
+    daily_stats: {} as any
   };
 
-  analytics?.forEach(log => {
+  analytics?.forEach((log: any) => {
     // Por tipo
     stats.by_type[log.type] = (stats.by_type[log.type] || 0) + 1;
     
@@ -472,7 +472,7 @@ async function getNotificationAnalytics(supabase: any) {
   });
 
   stats.success_rate = stats.total_sent > 0 
-    ? Math.round((stats.by_status['sent'] || 0) / stats.total_sent * 100) 
+    ? Math.round((stats.by_status['sent'] || 0) / stats.total_sent * 100)
     : 0;
 
   return new Response(

@@ -142,7 +142,7 @@ async function createBackup(req: Request, supabase: any) {
       }
     )
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Backup creation error:', error)
     
     // Registrar falha no backup
@@ -153,7 +153,7 @@ async function createBackup(req: Request, supabase: any) {
         created_at: timestamp,
         status: 'failed',
         backup_type: 'manual',
-        error_message: error.message
+        error_message: error?.message || 'Erro desconhecido'
       }])
       .catch(console.error)
 

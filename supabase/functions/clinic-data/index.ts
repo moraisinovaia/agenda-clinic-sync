@@ -169,15 +169,15 @@ serve(async (req) => {
       }
 
       // Remover duplicatas e ordenar
-      const uniqueSlots = slots.reduce((acc, current) => {
-        const existing = acc.find(slot => slot.time === current.time && slot.tipo === current.tipo);
+      const uniqueSlots = slots.reduce((acc: any[], current: any) => {
+        const existing = acc.find((slot: any) => slot.time === current.time && slot.tipo === current.tipo);
         if (!existing) {
           acc.push(current);
         }
         return acc;
       }, []);
 
-      uniqueSlots.sort((a, b) => a.time.localeCompare(b.time));
+      uniqueSlots.sort((a: any, b: any) => a.time.localeCompare(b.time));
 
       return new Response(
         JSON.stringify({ 
@@ -189,7 +189,7 @@ serve(async (req) => {
             dayOfWeek,
             slots: uniqueSlots,
             totalSlots: uniqueSlots.length,
-            availableSlots: uniqueSlots.filter(slot => slot.available).length,
+            availableSlots: uniqueSlots.filter((slot: any) => slot.available).length,
             schedule: doctorSchedule
           }
         }),
@@ -248,7 +248,7 @@ serve(async (req) => {
 
       // Remover duplicatas baseado no nome completo e convênio
       const uniquePatients = patients ? patients.reduce((acc, current) => {
-        const existing = acc.find(patient => 
+        const existing = acc.find((patient: any) => 
           patient.nome_completo.toLowerCase() === current.nome_completo.toLowerCase() &&
           patient.convenio === current.convenio
         );
@@ -367,10 +367,10 @@ serve(async (req) => {
       { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Erro na API de dados da clínica:', error);
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ success: false, error: error?.message || 'Erro desconhecido' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
