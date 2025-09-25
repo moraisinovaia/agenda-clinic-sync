@@ -255,7 +255,7 @@ const Index = () => {
             <div className="absolute inset-0 h-12 w-12 animate-pulse rounded-full bg-primary/20 mx-auto"></div>
           </div>
           <div>
-            <p className="text-lg font-medium">Endogastro</p>
+            <p className="text-lg font-medium">INOVAIA</p>
             <p className="text-muted-foreground">Verificando autenticação...</p>
           </div>
         </div>
@@ -397,7 +397,7 @@ const Index = () => {
             <div className="absolute inset-0 h-12 w-12 animate-pulse rounded-full bg-primary/20 mx-auto"></div>
           </div>
           <div>
-            <p className="text-lg font-medium">Endogastro</p>
+            <p className="text-lg font-medium">INOVAIA</p>
             <p className="text-muted-foreground">Carregando dados da clínica...</p>
             <div className="mt-2 w-64 mx-auto bg-secondary rounded-full h-2">
               <div className="bg-primary h-2 rounded-full animate-pulse w-3/4"></div>

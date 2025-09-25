@@ -141,7 +141,7 @@ export const AlertSystem = () => {
         body: {
           to: testEmail,
           subject: 'Teste do Sistema de Alertas',
-          message: `Este é um teste do sistema de alertas da Endogastro. O sistema está funcionando corretamente!`,
+          message: `Este é um teste do sistema de alertas da INOVAIA. O sistema está funcionando corretamente!`,
           alertType: 'system',
           data: {
             timestamp: new Date().toISOString(),
