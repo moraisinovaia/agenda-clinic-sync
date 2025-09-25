@@ -116,7 +116,7 @@ export function useAtomicAppointmentCreation() {
         p_criado_por: profile?.nome || 'Recepcionista',
         p_criado_por_user_id: user?.id,
         p_agendamento_id_edicao: editingAppointmentId || null,
-        p_force_conflict: forceConflict
+        p_forcar_conflito: forceConflict
       });
 
       if (error) {
