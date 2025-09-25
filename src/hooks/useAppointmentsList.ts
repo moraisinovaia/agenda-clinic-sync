@@ -61,10 +61,10 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
             created_at: apt.created_at || '',
             updated_at: apt.updated_at || ''
           } : null,
-          // Informações do perfil de quem alterou o agendamento
-          alterado_por_profile: apt.alterado_por_profile_nome ? {
-            id: apt.alterado_por_user_id || '',
-            user_id: apt.alterado_por_user_id || '',
+          // Informações do perfil de quem alterou o agendamento - só se realmente foi alterado
+          alterado_por_profile: (apt.alterado_por_user_id && apt.alterado_por_profile_nome) ? {
+            id: apt.alterado_por_user_id,
+            user_id: apt.alterado_por_user_id,
             nome: apt.alterado_por_profile_nome,
             email: apt.alterado_por_profile_email || '',
             role: apt.alterado_por_profile_role || 'recepcionista',
