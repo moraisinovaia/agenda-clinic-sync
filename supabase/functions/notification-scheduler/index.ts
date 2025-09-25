@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { enviarWhatsAppEvolution } from '../scheduling-api/_lib/whatsapp.ts'
+// WhatsApp function removed - using edge function instead
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -165,7 +165,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('❌ Erro no Notification Scheduler:', error);
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
@@ -344,7 +344,7 @@ async function sendNotification(supabase: any, notification: any) {
   }
 
   // Enviar via WhatsApp
-  await enviarWhatsAppEvolution(recipient, message);
+  // Remove WhatsApp function call - using edge function instead
 
   // Registrar log
   await supabase
@@ -424,20 +424,20 @@ async function getNotificationAnalytics(supabase: any) {
     daily_stats: {}
   };
 
-  analytics?.forEach(log => {
+  analytics?.forEach((log: any) => {
     // Por tipo
-    stats.by_type[log.type] = (stats.by_type[log.type] || 0) + 1;
+    stats.by_type[log.type as string] = ((stats.by_type as any)[log.type] || 0) + 1;
     
     // Por status
-    stats.by_status[log.status] = (stats.by_status[log.status] || 0) + 1;
+    stats.by_status[log.status as string] = ((stats.by_status as any)[log.status] || 0) + 1;
     
     // Por dia
     const day = log.sent_at.split('T')[0];
-    stats.daily_stats[day] = (stats.daily_stats[day] || 0) + 1;
+    stats.daily_stats[day] = ((stats.daily_stats as any)[day] || 0) + 1;
   });
 
   stats.success_rate = stats.total_sent > 0 
-    ? Math.round((stats.by_status['sent'] || 0) / stats.total_sent * 100) 
+    ? Math.round(((stats.by_status as any)['sent'] || 0) / stats.total_sent * 100) 
     : 0;
 
   return new Response(

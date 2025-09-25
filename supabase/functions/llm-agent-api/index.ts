@@ -84,7 +84,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('❌ Erro na LLM Agent API:', error);
-    return errorResponse(`Erro interno: ${error.message}`);
+    return errorResponse(`Erro interno: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
   }
 })
 
@@ -266,7 +266,7 @@ async function handleCheckPatient(supabase: any, body: any) {
         .ilike('nome_completo', `%${paciente_nome}%`);
 
       if (pacientes && pacientes.length > 0) {
-        const paciente_ids = pacientes.map(p => p.id);
+        const paciente_ids = pacientes.map((p: any) => p.id);
         query = query.in('paciente_id', paciente_ids);
       }
     }
@@ -281,13 +281,13 @@ async function handleCheckPatient(supabase: any, body: any) {
     let filteredAgendamentos = agendamentos || [];
     
     if (data_nascimento) {
-      filteredAgendamentos = filteredAgendamentos.filter(a => 
+      filteredAgendamentos = filteredAgendamentos.filter((a: any) =>
         a.pacientes?.data_nascimento === data_nascimento
       );
     }
 
     if (celular) {
-      filteredAgendamentos = filteredAgendamentos.filter(a => 
+      filteredAgendamentos = filteredAgendamentos.filter((a: any) => 
         a.pacientes?.celular?.includes(celular.replace(/\D/g, ''))
       );
     }
@@ -300,7 +300,7 @@ async function handleCheckPatient(supabase: any, body: any) {
       });
     }
 
-    const consultas = filteredAgendamentos.map(a => ({
+    const consultas = filteredAgendamentos.map((a: any) => ({
       id: a.id,
       paciente: a.pacientes?.nome_completo,
       medico: a.medicos?.nome,
@@ -500,7 +500,7 @@ async function handleAvailability(supabase: any, body: any) {
       .eq('data_agendamento', data_consulta)
       .in('status', ['agendado', 'confirmado']);
 
-    const horariosOcupados = agendamentos?.map(a => a.hora_agendamento) || [];
+    const horariosOcupados = agendamentos?.map((a: any) => a.hora_agendamento) || [];
 
     // Gerar horários disponíveis (08:00 às 18:00, intervalos de 30min)
     const horarios = [];
