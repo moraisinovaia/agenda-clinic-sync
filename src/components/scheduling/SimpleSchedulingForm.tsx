@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -39,7 +39,7 @@ interface SimpleSchedulingFormProps {
 }
 
 
-export const SimpleSchedulingForm = React.memo(function SimpleSchedulingForm({ 
+export function SimpleSchedulingForm({ 
   doctors, 
   atendimentos, 
   appointments,
@@ -152,14 +152,13 @@ export const SimpleSchedulingForm = React.memo(function SimpleSchedulingForm({
     );
   };
 
-  // Função para verificar se uma data tem agendamentos para o médico selecionado
-  const hasAppointmentsOnDate = (date: Date) => {
+  // Memoizar funções para evitar re-criação desnecessária
+  const hasAppointmentsOnDate = useCallback((date: Date) => {
     if (!selectedDoctor) return false;
     return getAppointmentsForDoctorAndDate(selectedDoctor.id, date).length > 0;
-  };
+  }, [selectedDoctor, getAppointmentsForDoctorAndDate]);
 
-  // Função para verificar se uma data está bloqueada para o médico selecionado
-  const hasBlocksOnDate = (date: Date) => {
+  const hasBlocksOnDate = useCallback((date: Date) => {
     if (!selectedDoctor) return false;
     if (isDateBlocked) {
       return isDateBlocked(selectedDoctor.id, date);
@@ -172,7 +171,27 @@ export const SimpleSchedulingForm = React.memo(function SimpleSchedulingForm({
       dateStr >= blocked.data_inicio &&
       dateStr <= blocked.data_fim
     );
-  };
+  }, [selectedDoctor, isDateBlocked, blockedDates]);
+
+  // Memoizar modifiers do calendario para evitar re-renderizações
+  const calendarModifiers = useMemo(() => ({
+    hasAppointments: hasAppointmentsOnDate,
+    hasBlocks: hasBlocksOnDate
+  }), [hasAppointmentsOnDate, hasBlocksOnDate]);
+
+  const calendarModifiersStyles = useMemo(() => ({
+    hasAppointments: {
+      backgroundColor: 'hsl(var(--primary))',
+      color: 'hsl(var(--primary-foreground))',
+      fontWeight: 'bold'
+    },
+    hasBlocks: {
+      backgroundColor: 'hsl(var(--destructive))',
+      color: 'hsl(var(--destructive-foreground))',
+      fontWeight: 'bold',
+      textDecoration: 'line-through'
+    }
+  }), []);
 
   const selectedDateAppointments = selectedDoctor 
     ? getAppointmentsForDoctorAndDate(selectedDoctor.id, selectedCalendarDate)
@@ -287,29 +306,15 @@ export const SimpleSchedulingForm = React.memo(function SimpleSchedulingForm({
                 <div className="space-y-2">
                   <h4 className="font-medium">Selecione uma data para ver agendamentos:</h4>
                   <Calendar
+                    key={`calendar-${selectedDoctor.id}`}
                     mode="single"
                     selected={selectedCalendarDate}
                     onSelect={(date) => date && setSelectedCalendarDate(date)}
                     locale={ptBR}
                     className="rounded-md border shadow-sm bg-background p-3 pointer-events-auto"
-                    disabled={(date) => hasBlocksOnDate(date)}
-                    modifiers={{
-                      hasAppointments: (date) => hasAppointmentsOnDate(date),
-                      hasBlocks: (date) => hasBlocksOnDate(date)
-                    }}
-                    modifiersStyles={{
-                      hasAppointments: {
-                        backgroundColor: 'hsl(var(--primary))',
-                        color: 'hsl(var(--primary-foreground))',
-                        fontWeight: 'bold'
-                      },
-                      hasBlocks: {
-                        backgroundColor: 'hsl(var(--destructive))',
-                        color: 'hsl(var(--destructive-foreground))',
-                        fontWeight: 'bold',
-                        textDecoration: 'line-through'
-                      }
-                    }}
+                    disabled={hasBlocksOnDate}
+                    modifiers={calendarModifiers}
+                    modifiersStyles={calendarModifiersStyles}
                   />
                   <div className="text-xs text-muted-foreground space-y-1">
                     <div className="flex items-center gap-2">
@@ -446,4 +451,4 @@ export const SimpleSchedulingForm = React.memo(function SimpleSchedulingForm({
       </Dialog>
     </div>
   );
-});
+}

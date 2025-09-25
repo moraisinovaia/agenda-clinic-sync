@@ -492,8 +492,9 @@ const Index = () => {
               showBack={true}
               showHome={true}
             />
-            <SchedulingErrorBoundary>
+            <SchedulingErrorBoundary key={`scheduling-form-${selectedDoctor?.id || 'new'}`}>
               <SimpleSchedulingForm
+                key={`simple-form-${selectedDoctor?.id || 'new'}-${editingAppointment?.id || 'new'}`}
                 doctors={doctors}
                 atendimentos={atendimentos}
                 appointments={appointments}
@@ -569,11 +570,13 @@ const Index = () => {
               showBack={true}
               showHome={true}
             />
-            <SimpleSchedulingForm
-              doctors={doctors}
-              atendimentos={atendimentos}
-              appointments={appointments}
-              blockedDates={blockedDates}
+            <SchedulingErrorBoundary key={`scheduling-form-edit-${editingAppointment?.id}`}>
+              <SimpleSchedulingForm
+                key={`edit-form-${editingAppointment?.id}`}
+                doctors={doctors}
+                atendimentos={atendimentos}
+                appointments={appointments}
+                blockedDates={blockedDates}
               isDateBlocked={isDateBlocked}
               onSubmit={handleSimpleAppointmentSubmit}
               onCancel={goBack}
@@ -582,7 +585,11 @@ const Index = () => {
               editingAppointment={editingAppointment}
               adicionarFilaEspera={adicionarFilaEspera}
               onMultipleSuccess={handleMultipleAppointmentSuccess}
+              onFillLastPatient={(fn: () => void) => {
+                fillLastPatientRef.current = fn;
+              }}
             />
+            </SchedulingErrorBoundary>
           </div>
         )}
 
