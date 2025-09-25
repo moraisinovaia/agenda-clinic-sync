@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { format, addDays, startOfWeek, isSameDay, parse, startOfDay } from 'date-fns';
+import { format, addDays, startOfWeek, isSameDay, parse, startOfDay, differenceInYears } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { formatInTimeZone } from 'date-fns-tz';
+import { BRAZIL_TIMEZONE } from '@/utils/timezone';
 import { Doctor, AppointmentWithRelations, Atendimento } from '@/types/scheduling';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -245,16 +247,17 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
               
               <div className="flex-1 w-full">
                 {selectedDateAppointments.length > 0 ? (
-                  <ScrollArea className="h-[300px] w-full">
-                    <Table className="min-w-[800px]">
-                      <TableHeader>
+                    <ScrollArea className="h-[300px] w-full">
+                      <Table className="min-w-[900px]">
+                        <TableHeader>
                         <TableRow>
                           <TableHead className="w-[120px]">Status/Hora</TableHead>
-                          <TableHead className="w-[200px]">Paciente</TableHead>
+                          <TableHead className="w-[180px]">Paciente/Idade</TableHead>
                           <TableHead className="w-[120px]">Telefone</TableHead>
                           <TableHead className="w-[100px]">Convênio</TableHead>
                           <TableHead className="w-[120px]">Tipo</TableHead>
-                          <TableHead className="w-[140px]">Agendado por</TableHead>
+                          <TableHead className="w-[120px]">Registrado em</TableHead>
+                          <TableHead className="w-[120px]">Última alteração</TableHead>
                           <TableHead className="w-[100px] text-center">Ações</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -277,11 +280,16 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                                 </div>
                               </TableCell>
                               
-                              {/* Paciente */}
-                              <TableCell className="w-[200px]">
+                              {/* Paciente/Idade */}
+                              <TableCell className="w-[180px]">
                                 <div className="space-y-1">
                                   <div className="text-xs font-medium leading-tight">
                                     {appointment.pacientes?.nome_completo || 'Paciente não encontrado'}
+                                    {appointment.pacientes?.data_nascimento && (
+                                      <span className="ml-2 text-[10px] text-muted-foreground">
+                                        ({differenceInYears(new Date(), new Date(appointment.pacientes.data_nascimento))} anos)
+                                      </span>
+                                    )}
                                   </div>
                                   {appointment.observacoes && (
                                     <div className="text-[10px] text-muted-foreground truncate">
@@ -308,11 +316,30 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                                 {appointment.atendimentos?.nome || 'Consulta'}
                               </TableCell>
                               
-                              {/* Agendado por */}
-                              <TableCell className="w-[140px] text-[10px]">
-                                {appointment.criado_por_profile?.nome || 
-                                 appointment.criado_por || 
-                                 'Recepcionista'}
+                              {/* Registrado em */}
+                              <TableCell className="w-[120px] text-[10px]">
+                                <div className="space-y-1">
+                                  <div>
+                                    {formatInTimeZone(new Date(appointment.created_at), BRAZIL_TIMEZONE, 'dd/MM/yy HH:mm', { locale: ptBR })}
+                                  </div>
+                                  <div className="text-muted-foreground">
+                                    por {appointment.criado_por_profile?.nome || appointment.criado_por || 'Sistema'}
+                                  </div>
+                                </div>
+                              </TableCell>
+                              
+                              {/* Última alteração */}
+                              <TableCell className="w-[120px] text-[10px]">
+                                <div className="space-y-1">
+                                  <div>
+                                    {formatInTimeZone(new Date(appointment.updated_at), BRAZIL_TIMEZONE, 'dd/MM/yy HH:mm', { locale: ptBR })}
+                                  </div>
+                                  {appointment.alterado_por_profile?.nome && (
+                                    <div className="text-muted-foreground">
+                                      por {appointment.alterado_por_profile.nome}
+                                    </div>
+                                  )}
+                                </div>
                               </TableCell>
                               
                               {/* Ações */}

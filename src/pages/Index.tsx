@@ -89,6 +89,14 @@ const Index = () => {
     refetch
   } = useSupabaseScheduling();
 
+  // Force refresh quando entra na agenda de um médico específico
+  useEffect(() => {
+    if (viewMode === 'schedule' && selectedDoctor) {
+      console.log('🔄 Forçando refresh para agenda do médico:', selectedDoctor.nome);
+      refetch();
+    }
+  }, [viewMode, selectedDoctor, refetch]);
+
   const {
     filaEspera,
     loading: filaLoading,
