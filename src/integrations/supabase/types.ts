@@ -1212,6 +1212,9 @@ export type Database = {
           paciente_id: string
           paciente_nome: string
           paciente_telefone: string
+          profile_email: string
+          profile_nome: string
+          profile_role: string
           status: string
           updated_at: string
         }[]

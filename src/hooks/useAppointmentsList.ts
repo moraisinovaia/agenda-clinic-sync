@@ -42,13 +42,24 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           criado_por_user_id: apt.criado_por_user_id,
           cliente_id: '00000000-0000-0000-0000-000000000000', // Usar ID padrão temporário
           // Campos adicionais para cancelamento e confirmação
-          cancelado_em: null,
-          cancelado_por: null,
-          cancelado_por_user_id: null,
-          confirmado_em: null,
-          confirmado_por: null,
-          confirmado_por_user_id: null,
+          cancelado_em: apt.cancelado_em,
+          cancelado_por: apt.cancelado_por,
+          cancelado_por_user_id: apt.cancelado_por_user_id,
+          confirmado_em: apt.confirmado_em,
+          confirmado_por: apt.confirmado_por,
+          confirmado_por_user_id: apt.confirmado_por_user_id,
           convenio: apt.paciente_convenio,
+          // Informações do perfil de quem criou o agendamento
+          criado_por_profile: apt.profile_nome ? {
+            id: apt.criado_por_user_id || '',
+            user_id: apt.criado_por_user_id || '',
+            nome: apt.profile_nome,
+            email: apt.profile_email || '',
+            role: apt.profile_role || 'recepcionista',
+            ativo: true,
+            created_at: apt.created_at || '',
+            updated_at: apt.updated_at || ''
+          } : null,
           pacientes: {
             id: apt.paciente_id,
             nome_completo: apt.paciente_nome,
