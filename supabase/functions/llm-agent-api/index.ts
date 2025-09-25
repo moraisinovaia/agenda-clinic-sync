@@ -6,6 +6,40 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Função para mapear dados flexivelmente
+function mapSchedulingData(body: any) {
+  const mapped = {
+    // Nome do paciente - aceitar diferentes formatos
+    paciente_nome: body.paciente_nome || body.nome_paciente || body.nome_completo || body.patient_name,
+    
+    // Data de nascimento - aceitar diferentes formatos
+    data_nascimento: body.data_nascimento || body.paciente_nascimento || body.birth_date || body.nascimento,
+    
+    // Convênio
+    convenio: body.convenio || body.insurance || body.plano_saude,
+    
+    // Telefones
+    telefone: body.telefone || body.phone || body.telefone_fixo,
+    celular: body.celular || body.mobile || body.whatsapp || body.telefone_celular,
+    
+    // Médico - aceitar ID ou nome
+    medico_nome: body.medico_nome || body.doctor_name || body.nome_medico,
+    medico_id: body.medico_id || body.doctor_id,
+    
+    // Atendimento
+    atendimento_nome: body.atendimento_nome || body.tipo_consulta || body.service_name || body.procedimento,
+    
+    // Data e hora da consulta - aceitar diferentes formatos
+    data_consulta: body.data_consulta || body.data_agendamento || body.appointment_date || body.data,
+    hora_consulta: body.hora_consulta || body.hora_agendamento || body.appointment_time || body.hora,
+    
+    // Observações
+    observacoes: body.observacoes || body.notes || body.comments || body.obs
+  };
+  
+  return mapped;
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -57,6 +91,12 @@ serve(async (req) => {
 // Agendar consulta
 async function handleSchedule(supabase: any, body: any) {
   try {
+    console.log('📥 Dados recebidos na API:', JSON.stringify(body, null, 2));
+    
+    // Mapear dados flexivelmente (aceitar diferentes formatos)
+    const mappedData = mapSchedulingData(body);
+    console.log('🔄 Dados mapeados:', JSON.stringify(mappedData, null, 2));
+    
     const { 
       paciente_nome, 
       data_nascimento, 
@@ -64,27 +104,53 @@ async function handleSchedule(supabase: any, body: any) {
       telefone, 
       celular, 
       medico_nome, 
+      medico_id,
       atendimento_nome, 
       data_consulta, 
       hora_consulta, 
       observacoes 
-    } = body;
+    } = mappedData;
 
     // Validar campos obrigatórios
-    if (!paciente_nome || !data_nascimento || !convenio || !celular || !medico_nome || !data_consulta || !hora_consulta) {
-      return errorResponse('Campos obrigatórios: paciente_nome, data_nascimento, convenio, celular, medico_nome, data_consulta, hora_consulta');
+    if (!paciente_nome || !data_nascimento || !convenio || !celular || (!medico_nome && !medico_id) || !data_consulta || !hora_consulta) {
+      const missingFields = [];
+      if (!paciente_nome) missingFields.push('paciente_nome');
+      if (!data_nascimento) missingFields.push('data_nascimento');
+      if (!convenio) missingFields.push('convenio');
+      if (!celular) missingFields.push('celular');
+      if (!medico_nome && !medico_id) missingFields.push('medico_nome ou medico_id');
+      if (!data_consulta) missingFields.push('data_consulta');
+      if (!hora_consulta) missingFields.push('hora_consulta');
+      
+      return errorResponse(`Campos obrigatórios faltando: ${missingFields.join(', ')}`);
     }
 
-    // Buscar médico por nome
-    const { data: medico, error: medicoError } = await supabase
-      .from('medicos')
-      .select('id, nome, ativo')
-      .ilike('nome', `%${medico_nome}%`)
-      .eq('ativo', true)
-      .single();
-
-    if (medicoError || !medico) {
-      return errorResponse(`Médico "${medico_nome}" não encontrado ou inativo`);
+    // Buscar médico por ID ou nome
+    let medico;
+    if (medico_id) {
+      const { data, error } = await supabase
+        .from('medicos')
+        .select('id, nome, ativo')
+        .eq('id', medico_id)
+        .eq('ativo', true)
+        .single();
+      
+      medico = data;
+      if (error || !medico) {
+        return errorResponse(`Médico com ID "${medico_id}" não encontrado ou inativo`);
+      }
+    } else {
+      const { data, error } = await supabase
+        .from('medicos')
+        .select('id, nome, ativo')
+        .ilike('nome', `%${medico_nome}%`)
+        .eq('ativo', true)
+        .single();
+      
+      medico = data;
+      if (error || !medico) {
+        return errorResponse(`Médico "${medico_nome}" não encontrado ou inativo`);
+      }
     }
 
     // Buscar atendimento por nome (se especificado)
