@@ -82,7 +82,7 @@ serve(async (req) => {
 
     return errorResponse('Método não permitido. Use POST.');
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Erro na LLM Agent API:', error);
     return errorResponse(`Erro interno: ${error.message}`);
   }
@@ -183,6 +183,18 @@ async function handleSchedule(supabase: any, body: any) {
       atendimento_id = atendimentos[0].id;
     }
 
+    // Buscar cliente padrão (IPADO)
+    const { data: cliente, error: clienteError } = await supabase
+      .from('clientes')
+      .select('id, nome')
+      .eq('nome', 'IPADO')
+      .eq('ativo', true)
+      .single();
+
+    if (clienteError || !cliente) {
+      return errorResponse('Cliente IPADO não encontrado. Configure um cliente padrão no sistema.');
+    }
+
     // Criar agendamento usando a função atômica
     console.log(`📅 Criando agendamento para ${paciente_nome} com médico ${medico.nome}`);
     
@@ -202,7 +214,8 @@ async function handleSchedule(supabase: any, body: any) {
         p_criado_por_user_id: null,
         p_agendamento_id_edicao: null,
         p_force_update_patient: false,
-        p_force_conflict: false
+        p_force_conflict: false,
+        p_cliente_id: cliente.id
       });
 
     console.log('📋 Resultado da função:', { result, agendamentoError });
@@ -228,7 +241,7 @@ async function handleSchedule(supabase: any, body: any) {
       hora: hora_consulta
     });
 
-  } catch (error) {
+  } catch (error: any) {
     return errorResponse(`Erro ao processar agendamento: ${error.message}`);
   }
 }
@@ -266,7 +279,7 @@ async function handleCheckPatient(supabase: any, body: any) {
         .ilike('nome_completo', `%${paciente_nome}%`);
 
       if (pacientes && pacientes.length > 0) {
-        const paciente_ids = pacientes.map(p => p.id);
+        const paciente_ids = pacientes.map((p: any) => p.id);
         query = query.in('paciente_id', paciente_ids);
       }
     }
@@ -281,13 +294,13 @@ async function handleCheckPatient(supabase: any, body: any) {
     let filteredAgendamentos = agendamentos || [];
     
     if (data_nascimento) {
-      filteredAgendamentos = filteredAgendamentos.filter(a => 
+      filteredAgendamentos = filteredAgendamentos.filter((a: any) => 
         a.pacientes?.data_nascimento === data_nascimento
       );
     }
 
     if (celular) {
-      filteredAgendamentos = filteredAgendamentos.filter(a => 
+      filteredAgendamentos = filteredAgendamentos.filter((a: any) => 
         a.pacientes?.celular?.includes(celular.replace(/\D/g, ''))
       );
     }
@@ -300,7 +313,7 @@ async function handleCheckPatient(supabase: any, body: any) {
       });
     }
 
-    const consultas = filteredAgendamentos.map(a => ({
+    const consultas = filteredAgendamentos.map((a: any) => ({
       id: a.id,
       paciente: a.pacientes?.nome_completo,
       medico: a.medicos?.nome,
@@ -319,7 +332,7 @@ async function handleCheckPatient(supabase: any, body: any) {
       total: consultas.length
     });
 
-  } catch (error) {
+  } catch (error: any) {
     return errorResponse(`Erro ao verificar paciente: ${error.message}`);
   }
 }
@@ -401,7 +414,7 @@ async function handleReschedule(supabase: any, body: any) {
       nova_hora
     });
 
-  } catch (error) {
+  } catch (error: any) {
     return errorResponse(`Erro ao remarcar consulta: ${error.message}`);
   }
 }
@@ -466,7 +479,7 @@ async function handleCancel(supabase: any, body: any) {
       motivo
     });
 
-  } catch (error) {
+  } catch (error: any) {
     return errorResponse(`Erro ao cancelar consulta: ${error.message}`);
   }
 }
@@ -500,7 +513,7 @@ async function handleAvailability(supabase: any, body: any) {
       .eq('data_agendamento', data_consulta)
       .in('status', ['agendado', 'confirmado']);
 
-    const horariosOcupados = agendamentos?.map(a => a.hora_agendamento) || [];
+    const horariosOcupados = agendamentos?.map((a: any) => a.hora_agendamento) || [];
 
     // Gerar horários disponíveis (08:00 às 18:00, intervalos de 30min)
     const horarios = [];
@@ -531,7 +544,7 @@ async function handleAvailability(supabase: any, body: any) {
       total: horarios.length
     });
 
-  } catch (error) {
+  } catch (error: any) {
     return errorResponse(`Erro ao verificar disponibilidade: ${error.message}`);
   }
 }
@@ -579,7 +592,7 @@ async function handlePatientSearch(supabase: any, body: any) {
       total: pacientes?.length || 0
     });
 
-  } catch (error) {
+  } catch (error: any) {
     return errorResponse(`Erro ao buscar pacientes: ${error.message}`);
   }
 }
