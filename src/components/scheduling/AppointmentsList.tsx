@@ -1,3 +1,4 @@
+import React, { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatInTimeZone } from 'date-fns-tz';
@@ -8,12 +9,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Calendar, Clock, User, Phone, CheckCircle, Edit, X, RotateCcw } from 'lucide-react';
+import { Calendar, Clock, User, Phone, CheckCircle, Edit, X, RotateCcw, History } from 'lucide-react';
 import { AppointmentFilters } from '@/components/filters/AppointmentFilters';
 import { useAdvancedAppointmentFilters } from '@/hooks/useAdvancedAppointmentFilters';
 import { useDebounce } from '@/hooks/useDebounce';
 import { usePagination } from '@/hooks/usePagination';
 import { PaginationControls } from '@/components/ui/pagination-controls';
+import { AuditHistoryModal } from './AuditHistoryModal';
 
 interface AppointmentsListProps {
   appointments: AppointmentWithRelations[];
@@ -25,6 +27,8 @@ interface AppointmentsListProps {
 }
 
 export function AppointmentsList({ appointments, doctors, onEditAppointment, onCancelAppointment, onConfirmAppointment, onUnconfirmAppointment }: AppointmentsListProps) {
+  const [selectedAuditId, setSelectedAuditId] = useState<string | null>(null);
+  const [selectedPatientName, setSelectedPatientName] = useState<string>("");
   const {
     searchTerm,
     statusFilter,
@@ -143,6 +147,7 @@ export function AppointmentsList({ appointments, doctors, onEditAppointment, onC
                       <TableHead className="font-semibold min-w-[120px]">Tipo</TableHead>
                       <TableHead className="font-semibold min-w-[140px]">Registrado em</TableHead>
                       <TableHead className="font-semibold min-w-[140px]">Última alteração</TableHead>
+                      <TableHead className="font-semibold min-w-[50px]">Histórico</TableHead>
                       <TableHead className="font-semibold text-center min-w-[120px] sticky right-0 bg-muted/50">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -209,13 +214,30 @@ export function AppointmentsList({ appointments, doctors, onEditAppointment, onC
                       </TableCell>
                       <TableCell className="text-sm max-w-[140px]">
                         <div className="text-xs">
-                          {formatInTimeZone(new Date(appointment.updated_at), BRAZIL_TIMEZONE, 'dd/MM/yyyy HH:mm', { locale: ptBR })}
+                          {appointment.alterado_por_user_id 
+                            ? formatInTimeZone(new Date(appointment.updated_at), BRAZIL_TIMEZONE, 'dd/MM/yyyy HH:mm', { locale: ptBR })
+                            : 'Nunca alterado'
+                          }
                         </div>
                         {appointment.alterado_por_profile?.nome && (
                           <div className="text-xs text-muted-foreground truncate">
                             por {appointment.alterado_por_profile.nome}
                           </div>
                         )}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedAuditId(appointment.id);
+                            setSelectedPatientName(appointment.pacientes?.nome_completo || 'Paciente');
+                          }}
+                          className="h-8 w-8 p-0"
+                          title="Ver histórico de alterações"
+                        >
+                          <History className="h-4 w-4" />
+                        </Button>
                       </TableCell>
                       <TableCell className="sticky right-0 bg-background/95 backdrop-blur-sm">
                         <div className="flex items-center justify-center gap-1">
@@ -312,6 +334,19 @@ export function AppointmentsList({ appointments, doctors, onEditAppointment, onC
           )}
         </CardContent>
       </Card>
+
+      {/* Modal de histórico de auditoria */}
+      <AuditHistoryModal
+        open={!!selectedAuditId}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedAuditId(null);
+            setSelectedPatientName("");
+          }
+        }}
+        agendamentoId={selectedAuditId || ""}
+        pacienteNome={selectedPatientName}
+      />
     </div>
   );
 }

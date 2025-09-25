@@ -180,6 +180,54 @@ export type Database = {
           },
         ]
       }
+      audit_logs: {
+        Row: {
+          action: string
+          audit_timestamp: string
+          changed_fields: string[] | null
+          created_at: string
+          id: string
+          ip_address: unknown | null
+          new_values: Json | null
+          old_values: Json | null
+          record_id: string
+          session_info: Json | null
+          table_name: string
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          audit_timestamp?: string
+          changed_fields?: string[] | null
+          created_at?: string
+          id?: string
+          ip_address?: unknown | null
+          new_values?: Json | null
+          old_values?: Json | null
+          record_id: string
+          session_info?: Json | null
+          table_name: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          audit_timestamp?: string
+          changed_fields?: string[] | null
+          created_at?: string
+          id?: string
+          ip_address?: unknown | null
+          new_values?: Json | null
+          old_values?: Json | null
+          record_id?: string
+          session_info?: Json | null
+          table_name?: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       bloqueios_agenda: {
         Row: {
           cliente_id: string
@@ -1402,6 +1450,19 @@ export type Database = {
       enviar_whatsapp_via_invoke: {
         Args: { p_agendamento_id: string }
         Returns: Json
+      }
+      get_agendamento_audit_history: {
+        Args: { p_agendamento_id: string }
+        Returns: {
+          action: string
+          audit_timestamp: string
+          changed_fields: string[]
+          id: string
+          new_values: Json
+          old_values: Json
+          profile_name: string
+          user_name: string
+        }[]
       }
       get_approved_users_safe: {
         Args: Record<PropertyKey, never>
