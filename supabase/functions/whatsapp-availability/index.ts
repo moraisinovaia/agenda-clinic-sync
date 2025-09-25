@@ -177,7 +177,7 @@ serve(async (req: Request): Promise<Response> => {
     
     return new Response(
       JSON.stringify({
-        error: (error as any).message,
+        error: error.message,
         message: "❌ Erro ao consultar disponibilidade. Tente novamente em alguns instantes ou entre em contato conosco.",
         available: false
       }),

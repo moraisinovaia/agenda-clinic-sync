@@ -217,16 +217,16 @@ serve(async (req) => {
         .insert([{
           timestamp: new Date().toISOString(),
           level: 'error',
-          message: `Falha no backup automático: ${(error as any).message}`,
+          message: `Falha no backup automático: ${error.message}`,
           context: 'AUTO_BACKUP_ERROR',
-          data: { error: (error as any).message, stack: (error as any).stack }
+          data: { error: error.message, stack: error.stack }
         }])
     } catch (logError) {
       console.error('Erro ao fazer log:', logError)
     }
 
     return new Response(
-      JSON.stringify({ error: 'Falha no backup automático', details: (error as any).message }),
+      JSON.stringify({ error: 'Falha no backup automático', details: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }

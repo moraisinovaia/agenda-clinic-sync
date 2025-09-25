@@ -287,7 +287,7 @@ serve(async (req) => {
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ ERRO GERAL:', error);
     return new Response(
       JSON.stringify({ 

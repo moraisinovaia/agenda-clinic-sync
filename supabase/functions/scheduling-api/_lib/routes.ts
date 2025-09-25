@@ -235,7 +235,7 @@ export async function handleCreateAppointment(supabase: any, body: any) {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Erro crítico na criação do agendamento N8N:', error);
     return new Response(
       JSON.stringify({ 
@@ -462,7 +462,7 @@ export async function handleCheckAvailability(supabase: any, params: URLSearchPa
       if (!horarios[dayName] || !horarios[dayName].ativo) continue;
 
       // Verificar se a data não está bloqueada
-      const isBlocked = blockedPeriods.some((block: any) => 
+      const isBlocked = blockedPeriods.some(block => 
         dateStr >= block.data_inicio && dateStr <= block.data_fim
       );
       if (isBlocked) continue;
@@ -482,7 +482,7 @@ export async function handleCheckAvailability(supabase: any, params: URLSearchPa
           const timeStr = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
           
           // Verificar se este horário não está ocupado
-          const isOccupied = occupiedSlots.some((slot: any) => 
+          const isOccupied = occupiedSlots.some(slot => 
             slot.data_agendamento === dateStr && slot.hora_agendamento === timeStr
           );
           
@@ -519,7 +519,7 @@ export async function handleCheckAvailability(supabase: any, params: URLSearchPa
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Erro ao consultar disponibilidade:', error);
     return new Response(
       JSON.stringify({ 

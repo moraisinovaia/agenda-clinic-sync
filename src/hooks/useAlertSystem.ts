@@ -64,7 +64,7 @@ export const useAlertSystem = () => {
         return false;
       }
 
-      const response = await supabase.functions.invoke('native-alerts', {
+      const response = await supabase.functions.invoke('gmail-alerts', {
         body: {
           ...alertData,
           to: config.email

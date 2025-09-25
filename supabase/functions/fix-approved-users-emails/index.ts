@@ -89,7 +89,7 @@ const handler = async (req: Request): Promise<Response> => {
           const { error: updateError } = await supabase.auth.admin.updateUserById(
             user.user_id,
             {
-              email_confirm: true
+              email_confirmed_at: new Date().toISOString()
             }
           );
 

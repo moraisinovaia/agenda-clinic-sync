@@ -1,41 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-// Função para enviar WhatsApp via Evolution API
-async function enviarWhatsAppEvolution(celular: string, mensagem: string) {
-  try {
-    const evolutionUrl = Deno.env.get('EVOLUTION_API_URL') || 'https://evolutionapi.inovaia.online';
-    const apiKey = Deno.env.get('EVOLUTION_API_KEY') || 'grozNCsxwy32iYir20LRw7dfIRNPI8UZ';
-    const instanceName = Deno.env.get('EVOLUTION_INSTANCE_NAME') || 'Endogastro';
-
-    console.log(`📱 Enviando WhatsApp via Evolution API para: ${celular}`);
-
-    const response = await fetch(`${evolutionUrl}/message/sendText/${instanceName}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': apiKey
-      },
-      body: JSON.stringify({
-        number: celular,
-        text: mensagem
-      })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`❌ Erro ao enviar WhatsApp: ${response.status} - ${errorText}`);
-      throw new Error(`Evolution API error: ${response.status}`);
-    }
-
-    const result = await response.json();
-    console.log('✅ WhatsApp enviado com sucesso:', result);
-    return result;
-  } catch (error) {
-    console.error('❌ Erro na integração Evolution API:', error);
-    throw error;
-  }
-}
+import { enviarWhatsAppEvolution } from '../scheduling-api/_lib/whatsapp.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -197,7 +162,7 @@ serve(async (req) => {
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Erro no Notification Scheduler:', error);
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
@@ -451,13 +416,7 @@ async function getNotificationAnalytics(supabase: any) {
   }
 
   // Processar analytics
-  const stats: {
-    total_sent: number;
-    by_type: Record<string, number>;
-    by_status: Record<string, number>;
-    success_rate: number;
-    daily_stats: Record<string, number>;
-  } = {
+  const stats = {
     total_sent: analytics?.length || 0,
     by_type: {},
     by_status: {},
@@ -465,7 +424,7 @@ async function getNotificationAnalytics(supabase: any) {
     daily_stats: {}
   };
 
-  analytics?.forEach((log: any) => {
+  analytics?.forEach(log => {
     // Por tipo
     stats.by_type[log.type] = (stats.by_type[log.type] || 0) + 1;
     

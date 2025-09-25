@@ -140,7 +140,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: (error as any).message,
+        error: error.message,
         timestamp: new Date().toISOString()
       }),
       { 
