@@ -168,15 +168,15 @@ const handleDateChange = (date: string) => {
 };
 
   return (
-    <div className="space-y-4">
-      <h3 className="text-lg font-semibold flex items-center gap-2">
-        <Clock className="h-4 w-4" />
+    <div className="space-y-4 animate-fade-in">
+      <h3 className="text-lg font-semibold flex items-center gap-2 animate-slide-in">
+        <Clock className="h-4 w-4 animate-bounce-gentle" />
         Dados do Agendamento
       </h3>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <Label htmlFor="medico" className={validationErrors.medicoId ? 'text-destructive' : ''}>
+          <Label htmlFor="medico" className={cn("animate-slide-in", validationErrors.medicoId ? 'text-destructive' : '')}>
             Médico *
           </Label>
           <Popover open={openDoctorCombo} onOpenChange={setOpenDoctorCombo}>

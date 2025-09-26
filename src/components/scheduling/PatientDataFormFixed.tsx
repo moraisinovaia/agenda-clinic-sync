@@ -217,20 +217,21 @@ export function PatientDataFormFixed({
   };
 
   return (
-    <div className="space-y-4">
-      <h3 className="text-lg font-semibold flex items-center gap-2">
-        <User className="h-4 w-4" />
+    <div className="space-y-4 animate-fade-in">
+      <h3 className="text-lg font-semibold flex items-center gap-2 animate-slide-in">
+        <User className="h-4 w-4 animate-bounce-gentle" />
         Dados do Paciente
       </h3>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <Label htmlFor="nomeCompleto">Nome Completo *</Label>
+          <Label htmlFor="nomeCompleto" className="animate-slide-in">Nome Completo *</Label>
           <Input
             id="nomeCompleto"
             value={formData.nomeCompleto}
             onChange={(e) => setFormData(prev => ({ ...prev, nomeCompleto: e.target.value }))}
             placeholder="Nome completo do paciente"
+            className="focus-ring hover-glow transition-all duration-200"
             required
           />
         </div>

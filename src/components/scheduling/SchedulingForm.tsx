@@ -148,10 +148,10 @@ export function SchedulingForm({
     <div className="w-full max-w-6xl mx-auto space-y-6">
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Formulário de Agendamento */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CalendarIcon className="h-5 w-5" />
+        <Card className="shadow-card-enhanced hover-lift animate-fade-in">
+          <CardHeader className="bg-gradient-secondary">
+            <CardTitle className="flex items-center gap-2 animate-slide-in">
+              <CalendarIcon className="h-5 w-5 animate-bounce-gentle" />
               {editingAppointment ? 'Editar Agendamento' : 'Novo Agendamento'}
             </CardTitle>
           </CardHeader>
@@ -184,13 +184,22 @@ export function SchedulingForm({
               )}
 
               <div className="flex gap-2 pt-4">
-                <Button type="submit" disabled={loading} className="flex-1">
+                <Button 
+                  type="submit" 
+                  disabled={loading} 
+                  className="flex-1 bg-gradient-primary hover:shadow-elegant transition-all duration-300 focus-ring"
+                >
                   {loading 
                     ? (editingAppointment ? 'Atualizando...' : 'Agendando...') 
                     : (editingAppointment ? 'Atualizar Agendamento' : 'Confirmar Agendamento')
                   }
                 </Button>
-                <Button type="button" variant="outline" onClick={onCancel}>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={onCancel}
+                  className="hover-scale focus-ring"
+                >
                   Cancelar
                 </Button>
               </div>
@@ -199,10 +208,10 @@ export function SchedulingForm({
         </Card>
 
         {/* Calendário e Agendamentos */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CalendarIcon className="h-5 w-5" />
+        <Card className="shadow-card-enhanced hover-lift animate-fade-in animation-delay-100">
+          <CardHeader className="bg-gradient-secondary">
+            <CardTitle className="flex items-center gap-2 animate-slide-in">
+              <CalendarIcon className="h-5 w-5 animate-bounce-gentle" />
               Agenda do Médico
             </CardTitle>
             {selectedDoctor && (
@@ -214,8 +223,8 @@ export function SchedulingForm({
           
           <CardContent className="space-y-4">
             {!selectedDoctor ? (
-              <div className="text-center py-8">
-                <CalendarIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <div className="text-center py-8 animate-fade-in">
+                <CalendarIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4 animate-pulse-gentle" />
                 <h4 className="text-lg font-medium text-muted-foreground mb-2">
                   Selecione um médico
                 </h4>
@@ -243,7 +252,7 @@ export function SchedulingForm({
                       }
                     }}
                     locale={ptBR}
-                    className="rounded-md border shadow-sm bg-background p-3 pointer-events-auto"
+                    className="rounded-md border shadow-elegant bg-background p-3 pointer-events-auto animate-scale-in hover-glow transition-all duration-300"
                     disabled={hasBlocksOnDate}
                     modifiers={calendarModifiers}
                     modifiersStyles={calendarModifiersStyles}
@@ -274,10 +283,10 @@ export function SchedulingForm({
                         .map((appointment) => (
                           <div 
                             key={appointment.id} 
-                            className={`p-3 border rounded-lg space-y-2 ${
+                            className={`p-3 border rounded-lg space-y-2 hover-lift animate-slide-in shadow-card-enhanced transition-all duration-200 ${
                               appointment.status === 'confirmado' 
-                                ? 'bg-green-50 border-green-200' 
-                                : 'bg-background'
+                                ? 'bg-gradient-success border-success' 
+                                : 'bg-background hover:bg-muted/50'
                             }`}
                           >
                             <div className="flex items-center justify-between">
@@ -315,8 +324,8 @@ export function SchedulingForm({
                           </div>
                         ))
                     ) : (
-                      <div className="text-center py-4 text-sm text-muted-foreground border rounded-lg bg-muted/50">
-                        <CalendarIcon className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <div className="text-center py-4 text-sm text-muted-foreground border rounded-lg bg-muted/50 animate-fade-in hover-scale transition-all duration-200">
+                        <CalendarIcon className="h-8 w-8 mx-auto mb-2 opacity-50 animate-pulse-gentle" />
                         <p>Nenhum agendamento nesta data</p>
                         <p className="text-xs">Esta data está disponível para agendamento</p>
                       </div>
