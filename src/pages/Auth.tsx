@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
+import { AutocompleteInput } from '@/components/ui/autocomplete-input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -11,6 +12,7 @@ import { Loader2, User, Lock, Mail, AtSign, AlertCircle, KeyRound, Wrench } from
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/hooks/useAuth';
 import { useRememberMe } from '@/hooks/useRememberMe';
+import { useLoginHistory } from '@/hooks/useLoginHistory';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import inovaiaLogo from '@/assets/inovaia-logo.jpeg';
@@ -18,6 +20,7 @@ import inovaiaLogo from '@/assets/inovaia-logo.jpeg';
 export default function Auth() {
   const { user, loading, signIn, signUp } = useAuth();
   const { rememberMe, savedUsername, saveCredentials } = useRememberMe();
+  const { getSuggestions, addToHistory } = useLoginHistory();
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
@@ -113,6 +116,14 @@ export default function Auth() {
       } else {
         // Apenas se login foi bem-sucedido
         saveCredentials(loginData.emailOrUsername, rememberMeChecked);
+        
+        // Adicionar ao histórico de login
+        const isEmail = loginData.emailOrUsername.includes('@');
+        addToHistory({
+          email: isEmail ? loginData.emailOrUsername : undefined,
+          username: isEmail ? undefined : loginData.emailOrUsername
+        });
+        
         // Não exibir toast aqui pois o useAuth já exibe
       }
     } catch (error: any) {
@@ -492,13 +503,14 @@ export default function Auth() {
                   <Label htmlFor="login-emailOrUsername" className="text-sm font-medium">Email ou Nome de Usuário</Label>
                   <div className="relative group">
                     <AtSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
-                      <Input
+                      <AutocompleteInput
                       id="login-emailOrUsername"
                       type="text"
                       placeholder="email@exemplo.com ou usuario"
                       className="pl-8 auth-input"
                       value={loginData.emailOrUsername}
-                      onChange={(e) => setLoginData(prev => ({ ...prev, emailOrUsername: e.target.value }))}
+                      suggestions={getSuggestions()}
+                      onValueChange={(value) => setLoginData(prev => ({ ...prev, emailOrUsername: value }))}
                       required
                     />
                   </div>
