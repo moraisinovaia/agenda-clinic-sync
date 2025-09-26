@@ -5,7 +5,6 @@ import { Progress } from '@/components/ui/progress';
 import { Doctor, AppointmentWithRelations } from '@/types/scheduling';
 import { format, isToday, isTomorrow, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { AppointmentSummary } from '../scheduling/AppointmentSummary';
 
 interface StatsCardsProps {
   doctors: Doctor[];
@@ -35,8 +34,7 @@ export const StatsCards = ({ doctors, appointments }: StatsCardsProps) => {
   const occupationRate = activeDoctors > 0 ? Math.round((activeDoctorsToday / activeDoctors) * 100) : 0;
 
   return (
-    <>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mb-8">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mb-8">
       {/* Active Doctors */}
       <Card>
         <CardContent className="p-4">
@@ -122,9 +120,5 @@ export const StatsCards = ({ doctors, appointments }: StatsCardsProps) => {
         </CardContent>
       </Card>
     </div>
-
-    {/* Resumo geral por categoria */}
-    <AppointmentSummary appointments={appointments} />
-    </>
   );
 };
