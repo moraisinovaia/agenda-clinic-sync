@@ -470,60 +470,60 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
         </DialogContent>
       </Dialog>
 
-      {/* Resumo estatístico */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <CalendarIcon className="h-5 w-5 text-blue-600" />
+      {/* Resumo estatístico - Versão compacta */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <Card className="p-2">
+          <div className="flex items-center gap-2">
+            <div className="p-1 bg-blue-100 rounded">
+              <CalendarIcon className="h-4 w-4 text-blue-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold">
+              <p className="text-lg font-bold">
                 {appointments.filter(apt => apt.medico_id === doctor.id && apt.status === 'agendado').length}
               </p>
-              <p className="text-sm text-muted-foreground">Agendados</p>
+              <p className="text-xs text-muted-foreground">Agendados</p>
             </div>
           </div>
         </Card>
 
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <Clock className="h-5 w-5 text-green-600" />
+        <Card className="p-2">
+          <div className="flex items-center gap-2">
+            <div className="p-1 bg-green-100 rounded">
+              <Clock className="h-4 w-4 text-green-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold">
+              <p className="text-lg font-bold">
                 {appointments.filter(apt => apt.medico_id === doctor.id && apt.status === 'confirmado').length}
               </p>
-              <p className="text-sm text-muted-foreground">Confirmados</p>
+              <p className="text-xs text-muted-foreground">Confirmados</p>
             </div>
           </div>
         </Card>
 
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-gray-100 rounded-lg">
-              <User className="h-5 w-5 text-gray-600" />
+        <Card className="p-2">
+          <div className="flex items-center gap-2">
+            <div className="p-1 bg-gray-100 rounded">
+              <User className="h-4 w-4 text-gray-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold">
+              <p className="text-lg font-bold">
                 {appointments.filter(apt => apt.medico_id === doctor.id && apt.status === 'realizado').length}
               </p>
-              <p className="text-sm text-muted-foreground">Realizados</p>
+              <p className="text-xs text-muted-foreground">Realizados</p>
             </div>
           </div>
         </Card>
 
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-red-100 rounded-lg">
-              <CalendarIcon className="h-5 w-5 text-red-600" />
+        <Card className="p-2">
+          <div className="flex items-center gap-2">
+            <div className="p-1 bg-red-100 rounded">
+              <CalendarIcon className="h-4 w-4 text-red-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold">
+              <p className="text-lg font-bold">
                 {appointments.filter(apt => apt.medico_id === doctor.id && apt.status === 'cancelado').length}
               </p>
-              <p className="text-sm text-muted-foreground">Cancelados</p>
+              <p className="text-xs text-muted-foreground">Cancelados</p>
             </div>
           </div>
         </Card>
