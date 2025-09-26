@@ -25,6 +25,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { FilaEsperaForm } from '@/components/fila-espera/FilaEsperaForm';
 import { FilaEsperaFormData } from '@/types/fila-espera';
+import { AppointmentSummary } from './AppointmentSummary';
 
 interface DoctorScheduleProps {
   doctor: Doctor;
@@ -517,6 +518,11 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
           </div>
         </Card>
       </div>
+
+      {/* Rodapé com resumo por categoria */}
+      <AppointmentSummary 
+        appointments={appointments.filter(apt => apt.medico_id === doctor.id)} 
+      />
     </div>
   );
 }
