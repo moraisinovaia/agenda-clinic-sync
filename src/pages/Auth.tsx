@@ -356,7 +356,7 @@ export default function Auth() {
                   <PasswordInput
                     id="new-password"
                     placeholder="••••••••"
-                    className="pl-9"
+                    className="pl-8"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     required
@@ -371,7 +371,7 @@ export default function Auth() {
                   <PasswordInput
                     id="confirm-new-password"
                     placeholder="••••••••"
-                    className="pl-9"
+                    className="pl-8"
                     value={confirmNewPassword}
                     onChange={(e) => setConfirmNewPassword(e.target.value)}
                     required
@@ -492,11 +492,11 @@ export default function Auth() {
                   <Label htmlFor="login-emailOrUsername" className="text-sm font-medium">Email ou Nome de Usuário</Label>
                   <div className="relative group">
                     <AtSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
-                    <Input
+                      <Input
                       id="login-emailOrUsername"
                       type="text"
                       placeholder="email@exemplo.com ou usuario"
-                      className="pl-9 auth-input"
+                      className="pl-8 auth-input"
                       value={loginData.emailOrUsername}
                       onChange={(e) => setLoginData(prev => ({ ...prev, emailOrUsername: e.target.value }))}
                       required
@@ -511,7 +511,7 @@ export default function Auth() {
                     <PasswordInput
                       id="login-password"
                       placeholder="••••••••"
-                      className="pl-9 auth-input"
+                      className="pl-8 auth-input"
                       value={loginData.password}
                       onChange={(e) => setLoginData(prev => ({ ...prev, password: e.target.value }))}
                       required
@@ -575,11 +575,11 @@ export default function Auth() {
                   <Label htmlFor="signup-nome" className="text-sm font-medium">Nome Completo</Label>
                   <div className="relative group">
                     <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
-                    <Input
+                      <Input
                       id="signup-nome"
                       type="text"
                       placeholder="Seu nome completo"
-                      className="pl-9 auth-input"
+                      className="pl-8 auth-input"
                       value={signupData.nome}
                       onChange={(e) => setSignupData(prev => ({ ...prev, nome: e.target.value }))}
                       required
@@ -591,11 +591,11 @@ export default function Auth() {
                   <Label htmlFor="signup-username" className="text-sm font-medium">Nome de Usuário</Label>
                   <div className="relative group">
                     <AtSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
-                    <Input
+                      <Input
                       id="signup-username"
                       type="text"
                       placeholder="usuario123"
-                      className="pl-9 auth-input"
+                      className="pl-8 auth-input"
                       value={signupData.username}
                       onChange={(e) => setSignupData(prev => ({ ...prev, username: e.target.value }))}
                       required
@@ -610,11 +610,11 @@ export default function Auth() {
                   <Label htmlFor="signup-email" className="text-sm font-medium">Email</Label>
                   <div className="relative group">
                     <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
-                    <Input
+                      <Input
                       id="signup-email"
                       type="email"
                       placeholder="seu@email.com"
-                      className="pl-9 auth-input"
+                      className="pl-8 auth-input"
                       value={signupData.email}
                       onChange={(e) => setSignupData(prev => ({ ...prev, email: e.target.value }))}
                       required
@@ -632,7 +632,7 @@ export default function Auth() {
                     <PasswordInput
                       id="signup-password"
                       placeholder="••••••••"
-                      className="pl-9 auth-input"
+                      className="pl-8 auth-input"
                       value={signupData.password}
                       onChange={(e) => setSignupData(prev => ({ ...prev, password: e.target.value }))}
                       required
@@ -647,7 +647,7 @@ export default function Auth() {
                     <PasswordInput
                       id="signup-confirm"
                       placeholder="••••••••"
-                      className="pl-9 auth-input"
+                      className="pl-8 auth-input"
                       value={signupData.confirmPassword}
                       onChange={(e) => setSignupData(prev => ({ ...prev, confirmPassword: e.target.value }))}
                       required
