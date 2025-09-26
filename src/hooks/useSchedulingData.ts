@@ -1,7 +1,8 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Doctor, Atendimento } from '@/types/scheduling';
+import { logger } from '@/utils/logger';
 
 export function useSchedulingData() {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
@@ -9,59 +10,99 @@ export function useSchedulingData() {
   const [blockedDates, setBlockedDates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
-  // Buscar médicos ativos
-  const fetchDoctors = async () => {
+  // Função de retry com backoff exponencial
+  const retryWithBackoff = async (fn: () => Promise<any>, maxRetries = 3) => {
+    let lastError;
+    for (let i = 0; i <= maxRetries; i++) {
+      try {
+        return await fn();
+      } catch (error) {
+        lastError = error;
+        if (i < maxRetries) {
+          const delay = Math.pow(2, i) * 1000; // 1s, 2s, 4s
+          logger.warn(`Tentativa ${i + 1}/${maxRetries + 1} falhou, tentando novamente em ${delay}ms`, error, 'SCHEDULING_DATA');
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+    throw lastError;
+  };
+
+  // Buscar médicos ativos com retry
+  const fetchDoctors = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from('medicos')
-        .select('*')
-        .eq('ativo', true)
-        .order('nome');
+      logger.info('Buscando médicos ativos', {}, 'SCHEDULING_DATA');
+      
+      const result = await retryWithBackoff(async () => {
+        const { data, error } = await supabase
+          .from('medicos')
+          .select('*')
+          .eq('ativo', true)
+          .order('nome');
 
-      if (error) throw error;
-      setDoctors(data || []);
+        if (error) throw error;
+        return data;
+      });
+
+      setDoctors(result || []);
       setError(null);
+      logger.info(`${result?.length || 0} médicos carregados`, {}, 'SCHEDULING_DATA');
     } catch (error) {
-      console.error('Erro ao buscar médicos:', error);
-      setError('Erro ao carregar médicos');
+      logger.error('Erro ao buscar médicos após todas as tentativas', error, 'SCHEDULING_DATA');
+      setError('Erro ao carregar médicos. Tentando reconectar...');
       setDoctors([]);
     }
-  };
+  }, []);
 
-  // Buscar atendimentos ativos
-  const fetchAtendimentos = async () => {
+  // Buscar atendimentos ativos com retry
+  const fetchAtendimentos = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from('atendimentos')
-        .select('*')
-        .eq('ativo', true)
-        .order('nome');
+      logger.info('Buscando atendimentos ativos', {}, 'SCHEDULING_DATA');
+      
+      const result = await retryWithBackoff(async () => {
+        const { data, error } = await supabase
+          .from('atendimentos')
+          .select('*')
+          .eq('ativo', true)
+          .order('nome');
 
-      if (error) throw error;
-      setAtendimentos(data || []);
+        if (error) throw error;
+        return data;
+      });
+
+      setAtendimentos(result || []);
+      logger.info(`${result?.length || 0} atendimentos carregados`, {}, 'SCHEDULING_DATA');
     } catch (error) {
-      console.error('Erro ao buscar atendimentos:', error);
+      logger.error('Erro ao buscar atendimentos após todas as tentativas', error, 'SCHEDULING_DATA');
       setAtendimentos([]);
     }
-  };
+  }, []);
 
-  // Buscar bloqueios de agenda
-  const fetchBlockedDates = async () => {
+  // Buscar bloqueios de agenda com retry
+  const fetchBlockedDates = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from('bloqueios_agenda')
-        .select('*')
-        .eq('status', 'ativo')
-        .order('data_inicio');
+      logger.info('Buscando bloqueios de agenda', {}, 'SCHEDULING_DATA');
+      
+      const result = await retryWithBackoff(async () => {
+        const { data, error } = await supabase
+          .from('bloqueios_agenda')
+          .select('*')
+          .eq('status', 'ativo')
+          .order('data_inicio');
 
-      if (error) throw error;
-      setBlockedDates(data || []);
+        if (error) throw error;
+        return data;
+      });
+
+      setBlockedDates(result || []);
+      logger.info(`${result?.length || 0} bloqueios carregados`, {}, 'SCHEDULING_DATA');
     } catch (error) {
-      console.error('Erro ao buscar bloqueios:', error);
+      logger.error('Erro ao buscar bloqueios após todas as tentativas', error, 'SCHEDULING_DATA');
       setBlockedDates([]);
     }
-  };
+  }, []);
 
   // Buscar atendimentos por médico
   const getAtendimentosByDoctor = (doctorId: string) => {
@@ -86,22 +127,33 @@ export function useSchedulingData() {
     );
   };
 
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        await Promise.all([
-          fetchDoctors(),
-          fetchAtendimentos(),
-          fetchBlockedDates(),
-        ]);
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Função de carregamento com monitoramento de tentativas
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setRetryCount(prev => prev + 1);
+    
+    try {
+      logger.info('Iniciando carregamento de dados do sistema', { tentativa: retryCount }, 'SCHEDULING_DATA');
+      
+      await Promise.all([
+        fetchDoctors(),
+        fetchAtendimentos(),
+        fetchBlockedDates(),
+      ]);
 
+      logger.info('Carregamento de dados concluído com sucesso', {}, 'SCHEDULING_DATA');
+      setError(null);
+    } catch (error) {
+      logger.error('Falha no carregamento geral dos dados', error, 'SCHEDULING_DATA');
+      setError('Erro ao conectar com o sistema. Verificando conexão...');
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchDoctors, fetchAtendimentos, fetchBlockedDates, retryCount]);
+
+  useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   return {
     doctors,
@@ -109,9 +161,10 @@ export function useSchedulingData() {
     blockedDates,
     loading,
     error,
+    retryCount,
     getAtendimentosByDoctor,
     isDateBlocked,
     getBlockedDatesByDoctor,
-    refetch: () => Promise.all([fetchDoctors(), fetchAtendimentos(), fetchBlockedDates()]),
+    refetch: loadData,
   };
 }
