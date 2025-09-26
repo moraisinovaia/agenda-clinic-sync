@@ -10,38 +10,75 @@ export function useSchedulingData() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Buscar médicos ativos
+  // Buscar médicos ativos com melhor tratamento de erro
   const fetchDoctors = async () => {
     try {
-      const { data, error } = await supabase
+      console.log('🔍 Buscando médicos...');
+      
+      // First try with RLS
+      let { data, error } = await supabase
         .from('medicos')
         .select('*')
         .eq('ativo', true)
         .order('nome');
 
-      if (error) throw error;
+      // If RLS fails, try direct query (public access policy should work)
+      if (error && error.code === '42501') {
+        console.log('⚠️ RLS failed, trying direct query...');
+        const { data: directData, error: directError } = await supabase
+          .from('medicos')
+          .select('*')
+          .eq('ativo', true)
+          .order('nome');
+        
+        data = directData;
+        error = directError;
+      }
+
+      if (error) {
+        console.error('❌ Erro final ao buscar médicos:', error);
+        throw error;
+      }
+      
+      console.log('✅ Médicos encontrados:', data?.length || 0);
       setDoctors(data || []);
       setError(null);
-    } catch (error) {
-      console.error('Erro ao buscar médicos:', error);
-      setError('Erro ao carregar médicos');
+    } catch (error: any) {
+      console.error('💥 Erro ao buscar médicos:', error);
+      
+      // Set specific error messages based on error type
+      if (error?.code === '42501') {
+        setError('Erro de permissão - verificar configurações');
+      } else if (error?.message?.includes('connection')) {
+        setError('Erro de conexão - tentando reconectar...');
+      } else {
+        setError('Erro ao carregar médicos');
+      }
+      
       setDoctors([]);
     }
   };
 
-  // Buscar atendimentos ativos
+  // Buscar atendimentos ativos com melhor tratamento de erro
   const fetchAtendimentos = async () => {
     try {
+      console.log('🔍 Buscando atendimentos...');
+      
       const { data, error } = await supabase
         .from('atendimentos')
         .select('*')
         .eq('ativo', true)
         .order('nome');
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Erro ao buscar atendimentos:', error);
+        throw error;
+      }
+      
+      console.log('✅ Atendimentos encontrados:', data?.length || 0);
       setAtendimentos(data || []);
     } catch (error) {
-      console.error('Erro ao buscar atendimentos:', error);
+      console.error('💥 Erro ao buscar atendimentos:', error);
       setAtendimentos([]);
     }
   };

@@ -31,13 +31,23 @@ export const useAlertSystem = () => {
 
   const loadAlertConfigs = async () => {
     try {
+      console.log('🔧 Carregando configurações de alertas...');
+      
       const { data, error } = await supabase
         .from('configuracoes_clinica')
         .select('*')
         .eq('categoria', 'alertas')
         .eq('ativo', true);
 
-      if (error) throw error;
+      if (error) {
+        // Se for erro de permissão, usar configurações padrão sem alertas
+        if (error.code === '42501') {
+          console.log('⚠️ Sem permissão para configurações - desabilitando alertas');
+          setAlertConfigs([]);
+          return;
+        }
+        throw error;
+      }
 
       if (data && data.length > 0) {
         const configs = data.map(item => ({
@@ -48,10 +58,12 @@ export const useAlertSystem = () => {
             ? item.dados_extras as AlertConfig['conditions']
             : {}
         }));
+        console.log('✅ Configurações de alertas carregadas:', configs.length);
         setAlertConfigs(configs);
       }
     } catch (error) {
-      console.error('Erro ao carregar configurações de alertas:', error);
+      console.log('⚠️ Erro ao carregar configurações de alertas - desabilitando alertas:', error);
+      setAlertConfigs([]);
     }
   };
 

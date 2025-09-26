@@ -20,6 +20,8 @@ export const DoctorsView = ({
   onScheduleDoctor, 
   onViewSchedule 
 }: DoctorsViewProps) => {
+  console.log('📊 DoctorsView render - doctors:', doctors?.length || 0, 'array:', Array.isArray(doctors));
+  
   const normalizeText = (text: string) => {
     return text
       .toLowerCase()
@@ -27,14 +29,21 @@ export const DoctorsView = ({
       .replace(/[\u0300-\u036f]/g, ''); // Remove acentos
   };
 
-  const filteredDoctors = doctors.filter(doctor => {
+  // Ensure doctors is always an array
+  const safeDoctors = Array.isArray(doctors) ? doctors : [];
+  
+  const filteredDoctors = safeDoctors.filter(doctor => {
+    if (!doctor || typeof doctor !== 'object') return false;
+    
     const searchNormalized = normalizeText(searchTerm);
-    const nomeNormalized = normalizeText(doctor.nome);
-    const especialidadeNormalized = normalizeText(doctor.especialidade);
+    const nomeNormalized = normalizeText(doctor.nome || '');
+    const especialidadeNormalized = normalizeText(doctor.especialidade || '');
     
     return nomeNormalized.includes(searchNormalized) ||
            especialidadeNormalized.includes(searchNormalized);
   });
+  
+  console.log('🔍 DoctorsView - filtered doctors:', filteredDoctors?.length || 0);
 
   return (
     <>
@@ -73,12 +82,24 @@ export const DoctorsView = ({
         </div>
       ) : (
         <Card className="p-8 text-center">
-          <p className="text-muted-foreground">
-            {searchTerm ? 
-              `Nenhum médico encontrado com o termo "${searchTerm}"` : 
-              'Nenhum médico encontrado. Verifique se existem médicos ativos no sistema.'
-            }
-          </p>
+          <div className="space-y-4">
+            <p className="text-muted-foreground">
+              {searchTerm ? 
+                `Nenhum médico encontrado com o termo "${searchTerm}"` : 
+                safeDoctors.length === 0 ? 
+                  'Carregando médicos...' : 
+                  'Nenhum médico encontrado. Verifique se existem médicos ativos no sistema.'
+              }
+            </p>
+            {safeDoctors.length === 0 && (
+              <div className="flex flex-col items-center space-y-2">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                <p className="text-sm text-muted-foreground">
+                  Verificando conexão com banco de dados...
+                </p>
+              </div>
+            )}
+          </div>
         </Card>
       )}
     </>

@@ -3,6 +3,7 @@ import { useSchedulingData } from './useSchedulingData';
 import { useAppointmentsList } from './useAppointmentsList';
 import { usePatientManagement } from './usePatientManagement';
 import { useAtomicAppointmentCreation } from './useAtomicAppointmentCreation';
+import { useConnectionHealth } from './useConnectionHealth';
 
 export function useSupabaseScheduling() {
   // Usar os hooks especializados
@@ -10,6 +11,10 @@ export function useSupabaseScheduling() {
   const appointmentsList = useAppointmentsList();
   const patientManagement = usePatientManagement();
   const appointmentCreation = useAtomicAppointmentCreation();
+  const connectionHealth = useConnectionHealth();
+
+  console.log('🎯 useSupabaseScheduling - doctors loaded:', schedulingData.doctors?.length || 0);
+  console.log('🏥 Connection health:', connectionHealth.isHealthy ? 'HEALTHY' : 'UNHEALTHY');
 
   // ✅ ESTABILIZAR: Função de recarregamento consolidada
   const refetch = useCallback(async () => {
@@ -92,6 +97,10 @@ export function useSupabaseScheduling() {
     // Estados de loading - apenas dos dados essenciais (NÃO incluir loading de criação para não desmontar a tela durante submissão)
     loading: schedulingData.loading || patientManagement.loading,
     
+    // Connection health
+    connectionHealth,
+    isHealthy: connectionHealth.isHealthy,
+    
     // Operações - AGORA TODAS ESTÁVEIS
     createAppointment,
     cancelAppointment,
@@ -117,6 +126,8 @@ export function useSupabaseScheduling() {
     schedulingData.loading,
     patientManagement.loading,
     appointmentCreation.loading,
+    // Connection health
+    connectionHealth,
     // Funções estáveis
     createAppointment,
     cancelAppointment,
