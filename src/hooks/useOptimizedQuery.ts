@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface QueryOptions {
@@ -24,6 +24,8 @@ export const useOptimizedQuery = <T>(
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const {
     cacheKey,
