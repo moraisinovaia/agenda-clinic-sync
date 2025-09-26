@@ -519,9 +519,10 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
         </Card>
       </div>
 
-      {/* Rodapé com resumo por categoria */}
+      {/* Resumo por categoria - posicionado após os cards */}
       <AppointmentSummary 
         appointments={appointments.filter(apt => apt.medico_id === doctor.id)} 
+        className="mt-4 mb-6"
       />
     </div>
   );
