@@ -4,11 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Loader2, Check, X, Users, Clock, CheckCircle, XCircle, Mail, MailCheck, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useStableAuth } from '@/hooks/useStableAuth';
+import { DeleteUserModal } from './DeleteUserModal';
 
 interface PendingUser {
   id: string;
@@ -36,7 +36,7 @@ export function UserApprovalPanel() {
   const [approvedUsers, setApprovedUsers] = useState<ApprovedUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingUser, setProcessingUser] = useState<string | null>(null);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<ApprovedUser | null>(null);
   const { toast } = useToast();
   const { profile, isAdmin, isApproved } = useStableAuth();
@@ -288,12 +288,12 @@ export function UserApprovalPanel() {
 
       toast({
         title: 'Usuário excluído',
-        description: `O usuário ${userToDelete.nome} foi excluído com sucesso`,
+        description: 'O usuário foi excluído permanentemente do sistema',
       });
 
       // Remover da lista local
       setApprovedUsers(prev => prev.filter(user => user.id !== userToDelete.id));
-      setDeleteDialogOpen(false);
+      setDeleteModalOpen(false);
       setUserToDelete(null);
     } catch (error: any) {
       toast({
@@ -306,9 +306,14 @@ export function UserApprovalPanel() {
     }
   };
 
-  const openDeleteDialog = (user: ApprovedUser) => {
+  const openDeleteModal = (user: ApprovedUser) => {
     setUserToDelete(user);
-    setDeleteDialogOpen(true);
+    setDeleteModalOpen(true);
+  };
+
+  const closeDeleteModal = () => {
+    setDeleteModalOpen(false);
+    setUserToDelete(null);
   };
 
   // Se não é admin aprovado, não mostrar nada
@@ -516,9 +521,10 @@ export function UserApprovalPanel() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => openDeleteDialog(user)}
+                            onClick={() => openDeleteModal(user)}
                             disabled={processingUser === user.id || user.id === profile?.id}
-                            className="text-red-600 border-red-200 hover:bg-red-50"
+                            className="text-red-600 border-red-200 hover:bg-red-50 disabled:opacity-50"
+                            title={user.id === profile?.id ? 'Não é possível excluir seu próprio usuário' : 'Excluir usuário'}
                           >
                             <Trash2 className="h-4 w-4" />
                             Excluir
@@ -533,49 +539,14 @@ export function UserApprovalPanel() {
           </TabsContent>
         </Tabs>
       </CardContent>
-
-      {/* Modal de confirmação para exclusão */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-red-600">
-              <Trash2 className="h-5 w-5" />
-              Confirmar Exclusão
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Tem certeza que deseja excluir o usuário <strong>{userToDelete?.nome}</strong>?
-              <br /><br />
-              <span className="text-red-600 font-medium">
-                ⚠️ Esta ação não pode ser desfeita!
-              </span>
-              <br />
-              O usuário será completamente removido do sistema e perderá acesso permanentemente.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel 
-              onClick={() => {
-                setDeleteDialogOpen(false);
-                setUserToDelete(null);
-              }}
-            >
-              Cancelar
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteUser}
-              disabled={processingUser === userToDelete?.id}
-              className="bg-red-600 hover:bg-red-700 text-white"
-            >
-              {processingUser === userToDelete?.id ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : (
-                <Trash2 className="h-4 w-4 mr-2" />
-              )}
-              Excluir Usuário
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      
+      <DeleteUserModal
+        isOpen={deleteModalOpen}
+        onClose={closeDeleteModal}
+        onConfirm={handleDeleteUser}
+        userName={userToDelete?.nome || ''}
+        isLoading={processingUser === userToDelete?.id}
+      />
     </Card>
   );
 }
