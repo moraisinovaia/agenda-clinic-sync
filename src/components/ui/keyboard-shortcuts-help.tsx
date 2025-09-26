@@ -23,7 +23,6 @@ const SHORTCUTS: Shortcut[] = [
   { key: 'M', ctrlKey: true, description: 'Agendamento múltiplo' },
   { key: 'L', ctrlKey: true, description: 'Lista de agendamentos' },
   { key: 'D', ctrlKey: true, description: 'Dashboard/Médicos' },
-  { key: 'A', ctrlKey: true, description: 'Alertas' },
   { key: 'F', ctrlKey: true, shiftKey: true, description: 'Fila de espera' },
   { key: 'F12', description: 'Preencher último paciente agendado' },
   { key: 'Esc', description: 'Voltar/Fechar' },

@@ -12,7 +12,6 @@ import { MultipleSchedulingModal } from '@/components/scheduling/MultipleSchedul
 import { DoctorSchedule } from '@/components/scheduling/DoctorSchedule';
 import { AppointmentsList } from '@/components/scheduling/AppointmentsList';
 import { BloqueioAgenda } from '@/components/scheduling/BloqueioAgenda';
-import { PreparosView } from '@/components/preparos/PreparosView';
 import { FilaEsperaForm } from '@/components/fila-espera/FilaEsperaForm';
 import { FilaEsperaList } from '@/components/fila-espera/FilaEsperaList';
 import { RelatorioAgenda } from '@/components/scheduling/RelatorioAgenda';
@@ -22,14 +21,12 @@ import { SystemHealthDashboard } from '@/components/dashboard/SystemHealthDashbo
 import { DoctorsView } from '@/components/dashboard/DoctorsView';
 import { DashboardActions } from '@/components/dashboard/DashboardActions';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
-import { AlertSystem } from '@/components/alerts/AlertSystem';
 import { UserApprovalPanel } from '@/components/admin/UserApprovalPanel';
 import { 
   LazyDashboard, 
   LazySchedulingForm, 
   LazyAppointmentsList, 
-  LazyFilaEspera, 
-  LazyPreparos,
+  LazyFilaEspera,
   LazyWrapper 
 } from '@/components/performance/LazyComponents';
 
@@ -42,9 +39,7 @@ import { SchedulingFormData, AppointmentWithRelations } from '@/types/scheduling
 import { useStableAuth } from '@/hooks/useStableAuth';
 import { Button } from '@/components/ui/button';
 import { NavigationHeader } from '@/components/ui/navigation-header';
-import { AuthTest } from '@/components/AuthTest';
 import PendingApproval from '@/components/PendingApproval';
-import { WhatsAppAgentDashboard } from '@/components/whatsapp-agent/WhatsAppAgentDashboard';
 
 const Index = () => {
   const { user, profile, loading: authLoading, signOut } = useStableAuth();
@@ -139,12 +134,6 @@ const Index = () => {
       ctrlKey: true,
       action: () => setViewMode('doctors'),
       description: 'Ctrl+D - Dashboard/Médicos'
-    },
-    {
-      key: 'a',
-      ctrlKey: true,
-      action: () => setViewMode('alertas'),
-      description: 'Ctrl+A - Alertas'
     },
     {
       key: 'f',
@@ -594,20 +583,6 @@ const Index = () => {
           </div>
         )}
 
-        {viewMode === 'preparos' && (
-          <div className="space-y-6">
-            <NavigationHeader
-              title="Preparos de Exames"
-              subtitle="Instruções detalhadas para preparação de exames"
-              onBack={goBack}
-              onHome={() => setViewMode('doctors')}
-              showBack={true}
-              showHome={true}
-            />
-            <PreparosView showAll={true} />
-          </div>
-        )}
-
         {viewMode === 'fila-espera' && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -653,40 +628,6 @@ const Index = () => {
 
         {viewMode === 'bloqueio-agenda' && (
           <BloqueioAgenda onBack={goBack} onRefresh={refetch} />
-        )}
-
-        {viewMode === 'auth-test' && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold">Teste de Autenticação</h2>
-                <p className="text-muted-foreground mt-1">
-                  Verifique o status completo da autenticação e sessão
-                </p>
-              </div>
-            </div>
-            <div className="flex justify-center">
-              <AuthTest />
-            </div>
-          </div>
-        )}
-
-        {viewMode === 'alertas' && (
-          <AlertSystem />
-        )}
-
-        {viewMode === 'whatsapp-agent' && (
-          <div className="space-y-6">
-            <NavigationHeader
-              title="Agente WhatsApp"
-              subtitle="Teste e monitore as funcionalidades do agente LLM para WhatsApp"
-              onBack={goBack}
-              onHome={() => setViewMode('doctors')}
-              showBack={true}
-              showHome={true}
-            />
-            <WhatsAppAgentDashboard />
-          </div>
         )}
       </div>
 

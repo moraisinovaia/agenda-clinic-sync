@@ -26,12 +26,6 @@ export const LazyFilaEspera = lazy(() =>
   }))
 );
 
-export const LazyPreparos = lazy(() => 
-  import('@/components/preparos/PreparosView').then(module => ({
-    default: module.PreparosView
-  }))
-);
-
 // Wrapper component with loading fallback
 interface LazyWrapperProps {
   children: React.ReactNode;
