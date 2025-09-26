@@ -277,14 +277,15 @@ All colors MUST be HSL.
   }
   
   .auth-input {
-    background: hsl(var(--background) / 0.7);
+    background: hsl(var(--background) / 0.95);
     border: 1px solid hsl(var(--border) / 0.6);
     backdrop-filter: blur(10px);
+    color: hsl(var(--foreground));
     @apply transition-all duration-300 ease-out;
   }
   
   .auth-input:focus {
-    background: hsl(var(--background) / 0.9);
+    background: hsl(var(--background) / 0.98);
     border-color: hsl(var(--primary) / 0.8);
     box-shadow: 0 0 0 3px hsl(var(--primary) / 0.1), 0 2px 8px hsl(var(--primary) / 0.15);
     @apply outline-none;
