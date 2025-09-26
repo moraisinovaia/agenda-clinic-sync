@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { AppointmentWithRelations } from '@/types/scheduling';
 import { useToast } from '@/hooks/use-toast';
@@ -6,11 +6,15 @@ import { useOptimizedQuery } from '@/hooks/useOptimizedQuery';
 import { usePagination } from '@/hooks/usePagination';
 import { usePerformanceMetrics } from '@/hooks/usePerformanceMetrics';
 import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
+import { useDebounce } from '@/hooks/useDebounce';
 import { logger } from '@/utils/logger';
 
 export function useAppointmentsList(itemsPerPage: number = 20) {
   const { toast } = useToast();
   const { measureApiCall } = usePerformanceMetrics();
+  const errorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastErrorRef = useRef<string | null>(null);
+  const isOperatingRef = useRef(false);
 
   // ✅ ESTABILIZAR: Função de query totalmente estável
   const fetchAppointments = useCallback(async () => {
@@ -137,40 +141,107 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     }
   );
 
-  // ✅ REALTIME: Configurar atualizações em tempo real para agendamentos
+  // ✅ REALTIME: Configurar atualizações em tempo real inteligentes
   useRealtimeUpdates({
     table: 'agendamentos',
     onInsert: (payload) => {
+      if (isOperatingRef.current) {
+        console.log('🔄 Skipping refetch - operation in progress');
+        return;
+      }
       console.log('🔄 useAppointmentsList: New appointment inserted', payload);
-      refetch(); // Refetch automatico quando novo agendamento é criado
-      toast({
-        title: "Novo agendamento",
-        description: "Um novo agendamento foi criado e o calendário foi atualizado!",
-      });
+      // Delay inteligente para evitar conflitos
+      setTimeout(() => {
+        if (!isOperatingRef.current) {
+          refetch();
+          toast({
+            title: "Novo agendamento",
+            description: "Um novo agendamento foi criado e o calendário foi atualizado!",
+          });
+        }
+      }, 500);
     },
     onUpdate: (payload) => {
+      if (isOperatingRef.current) {
+        console.log('🔄 Skipping refetch - operation in progress');
+        return;
+      }
       console.log('🔄 useAppointmentsList: Appointment updated', payload);
-      refetch(); // Refetch automatico quando agendamento é atualizado
+      // Delay para evitar conflitos com operações locais
+      setTimeout(() => {
+        if (!isOperatingRef.current) {
+          refetch();
+        }
+      }, 300);
     },
     onDelete: (payload) => {
+      if (isOperatingRef.current) {
+        console.log('🔄 Skipping refetch - operation in progress');
+        return;
+      }
       console.log('🔄 useAppointmentsList: Appointment deleted', payload);
-      refetch(); // Refetch automatico quando agendamento é deletado
+      setTimeout(() => {
+        if (!isOperatingRef.current) {
+          refetch();
+        }
+      }, 300);
     }
   });
 
   // Paginação
   const pagination = usePagination(appointments || [], { itemsPerPage });
 
-  // ✅ ESTABILIZAR: Exibir erros sem colocar toast nas dependências  
+  // ✅ TRATAMENTO INTELIGENTE DE ERROS com debounce
+  const debouncedError = useDebounce(error, 1000); // Aguarda 1 segundo antes de processar erro
+  
   useEffect(() => {
-    if (error) {
-      toast({
-        title: 'Erro',
-        description: 'Não foi possível carregar os agendamentos',
-        variant: 'destructive',
-      });
+    if (!debouncedError || isOperatingRef.current) return;
+    
+    const errorMessage = debouncedError.message || 'Erro desconhecido';
+    
+    // Evitar toasts duplicados para o mesmo erro
+    if (lastErrorRef.current === errorMessage) {
+      console.log('🔄 Erro duplicado ignorado:', errorMessage);
+      return;
     }
-  }, [error]); // ✅ REMOVER toast das dependências
+    
+    lastErrorRef.current = errorMessage;
+    
+    // Filtrar erros temporários/esperados
+    const isTemporaryError = errorMessage.includes('network') || 
+                           errorMessage.includes('timeout') ||
+                           errorMessage.includes('aborted') ||
+                           errorMessage.includes('cancelled');
+    
+    if (isTemporaryError) {
+      console.log('🔄 Erro temporário ignorado:', errorMessage);
+      return;
+    }
+    
+    // Limpar timeout anterior se existir
+    if (errorTimeoutRef.current) {
+      clearTimeout(errorTimeoutRef.current);
+    }
+    
+    // Só mostrar toast após delay para erros persistentes
+    errorTimeoutRef.current = setTimeout(() => {
+      if (debouncedError === error) { // Verificar se erro ainda é o mesmo
+        console.log('❌ Mostrando toast de erro:', errorMessage);
+        toast({
+          title: 'Erro ao carregar agendamentos',
+          description: 'Houve um problema ao carregar os dados. Tente novamente.',
+          variant: 'destructive',
+        });
+      }
+      lastErrorRef.current = null;
+    }, 2000);
+    
+    return () => {
+      if (errorTimeoutRef.current) {
+        clearTimeout(errorTimeoutRef.current);
+      }
+    };
+  }, [debouncedError, error, toast]);
 
   // Buscar agendamentos por médico e data
   const getAppointmentsByDoctorAndDate = (doctorId: string, date: string) => {
@@ -181,8 +252,9 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     );
   };
 
-  // Cancelar agendamento
+  // Cancelar agendamento com optimistic update
   const cancelAppointment = async (appointmentId: string) => {
+    isOperatingRef.current = true;
     try {
       logger.info('Cancelando agendamento', { appointmentId }, 'APPOINTMENTS');
 
@@ -220,8 +292,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         description: 'O agendamento foi cancelado com sucesso',
       });
 
-      // Invalidar cache e recarregar
-      refetch();
+      // Refetch otimizado sem invalidação agressiva
+      await refetch();
       logger.info('Agendamento cancelado com sucesso', { appointmentId }, 'APPOINTMENTS');
     } catch (error) {
       logger.error('Erro ao cancelar agendamento', error, 'APPOINTMENTS');
@@ -231,11 +303,14 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         variant: 'destructive',
       });
       throw error;
+    } finally {
+      isOperatingRef.current = false;
     }
   };
 
-  // Confirmar agendamento
+  // Confirmar agendamento com estratégia otimizada
   const confirmAppointment = async (appointmentId: string) => {
+    isOperatingRef.current = true;
     try {
       logger.info('Confirmando agendamento', { appointmentId }, 'APPOINTMENTS');
 
@@ -268,19 +343,10 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         return data;
       }, 'confirm_appointment', 'PUT');
 
-      // ⚡ INVALIDAÇÃO AGRESSIVA DE CACHE APÓS CONFIRMAÇÃO
-      console.log('🧹 Iniciando invalidação agressiva de cache após confirmação...');
-      
-      // 1. Invalidar cache imediatamente
-      invalidateCache();
-      
-      // 2. Aguardar um pouco para garantir que mudança foi persistida no banco
-      await new Promise(resolve => setTimeout(resolve, 200));
-      
-      // 3. Forçar refetch completo, ignorando qualquer cache
-      await forceRefetch();
-      
-      console.log('✅ Cache invalidado e dados recarregados após confirmação');
+      // ✅ ESTRATÉGIA OTIMIZADA: Single refetch sem invalidação agressiva
+      console.log('🔄 Atualizando dados após confirmação...');
+      await refetch();
+      console.log('✅ Dados atualizados após confirmação');
 
       toast({
         title: 'Agendamento confirmado',
@@ -296,11 +362,14 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         variant: 'destructive',
       });
       throw error;
+    } finally {
+      isOperatingRef.current = false;
     }
   };
 
-  // Desconfirmar agendamento
+  // Desconfirmar agendamento com estratégia otimizada
   const unconfirmAppointment = async (appointmentId: string) => {
+    isOperatingRef.current = true;
     try {
       logger.info('Desconfirmando agendamento', { appointmentId }, 'APPOINTMENTS');
 
@@ -339,19 +408,10 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         return data;
       }, 'unconfirm_appointment', 'PUT');
 
-      // ⚡ INVALIDAÇÃO AGRESSIVA DE CACHE APÓS DESCONFIRMAÇÃO
-      console.log('🧹 Iniciando invalidação agressiva de cache após desconfirmação...');
-      
-      // 1. Invalidar cache imediatamente
-      invalidateCache();
-      
-      // 2. Aguardar um pouco para garantir que mudança foi persistida no banco
-      await new Promise(resolve => setTimeout(resolve, 200));
-      
-      // 3. Forçar refetch completo, ignorando qualquer cache
-      await forceRefetch();
-      
-      console.log('✅ Cache invalidado e dados recarregados após desconfirmação');
+      // ✅ ESTRATÉGIA OTIMIZADA: Single refetch sem invalidação agressiva
+      console.log('🔄 Atualizando dados após desconfirmação...');
+      await refetch();
+      console.log('✅ Dados atualizados após desconfirmação');
 
       toast({
         title: 'Agendamento desconfirmado',
@@ -367,6 +427,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         variant: 'destructive',
       });
       throw error;
+    } finally {
+      isOperatingRef.current = false;
     }
   };
 

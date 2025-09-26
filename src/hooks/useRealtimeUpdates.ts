@@ -1,6 +1,7 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useDebounce } from '@/hooks/useDebounce';
 
 interface RealtimeConfig {
   table: string;
@@ -11,6 +12,9 @@ interface RealtimeConfig {
 
 export const useRealtimeUpdates = (config: RealtimeConfig) => {
   const { notifyNewAppointment, notifySystemError } = useNotifications();
+  const connectionRetryRef = useRef<NodeJS.Timeout | null>(null);
+  const maxRetries = 3;
+  const retryCountRef = useRef(0);
 
   const handleInsert = useCallback((payload: any) => {
     console.log('New insert:', payload);
@@ -78,14 +82,32 @@ export const useRealtimeUpdates = (config: RealtimeConfig) => {
             if (status === 'SUBSCRIBED') {
               console.log(`✅ Realtime connected for ${config.table}`);
               isSubscribed = true;
+              retryCountRef.current = 0; // Reset retry count on successful connection
             } else if (status === 'CLOSED') {
               isSubscribed = false;
               console.log(`Connection closed for ${config.table}`);
+              
+              // Tentar reconectar apenas se não excedeu o limite de tentativas
+              if (retryCountRef.current < maxRetries) {
+                retryCountRef.current += 1;
+                console.log(`Attempting reconnection ${retryCountRef.current}/${maxRetries}`);
+                
+                connectionRetryRef.current = setTimeout(() => {
+                  if (!isSubscribed) {
+                    setupRealtime();
+                  }
+                }, 2000 * retryCountRef.current); // Backoff exponencial
+              } else {
+                console.log('Max retry attempts reached. Stopping reconnection attempts.');
+              }
+            } else if (status === 'CHANNEL_ERROR') {
+              console.error(`Channel error for ${config.table}`);
+              isSubscribed = false;
             }
-            // Removida lógica de retry automático para evitar loops
           });
       } catch (error) {
         console.error('Error setting up realtime:', error);
+        isSubscribed = false;
       }
     };
 
@@ -93,9 +115,12 @@ export const useRealtimeUpdates = (config: RealtimeConfig) => {
 
     return () => {
       isSubscribed = false;
+      if (connectionRetryRef.current) {
+        clearTimeout(connectionRetryRef.current);
+      }
       if (channel) {
         supabase.removeChannel(channel);
       }
     };
-  }, [config.table]); // Removidas dependências desnecessárias
+  }, [config.table, handleInsert, handleUpdate, handleDelete]);
 };
