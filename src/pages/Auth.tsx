@@ -17,7 +17,7 @@ import inovaiaLogo from '@/assets/inovaia-logo.jpeg';
 
 export default function Auth() {
   const { user, loading, signIn, signUp } = useAuth();
-  const { rememberMe, savedUsername, saveCredentials } = useRememberMe();
+  const { rememberMe, savedUsername, savedPassword, saveCredentials, clearSavedCredentials } = useRememberMe();
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
@@ -32,7 +32,7 @@ export default function Auth() {
   
   const [loginData, setLoginData] = useState({
     emailOrUsername: savedUsername || '',
-    password: ''
+    password: savedPassword || ''
   });
   
   const [signupData, setSignupData] = useState({
@@ -43,13 +43,17 @@ export default function Auth() {
     confirmPassword: ''
   });
 
-  // Set initial remember me state and load saved username
+  // Set initial remember me state and load saved credentials
   useEffect(() => {
     setRememberMeChecked(rememberMe);
     if (savedUsername) {
-      setLoginData(prev => ({ ...prev, emailOrUsername: savedUsername }));
+      setLoginData(prev => ({ 
+        ...prev, 
+        emailOrUsername: savedUsername,
+        password: savedPassword || ''
+      }));
     }
-  }, [rememberMe, savedUsername]);
+  }, [rememberMe, savedUsername, savedPassword]);
 
   // Check for password recovery session FIRST (before any redirect logic)
   const hasRecoveryParams = searchParams.get('type') === 'recovery' || 
@@ -109,10 +113,15 @@ export default function Auth() {
           : 'Erro ao fazer login. Tente novamente.';
         
         setError(errorMessage);
+        // Limpar credenciais salvas se login falhar
+        if (rememberMeChecked) {
+          clearSavedCredentials();
+          setRememberMeChecked(false);
+        }
         // Não exibir toast aqui pois o useAuth já exibe
       } else {
         // Apenas se login foi bem-sucedido
-        saveCredentials(loginData.emailOrUsername, rememberMeChecked);
+        saveCredentials(loginData.emailOrUsername, loginData.password, rememberMeChecked);
         // Não exibir toast aqui pois o useAuth já exibe
       }
     } catch (error: any) {
@@ -524,7 +533,13 @@ export default function Auth() {
                   <Checkbox
                     id="remember-me"
                     checked={rememberMeChecked}
-                    onCheckedChange={(checked) => setRememberMeChecked(checked as boolean)}
+                    onCheckedChange={(checked) => {
+                      setRememberMeChecked(checked as boolean);
+                      if (!checked) {
+                        clearSavedCredentials();
+                        setLoginData(prev => ({ ...prev, password: '' }));
+                      }
+                    }}
                   />
                   <Label htmlFor="remember-me" className="text-sm">
                     Lembrar de mim
