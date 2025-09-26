@@ -17,7 +17,7 @@ All colors MUST be HSL.
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
 
-    --primary: 222.2 47.4% 11.2%;
+    --primary: 221.2 83.2% 53.3%;
     --primary-foreground: 210 40% 98%;
 
     --secondary: 210 40% 96.1%;
@@ -34,9 +34,9 @@ All colors MUST be HSL.
 
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --ring: 221.2 83.2% 53.3%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
 
     /* Success & Warning Colors */
     --success: 142 76% 36%;
@@ -44,15 +44,30 @@ All colors MUST be HSL.
     --warning: 38 92% 50%;
     --warning-foreground: 220.9 39.3% 11%;
     
-    /* Gradient Variables */
+    /* Modern Auth Gradients */
+    --gradient-auth-bg: linear-gradient(135deg, hsl(221.2 83.2% 53.3% / 0.05), hsl(270 50% 40% / 0.1), hsl(210 40% 96% / 0.3));
+    --gradient-glass: linear-gradient(135deg, hsl(0 0% 100% / 0.1), hsl(0 0% 100% / 0.05));
     --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary) / 0.8));
     --gradient-secondary: linear-gradient(135deg, hsl(var(--secondary)), hsl(var(--muted)));
     --gradient-success: linear-gradient(135deg, hsl(var(--success)), hsl(var(--success) / 0.8));
+    --gradient-button: linear-gradient(135deg, hsl(221.2 83.2% 53.3%), hsl(221.2 83.2% 48%));
+    --gradient-button-hover: linear-gradient(135deg, hsl(221.2 83.2% 48%), hsl(221.2 83.2% 43%));
     
-    /* Shadow Variables */
-    --shadow-elegant: 0 4px 12px hsl(var(--primary) / 0.15);
-    --shadow-glow: 0 0 20px hsl(var(--primary) / 0.3);
-    --shadow-card: 0 1px 3px hsl(var(--foreground) / 0.12), 0 1px 2px hsl(var(--foreground) / 0.24);
+    /* Glassmorphism Effects */
+    --glass-bg: hsl(0 0% 100% / 0.25);
+    --glass-border: hsl(0 0% 100% / 0.2);
+    --glass-shadow: 0 8px 32px hsl(0 0% 0% / 0.1);
+    --backdrop-blur: blur(16px);
+    
+    /* Enhanced Shadow Variables */
+    --shadow-elegant: 0 10px 30px -10px hsl(var(--primary) / 0.3);
+    --shadow-glow: 0 0 40px hsl(var(--primary) / 0.15);
+    --shadow-card: 0 8px 25px -8px hsl(0 0% 0% / 0.1);
+    --shadow-input-focus: 0 0 0 3px hsl(var(--primary) / 0.1);
+    
+    /* Animation Variables */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-spring: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 
     --sidebar-background: 0 0% 98%;
 
@@ -72,29 +87,29 @@ All colors MUST be HSL.
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    --background: 224 71.4% 4.1%;
+    --foreground: 210 20% 98%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 224 71.4% 4.1%;
+    --card-foreground: 210 20% 98%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 224 71.4% 4.1%;
+    --popover-foreground: 210 20% 98%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 263.4 70% 50.4%;
+    --primary-foreground: 210 20% 98%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 215 27.9% 16.9%;
+    --secondary-foreground: 210 20% 98%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 215 27.9% 16.9%;
+    --muted-foreground: 217.9 10.6% 64.9%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 215 27.9% 16.9%;
+    --accent-foreground: 210 20% 98%;
 
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 210 20% 98%;
 
     /* Success & Warning Colors - Dark Mode */
     --success: 142 71% 45%;
@@ -102,9 +117,26 @@ All colors MUST be HSL.
     --warning: 38 92% 50%;
     --warning-foreground: 220.9 39.3% 11%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    /* Modern Dark Mode Gradients */
+    --gradient-auth-bg: linear-gradient(135deg, hsl(263.4 70% 50.4% / 0.08), hsl(270 50% 40% / 0.15), hsl(215 27.9% 16.9% / 0.5));
+    --gradient-glass: linear-gradient(135deg, hsl(0 0% 100% / 0.05), hsl(0 0% 100% / 0.02));
+    --gradient-button: linear-gradient(135deg, hsl(263.4 70% 50.4%), hsl(263.4 70% 45%));
+    --gradient-button-hover: linear-gradient(135deg, hsl(263.4 70% 45%), hsl(263.4 70% 40%));
+    
+    /* Glassmorphism Effects for Dark Mode */
+    --glass-bg: hsl(0 0% 0% / 0.25);
+    --glass-border: hsl(0 0% 100% / 0.1);
+    --glass-shadow: 0 8px 32px hsl(0 0% 0% / 0.3);
+    
+    /* Enhanced Dark Shadows */
+    --shadow-elegant: 0 10px 30px -10px hsl(var(--primary) / 0.4);
+    --shadow-card: 0 8px 25px -8px hsl(0 0% 0% / 0.4);
+    --shadow-glow: 0 0 40px hsl(var(--primary) / 0.25);
+    --shadow-input-focus: 0 0 0 3px hsl(var(--primary) / 0.2);
+
+    --border: 215 27.9% 16.9%;
+    --input: 215 27.9% 16.9%;
+    --ring: 263.4 70% 50.4%;
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
@@ -127,6 +159,71 @@ All colors MUST be HSL.
 }
 
 @layer components {
+  /* Modern UI Components */
+  
+  /* Glass Card Effect */
+  .glass-card {
+    background: var(--glass-bg);
+    backdrop-filter: var(--backdrop-blur);
+    -webkit-backdrop-filter: var(--backdrop-blur);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+  }
+  
+  /* Modern Auth Background */
+  .auth-background {
+    background: var(--gradient-auth-bg);
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .auth-background::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(circle at 20% 80%, hsl(var(--primary) / 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, hsl(263.4 70% 50.4% / 0.08) 0%, transparent 50%);
+    pointer-events: none;
+  }
+  
+  /* Floating Label Input Effect */
+  .floating-label-container {
+    @apply relative;
+  }
+  
+  .floating-label {
+    @apply absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-all duration-300 pointer-events-none;
+    font-size: 0.875rem;
+  }
+  
+  .floating-input:focus + .floating-label,
+  .floating-input:not(:placeholder-shown) + .floating-label {
+    @apply -translate-y-8 text-xs text-primary;
+    left: 0.75rem;
+  }
+  
+  .floating-input {
+    @apply pt-6 pb-2;
+  }
+  
+  /* Modern Button Styles */
+  .btn-gradient {
+    background: var(--gradient-button);
+    @apply text-white border-0 shadow-md transition-all duration-300;
+  }
+  
+  .btn-gradient:hover {
+    background: var(--gradient-button-hover);
+    @apply shadow-lg transform -translate-y-0.5;
+  }
+  
+  .btn-glass {
+    @apply glass-card backdrop-blur-sm text-foreground hover:bg-white/20 transition-all duration-300;
+  }
+
   /* Animation Classes */
   .animate-slide-in {
     animation: slide-in 0.3s ease-out;
@@ -158,7 +255,7 @@ All colors MUST be HSL.
 
   /* Hover Effects */
   .hover-lift {
-    @apply transition-all duration-200 ease-out;
+    @apply transition-all duration-300;
   }
   
   .hover-lift:hover {
@@ -166,7 +263,7 @@ All colors MUST be HSL.
   }
   
   .hover-glow {
-    @apply transition-all duration-300 ease-out;
+    @apply transition-all duration-300;
   }
   
   .hover-glow:hover {
@@ -174,11 +271,16 @@ All colors MUST be HSL.
   }
   
   .hover-scale {
-    @apply transition-transform duration-200 ease-out;
+    @apply transition-transform duration-200;
   }
   
   .hover-scale:hover {
     @apply scale-105;
+  }
+
+  /* Enhanced focus effects */
+  .focus-glow:focus-within {
+    box-shadow: var(--shadow-input-focus);
   }
 
   /* Gradient Backgrounds */
@@ -193,6 +295,10 @@ All colors MUST be HSL.
   .bg-gradient-success {
     background: var(--gradient-success);
   }
+  
+  .bg-gradient-auth {
+    background: var(--gradient-auth-bg);
+  }
 
   /* Enhanced Shadows */
   .shadow-elegant {
@@ -201,6 +307,10 @@ All colors MUST be HSL.
   
   .shadow-card-enhanced {
     box-shadow: var(--shadow-card);
+  }
+  
+  .shadow-glow {
+    box-shadow: var(--shadow-glow);
   }
 
   /* Skeleton Loading */

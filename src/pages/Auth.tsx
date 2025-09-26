@@ -319,8 +319,13 @@ export default function Auth() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
+      <div className="min-h-screen auth-background flex items-center justify-center">
+        <div className="text-center space-y-4 animate-fade-in">
+          <div className="w-16 h-16 mx-auto bg-gradient-primary rounded-full flex items-center justify-center shadow-glow animate-pulse-gentle">
+            <Loader2 className="h-8 w-8 animate-spin text-primary-foreground" />
+          </div>
+          <p className="text-muted-foreground text-lg">Verificando autenticação...</p>
+        </div>
       </div>
     );
   }
@@ -328,34 +333,38 @@ export default function Auth() {
   // Show password reset form if in recovery mode
   if (showPasswordReset) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 to-secondary/5 p-4">
-        <Card className="w-full max-w-md">
+      <div className="min-h-screen auth-background flex items-center justify-center p-4">
+        <Card className="w-full max-w-md glass-card shadow-elegant hover-lift animate-fade-in">
           <CardHeader className="text-center space-y-4">
-            <div>
-              <CardTitle className="text-2xl font-bold flex items-center justify-center gap-2">
-                <KeyRound className="h-6 w-6" />
-                Redefinir Senha
-              </CardTitle>
-              <p className="text-muted-foreground">Digite sua nova senha</p>
+            <div className="space-y-3">
+              <div className="w-16 h-16 mx-auto bg-gradient-primary rounded-full flex items-center justify-center shadow-glow">
+                <KeyRound className="h-8 w-8 text-primary-foreground" />
+              </div>
+              <div>
+                <CardTitle className="text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent">
+                  Redefinir Senha
+                </CardTitle>
+                <p className="text-muted-foreground text-sm mt-2">Digite sua nova senha</p>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
             {error && (
-              <Alert variant="destructive" className="mb-4">
+              <Alert variant="destructive" className="mb-4 animate-bounce-gentle shadow-card-enhanced">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
             
-            <form onSubmit={handleUpdatePassword} className="space-y-4">
+            <form onSubmit={handleUpdatePassword} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="new-password">Nova Senha</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Label htmlFor="new-password" className="text-sm font-medium text-foreground">Nova Senha</Label>
+                <div className="relative focus-glow rounded-lg">
+                  <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors" />
                   <PasswordInput
                     id="new-password"
                     placeholder="••••••••"
-                    className="pl-10"
+                    className="pl-10 h-12 border-2 focus:border-primary transition-all duration-300 hover-lift"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     required
@@ -364,13 +373,13 @@ export default function Auth() {
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="confirm-new-password">Confirmar Nova Senha</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Label htmlFor="confirm-new-password" className="text-sm font-medium text-foreground">Confirmar Nova Senha</Label>
+                <div className="relative focus-glow rounded-lg">
+                  <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors" />
                   <PasswordInput
                     id="confirm-new-password"
                     placeholder="••••••••"
-                    className="pl-10"
+                    className="pl-10 h-12 border-2 focus:border-primary transition-all duration-300 hover-lift"
                     value={confirmNewPassword}
                     onChange={(e) => setConfirmNewPassword(e.target.value)}
                     required
@@ -379,28 +388,31 @@ export default function Auth() {
               </div>
               
               {newPassword && confirmNewPassword && newPassword !== confirmNewPassword && (
-                <p className="text-sm text-red-500">As senhas não coincidem</p>
+                <p className="text-sm text-red-500 animate-bounce-gentle">As senhas não coincidem</p>
               )}
               
               <Button 
                 type="submit" 
-                className="w-full" 
+                className="w-full h-12 btn-gradient text-lg font-semibold hover-lift shadow-elegant" 
                 disabled={isUpdatingPassword || newPassword !== confirmNewPassword || !newPassword}
               >
                 {isUpdatingPassword ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                     Atualizando...
                   </>
                 ) : (
-                  'Atualizar Senha'
+                  <>
+                    <KeyRound className="mr-2 h-5 w-5" />
+                    Atualizar Senha
+                  </>
                 )}
               </Button>
               
               <Button 
                 type="button" 
                 variant="outline" 
-                className="w-full" 
+                className="w-full h-12 hover-lift" 
                 onClick={() => {
                   setShowPasswordReset(false);
                   setNewPassword('');
@@ -418,14 +430,20 @@ export default function Auth() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 to-secondary/5 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center space-y-4">
-          <div>
-            <CardTitle className="text-2xl font-bold">Sistema de Agendamentos</CardTitle>
-            <p className="text-muted-foreground">Acesso para Recepcionistas</p>
+    <div className="min-h-screen auth-background flex items-center justify-center p-4">
+      <Card className="w-full max-w-md glass-card shadow-elegant hover-lift animate-fade-in">
+        <CardHeader className="text-center space-y-4 pb-6">
+          <div className="space-y-3">
+            <div className="w-16 h-16 mx-auto bg-gradient-primary rounded-full flex items-center justify-center shadow-glow">
+              <User className="h-8 w-8 text-primary-foreground" />
+            </div>
+            <div>
+              <CardTitle className="text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent">
+                Sistema de Agendamentos
+              </CardTitle>
+              <p className="text-muted-foreground text-sm mt-2">Acesso para Recepcionistas</p>
+            </div>
           </div>
-          
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="login" className="w-full">
@@ -615,13 +633,13 @@ export default function Auth() {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="signup-password">Senha</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Label htmlFor="signup-password" className="text-sm font-medium text-foreground">Senha</Label>
+                  <div className="relative focus-glow rounded-lg">
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors" />
                     <PasswordInput
                       id="signup-password"
                       placeholder="••••••••"
-                      className="pl-10"
+                      className="pl-10 h-12 border-2 focus:border-primary transition-all duration-300 hover-lift"
                       value={signupData.password}
                       onChange={(e) => setSignupData(prev => ({ ...prev, password: e.target.value }))}
                       required
@@ -630,13 +648,13 @@ export default function Auth() {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="signup-confirm">Confirmar Senha</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Label htmlFor="signup-confirm" className="text-sm font-medium text-foreground">Confirmar Senha</Label>
+                  <div className="relative focus-glow rounded-lg">
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors" />
                     <PasswordInput
                       id="signup-confirm"
                       placeholder="••••••••"
-                      className="pl-10"
+                      className="pl-10 h-12 border-2 focus:border-primary transition-all duration-300 hover-lift"
                       value={signupData.confirmPassword}
                       onChange={(e) => setSignupData(prev => ({ ...prev, confirmPassword: e.target.value }))}
                       required
@@ -646,21 +664,24 @@ export default function Auth() {
                 
                 {signupData.password && signupData.confirmPassword && 
                  signupData.password !== signupData.confirmPassword && (
-                  <p className="text-sm text-red-500">As senhas não coincidem</p>
+                  <p className="text-sm text-red-500 animate-bounce-gentle">As senhas não coincidem</p>
                 )}
                 
                 <Button 
                   type="submit" 
-                  className="w-full" 
+                  className="w-full h-12 btn-gradient text-lg font-semibold hover-lift shadow-elegant" 
                   disabled={isLoading || signupData.password !== signupData.confirmPassword}
                 >
                   {isLoading ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                       Cadastrando...
                     </>
                   ) : (
-                    'Criar Conta'
+                    <>
+                      <User className="mr-2 h-5 w-5" />
+                      Criar Conta
+                    </>
                   )}
                 </Button>
               </form>
