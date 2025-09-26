@@ -3,7 +3,6 @@ import { useSchedulingData } from './useSchedulingData';
 import { useAppointmentsList } from './useAppointmentsList';
 import { usePatientManagement } from './usePatientManagement';
 import { useAtomicAppointmentCreation } from './useAtomicAppointmentCreation';
-import { useConnectionHealth } from './useConnectionHealth';
 
 export function useSupabaseScheduling() {
   // Usar os hooks especializados
@@ -11,10 +10,6 @@ export function useSupabaseScheduling() {
   const appointmentsList = useAppointmentsList();
   const patientManagement = usePatientManagement();
   const appointmentCreation = useAtomicAppointmentCreation();
-  const connectionHealth = useConnectionHealth();
-
-  console.log('🎯 useSupabaseScheduling - doctors loaded:', schedulingData.doctors?.length || 0);
-  console.log('🏥 Connection health:', connectionHealth.isHealthy ? 'HEALTHY' : 'UNHEALTHY');
 
   // ✅ ESTABILIZAR: Função de recarregamento consolidada
   const refetch = useCallback(async () => {
@@ -26,32 +21,20 @@ export function useSupabaseScheduling() {
 
   // ✅ CORREÇÃO DEFINITIVA: Invalidar cache SEMPRE após sucesso e garantir refetch
   const createAppointment = useCallback(async (formData: any, editingAppointmentId?: string, forceConflict = false) => {
-    console.log('🎯 useSupabaseScheduling: Iniciando createAppointment');
-    console.log('📋 FormData recebido:', formData);
-    
     try {
       const result = await appointmentCreation.createAppointment(formData, editingAppointmentId, forceConflict);
-      console.log('📊 Resultado do createAppointment:', result);
       
       // ✅ Se há sucesso (mesmo que não explícito), invalidar cache
       if (result && result.success !== false) {
-        console.log('✅ Sucesso CONFIRMADO - invalidando cache e refetch automático');
-        
         // Invalidar cache imediatamente - o realtime fará o resto
         appointmentsList.invalidateCache?.();
         
         // Aguardar um pouco para o realtime processar
         await new Promise(resolve => setTimeout(resolve, 100));
-        
-        console.log('🔄 Cache invalidado - realtime updates farão o refetch automático');
-      } else {
-        console.log('⚠️ Resultado indefinido ou falha - NÃO invalidando cache');
-        console.log('🔍 Result details:', JSON.stringify(result, null, 2));
       }
       
       return result;
     } catch (error) {
-      console.log('❌ Erro capturado - PRESERVANDO cache e formulário:', error);
       throw error; // Repassar erro SEM afetar estado
     }
   }, [appointmentCreation.createAppointment, appointmentsList]);
@@ -97,10 +80,6 @@ export function useSupabaseScheduling() {
     // Estados de loading - apenas dos dados essenciais (NÃO incluir loading de criação para não desmontar a tela durante submissão)
     loading: schedulingData.loading || patientManagement.loading,
     
-    // Connection health
-    connectionHealth,
-    isHealthy: connectionHealth.isHealthy,
-    
     // Operações - AGORA TODAS ESTÁVEIS
     createAppointment,
     cancelAppointment,
@@ -126,8 +105,6 @@ export function useSupabaseScheduling() {
     schedulingData.loading,
     patientManagement.loading,
     appointmentCreation.loading,
-    // Connection health
-    connectionHealth,
     // Funções estáveis
     createAppointment,
     cancelAppointment,

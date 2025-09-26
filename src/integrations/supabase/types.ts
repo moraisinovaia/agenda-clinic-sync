@@ -1443,6 +1443,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Json
       }
+      ensure_user_cliente_id: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       enviar_whatsapp_fallback: {
         Args: { p_agendamento_id: string }
         Returns: Json

@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
-import { useConnectionHealth } from '@/hooks/useConnectionHealth';
+import { supabase } from '@/integrations/supabase/client';
 
 interface SystemHealthProps {
   doctors: any[];
@@ -12,22 +12,39 @@ interface SystemHealthProps {
 }
 
 export const SystemHealthDashboard = ({ doctors, appointments }: SystemHealthProps) => {
-  const connectionHealth = useConnectionHealth();
+  const [isHealthy, setIsHealthy] = useState(true);
+  const [lastCheck, setLastCheck] = useState<Date>(new Date());
   
-  console.log('🏥 SystemHealthDashboard - Connection:', connectionHealth.dbStatus, 'Online:', connectionHealth.isOnline);
-
+  // Calcular ocupação diária
   const today = new Date().toISOString().split('T')[0];
-  const todayAppointments = appointments.filter(apt => apt.data_agendamento === today).length;
-  const activeDoctors = doctors.filter(d => d.ativo).length;
-  const occupationRate = activeDoctors > 0 ? Math.round((todayAppointments / (activeDoctors * 8)) * 100) : 0;
+  const todayAppointments = appointments?.filter(apt => 
+    apt.data_agendamento === today && 
+    apt.status !== 'cancelado'
+  ) || [];
+  
+  const activeDoctors = doctors?.filter(doc => doc.ativo) || [];
+  const occupationRate = activeDoctors.length > 0 
+    ? Math.round((todayAppointments.length / (activeDoctors.length * 8)) * 100) // Assumindo 8 slots por médico
+    : 0;
 
   const getHealthStatus = () => {
-    if (!connectionHealth.isOnline || connectionHealth.dbStatus === 'disconnected') return 'critical';
-    if (connectionHealth.dbStatus === 'checking') return 'warning';
-    return 'healthy';
+    if (!isHealthy) return { status: 'critical', color: 'text-red-500', bg: 'bg-red-50' };
+    if (occupationRate > 80) return { status: 'warning', color: 'text-yellow-500', bg: 'bg-yellow-50' };
+    return { status: 'healthy', color: 'text-green-500', bg: 'bg-green-50' };
   };
 
   const healthStatus = getHealthStatus();
+
+  const forceHealthCheck = async () => {
+    try {
+      const { error } = await supabase.from('medicos').select('count').limit(1);
+      setIsHealthy(!error);
+      setLastCheck(new Date());
+    } catch (error) {
+      setIsHealthy(false);
+      setLastCheck(new Date());
+    }
+  };
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -38,45 +55,38 @@ export const SystemHealthDashboard = ({ doctors, appointments }: SystemHealthPro
         </CardHeader>
         <CardContent>
           <div className="flex items-center space-x-2">
-            {healthStatus === 'healthy' ? (
+            {healthStatus.status === 'healthy' ? (
               <CheckCircle className="h-4 w-4 text-green-500" />
-            ) : healthStatus === 'warning' ? (
+            ) : healthStatus.status === 'warning' ? (
               <Clock className="h-4 w-4 text-yellow-500" />
             ) : (
               <AlertTriangle className="h-4 w-4 text-red-500" />
             )}
-            <Badge variant={healthStatus === 'healthy' ? 'default' : healthStatus === 'warning' ? 'secondary' : 'destructive'}>
-              {healthStatus === 'healthy' ? 'Saudável' : healthStatus === 'warning' ? 'Verificando' : 'Crítico'}
+            <Badge variant={healthStatus.status === 'healthy' ? 'default' : healthStatus.status === 'warning' ? 'secondary' : 'destructive'}>
+              {healthStatus.status === 'healthy' ? 'Saudável' : healthStatus.status === 'warning' ? 'Verificando' : 'Crítico'}
             </Badge>
           </div>
           <div className="mt-2 space-y-1">
             <div className="flex items-center text-xs text-muted-foreground">
-              {connectionHealth.isOnline ? (
+              {isHealthy ? (
                 <Wifi className="h-3 w-3 mr-1 text-green-500" />
               ) : (
                 <WifiOff className="h-3 w-3 mr-1 text-red-500" />
               )}
-              {connectionHealth.isOnline ? 'Online' : 'Offline'}
+              {isHealthy ? 'Online' : 'Offline'}
             </div>
             <div className="flex items-center text-xs text-muted-foreground">
               <Database className={`h-3 w-3 mr-1 ${
-                connectionHealth.dbStatus === 'connected' ? 'text-green-500' : 
-                connectionHealth.dbStatus === 'disconnected' ? 'text-red-500' : 'text-yellow-500'
+                isHealthy ? 'text-green-500' : 'text-red-500'
               }`} />
-              DB: {connectionHealth.dbStatus === 'connected' ? 'Conectado' : 
-                   connectionHealth.dbStatus === 'disconnected' ? 'Desconectado' : 'Verificando...'}
+              DB: {isHealthy ? 'Conectado' : 'Desconectado'}
             </div>
-            {connectionHealth.errorCount > 0 && (
-              <div className="text-xs text-yellow-600">
-                Erros: {connectionHealth.errorCount}
-              </div>
-            )}
           </div>
-          {connectionHealth.dbStatus === 'disconnected' && (
+          {!isHealthy && (
             <Button 
               size="sm" 
               variant="outline" 
-              onClick={() => connectionHealth.forceCheck()} 
+              onClick={forceHealthCheck} 
               className="mt-2 w-full"
             >
               Tentar Reconectar
@@ -103,7 +113,7 @@ export const SystemHealthDashboard = ({ doctors, appointments }: SystemHealthPro
         <CardContent className="pt-6">
           <div className="flex items-center justify-between text-sm text-muted-foreground">
             <span>Última verificação:</span>
-            <span>{connectionHealth.lastCheck.toLocaleTimeString('pt-BR')}</span>
+            <span>{lastCheck.toLocaleTimeString('pt-BR')}</span>
           </div>
         </CardContent>
       </Card>

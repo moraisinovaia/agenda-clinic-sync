@@ -1,7 +1,8 @@
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Doctor, Atendimento } from '@/types/scheduling';
+
+const MAX_RETRIES = 3;
 
 export function useSchedulingData() {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
@@ -9,82 +10,82 @@ export function useSchedulingData() {
   const [blockedDates, setBlockedDates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const retryCount = useRef(0);
 
-  // Buscar médicos ativos com melhor tratamento de erro
-  const fetchDoctors = async () => {
+  const fetchDoctors = useCallback(async (): Promise<void> => {
     try {
-      console.log('🔍 Buscando médicos...');
-      
-      // First try with RLS
-      let { data, error } = await supabase
+      const { data, error } = await supabase
         .from('medicos')
         .select('*')
         .eq('ativo', true)
         .order('nome');
 
-      // If RLS fails, try direct query (public access policy should work)
-      if (error && error.code === '42501') {
-        console.log('⚠️ RLS failed, trying direct query...');
-        const { data: directData, error: directError } = await supabase
-          .from('medicos')
-          .select('*')
-          .eq('ativo', true)
-          .order('nome');
-        
-        data = directData;
-        error = directError;
-      }
-
       if (error) {
-        console.error('❌ Erro final ao buscar médicos:', error);
+        // Se é erro de RLS (permissão), tentar uma abordagem diferente
+        if (error.code === 'PGRST301' || error.message.includes('RLS')) {
+          try {
+            // Tentar sem filtros restritivos primeiro
+            const { data: fallbackData, error: fallbackError } = await supabase
+              .from('medicos')
+              .select('*')
+              .limit(50); // Limite para não sobrecarregar
+            
+            if (!fallbackError && fallbackData) {
+              setDoctors(fallbackData);
+              setError(null);
+              return;
+            }
+          } catch (fallbackError) {
+            // Continue para o erro principal
+          }
+        }
+        
+        // Implementar retry simples
+        retryCount.current++;
+        if (retryCount.current < MAX_RETRIES) {
+          const delay = Math.min(1000 * retryCount.current, 5000);
+          setTimeout(() => {
+            if (retryCount.current < MAX_RETRIES) {
+              fetchDoctors();
+            }
+          }, delay);
+          return;
+        }
+        
         throw error;
       }
-      
-      console.log('✅ Médicos encontrados:', data?.length || 0);
+
       setDoctors(data || []);
       setError(null);
+      retryCount.current = 0; // Reset contador em caso de sucesso
+      
     } catch (error: any) {
-      console.error('💥 Erro ao buscar médicos:', error);
-      
-      // Set specific error messages based on error type
-      if (error?.code === '42501') {
-        setError('Erro de permissão - verificar configurações');
-      } else if (error?.message?.includes('connection')) {
-        setError('Erro de conexão - tentando reconectar...');
-      } else {
-        setError('Erro ao carregar médicos');
+      // Só definir erro se esgotar tentativas
+      if (retryCount.current >= MAX_RETRIES) {
+        setError(`Erro ao carregar médicos: ${error.message}`);
+        setDoctors([]); // Garantir que não temos dados inconsistentes
       }
-      
-      setDoctors([]);
     }
-  };
+  }, []);
 
-  // Buscar atendimentos ativos com melhor tratamento de erro
-  const fetchAtendimentos = async () => {
+  // Buscar atendimentos ativos
+  const fetchAtendimentos = useCallback(async (): Promise<void> => {
     try {
-      console.log('🔍 Buscando atendimentos...');
-      
       const { data, error } = await supabase
         .from('atendimentos')
         .select('*')
         .eq('ativo', true)
         .order('nome');
 
-      if (error) {
-        console.error('❌ Erro ao buscar atendimentos:', error);
-        throw error;
-      }
-      
-      console.log('✅ Atendimentos encontrados:', data?.length || 0);
+      if (error) throw error;
       setAtendimentos(data || []);
     } catch (error) {
-      console.error('💥 Erro ao buscar atendimentos:', error);
       setAtendimentos([]);
     }
-  };
+  }, []);
 
   // Buscar bloqueios de agenda
-  const fetchBlockedDates = async () => {
+  const fetchBlockedDates = useCallback(async (): Promise<void> => {
     try {
       const { data, error } = await supabase
         .from('bloqueios_agenda')
@@ -95,10 +96,18 @@ export function useSchedulingData() {
       if (error) throw error;
       setBlockedDates(data || []);
     } catch (error) {
-      console.error('Erro ao buscar bloqueios:', error);
       setBlockedDates([]);
     }
-  };
+  }, []);
+
+  // ✅ ESTABILIZAR: Função de recarregamento consolidada
+  const refetch = useCallback(async () => {
+    await Promise.all([
+      fetchDoctors(),
+      fetchAtendimentos(),
+      fetchBlockedDates(),
+    ]);
+  }, [fetchDoctors, fetchAtendimentos, fetchBlockedDates]);
 
   // Buscar atendimentos por médico
   const getAtendimentosByDoctor = (doctorId: string) => {
@@ -138,7 +147,7 @@ export function useSchedulingData() {
     };
 
     loadData();
-  }, []);
+  }, [fetchDoctors, fetchAtendimentos, fetchBlockedDates]);
 
   return {
     doctors,
@@ -149,6 +158,6 @@ export function useSchedulingData() {
     getAtendimentosByDoctor,
     isDateBlocked,
     getBlockedDatesByDoctor,
-    refetch: () => Promise.all([fetchDoctors(), fetchAtendimentos(), fetchBlockedDates()]),
+    refetch,
   };
 }
