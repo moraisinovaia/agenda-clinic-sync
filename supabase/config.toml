@@ -76,3 +76,6 @@ verify_jwt = false
 
 [functions.fix-approved-users-emails]
 verify_jwt = false
+
+[functions.llm-agent-api]
+verify_jwt = false
