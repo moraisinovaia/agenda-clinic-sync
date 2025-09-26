@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, User, Lock, Mail, AtSign, AlertCircle, KeyRound, Wrench } from 'lucide-react';
+import inovaiaLogo from "@/assets/inovaia-logo-new.jpeg";
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/hooks/useAuth';
 import { useRememberMe } from '@/hooks/useRememberMe';
@@ -431,22 +432,29 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen auth-background flex items-center justify-center p-4">
-      <Card className="w-full max-w-md glass-card shadow-elegant hover-lift animate-fade-in">
-        <CardHeader className="text-center space-y-4 pb-6">
-          <div className="space-y-3">
-            <div className="w-16 h-16 mx-auto bg-gradient-primary rounded-full flex items-center justify-center shadow-glow">
-              <User className="h-8 w-8 text-primary-foreground" />
+        <div className="glass-card p-8 w-full max-w-md mx-4 relative overflow-hidden">
+          {/* Decorative elements */}
+          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-primary/20 to-accent/20 rounded-full blur-3xl transform translate-x-16 -translate-y-16" />
+          <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-accent/20 to-primary/20 rounded-full blur-2xl transform -translate-x-12 translate-y-12" />
+          
+          <div className="relative z-10">
+            {/* Header with INOVAIA Logo */}
+            <div className="text-center mb-8">
+              <div className="inline-flex items-center justify-center w-24 h-24 bg-gradient-to-br from-white/10 to-white/5 rounded-3xl mb-6 logo-glow logo-breathe backdrop-blur-sm border border-white/20 shadow-2xl p-2">
+                <img 
+                  src={inovaiaLogo} 
+                  alt="INOVAIA Logo" 
+                  className="w-full h-full object-contain rounded-2xl"
+                />
+              </div>
+              <h2 className="text-3xl font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent mb-2">
+                Bem-vindo
+              </h2>
+              <p className="text-muted-foreground/80 font-medium">
+                Sistema de Agendamentos INOVAIA
+              </p>
             </div>
-            <div>
-              <CardTitle className="text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-                Sistema de Agendamentos
-              </CardTitle>
-              <p className="text-muted-foreground text-sm mt-2">Acesso para Recepcionistas</p>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="login" className="w-full">
+            <Tabs defaultValue="login" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="login">Entrar</TabsTrigger>
               <TabsTrigger value="signup">Cadastrar</TabsTrigger>
@@ -686,9 +694,9 @@ export default function Auth() {
                 </Button>
               </form>
             </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
-    </div>
+            </Tabs>
+          </div>
+        </div>
+      </div>
   );
 }

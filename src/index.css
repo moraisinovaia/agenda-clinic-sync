@@ -44,14 +44,14 @@ All colors MUST be HSL.
     --warning: 38 92% 50%;
     --warning-foreground: 220.9 39.3% 11%;
     
-    /* Modern Auth Gradients */
-    --gradient-auth-bg: linear-gradient(135deg, hsl(221.2 83.2% 53.3% / 0.05), hsl(270 50% 40% / 0.1), hsl(210 40% 96% / 0.3));
+    /* Modern Auth Gradients - INOVAIA Blue Theme */
+    --gradient-auth-bg: linear-gradient(135deg, hsl(217 91% 60% / 0.08), hsl(217 91% 65% / 0.12), hsl(226 100% 94% / 0.15));
     --gradient-glass: linear-gradient(135deg, hsl(0 0% 100% / 0.1), hsl(0 0% 100% / 0.05));
-    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary) / 0.8));
+    --gradient-primary: linear-gradient(135deg, hsl(217 91% 60%), hsl(217 91% 65% / 0.9));
     --gradient-secondary: linear-gradient(135deg, hsl(var(--secondary)), hsl(var(--muted)));
     --gradient-success: linear-gradient(135deg, hsl(var(--success)), hsl(var(--success) / 0.8));
-    --gradient-button: linear-gradient(135deg, hsl(221.2 83.2% 53.3%), hsl(221.2 83.2% 48%));
-    --gradient-button-hover: linear-gradient(135deg, hsl(221.2 83.2% 48%), hsl(221.2 83.2% 43%));
+    --gradient-button: linear-gradient(135deg, hsl(217 91% 60%), hsl(217 91% 55%));
+    --gradient-button-hover: linear-gradient(135deg, hsl(217 91% 55%), hsl(217 91% 50%));
     
     /* Glassmorphism Effects */
     --glass-bg: hsl(0 0% 100% / 0.25);
@@ -251,6 +251,24 @@ All colors MUST be HSL.
   
   .animate-shimmer {
     animation: shimmer 2s ease-in-out infinite;
+  }
+
+  /* Logo animations and effects */
+  .logo-glow {
+    filter: drop-shadow(0 0 20px hsl(217 91% 60% / 0.5));
+  }
+  
+  .logo-pulse {
+    animation: pulse-gentle 3s ease-in-out infinite;
+  }
+  
+  .logo-breathe {
+    animation: breathe 4s ease-in-out infinite;
+  }
+  
+  @keyframes breathe {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
   }
 
   /* Hover Effects */
