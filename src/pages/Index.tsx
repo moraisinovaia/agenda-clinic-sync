@@ -20,6 +20,7 @@ import { StatsCards } from '@/components/dashboard/StatsCards';
 import { SystemHealthDashboard } from '@/components/dashboard/SystemHealthDashboard';
 import { DoctorsView } from '@/components/dashboard/DoctorsView';
 import { DashboardActions } from '@/components/dashboard/DashboardActions';
+import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { UserApprovalPanel } from '@/components/admin/UserApprovalPanel';
 import { 
   LazyDashboard, 
@@ -37,7 +38,7 @@ import { useViewMode } from '@/hooks/useViewMode';
 import { SchedulingFormData, AppointmentWithRelations } from '@/types/scheduling';
 import { useStableAuth } from '@/hooks/useStableAuth';
 import { Button } from '@/components/ui/button';
-import { PageTransition } from '@/components/ui/page-transition';
+import { NavigationHeader } from '@/components/ui/navigation-header';
 import PendingApproval from '@/components/PendingApproval';
 
 const Index = () => {
@@ -390,54 +391,64 @@ const Index = () => {
   }
 
   return (
-    <MainLayout
-      viewMode={viewMode}
-      onViewChange={setViewMode}
-      profile={profile}
-      onSignOut={signOut}
-      selectedDoctor={selectedDoctor}
-      editingAppointment={editingAppointment}
-      appointmentCount={appointments.length}
-      waitlistCount={filaEspera.length}
-    >
-      <div className="h-full space-y-6">
+    <div className="min-h-screen bg-background">
+      <DashboardHeader
+        viewMode={viewMode}
+        profileName={profile?.nome}
+        profileRole={profile?.role}
+        onBack={goBack}
+        onBackToFilaEspera={goBackToFilaEspera}
+        onSignOut={signOut}
+      />
+
+      <div className="container mx-auto px-4 py-6">
         {viewMode === 'doctors' && (
-          <PageTransition>
+          <div className="space-y-6">
             {/* Admin view - apenas gerenciamento de usuários */}
             {profile?.role === 'admin' && profile?.status === 'aprovado' ? (
               <UserApprovalPanel />
             ) : (
               // Receptionist view - dashboard completo
-              <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                <div className="lg:col-span-3">
-                  <StatsCards doctors={doctors} appointments={appointments} />
-                  
-                  <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                    <div className="relative max-w-md">
-                      {/* This will be moved to DoctorsView component */}
+              <>
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                  <div className="lg:col-span-3">
+                    <StatsCards doctors={doctors} appointments={appointments} />
+                    
+                    <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                      <div className="relative max-w-md">
+                        {/* This will be moved to DoctorsView component */}
+                      </div>
+                      <DashboardActions onViewChange={setViewMode} />
                     </div>
-                    <DashboardActions onViewChange={setViewMode} />
-                  </div>
 
-                  <DoctorsView
-                    doctors={doctors}
-                    searchTerm={searchTerm}
-                    onSearchChange={setSearchTerm}
-                    onScheduleDoctor={handleScheduleDoctor}
-                    onViewSchedule={handleViewSchedule}
-                  />
+                    <DoctorsView
+                      doctors={doctors}
+                      searchTerm={searchTerm}
+                      onSearchChange={setSearchTerm}
+                      onScheduleDoctor={handleScheduleDoctor}
+                      onViewSchedule={handleViewSchedule}
+                    />
+                  </div>
+                  
+                  <div className="lg:col-span-1">
+                    <SystemMonitor />
+                  </div>
                 </div>
-                
-                <div className="lg:col-span-1">
-                  <SystemMonitor />
-                </div>
-              </div>
+              </>
             )}
-          </PageTransition>
+          </div>
         )}
 
         {viewMode === 'schedule' && selectedDoctor && (
-          <PageTransition>
+          <div className="space-y-6">
+            <NavigationHeader
+              title={`Agenda - ${selectedDoctor.nome}`}
+              subtitle={selectedDoctor.especialidade}
+              onBack={goBack}
+              onHome={() => setViewMode('doctors')}
+              showBack={true}
+              showHome={true}
+            />
             <DoctorSchedule
               doctor={selectedDoctor}
               appointments={appointments.filter(apt => apt.medico_id === selectedDoctor.id)}
@@ -458,11 +469,19 @@ const Index = () => {
               adicionarFilaEspera={adicionarFilaEspera}
               searchPatientsByBirthDate={searchPatientsByBirthDate}
             />
-          </PageTransition>
+          </div>
         )}
 
         {viewMode === 'new-appointment' && (
-          <PageTransition>
+          <div className="space-y-6">
+            <NavigationHeader
+              title="Novo Agendamento"
+              subtitle={selectedDoctor ? `${selectedDoctor.nome} - ${selectedDoctor.especialidade}` : undefined}
+              onBack={goBack}
+              onHome={() => setViewMode('doctors')}
+              showBack={true}
+              showHome={true}
+            />
             <SchedulingErrorBoundary key={`scheduling-form-${selectedDoctor?.id || 'new'}`}>
               <SimpleSchedulingForm
                 key={`simple-form-${selectedDoctor?.id || 'new'}-${editingAppointment?.id || 'new'}`}
@@ -485,11 +504,21 @@ const Index = () => {
                 }}
               />
             </SchedulingErrorBoundary>
-          </PageTransition>
+          </div>
         )}
 
+
         {viewMode === 'appointments-list' && (
-          <AppointmentsList
+          <div className="space-y-6">
+            <NavigationHeader
+              title="Lista de Agendamentos"
+              subtitle="Gerencie todos os agendamentos"
+              onBack={goBack}
+              onHome={() => setViewMode('doctors')}
+              showBack={true}
+              showHome={true}
+            />
+            <AppointmentsList 
               appointments={appointments}
               doctors={doctors}
               onEditAppointment={handleEditAppointment}
@@ -497,10 +526,20 @@ const Index = () => {
               onConfirmAppointment={handleConfirmAppointment}
               onUnconfirmAppointment={handleUnconfirmAppointment}
             />
+          </div>
         )}
 
         {viewMode === 'canceled-appointments' && (
-          <AppointmentsList
+          <div className="space-y-6">
+            <NavigationHeader
+              title="Agendamentos Cancelados"
+              subtitle="Visualize todos os agendamentos cancelados"
+              onBack={goBack}
+              onHome={() => setViewMode('doctors')}
+              showBack={true}
+              showHome={true}
+            />
+            <AppointmentsList 
               appointments={appointments.filter(apt => apt.status === 'cancelado')}
               doctors={doctors}
               onEditAppointment={handleEditAppointment}
@@ -508,10 +547,20 @@ const Index = () => {
               onConfirmAppointment={handleConfirmAppointment}
               onUnconfirmAppointment={handleUnconfirmAppointment}
             />
+          </div>
         )}
 
         {viewMode === 'edit-appointment' && editingAppointment && (
-          <SchedulingErrorBoundary key={`scheduling-form-edit-${editingAppointment?.id}`}>
+          <div className="space-y-6">
+            <NavigationHeader
+              title="Editar Agendamento"
+              subtitle={`${editingAppointment.pacientes?.nome_completo} - ${editingAppointment.medicos?.nome}`}
+              onBack={goBack}
+              onHome={() => setViewMode('doctors')}
+              showBack={true}
+              showHome={true}
+            />
+            <SchedulingErrorBoundary key={`scheduling-form-edit-${editingAppointment?.id}`}>
               <SimpleSchedulingForm
                 key={`edit-form-${editingAppointment?.id}`}
                 doctors={doctors}
@@ -531,6 +580,7 @@ const Index = () => {
               }}
             />
             </SchedulingErrorBoundary>
+          </div>
         )}
 
         {viewMode === 'fila-espera' && (
@@ -546,7 +596,7 @@ const Index = () => {
                 Adicionar à Fila
               </Button>
             </div>
-            <FilaEsperaList
+            <FilaEsperaList 
               filaEspera={filaEspera}
               status={getFilaStatus()}
               loading={filaLoading}
@@ -590,7 +640,7 @@ const Index = () => {
         availableConvenios={uniqueConvenios}
         onSuccess={handleMultipleAppointmentSuccess}
       />
-    </MainLayout>
+    </div>
   );
 };
 
