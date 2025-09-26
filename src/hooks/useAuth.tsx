@@ -96,109 +96,60 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   useEffect(() => {
     let isSubscribed = true;
-    let initialized = false;
     
     // Configurar listener de mudanças de autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (!isSubscribed) return;
+      (event, session) => {
+        if (!isSubscribed || isLoggingOut.current) return;
         
-        // Se estamos fazendo logout, ignorar completamente qualquer evento
-        if (isLoggingOut.current) {
-          return;
-        }
+        console.log('🔐 Auth state change:', event);
         
-        // Só processar eventos após a inicialização OU se for SIGNED_OUT
-        if (!initialized && event !== 'SIGNED_OUT') {
-          return;
-        }
+        // Atualizar estados imediatamente
+        setSession(session);
+        setUser(session?.user ?? null);
         
-        // Se for evento de logout ou não há sessão
         if (event === 'SIGNED_OUT' || !session) {
-          setSession(null);
-          setUser(null);
           setProfile(null);
           setLoading(false);
           return;
         }
         
-        // Se for login/signup após inicialização
-        if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && initialized) {
-          console.log('🔐 User signed in, fetching profile...');
-          setSession(session);
-          setUser(session?.user ?? null);
-          
-          if (session?.user) {
-            // Buscar perfil do usuário
-            setTimeout(async () => {
-              if (!isSubscribed || isLoggingOut.current) return;
-              
-              const profileData = await fetchProfile(session.user.id);
-              if (!isLoggingOut.current) {
-                setProfile(profileData);
-                setLoading(false);
-                
-                // Check if user is approved
-                if (profileData && profileData.status !== 'aprovado') {
-                  console.log('⚠️ User not approved yet, status:', profileData.status);
-                }
-              }
-            }, 100);
-          } else {
-            setProfile(null);
-            setLoading(false);
-          }
+        // Se há usuário, buscar perfil
+        if (session?.user) {
+          fetchProfile(session.user.id).then(profileData => {
+            if (isSubscribed && !isLoggingOut.current) {
+              setProfile(profileData);
+              setLoading(false);
+            }
+          });
+        } else {
+          setProfile(null);
+          setLoading(false);
         }
       }
     );
 
-    // Verificar sessão existente APENAS na inicialização
-    const initializeAuth = async () => {
+    // Verificar sessão existente na inicialização
+    supabase.auth.getSession().then(({ data: { session } }) => {
       if (!isSubscribed || isLoggingOut.current) return;
       
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (!isSubscribed || isLoggingOut.current) return;
-        
-        if (session && !error) {
-          console.log('🔐 Initial session found, fetching profile...');
-          setSession(session);
-          setUser(session.user);
-          
-          const profileData = await fetchProfile(session.user.id);
-          if (!isSubscribed || isLoggingOut.current) return;
-          
-          setProfile(profileData);
-          setLoading(false);
-          
-          // Check if user is approved
-          if (profileData && profileData.status !== 'aprovado') {
-            console.log('⚠️ User not approved yet, status:', profileData.status);
+      console.log('🔐 Initial session check:', !!session);
+      
+      setSession(session);
+      setUser(session?.user ?? null);
+      
+      if (session?.user) {
+        fetchProfile(session.user.id).then(profileData => {
+          if (isSubscribed && !isLoggingOut.current) {
+            setProfile(profileData);
+            setLoading(false);
           }
-        } else {
-          setSession(null);
-          setUser(null);
-          setProfile(null);
-          setLoading(false);
-        }
-        
-        // Marcar como inicializado APÓS processar a sessão inicial
-        initialized = true;
-        
-      } catch (error) {
-        if (!isSubscribed || isLoggingOut.current) return;
-        
-        setSession(null);
-        setUser(null);
+        });
+      } else {
         setProfile(null);
         setLoading(false);
-        initialized = true;
       }
-    };
-    
-    // Executar inicialização
-    initializeAuth();
+    });
 
     return () => {
       isSubscribed = false;

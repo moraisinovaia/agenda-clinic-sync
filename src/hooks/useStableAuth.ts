@@ -9,17 +9,9 @@ export const useStableAuth = () => {
   const auth = useAuth();
   const { user, profile, loading, signOut } = auth;
 
-  // Debug temporário
-  console.log('🔍 useStableAuth - Estado atual:', {
-    hasUser: !!user,
-    userId: user?.id,
-    profileStatus: profile?.status,
-    loading
-  });
-
   // Criar valores estáveis para usar como dependências
   const stableValues = useMemo(() => {
-    const values = {
+    return {
       userId: user?.id || null,
       userRole: profile?.role || null,
       userStatus: profile?.status || null,
@@ -28,9 +20,6 @@ export const useStableAuth = () => {
       isAdmin: profile?.role === 'admin' && profile?.status === 'aprovado',
       loading
     };
-    
-    console.log('🔍 useStableAuth - Valores estáveis calculados:', values);
-    return values;
   }, [user?.id, profile?.role, profile?.status, loading]);
 
   return {
