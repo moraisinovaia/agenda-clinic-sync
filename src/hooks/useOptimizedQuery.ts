@@ -124,9 +124,18 @@ export const useOptimizedQuery = <T>(
     }
   }, [executeQuery, refetchOnMount]);
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
   return {
     data,
-    loading,
+    loading: loading || isRetrying,
     error,
     refetch,
     invalidateCache,
