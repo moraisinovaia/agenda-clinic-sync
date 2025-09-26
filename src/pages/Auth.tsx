@@ -8,7 +8,6 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, User, Lock, Mail, AtSign, AlertCircle, KeyRound, Wrench } from 'lucide-react';
-import inovaiaLogo from "@/assets/inovaia-logo-new.jpeg";
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/hooks/useAuth';
 import { useRememberMe } from '@/hooks/useRememberMe';
@@ -320,13 +319,8 @@ export default function Auth() {
 
   if (loading) {
     return (
-      <div className="min-h-screen auth-background flex items-center justify-center">
-        <div className="text-center space-y-4 animate-fade-in">
-          <div className="w-16 h-16 mx-auto bg-gradient-primary rounded-full flex items-center justify-center shadow-glow animate-pulse-gentle">
-            <Loader2 className="h-8 w-8 animate-spin text-primary-foreground" />
-          </div>
-          <p className="text-muted-foreground text-lg">Verificando autenticação...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
   }
@@ -334,38 +328,34 @@ export default function Auth() {
   // Show password reset form if in recovery mode
   if (showPasswordReset) {
     return (
-      <div className="min-h-screen auth-background flex items-center justify-center p-4">
-        <Card className="w-full max-w-md glass-card shadow-elegant hover-lift animate-fade-in">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 to-secondary/5 p-4">
+        <Card className="w-full max-w-md">
           <CardHeader className="text-center space-y-4">
-            <div className="space-y-3">
-              <div className="w-16 h-16 mx-auto bg-gradient-primary rounded-full flex items-center justify-center shadow-glow">
-                <KeyRound className="h-8 w-8 text-primary-foreground" />
-              </div>
-              <div>
-                <CardTitle className="text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-                  Redefinir Senha
-                </CardTitle>
-                <p className="text-muted-foreground text-sm mt-2">Digite sua nova senha</p>
-              </div>
+            <div>
+              <CardTitle className="text-2xl font-bold flex items-center justify-center gap-2">
+                <KeyRound className="h-6 w-6" />
+                Redefinir Senha
+              </CardTitle>
+              <p className="text-muted-foreground">Digite sua nova senha</p>
             </div>
           </CardHeader>
           <CardContent>
             {error && (
-              <Alert variant="destructive" className="mb-4 animate-bounce-gentle shadow-card-enhanced">
+              <Alert variant="destructive" className="mb-4">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
             
-            <form onSubmit={handleUpdatePassword} className="space-y-5">
+            <form onSubmit={handleUpdatePassword} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="new-password" className="text-sm font-medium text-foreground">Nova Senha</Label>
-                <div className="relative focus-glow rounded-lg">
-                  <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors" />
+                <Label htmlFor="new-password">Nova Senha</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <PasswordInput
                     id="new-password"
                     placeholder="••••••••"
-                    className="pl-10 h-12 border-2 focus:border-primary transition-all duration-300 hover-lift"
+                    className="pl-10"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     required
@@ -374,13 +364,13 @@ export default function Auth() {
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="confirm-new-password" className="text-sm font-medium text-foreground">Confirmar Nova Senha</Label>
-                <div className="relative focus-glow rounded-lg">
-                  <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors" />
+                <Label htmlFor="confirm-new-password">Confirmar Nova Senha</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <PasswordInput
                     id="confirm-new-password"
                     placeholder="••••••••"
-                    className="pl-10 h-12 border-2 focus:border-primary transition-all duration-300 hover-lift"
+                    className="pl-10"
                     value={confirmNewPassword}
                     onChange={(e) => setConfirmNewPassword(e.target.value)}
                     required
@@ -389,31 +379,28 @@ export default function Auth() {
               </div>
               
               {newPassword && confirmNewPassword && newPassword !== confirmNewPassword && (
-                <p className="text-sm text-red-500 animate-bounce-gentle">As senhas não coincidem</p>
+                <p className="text-sm text-red-500">As senhas não coincidem</p>
               )}
               
               <Button 
                 type="submit" 
-                className="w-full h-12 btn-gradient text-lg font-semibold hover-lift shadow-elegant" 
+                className="w-full" 
                 disabled={isUpdatingPassword || newPassword !== confirmNewPassword || !newPassword}
               >
                 {isUpdatingPassword ? (
                   <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Atualizando...
                   </>
                 ) : (
-                  <>
-                    <KeyRound className="mr-2 h-5 w-5" />
-                    Atualizar Senha
-                  </>
+                  'Atualizar Senha'
                 )}
               </Button>
               
               <Button 
                 type="button" 
                 variant="outline" 
-                className="w-full h-12 hover-lift" 
+                className="w-full" 
                 onClick={() => {
                   setShowPasswordReset(false);
                   setNewPassword('');
@@ -431,30 +418,17 @@ export default function Auth() {
   }
 
   return (
-    <div className="min-h-screen auth-background flex items-center justify-center p-4">
-        <div className="glass-card p-8 w-full max-w-md mx-4 relative overflow-hidden">
-          {/* Decorative elements */}
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-primary/20 to-accent/20 rounded-full blur-3xl transform translate-x-16 -translate-y-16" />
-          <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-accent/20 to-primary/20 rounded-full blur-2xl transform -translate-x-12 translate-y-12" />
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 to-secondary/5 p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center space-y-4">
+          <div>
+            <CardTitle className="text-2xl font-bold">Sistema de Agendamentos</CardTitle>
+            <p className="text-muted-foreground">Acesso para Recepcionistas</p>
+          </div>
           
-          <div className="relative z-10">
-            {/* Header with INOVAIA Logo */}
-            <div className="text-center mb-8">
-              <div className="inline-flex items-center justify-center w-24 h-24 bg-gradient-to-br from-white/10 to-white/5 rounded-3xl mb-6 logo-glow logo-breathe backdrop-blur-sm border border-white/20 shadow-2xl p-2">
-                <img 
-                  src={inovaiaLogo} 
-                  alt="INOVAIA Logo" 
-                  className="w-full h-full object-contain rounded-2xl"
-                />
-              </div>
-              <h2 className="text-3xl font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent mb-2">
-                Bem-vindo
-              </h2>
-              <p className="text-muted-foreground/80 font-medium">
-                Sistema de Agendamentos INOVAIA
-              </p>
-            </div>
-            <Tabs defaultValue="login" className="w-full">
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="login" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="login">Entrar</TabsTrigger>
               <TabsTrigger value="signup">Cadastrar</TabsTrigger>
@@ -641,13 +615,13 @@ export default function Auth() {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="signup-password" className="text-sm font-medium text-foreground">Senha</Label>
-                  <div className="relative focus-glow rounded-lg">
-                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors" />
+                  <Label htmlFor="signup-password">Senha</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                     <PasswordInput
                       id="signup-password"
                       placeholder="••••••••"
-                      className="pl-10 h-12 border-2 focus:border-primary transition-all duration-300 hover-lift"
+                      className="pl-10"
                       value={signupData.password}
                       onChange={(e) => setSignupData(prev => ({ ...prev, password: e.target.value }))}
                       required
@@ -656,13 +630,13 @@ export default function Auth() {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="signup-confirm" className="text-sm font-medium text-foreground">Confirmar Senha</Label>
-                  <div className="relative focus-glow rounded-lg">
-                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors" />
+                  <Label htmlFor="signup-confirm">Confirmar Senha</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                     <PasswordInput
                       id="signup-confirm"
                       placeholder="••••••••"
-                      className="pl-10 h-12 border-2 focus:border-primary transition-all duration-300 hover-lift"
+                      className="pl-10"
                       value={signupData.confirmPassword}
                       onChange={(e) => setSignupData(prev => ({ ...prev, confirmPassword: e.target.value }))}
                       required
@@ -672,31 +646,28 @@ export default function Auth() {
                 
                 {signupData.password && signupData.confirmPassword && 
                  signupData.password !== signupData.confirmPassword && (
-                  <p className="text-sm text-red-500 animate-bounce-gentle">As senhas não coincidem</p>
+                  <p className="text-sm text-red-500">As senhas não coincidem</p>
                 )}
                 
                 <Button 
                   type="submit" 
-                  className="w-full h-12 btn-gradient text-lg font-semibold hover-lift shadow-elegant" 
+                  className="w-full" 
                   disabled={isLoading || signupData.password !== signupData.confirmPassword}
                 >
                   {isLoading ? (
                     <>
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Cadastrando...
                     </>
                   ) : (
-                    <>
-                      <User className="mr-2 h-5 w-5" />
-                      Criar Conta
-                    </>
+                    'Criar Conta'
                   )}
                 </Button>
               </form>
             </TabsContent>
-            </Tabs>
-          </div>
-        </div>
-      </div>
+          </Tabs>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
