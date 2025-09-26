@@ -1451,6 +1451,10 @@ export type Database = {
         Args: { p_agendamento_id: string }
         Returns: Json
       }
+      excluir_usuario: {
+        Args: { p_admin_id: string; p_user_id: string }
+        Returns: Json
+      }
       get_agendamento_audit_history: {
         Args: { p_agendamento_id: string }
         Returns: {
