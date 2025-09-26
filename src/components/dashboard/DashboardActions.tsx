@@ -1,4 +1,4 @@
-import { Calendar, Clock } from 'lucide-react';
+import { Calendar, Clock, CalendarDays, XCircle, FileText, Ban } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'fila-espera' | 'nova-fila' | 'bloqueio-agenda' | 'relatorio-agenda' | 'multiple-appointment' | 'canceled-appointments';
@@ -24,7 +24,8 @@ export const DashboardActions = ({ onViewChange }: DashboardActionsProps) => {
         variant="outline"
         className="flex items-center gap-2 whitespace-nowrap"
       >
-        📅 Múltiplos Exames
+        <CalendarDays className="h-4 w-4" />
+        Múltiplos Exames
       </Button>
       
       <Button 
@@ -41,7 +42,8 @@ export const DashboardActions = ({ onViewChange }: DashboardActionsProps) => {
         variant="outline"
         className="flex items-center gap-2 whitespace-nowrap"
       >
-        ❌ Ver Cancelados
+        <XCircle className="h-4 w-4" />
+        Ver Cancelados
       </Button>
       
       <Button 
@@ -58,7 +60,8 @@ export const DashboardActions = ({ onViewChange }: DashboardActionsProps) => {
         variant="outline"
         className="flex items-center gap-2 whitespace-nowrap"
       >
-        📄 Relatório de Agenda
+        <FileText className="h-4 w-4" />
+        Relatório de Agenda
       </Button>
       
       <Button 
@@ -66,7 +69,8 @@ export const DashboardActions = ({ onViewChange }: DashboardActionsProps) => {
         variant="destructive"
         className="flex items-center gap-2 whitespace-nowrap"
       >
-        🚫 Bloquear Agenda
+        <Ban className="h-4 w-4" />
+        Bloquear Agenda
       </Button>
     </div>
   );

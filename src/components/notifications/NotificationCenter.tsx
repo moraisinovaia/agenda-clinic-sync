@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bell, X, Check, CheckCheck } from 'lucide-react';
+import { Bell, X, Check, CheckCheck, CheckCircle, AlertTriangle, XCircle, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,10 +32,10 @@ export const NotificationCenter = () => {
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
-      case 'success': return '✅';
-      case 'warning': return '⚠️';
-      case 'error': return '❌';
-      default: return 'ℹ️';
+      case 'success': return <CheckCircle className="h-4 w-4 text-green-600" />;
+      case 'warning': return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
+      case 'error': return <XCircle className="h-4 w-4 text-destructive" />;
+      default: return <Info className="h-4 w-4 text-primary" />;
     }
   };
 
@@ -120,9 +120,7 @@ export const NotificationCenter = () => {
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="text-sm">
-                              {getNotificationIcon(notification.type)}
-                            </span>
+                            {getNotificationIcon(notification.type)}
                             <h4 className="text-sm font-medium truncate">
                               {notification.title}
                             </h4>

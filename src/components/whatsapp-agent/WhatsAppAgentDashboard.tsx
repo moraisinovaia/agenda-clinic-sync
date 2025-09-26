@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { MessageSquare, Send, CheckCircle, XCircle, Clock, User, Bot } from 'lucide-react';
+import { MessageSquare, Send, CheckCircle, XCircle, Clock, User, Bot, Calendar, Stethoscope, ClipboardList } from 'lucide-react';
 
 interface APIResponse {
   success: boolean;
@@ -97,12 +97,12 @@ export const WhatsAppAgentDashboard = () => {
 
       if (response.success) {
         toast({
-          title: "✅ Sucesso",
+          title: "Sucesso",
           description: response.message || "Operação realizada com sucesso"
         });
       } else {
         toast({
-          title: "❌ Erro",
+          title: "Erro",
           description: response.error || response.message || "Erro na operação",
           variant: "destructive"
         });
@@ -120,7 +120,7 @@ export const WhatsAppAgentDashboard = () => {
       setMessages(prev => [...prev, errorMsg]);
       
       toast({
-        title: "❌ Erro de Sistema",
+        title: "Erro de Sistema",
         description: "Falha na comunicação com a API",
         variant: "destructive"
       });
@@ -257,28 +257,28 @@ export const WhatsAppAgentDashboard = () => {
 
   const formatBotResponse = (response: APIResponse, intent: string): string => {
     if (!response.success) {
-      return `❌ ${response.error || response.message || 'Erro na operação'}`;
+      return `Erro: ${response.error || response.message || 'Erro na operação'}`;
     }
 
     switch (intent) {
       case 'schedule':
-        return `✅ ${response.message}\n📅 Data: ${response.data || 'N/A'}\n⏰ Horário: ${response.hora || 'N/A'}\n👨‍⚕️ Médico: ${response.medico || 'N/A'}`;
+        return `${response.message}\nData: ${response.data || 'N/A'}\nHorário: ${response.hora || 'N/A'}\nMédico: ${response.medico || 'N/A'}`;
       
       case 'check-patient':
-        return `✅ ${response.message}\n📋 ${response.total || 0} consulta(s) encontrada(s)`;
+        return `${response.message}\n${response.total || 0} consulta(s) encontrada(s)`;
       
       case 'availability':
-        return `✅ ${response.message}\n📅 ${response.horarios_disponiveis?.length || 0} horários disponíveis`;
+        return `${response.message}\n${response.horarios_disponiveis?.length || 0} horários disponíveis`;
       
       default:
-        return `✅ ${response.message || 'Operação realizada com sucesso'}`;
+        return `${response.message || 'Operação realizada com sucesso'}`;
     }
   };
 
   const testEndpointDirectly = async () => {
     if (!testPayload.trim()) {
       toast({
-        title: "❌ Erro",
+        title: "Erro",
         description: "Por favor, insira um payload JSON válido",
         variant: "destructive"
       });
@@ -300,7 +300,7 @@ export const WhatsAppAgentDashboard = () => {
       setLastResponse(result);
 
       toast({
-        title: result.success ? "✅ Sucesso" : "❌ Erro",
+        title: result.success ? "Sucesso" : "Erro",
         description: result.message || result.error || 'Teste concluído',
         variant: result.success ? "default" : "destructive"
       });
@@ -314,7 +314,7 @@ export const WhatsAppAgentDashboard = () => {
       setLastResponse(errorResult);
       
       toast({
-        title: "❌ Erro",
+        title: "Erro",
         description: "Erro ao fazer requisição ou parsear JSON",
         variant: "destructive"
       });

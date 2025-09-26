@@ -1,4 +1,4 @@
-import { Users, Calendar, Clock, AlertTriangle, TrendingUp, Activity } from 'lucide-react';
+import { Users, Calendar, Clock, AlertTriangle, TrendingUp, Activity, CheckCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -94,9 +94,7 @@ export const StatsCards = ({ doctors, appointments }: StatsCardsProps) => {
       <Card>
         <CardContent className="p-4">
           <div className="flex items-center gap-3">
-            <Badge variant="default" className="h-6 w-6 rounded-full flex items-center justify-center text-xs">
-              ✓
-            </Badge>
+            <CheckCircle className="h-6 w-6 text-green-600" />
             <div>
               <p className="text-lg font-bold">{confirmedAppointments}</p>
               <p className="text-xs text-muted-foreground">Confirmados</p>
