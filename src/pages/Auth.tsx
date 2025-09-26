@@ -13,6 +13,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useRememberMe } from '@/hooks/useRememberMe';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import inovaiaLogo from '@/assets/inovaia-logo.jpeg';
 
 export default function Auth() {
   const { user, loading, signIn, signUp } = useAuth();
@@ -328,8 +329,8 @@ export default function Auth() {
   // Show password reset form if in recovery mode
   if (showPasswordReset) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 to-secondary/5 p-4">
-        <Card className="w-full max-w-md">
+      <div className="min-h-screen flex items-center justify-center auth-background p-4">
+        <Card className="w-full max-w-md auth-card animate-card-entrance">
           <CardHeader className="text-center space-y-4">
             <div>
               <CardTitle className="text-2xl font-bold flex items-center justify-center gap-2">
@@ -418,20 +419,30 @@ export default function Auth() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 to-secondary/5 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center space-y-4">
-          <div>
-            <CardTitle className="text-2xl font-bold">Sistema de Agendamentos</CardTitle>
-            <p className="text-muted-foreground">Acesso para Recepcionistas</p>
+    <div className="min-h-screen flex items-center justify-center auth-background p-4">
+      <Card className="w-full max-w-md auth-card animate-card-entrance">
+        <CardHeader className="text-center space-y-6 pt-8">
+          <div className="flex flex-col items-center space-y-4">
+            <div className="auth-logo animate-logo-breathe">
+              <img 
+                src={inovaiaLogo} 
+                alt="INOVAIA" 
+                className="h-16 w-auto object-contain rounded-lg shadow-lg"
+              />
+            </div>
+            <div>
+              <CardTitle className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">
+                Sistema de Agendamentos
+              </CardTitle>
+              <p className="text-muted-foreground text-sm mt-1">Acesso para Recepcionistas</p>
+            </div>
           </div>
-          
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-8 pb-8">
           <Tabs defaultValue="login" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="login">Entrar</TabsTrigger>
-              <TabsTrigger value="signup">Cadastrar</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-2 bg-background/50 backdrop-blur-sm">
+              <TabsTrigger value="login" className="auth-tab">Entrar</TabsTrigger>
+              <TabsTrigger value="signup" className="auth-tab">Cadastrar</TabsTrigger>
             </TabsList>
             
             <TabsContent value="login" className="space-y-4">
@@ -478,14 +489,14 @@ export default function Auth() {
               
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="login-emailOrUsername">Email ou Nome de Usuário</Label>
-                  <div className="relative">
-                    <AtSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Label htmlFor="login-emailOrUsername" className="text-sm font-medium">Email ou Nome de Usuário</Label>
+                  <div className="relative group">
+                    <AtSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
                     <Input
                       id="login-emailOrUsername"
                       type="text"
                       placeholder="email@exemplo.com ou usuario"
-                      className="pl-10"
+                      className="pl-10 auth-input"
                       value={loginData.emailOrUsername}
                       onChange={(e) => setLoginData(prev => ({ ...prev, emailOrUsername: e.target.value }))}
                       required
@@ -494,13 +505,13 @@ export default function Auth() {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="login-password">Senha</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Label htmlFor="login-password" className="text-sm font-medium">Senha</Label>
+                  <div className="relative group">
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
                     <PasswordInput
                       id="login-password"
                       placeholder="••••••••"
-                      className="pl-10"
+                      className="pl-10 auth-input"
                       value={loginData.password}
                       onChange={(e) => setLoginData(prev => ({ ...prev, password: e.target.value }))}
                       required
@@ -520,7 +531,7 @@ export default function Auth() {
                   </Label>
                 </div>
                 
-                <Button type="submit" className="w-full" disabled={isLoading}>
+                <Button type="submit" className="w-full auth-button hover:shadow-lg transition-all duration-300" disabled={isLoading}>
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -534,8 +545,8 @@ export default function Auth() {
                  {/* Forgot Password Button */}
                  <Button 
                    type="button" 
-                   variant="link" 
-                   className="w-full text-sm" 
+                   variant="ghost" 
+                   className="w-full text-sm hover:bg-background/50 transition-all duration-200" 
                    onClick={handleForgotPassword}
                    disabled={isResettingPassword}
                  >
@@ -561,14 +572,14 @@ export default function Auth() {
               
               <form onSubmit={handleSignup} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="signup-nome">Nome Completo</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Label htmlFor="signup-nome" className="text-sm font-medium">Nome Completo</Label>
+                  <div className="relative group">
+                    <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
                     <Input
                       id="signup-nome"
                       type="text"
                       placeholder="Seu nome completo"
-                      className="pl-10"
+                      className="pl-10 auth-input"
                       value={signupData.nome}
                       onChange={(e) => setSignupData(prev => ({ ...prev, nome: e.target.value }))}
                       required
@@ -577,14 +588,14 @@ export default function Auth() {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="signup-username">Nome de Usuário</Label>
-                  <div className="relative">
-                    <AtSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Label htmlFor="signup-username" className="text-sm font-medium">Nome de Usuário</Label>
+                  <div className="relative group">
+                    <AtSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
                     <Input
                       id="signup-username"
                       type="text"
                       placeholder="usuario123"
-                      className="pl-10"
+                      className="pl-10 auth-input"
                       value={signupData.username}
                       onChange={(e) => setSignupData(prev => ({ ...prev, username: e.target.value }))}
                       required
@@ -596,14 +607,14 @@ export default function Auth() {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="signup-email">Email</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Label htmlFor="signup-email" className="text-sm font-medium">Email</Label>
+                  <div className="relative group">
+                    <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
                     <Input
                       id="signup-email"
                       type="email"
                       placeholder="seu@email.com"
-                      className="pl-10"
+                      className="pl-10 auth-input"
                       value={signupData.email}
                       onChange={(e) => setSignupData(prev => ({ ...prev, email: e.target.value }))}
                       required
@@ -615,13 +626,13 @@ export default function Auth() {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="signup-password">Senha</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Label htmlFor="signup-password" className="text-sm font-medium">Senha</Label>
+                  <div className="relative group">
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
                     <PasswordInput
                       id="signup-password"
                       placeholder="••••••••"
-                      className="pl-10"
+                      className="pl-10 auth-input"
                       value={signupData.password}
                       onChange={(e) => setSignupData(prev => ({ ...prev, password: e.target.value }))}
                       required
@@ -630,13 +641,13 @@ export default function Auth() {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="signup-confirm">Confirmar Senha</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Label htmlFor="signup-confirm" className="text-sm font-medium">Confirmar Senha</Label>
+                  <div className="relative group">
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
                     <PasswordInput
                       id="signup-confirm"
                       placeholder="••••••••"
-                      className="pl-10"
+                      className="pl-10 auth-input"
                       value={signupData.confirmPassword}
                       onChange={(e) => setSignupData(prev => ({ ...prev, confirmPassword: e.target.value }))}
                       required
@@ -651,7 +662,7 @@ export default function Auth() {
                 
                 <Button 
                   type="submit" 
-                  className="w-full" 
+                  className="w-full auth-button hover:shadow-lg transition-all duration-300" 
                   disabled={isLoading || signupData.password !== signupData.confirmPassword}
                 >
                   {isLoading ? (
