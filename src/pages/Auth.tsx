@@ -356,7 +356,7 @@ export default function Auth() {
                   <PasswordInput
                     id="new-password"
                     placeholder="••••••••"
-                    className="pl-10"
+                    className="pl-9"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     required
@@ -371,7 +371,7 @@ export default function Auth() {
                   <PasswordInput
                     id="confirm-new-password"
                     placeholder="••••••••"
-                    className="pl-10"
+                    className="pl-9"
                     value={confirmNewPassword}
                     onChange={(e) => setConfirmNewPassword(e.target.value)}
                     required
@@ -496,7 +496,7 @@ export default function Auth() {
                       id="login-emailOrUsername"
                       type="text"
                       placeholder="email@exemplo.com ou usuario"
-                      className="pl-10 auth-input"
+                      className="pl-9 auth-input"
                       value={loginData.emailOrUsername}
                       onChange={(e) => setLoginData(prev => ({ ...prev, emailOrUsername: e.target.value }))}
                       required
@@ -511,7 +511,7 @@ export default function Auth() {
                     <PasswordInput
                       id="login-password"
                       placeholder="••••••••"
-                      className="pl-10 auth-input"
+                      className="pl-9 auth-input"
                       value={loginData.password}
                       onChange={(e) => setLoginData(prev => ({ ...prev, password: e.target.value }))}
                       required
@@ -579,7 +579,7 @@ export default function Auth() {
                       id="signup-nome"
                       type="text"
                       placeholder="Seu nome completo"
-                      className="pl-10 auth-input"
+                      className="pl-9 auth-input"
                       value={signupData.nome}
                       onChange={(e) => setSignupData(prev => ({ ...prev, nome: e.target.value }))}
                       required
@@ -595,7 +595,7 @@ export default function Auth() {
                       id="signup-username"
                       type="text"
                       placeholder="usuario123"
-                      className="pl-10 auth-input"
+                      className="pl-9 auth-input"
                       value={signupData.username}
                       onChange={(e) => setSignupData(prev => ({ ...prev, username: e.target.value }))}
                       required
@@ -614,7 +614,7 @@ export default function Auth() {
                       id="signup-email"
                       type="email"
                       placeholder="seu@email.com"
-                      className="pl-10 auth-input"
+                      className="pl-9 auth-input"
                       value={signupData.email}
                       onChange={(e) => setSignupData(prev => ({ ...prev, email: e.target.value }))}
                       required
@@ -632,7 +632,7 @@ export default function Auth() {
                     <PasswordInput
                       id="signup-password"
                       placeholder="••••••••"
-                      className="pl-10 auth-input"
+                      className="pl-9 auth-input"
                       value={signupData.password}
                       onChange={(e) => setSignupData(prev => ({ ...prev, password: e.target.value }))}
                       required
@@ -647,7 +647,7 @@ export default function Auth() {
                     <PasswordInput
                       id="signup-confirm"
                       placeholder="••••••••"
-                      className="pl-10 auth-input"
+                      className="pl-9 auth-input"
                       value={signupData.confirmPassword}
                       onChange={(e) => setSignupData(prev => ({ ...prev, confirmPassword: e.target.value }))}
                       required
