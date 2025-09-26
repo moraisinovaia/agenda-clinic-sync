@@ -6,23 +6,37 @@ import { useMemo } from 'react';
  * Usa apenas as propriedades essenciais para dependências
  */
 export const useStableAuth = () => {
-  const { user, profile, loading } = useAuth();
+  const auth = useAuth();
+  const { user, profile, loading, signOut } = auth;
+
+  // Debug temporário
+  console.log('🔍 useStableAuth - Estado atual:', {
+    hasUser: !!user,
+    userId: user?.id,
+    profileStatus: profile?.status,
+    loading
+  });
 
   // Criar valores estáveis para usar como dependências
-  const stableValues = useMemo(() => ({
-    userId: user?.id || null,
-    userRole: profile?.role || null,
-    userStatus: profile?.status || null,
-    isAuthenticated: !!user,
-    isApproved: profile?.status === 'aprovado',
-    isAdmin: profile?.role === 'admin' && profile?.status === 'aprovado',
-    loading
-  }), [user?.id, profile?.role, profile?.status, loading]);
+  const stableValues = useMemo(() => {
+    const values = {
+      userId: user?.id || null,
+      userRole: profile?.role || null,
+      userStatus: profile?.status || null,
+      isAuthenticated: !!user,
+      isApproved: profile?.status === 'aprovado',
+      isAdmin: profile?.role === 'admin' && profile?.status === 'aprovado',
+      loading
+    };
+    
+    console.log('🔍 useStableAuth - Valores estáveis calculados:', values);
+    return values;
+  }, [user?.id, profile?.role, profile?.status, loading]);
 
   return {
     ...stableValues,
     user,
     profile,
-    signOut: useAuth().signOut, // Incluir signOut do hook original
+    signOut,
   };
 };

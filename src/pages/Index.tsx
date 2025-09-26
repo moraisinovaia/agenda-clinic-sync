@@ -235,15 +235,8 @@ const Index = () => {
   ).filter(Boolean).sort();
   
   
-  // Redirecionar para login se não autenticado
-  if (!authLoading && !user) {
-    return <Navigate to="/auth" replace />;
-  }
-
-  // Show pending approval screen if user is not approved
-  if (!authLoading && user && profile && profile.status !== 'aprovado') {
-    return <PendingApproval profile={profile} />;
-  }
+  // AuthGuard já cuida da verificação de autenticação e aprovação
+  // Remover verificações duplicadas para evitar loops
   
   // Loading state durante verificação de autenticação
   if (authLoading) {
