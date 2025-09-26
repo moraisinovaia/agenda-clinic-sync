@@ -254,22 +254,29 @@ export function SimpleSchedulingForm({
                 </Alert>
               )}
 
-              <div className="flex gap-2 pt-4">
-                <Button type="submit" disabled={loading} className="flex-1">
-                  {loading 
-                    ? (editingAppointment ? 'Atualizando...' : 'Agendando...') 
-                    : (editingAppointment ? 'Atualizar Agendamento' : 'Confirmar Agendamento')
-                  }
-                </Button>
-                <Button type="button" variant="outline" onClick={() => setMultipleOpen(true)}>
-                  Agendar múltiplos
-                </Button>
-                <Button type="button" variant="outline" onClick={() => setWaitlistOpen(true)}>
-                  Adicionar à Fila
-                </Button>
-                <Button type="button" variant="outline" onClick={onCancel}>
-                  Cancelar
-                </Button>
+              <div className="space-y-3 pt-4">
+                {/* Botões principais */}
+                <div className="flex gap-3">
+                  <Button type="submit" disabled={loading} className="flex-1">
+                    {loading 
+                      ? (editingAppointment ? 'Atualizando...' : 'Agendando...') 
+                      : (editingAppointment ? 'Atualizar Agendamento' : 'Confirmar Agendamento')
+                    }
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={onCancel} className="min-w-[100px]">
+                    Cancelar
+                  </Button>
+                </div>
+                
+                {/* Ações secundárias */}
+                <div className="flex gap-3">
+                  <Button type="button" variant="outline" onClick={() => setMultipleOpen(true)} className="flex-1">
+                    Agendar múltiplos
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => setWaitlistOpen(true)} className="flex-1">
+                    Adicionar à Fila
+                  </Button>
+                </div>
               </div>
             </form>
           </CardContent>
