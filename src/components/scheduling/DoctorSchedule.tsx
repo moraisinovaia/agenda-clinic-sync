@@ -243,6 +243,17 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                 <h3 className="font-semibold text-xs">
                   Agendamentos para {format(selectedDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
                 </h3>
+                {/* Resumo dos agendamentos da data selecionada */}
+                {selectedDateAppointments.length > 0 && (
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    <span>
+                      Consultas: {selectedDateAppointments.filter(apt => apt.atendimentos?.nome?.toLowerCase().includes('consulta') || !apt.atendimentos?.nome?.toLowerCase().includes('retorno') && !apt.atendimentos?.nome?.toLowerCase().includes('exame')).length}, 
+                      Retornos: {selectedDateAppointments.filter(apt => apt.atendimentos?.nome?.toLowerCase().includes('retorno')).length}, 
+                      Exames: {selectedDateAppointments.filter(apt => apt.atendimentos?.nome?.toLowerCase().includes('exame')).length}, 
+                      Total: {selectedDateAppointments.length}
+                    </span>
+                  </div>
+                )}
               </div>
               
               <div className="flex-1 w-full">
