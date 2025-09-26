@@ -243,34 +243,18 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                 <h3 className="font-semibold text-xs">
                   Agendamentos para {format(selectedDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
                 </h3>
-              </div>
-              
-              {/* Resumo dos agendamentos - Repositioned */}
-              {selectedDateAppointments.length > 0 && (
-                <div className="mx-3 my-4 p-3 bg-secondary/10 border border-secondary/20 rounded-lg">
-                  <div className="flex flex-wrap items-center justify-center gap-4 text-sm text-foreground">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                      <span className="font-medium">Consultas: {selectedDateAppointments.filter(apt => apt.atendimentos?.nome?.toLowerCase().includes('consulta') || !apt.atendimentos?.nome?.toLowerCase().includes('retorno') && !apt.atendimentos?.nome?.toLowerCase().includes('exame')).length}</span>
-                    </div>
-                    <div className="w-px h-4 bg-border"></div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <span className="font-medium">Retornos: {selectedDateAppointments.filter(apt => apt.atendimentos?.nome?.toLowerCase().includes('retorno')).length}</span>
-                    </div>
-                    <div className="w-px h-4 bg-border"></div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                      <span className="font-medium">Exames: {selectedDateAppointments.filter(apt => apt.atendimentos?.nome?.toLowerCase().includes('exame')).length}</span>
-                    </div>
-                    <div className="w-px h-4 bg-border"></div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-primary rounded-full"></div>
-                      <span className="font-semibold text-primary">Total: {selectedDateAppointments.length}</span>
-                    </div>
+                {/* Resumo dos agendamentos da data selecionada */}
+                {selectedDateAppointments.length > 0 && (
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    <span>
+                      Consultas: {selectedDateAppointments.filter(apt => apt.atendimentos?.nome?.toLowerCase().includes('consulta') || !apt.atendimentos?.nome?.toLowerCase().includes('retorno') && !apt.atendimentos?.nome?.toLowerCase().includes('exame')).length}, 
+                      Retornos: {selectedDateAppointments.filter(apt => apt.atendimentos?.nome?.toLowerCase().includes('retorno')).length}, 
+                      Exames: {selectedDateAppointments.filter(apt => apt.atendimentos?.nome?.toLowerCase().includes('exame')).length}, 
+                      Total: {selectedDateAppointments.length}
+                    </span>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
               
               <div className="flex-1 w-full">
                 {selectedDateAppointments.length > 0 ? (
