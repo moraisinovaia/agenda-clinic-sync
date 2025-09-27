@@ -430,6 +430,59 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     } finally {
       isOperatingRef.current = false;
     }
+  const deleteAppointment = async (appointmentId: string) => {
+    isOperatingRef.current = true;
+    try {
+      logger.info('Excluindo agendamento', { appointmentId }, 'APPOINTMENTS');
+
+      await measureApiCall(async () => {
+        // Buscar perfil do usuário atual
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('nome, user_id')
+          .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+          .single();
+
+        // Usar função de exclusão com auditoria
+        const { data, error } = await supabase.rpc('excluir_agendamento_soft', {
+          p_agendamento_id: appointmentId,
+          p_excluido_por: profile?.nome || 'Usuário',
+          p_excluido_por_user_id: profile?.user_id || null
+        });
+
+        if (error) {
+          logger.error('Erro ao excluir agendamento', error, 'APPOINTMENTS');
+          throw error;
+        }
+
+        if (!(data as any)?.success) {
+          const errorMessage = (data as any)?.error || 'Erro ao excluir agendamento';
+          logger.error('Erro na exclusão', { error: errorMessage }, 'APPOINTMENTS');
+          throw new Error(errorMessage);
+        }
+
+        return data;
+      }, 'delete_appointment', 'PUT');
+
+      toast({
+        title: 'Agendamento excluído',
+        description: 'O agendamento foi excluído com sucesso',
+      });
+
+      // Refetch otimizado sem invalidação agressiva
+      await refetch();
+      logger.info('Agendamento excluído com sucesso', { appointmentId }, 'APPOINTMENTS');
+    } catch (error) {
+      logger.error('Erro ao excluir agendamento', error, 'APPOINTMENTS');
+      toast({
+        title: 'Erro',
+        description: error instanceof Error ? error.message : 'Não foi possível excluir o agendamento',
+        variant: 'destructive',
+      });
+      throw error;
+    } finally {
+      isOperatingRef.current = false;
+    }
   };
 
   return {
@@ -437,6 +490,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     loading,
     getAppointmentsByDoctorAndDate,
     cancelAppointment,
+    deleteAppointment,
     confirmAppointment,
     unconfirmAppointment,
     refetch,

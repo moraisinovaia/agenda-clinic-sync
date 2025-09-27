@@ -9,7 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Calendar, Clock, User, Phone, CheckCircle, Edit, X, RotateCcw, History } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { AppointmentFilters } from '@/components/filters/AppointmentFilters';
 import { useAdvancedAppointmentFilters } from '@/hooks/useAdvancedAppointmentFilters';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -22,11 +23,12 @@ interface AppointmentsListProps {
   doctors: any[];
   onEditAppointment?: (appointment: AppointmentWithRelations) => void;
   onCancelAppointment?: (appointmentId: string) => void;
+  onDeleteAppointment?: (appointmentId: string) => void;
   onConfirmAppointment?: (appointmentId: string) => void;
   onUnconfirmAppointment?: (appointmentId: string) => void;
 }
 
-export function AppointmentsList({ appointments, doctors, onEditAppointment, onCancelAppointment, onConfirmAppointment, onUnconfirmAppointment }: AppointmentsListProps) {
+export function AppointmentsList({ appointments, doctors, onEditAppointment, onCancelAppointment, onDeleteAppointment, onConfirmAppointment, onUnconfirmAppointment }: AppointmentsListProps) {
   const [selectedAuditId, setSelectedAuditId] = useState<string | null>(null);
   const [selectedPatientName, setSelectedPatientName] = useState<string>("");
   const {
@@ -293,6 +295,37 @@ export function AppointmentsList({ appointments, doctors, onEditAppointment, onC
                                 <X className="h-3 w-3" />
                               </Button>
                             </>
+                          )}
+                          {appointment.status === 'cancelado' && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  title="Excluir"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Excluir agendamento</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Tem certeza que deseja excluir este agendamento? Esta ação não pode ser desfeita.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Não</AlertDialogCancel>
+                                  <AlertDialogAction 
+                                    onClick={() => onDeleteAppointment?.(appointment.id)}
+                                    className="bg-red-600 hover:bg-red-700"
+                                  >
+                                    Sim, excluir
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           )}
                         </div>
                       </TableCell>

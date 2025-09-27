@@ -523,6 +523,7 @@ const Index = () => {
               doctors={doctors}
               onEditAppointment={handleEditAppointment}
               onCancelAppointment={cancelAppointment}
+              onDeleteAppointment={deleteAppointment}
               onConfirmAppointment={handleConfirmAppointment}
               onUnconfirmAppointment={handleUnconfirmAppointment}
             />
@@ -544,6 +545,7 @@ const Index = () => {
               doctors={doctors}
               onEditAppointment={handleEditAppointment}
               onCancelAppointment={cancelAppointment}
+              onDeleteAppointment={deleteAppointment}
               onConfirmAppointment={handleConfirmAppointment}
               onUnconfirmAppointment={handleUnconfirmAppointment}
             />

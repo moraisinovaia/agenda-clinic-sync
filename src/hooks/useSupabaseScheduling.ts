@@ -69,6 +69,15 @@ export function useSupabaseScheduling() {
     }
   }, [appointmentsList.unconfirmAppointment]);
 
+  const deleteAppointment = useCallback(async (appointmentId: string) => {
+    try {
+      await appointmentsList.deleteAppointment(appointmentId);
+      // O refetch já é feito automaticamente no useAppointmentsList
+    } catch (error) {
+      throw error;
+    }
+  }, [appointmentsList.deleteAppointment]);
+
   // ✅ MEMOIZAR: O objeto retornado para garantir referências estáveis
   return useMemo(() => ({
     // Dados
@@ -83,6 +92,7 @@ export function useSupabaseScheduling() {
     // Operações - AGORA TODAS ESTÁVEIS
     createAppointment,
     cancelAppointment,
+    deleteAppointment,
     confirmAppointment,
     unconfirmAppointment,
     searchPatientsByBirthDate: patientManagement.searchPatientsByBirthDate, // ✅ JÁ ESTÁVEL
@@ -108,6 +118,7 @@ export function useSupabaseScheduling() {
     // Funções estáveis
     createAppointment,
     cancelAppointment,
+    deleteAppointment,
     confirmAppointment,
     unconfirmAppointment,
     patientManagement.searchPatientsByBirthDate,

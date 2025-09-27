@@ -1264,6 +1264,9 @@ export type Database = {
           criado_por: string
           criado_por_user_id: string
           data_agendamento: string
+          excluido_em: string
+          excluido_por: string
+          excluido_por_user_id: string
           hora_agendamento: string
           id: string
           medico_especialidade: string

@@ -15,17 +15,26 @@ export const StatsCards = ({ doctors, appointments }: StatsCardsProps) => {
   const today = new Date().toISOString().split('T')[0];
   const tomorrow = addDays(new Date(), 1).toISOString().split('T')[0];
   
-  const totalAppointments = appointments.length;
-  const todayAppointments = appointments.filter(apt => apt.data_agendamento === today).length;
-  const tomorrowAppointments = appointments.filter(apt => apt.data_agendamento === tomorrow).length;
-  const pendingAppointments = appointments.filter(apt => apt.status === 'agendado').length;
-  const confirmedAppointments = appointments.filter(apt => apt.status === 'confirmado').length;
-  const cancelledAppointments = appointments.filter(apt => apt.status === 'cancelado').length;
+  // Filtrar apenas agendamentos válidos (não cancelados nem excluídos) para estatísticas
+  const validAppointments = appointments.filter(apt => 
+    apt.status !== 'cancelado' && apt.status !== 'excluido'
+  );
+  
+  const totalAppointments = validAppointments.length;
+  const todayAppointments = validAppointments.filter(apt => apt.data_agendamento === today).length;
+  const tomorrowAppointments = validAppointments.filter(apt => apt.data_agendamento === tomorrow).length;
+  const pendingAppointments = validAppointments.filter(apt => apt.status === 'agendado').length;
+  const confirmedAppointments = validAppointments.filter(apt => apt.status === 'confirmado').length;
+  
+  // Para cancelados, mostramos todos (incluindo cancelados e excluídos)
+  const cancelledAppointments = appointments.filter(apt => 
+    apt.status === 'cancelado' || apt.status === 'excluido'
+  ).length;
   
   // Calculate active doctors (with appointments today)
   const activeDoctorsToday = new Set(
     appointments
-      .filter(apt => apt.data_agendamento === today && apt.status !== 'cancelado')
+      .filter(apt => apt.data_agendamento === today && apt.status !== 'cancelado' && apt.status !== 'excluido')
       .map(apt => apt.medico_id)
   ).size;
 
