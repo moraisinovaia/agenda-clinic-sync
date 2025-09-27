@@ -293,15 +293,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         console.warn('Erro ao buscar cliente, usando padrão:', error);
       }
 
-      // Criar email fictício válido com domínios RFC 2606 oficialmente reservados
+      // Criar email fictício válido - SOLUÇÃO DEFINITIVA
+      // Usar apenas domínio principal RFC 2606 sem subdomínios
       const timestamp = Date.now();
-      const validTLDs = ['example.com', 'example.org', 'example.net'];
+      const validDomains = ['example.com', 'example.org', 'example.net'];
       let signUpResult;
       let lastError;
       
-      // Tentar com diferentes TLDs até conseguir um válido
-      for (const tld of validTLDs) {
-        const ficticiousEmail = `${username}.${clienteId}.${timestamp}@inovaia.${tld}`;
+      // Tentar com diferentes domínios principais até conseguir um válido
+      for (const domain of validDomains) {
+        const ficticiousEmail = `${username.toLowerCase()}.${timestamp}@${domain}`;
         console.log('Tentando email fictício:', ficticiousEmail);
         
         signUpResult = await supabase.auth.signUp({
@@ -325,7 +326,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           break;
         }
         
-        console.warn(`TLD ${tld} falhou, tentando próximo...`, lastError);
+        console.warn(`Domínio ${domain} falhou, tentando próximo...`, lastError);
       }
       
       const { error } = signUpResult;
