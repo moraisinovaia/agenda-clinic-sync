@@ -542,7 +542,11 @@ const Index = () => {
               showHome={true}
             />
             <AppointmentsList 
-              appointments={appointments.filter(apt => apt.status === 'cancelado')}
+              appointments={appointments.filter(apt => 
+                apt.status === 'cancelado' || 
+                apt.status === 'cancelado_bloqueio' || 
+                apt.status === 'excluido'
+              )}
               doctors={doctors}
               onEditAppointment={handleEditAppointment}
               onCancelAppointment={cancelAppointment}

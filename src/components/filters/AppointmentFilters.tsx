@@ -177,6 +177,7 @@ export const AppointmentFilters = ({
                     <SelectItem value="realizado">Realizado</SelectItem>
                     <SelectItem value="cancelado">Cancelado</SelectItem>
                     <SelectItem value="cancelado_bloqueio">Cancelado por Bloqueio</SelectItem>
+                    <SelectItem value="excluido">Excluído</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
