@@ -201,7 +201,7 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
         </CardHeader>
         
         <CardContent className="p-0">
-          <div className="grid lg:grid-cols-3 h-[400px]">
+          <div className="grid lg:grid-cols-3 xl:grid-cols-4 min-h-[60vh] max-h-[600px]">
             {/* Calendário - Lado Esquerdo */}
             <div className="border-r p-3 space-y-3">
               <h3 className="font-semibold text-xs">Selecione uma data</h3>
@@ -239,7 +239,7 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
             </div>
 
             {/* Tabela de Agendamentos - Lado Direito */}
-            <div className="lg:col-span-2 flex flex-col">
+            <div className="lg:col-span-2 xl:col-span-3 flex flex-col">
               <div className="p-3 border-b bg-muted/30">
                 <h3 className="font-semibold text-xs">
                   Agendamentos para {format(selectedDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
@@ -259,7 +259,7 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
               
               <div className="flex-1 w-full">
                 {selectedDateAppointments.length > 0 ? (
-                    <ScrollArea className="h-[300px] w-full">
+                    <ScrollArea className="h-[450px] w-full">
                       <Table className="min-w-[900px]">
                         <TableHeader>
                         <TableRow>
