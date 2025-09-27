@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Doctor, AppointmentWithRelations } from '@/types/scheduling';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -94,24 +95,33 @@ export function RelatorioAgenda({ doctors, appointments, onBack }: RelatorioAgen
     <div className="space-y-6">
       <style type="text/css" media="print">{`
         @page {
-          margin: 0.4in;
+          margin: 0.2in;
           size: A4;
         }
         body {
           font-family: Arial, sans-serif;
-          font-size: 11px;
-          line-height: 1.2;
+          font-size: 8px;
+          line-height: 1.1;
         }
-        .print\\:text-xs { font-size: 10px !important; }
-        .print\\:text-sm { font-size: 11px !important; }
-        .print\\:p-2 { padding: 0.5rem !important; }
+        .print\\:text-\\[6px\\] { font-size: 6px !important; }
+        .print\\:text-\\[8px\\] { font-size: 8px !important; }
+        .print\\:text-\\[10px\\] { font-size: 10px !important; }
+        .print\\:p-0 { padding: 0 !important; }
+        .print\\:p-1 { padding: 0.25rem !important; }
+        .print\\:px-1 { padding-left: 0.25rem !important; padding-right: 0.25rem !important; }
+        .print\\:py-0 { padding-top: 0 !important; padding-bottom: 0 !important; }
         .print\\:py-1 { padding-top: 0.25rem !important; padding-bottom: 0.25rem !important; }
+        .print\\:mb-1 { margin-bottom: 0.25rem !important; }
         .print\\:mb-2 { margin-bottom: 0.5rem !important; }
-        .print\\:space-y-1 > * + * { margin-top: 0.25rem !important; }
         .print\\:shadow-none { box-shadow: none !important; }
         .print\\:border-none { border: none !important; }
-        .print\\:hidden { display: none !important; }
         .print\\:border-gray-300 { border-color: #d1d5db !important; }
+        .print\\:border-t { border-top-width: 1px !important; }
+        .print\\:hidden { display: none !important; }
+        table { page-break-inside: avoid; }
+        tr { page-break-inside: avoid; page-break-after: auto; }
+        thead { display: table-header-group; }
+        tfoot { display: table-footer-group; }
       `}</style>
       
       <div className="print:hidden">
@@ -264,70 +274,75 @@ export function RelatorioAgenda({ doctors, appointments, onBack }: RelatorioAgen
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="print:p-2 p-6">
+            <CardContent className="print:p-1 p-6">
               {filteredAppointments.length > 0 ? (
-                <div className="space-y-3 print:space-y-1">
-                  <div className="text-center mb-3 print:mb-2">
-                    <Badge variant="secondary" className="text-sm print:text-xs px-3 py-1">
+                <div className="space-y-2">
+                  <div className="text-center mb-3 print:mb-1">
+                    <Badge variant="secondary" className="text-sm print:text-[8px] px-3 py-1 print:px-1 print:py-0">
                       {filteredAppointments.length} agendamento{filteredAppointments.length !== 1 ? 's' : ''}
                     </Badge>
                   </div>
                   
-                  <div className="grid gap-3 print:gap-1">
-                    {filteredAppointments.map((appointment, index) => (
-                      <div key={appointment.id} className="border rounded-lg p-3 print:p-2 print:border-gray-300 bg-background">
-                        <div className="flex items-center justify-between mb-2 print:mb-1">
-                          <div className="flex items-center gap-3 print:gap-2">
-                            <span className="bg-primary/10 text-primary px-2 py-1 rounded text-sm print:text-xs font-medium">
-                              #{String(index + 1).padStart(2, '0')}
-                            </span>
-                            <div className="flex items-center gap-2">
-                              <Calendar className="h-4 w-4 print:h-3 print:w-3 text-primary" />
-                              <span className="font-medium text-sm print:text-xs">{formatDate(appointment.data_agendamento)}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Clock className="h-4 w-4 print:h-3 print:w-3 text-primary" />
-                              <span className="font-medium text-sm print:text-xs">{formatTime(appointment.hora_agendamento)}</span>
-                            </div>
-                          </div>
-                          <Badge className={`${getStatusColor(appointment.status)} text-xs px-2 py-1`}>
-                            {appointment.status === 'confirmado' ? 'Confirmado' : 'Agendado'}
-                          </Badge>
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-3 print:gap-2 text-sm print:text-xs">
-                          <div>
-                            <span className="font-medium text-muted-foreground">Paciente:</span>
-                            <div className="font-medium">{appointment.pacientes?.nome_completo}</div>
-                          </div>
-                          <div>
-                            <span className="font-medium text-muted-foreground">Convênio:</span>
-                            <div>{appointment.pacientes?.convenio}</div>
-                          </div>
-                          <div>
-                            <span className="font-medium text-muted-foreground">Contato:</span>
-                            <div>{appointment.pacientes?.celular || appointment.pacientes?.telefone || 'Não informado'}</div>
-                          </div>
-                          <div>
-                            <span className="font-medium text-muted-foreground">Procedimento:</span>
-                            <div>{appointment.atendimentos?.nome}</div>
-                          </div>
-                        </div>
-                        
-                        {appointment.observacoes && (
-                          <div className="mt-2 print:mt-1 p-2 print:p-1 bg-amber-50 border border-amber-200 rounded text-xs print:text-xs">
-                            <span className="font-medium text-amber-700">Obs:</span> {appointment.observacoes}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                  <div className="border rounded-lg print:border-gray-300 print:border-t">
+                    <Table>
+                      <TableHeader className="print:text-[8px]">
+                        <TableRow className="print:border-gray-300">
+                          <TableHead className="print:py-1 print:px-1 print:text-[8px] w-20">Hora</TableHead>
+                          <TableHead className="print:py-1 print:px-1 print:text-[8px]">Paciente</TableHead>
+                          <TableHead className="print:py-1 print:px-1 print:text-[8px] w-24">Telefone</TableHead>
+                          <TableHead className="print:py-1 print:px-1 print:text-[8px] w-20">Convênio</TableHead>
+                          <TableHead className="print:py-1 print:px-1 print:text-[8px]">Procedimento</TableHead>
+                          <TableHead className="print:py-1 print:px-1 print:text-[8px] w-16">Status</TableHead>
+                          <TableHead className="print:py-1 print:px-1 print:text-[8px] w-20">Data</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody className="print:text-[8px]">
+                        {filteredAppointments.map((appointment, index) => (
+                          <TableRow key={appointment.id} className="print:border-gray-300 hover:bg-muted/50">
+                            <TableCell className="print:py-0 print:px-1 print:text-[8px] font-medium">
+                              {formatTime(appointment.hora_agendamento)}
+                            </TableCell>
+                            <TableCell className="print:py-0 print:px-1 print:text-[8px]">
+                              <div className="font-medium">{appointment.pacientes?.nome_completo}</div>
+                              {appointment.observacoes && (
+                                <div className="text-xs print:text-[6px] text-muted-foreground mt-1 print:mt-0">
+                                  {appointment.observacoes}
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell className="print:py-0 print:px-1 print:text-[8px]">
+                              {appointment.pacientes?.celular || appointment.pacientes?.telefone || '-'}
+                            </TableCell>
+                            <TableCell className="print:py-0 print:px-1 print:text-[8px]">
+                              <Badge variant="outline" className="text-xs print:text-[6px] print:px-1 print:py-0">
+                                {appointment.pacientes?.convenio}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="print:py-0 print:px-1 print:text-[8px]">
+                              {appointment.atendimentos?.nome}
+                            </TableCell>
+                            <TableCell className="print:py-0 print:px-1 print:text-[8px]">
+                              <Badge 
+                                variant={appointment.status === 'confirmado' ? 'default' : 'secondary'} 
+                                className="text-xs print:text-[6px] print:px-1 print:py-0"
+                              >
+                                {appointment.status === 'confirmado' ? 'Confirmado' : 'Agendado'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="print:py-0 print:px-1 print:text-[8px]">
+                              {formatDate(appointment.data_agendamento)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                   </div>
                 </div>
               ) : (
-                <div className="text-center py-8 print:py-4 text-muted-foreground">
-                  <FileText className="h-12 w-12 print:h-8 print:w-8 mx-auto mb-4 print:mb-2 opacity-50" />
-                  <h3 className="text-lg print:text-sm font-medium mb-2 print:mb-1">Nenhum agendamento encontrado</h3>
-                  <p className="text-sm print:text-xs">Verifique os filtros selecionados e tente novamente.</p>
+                <div className="text-center py-8 print:py-2 text-muted-foreground">
+                  <FileText className="h-12 w-12 print:h-6 print:w-6 mx-auto mb-4 print:mb-1 opacity-50" />
+                  <h3 className="text-lg print:text-[10px] font-medium mb-2 print:mb-1">Nenhum agendamento encontrado</h3>
+                  <p className="text-sm print:text-[8px]">Verifique os filtros selecionados e tente novamente.</p>
                 </div>
               )}
             </CardContent>
