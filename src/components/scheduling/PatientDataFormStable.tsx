@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DateOfBirthInput } from '@/components/ui/date-of-birth-input';
 import { User, Search, UserCheck, AlertCircle, CheckCircle } from 'lucide-react';
 import { SchedulingFormData } from '@/types/scheduling';
-import { usePatientManagement } from '@/hooks/usePatientManagement';
+import { useUnifiedPatientSearch } from '@/hooks/useUnifiedPatientSearch';
 import { useDebounce } from '@/hooks/useDebounce';
 
 interface PatientDataFormStableProps {
@@ -31,10 +31,15 @@ export const PatientDataFormStable = React.memo(({
   medicoSelected,
   selectedDoctor
 }: PatientDataFormStableProps) => {
-  const [foundPatients, setFoundPatients] = useState<any[]>([]);
-  const [showPatientsList, setShowPatientsList] = useState(false);
-  
-  const { loading: searchingPatients, searchPatientsByBirthDate, searchPatientsByName } = usePatientManagement();
+  const {
+    loading: searchingPatients,
+    foundPatients,
+    showResults: showPatientsList,
+    searchByBirthDate,
+    searchByName,
+    selectPatient: selectPatientFromSearch,
+    clearSearch
+  } = useUnifiedPatientSearch();
   
   // Debounce da data de nascimento para evitar muitas requisições
   const debouncedBirthDate = useDebounce(formData.dataNascimento, 800);
@@ -83,47 +88,22 @@ export const PatientDataFormStable = React.memo(({
     return null;
   }, [selectedDoctor, patientAge]);
 
-  // Buscar pacientes de forma estável
-  const handlePatientSearch = useCallback(async () => {
-    if (debouncedBirthDate && debouncedBirthDate.length === 10) {
-      try {
-        const patients = await searchPatientsByBirthDate(debouncedBirthDate);
-        setFoundPatients(patients);
-        setShowPatientsList(patients.length > 0);
-      } catch (error) {
-        console.error('Erro ao buscar pacientes:', error);
-        setFoundPatients([]);
-        setShowPatientsList(false);
-      }
-    } else {
-      setFoundPatients([]);
-      setShowPatientsList(false);
-    }
-  }, [debouncedBirthDate]); // Remover searchPatientsByBirthDate das dependências
-
   // Executar busca quando a data mudar
   React.useEffect(() => {
-    handlePatientSearch();
-  }, [handlePatientSearch]);
+    if (debouncedBirthDate && debouncedBirthDate.length === 10) {
+      searchByBirthDate(debouncedBirthDate);
+    } else {
+      clearSearch();
+    }
+  }, [debouncedBirthDate, searchByBirthDate, clearSearch]);
 
   // Executar busca por nome quando não houver data válida
   React.useEffect(() => {
     const hasValidBirth = debouncedBirthDate && debouncedBirthDate.length === 10;
-    const run = async () => {
-      if (!hasValidBirth && debouncedName && debouncedName.length >= 3) {
-        try {
-          const patients = await searchPatientsByName(debouncedName);
-          setFoundPatients(patients);
-          setShowPatientsList(patients.length > 0);
-        } catch (error) {
-          console.error('Erro ao buscar pacientes por nome:', error);
-          setFoundPatients([]);
-          setShowPatientsList(false);
-        }
-      }
-    };
-    run();
-  }, [debouncedBirthDate, debouncedName, searchPatientsByName]);
+    if (!hasValidBirth && debouncedName && debouncedName.length >= 3) {
+      searchByName(debouncedName);
+    }
+  }, [debouncedBirthDate, debouncedName, searchByName]);
 
 
   // Função para selecionar paciente de forma estável
@@ -133,10 +113,10 @@ export const PatientDataFormStable = React.memo(({
       nomeCompleto: patient.nome_completo,
       telefone: patient.telefone || '',
       celular: patient.celular,
-      convenio: patient.convenio,
+      convenio: patient.ultimo_convenio || '',
     }));
-    setShowPatientsList(false);
-  }, [setFormData]);
+    selectPatientFromSearch(patient);
+  }, [setFormData, selectPatientFromSearch]);
 
   // Função para criar novo paciente de forma estável
   const createNewPatient = useCallback(() => {
@@ -147,8 +127,8 @@ export const PatientDataFormStable = React.memo(({
       celular: '',
       convenio: '',
     }));
-    setShowPatientsList(false);
-  }, [setFormData]);
+    clearSearch();
+  }, [setFormData, clearSearch]);
 
   // Formatação de telefone estável
   const formatPhone = useCallback((value: string) => {
@@ -233,10 +213,10 @@ export const PatientDataFormStable = React.memo(({
                   <div key={patient.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
                     <div>
                       <p className="font-medium">{patient.nome_completo}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {patient.convenio} • {patient.celular}
-                        {patient.telefone && ` • ${patient.telefone}`}
-                      </p>
+                       <p className="text-sm text-muted-foreground">
+                         {patient.ultimo_convenio} • {patient.celular}
+                         {patient.telefone && ` • ${patient.telefone}`}
+                       </p>
                     </div>
                     <Button 
                       size="sm" 

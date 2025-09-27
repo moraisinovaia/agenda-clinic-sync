@@ -67,12 +67,30 @@ export function useUnifiedPatientSearch() {
       const { data: patients, error } = await searchQuery.limit(20).order('updated_at', { ascending: false });
 
       if (error) {
-        console.error('Erro ao buscar pacientes:', error);
-        toast({
-          title: "Erro ao buscar pacientes",
-          description: error.message,
-          variant: "destructive",
+        console.error('❌ Erro ao buscar pacientes:', error);
+        console.error('❌ Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code,
+          query: type,
+          value: query
         });
+        
+        // Erro específico de RLS 
+        if (error.message?.includes('row-level security') || error.code === '42501') {
+          toast({
+            title: "Erro de acesso",
+            description: "Sem permissão para buscar pacientes. Verifique se está logado corretamente.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Erro ao buscar pacientes",
+            description: error.message || "Erro desconhecido ao buscar pacientes",
+            variant: "destructive",
+          });
+        }
         setState(prev => ({ ...prev, foundPatients: [], showResults: false, loading: false }));
         return [];
       }
