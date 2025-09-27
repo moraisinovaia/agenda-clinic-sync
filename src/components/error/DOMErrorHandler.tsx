@@ -1,6 +1,6 @@
 import React, { Component, ReactNode } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle, RefreshCw, ExternalLink, Chrome, Globe, Monitor } from 'lucide-react';
+import { AlertCircle, RefreshCw, ExternalLink, Monitor, Globe, Laptop } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { detectBrowser, getBrowserSpecificSolutions } from '@/utils/browserDetection';
 
@@ -82,7 +82,7 @@ export class DOMErrorHandler extends Component<Props, State> {
       const solutions = getBrowserSpecificSolutions(browserInfo);
       
       // Ícone do navegador
-      const BrowserIcon = browserInfo.isChrome ? Chrome : 
+      const BrowserIcon = browserInfo.isChrome ? Laptop : 
                          browserInfo.isFirefox ? Globe :
                          browserInfo.isSafari ? Monitor : AlertCircle;
 
