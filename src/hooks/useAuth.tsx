@@ -293,13 +293,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         console.warn('Erro ao buscar cliente, usando padrão:', error);
       }
 
-      // SOLUÇÃO DEFINITIVA: Usar email do admin para todos os cadastros
-      // Isso resolve completamente o problema de validação do Supabase
-      const adminEmail = 'gabworais@gmail.com';
-      console.log('Criando usuário com email do admin:', adminEmail);
+      // Gerar email único para cada usuário para evitar conflitos
+      const uniqueEmail = `${username}@sistema.local`;
+      console.log('Criando usuário com email único:', uniqueEmail);
       
       const signUpResult = await supabase.auth.signUp({
-        email: adminEmail,
+        email: uniqueEmail,
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/`,
