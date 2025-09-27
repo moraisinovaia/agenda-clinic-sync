@@ -20,8 +20,6 @@ export const DoctorsView = ({
   onScheduleDoctor, 
   onViewSchedule 
 }: DoctorsViewProps) => {
-  console.log('📊 DoctorsView render - doctors:', doctors?.length || 0, 'array:', Array.isArray(doctors));
-  
   const normalizeText = (text: string) => {
     return text
       .toLowerCase()
@@ -42,8 +40,6 @@ export const DoctorsView = ({
     return nomeNormalized.includes(searchNormalized) ||
            especialidadeNormalized.includes(searchNormalized);
   });
-  
-  console.log('🔍 DoctorsView - filtered doctors:', filteredDoctors?.length || 0);
 
   return (
     <>

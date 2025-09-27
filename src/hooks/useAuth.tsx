@@ -87,16 +87,25 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   useEffect(() => {
     let isSubscribed = true;
     
+    console.log('🔐 Auth: Inicializando sistema de autenticação...');
+    
     // Configurar listener de mudanças de autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if (!isSubscribed || isLoggingOut.current) return;
+        
+        console.log('🔐 Auth: Estado mudou -', event, session ? 'com sessão' : 'sem sessão');
+        if (session?.user) {
+          console.log('🔐 Auth: User ID:', session.user.id);
+          console.log('🔐 Auth: Email:', session.user.email);
+        }
         
         // Atualizar estados imediatamente
         setSession(session);
         setUser(session?.user ?? null);
         
         if (event === 'SIGNED_OUT' || !session) {
+          console.log('🔐 Auth: Usuário desconectado, limpando dados');
           setProfile(null);
           setLoading(false);
           return;
@@ -104,8 +113,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         
         // Se há usuário, buscar perfil
         if (session?.user) {
+          console.log('🔐 Auth: Buscando perfil após mudança de estado...');
           fetchProfile(session.user.id).then(profileData => {
             if (isSubscribed && !isLoggingOut.current) {
+              console.log('🔐 Auth: Perfil carregado:', profileData ? 'sucesso' : 'falhou');
               setProfile(profileData);
               setLoading(false);
             }
@@ -118,37 +129,56 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     );
 
     // Verificar sessão existente na inicialização
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    console.log('🔐 Auth: Verificando sessão existente...');
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
       if (!isSubscribed || isLoggingOut.current) return;
+      
+      if (error) {
+        console.error('🔐 Auth: Erro ao buscar sessão:', error);
+        setLoading(false);
+        return;
+      }
+
+      console.log('🔐 Auth: Sessão inicial:', session ? 'encontrada' : 'não encontrada');
+      if (session?.user) {
+        console.log('🔐 Auth: User ID inicial:', session.user.id);
+      }
       
       setSession(session);
       setUser(session?.user ?? null);
       
       if (session?.user) {
+        console.log('🔐 Auth: Buscando perfil inicial...');
         fetchProfile(session.user.id).then(profileData => {
           if (isSubscribed && !isLoggingOut.current) {
+            console.log('🔐 Auth: Perfil inicial carregado:', profileData ? 'sucesso' : 'falhou');
             setProfile(profileData);
             setLoading(false);
           }
         });
       } else {
+        console.log('🔐 Auth: Sem sessão inicial, finalizando loading');
         setProfile(null);
         setLoading(false);
       }
     });
 
     return () => {
+      console.log('🔐 Auth: Limpando listeners de autenticação');
       isSubscribed = false;
       subscription.unsubscribe();
     };
   }, []);
 
   const signIn = async (emailOrUsername: string, password: string) => {
+    console.log('🔐 Auth: Tentativa de login com:', emailOrUsername.includes('@') ? 'email' : 'username');
+    
     try {
       let email = emailOrUsername;
       
       // Se não contém @, assume que é username e busca o email
       if (!emailOrUsername.includes('@')) {
+        console.log('🔐 Auth: Buscando email por username...');
         try {
           const { data: emailResult, error: emailError } = await supabase
             .rpc('get_email_by_username', { 
@@ -156,6 +186,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             });
             
           if (emailError || !emailResult) {
+            console.error('🔐 Auth: Username não encontrado:', emailError);
             toast({
               title: 'Erro no login',
               description: 'Nome de usuário não encontrado',
@@ -164,19 +195,23 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             return { error: new Error('Nome de usuário não encontrado') };
           }
           
+          console.log('🔐 Auth: Email encontrado para username');
           email = emailResult;
         } catch (profileSearchError) {
+          console.warn('🔐 Auth: Erro na busca por username, tentando como email:', profileSearchError);
           // Se falhar na busca por username, tentar usar como email mesmo
           email = emailOrUsername;
         }
       }
 
+      console.log('🔐 Auth: Fazendo login com email...');
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) {
+        console.error('🔐 Auth: Erro no login:', error.message);
         let errorMessage = 'Erro ao fazer login';
         if (error.message.includes('Invalid login credentials')) {
           errorMessage = 'Email/usuário ou senha incorretos';
@@ -193,6 +228,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         return { error };
       }
 
+      console.log('🔐 Auth: Login realizado com sucesso!');
       toast({
         title: 'Login realizado com sucesso!',
         description: 'Bem-vindo ao sistema de agendamentos.',
@@ -200,6 +236,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
       return { error: null };
     } catch (error) {
+      console.error('🔐 Auth: Erro inesperado no login:', error);
       toast({
         title: 'Erro',
         description: 'Erro inesperado ao fazer login',

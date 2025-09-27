@@ -100,6 +100,7 @@ export default function Auth() {
       return;
     }
     
+    console.log('🔐 Page: Iniciando processo de login...');
     setError(null);
     setIsLoading(true);
     
@@ -107,6 +108,7 @@ export default function Auth() {
       const { error } = await signIn(loginData.emailOrUsername, loginData.password);
       
       if (error) {
+        console.error('🔐 Page: Erro no login retornado:', error.message);
         // Se houve erro no login
         const errorMessage = error.message === 'Invalid credentials' 
           ? 'Email/usuário ou senha incorretos'
@@ -120,11 +122,13 @@ export default function Auth() {
         }
         // Não exibir toast aqui pois o useAuth já exibe
       } else {
+        console.log('🔐 Page: Login bem-sucedido, salvando credenciais se necessário');
         // Apenas se login foi bem-sucedido
         saveCredentials(loginData.emailOrUsername, loginData.password, rememberMeChecked);
         // Não exibir toast aqui pois o useAuth já exibe
       }
     } catch (error: any) {
+      console.error('🔐 Page: Erro inesperado no login:', error);
       // Erro inesperado (não deveria chegar aqui normalmente)
       const errorMessage = 'Erro inesperado ao fazer login. Tente novamente.';
       setError(errorMessage);
@@ -329,8 +333,14 @@ export default function Auth() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+          <div className="space-y-2">
+            <p className="text-muted-foreground">Verificando autenticação...</p>
+            <p className="text-xs text-muted-foreground/70">Aguarde um momento</p>
+          </div>
+        </div>
       </div>
     );
   }
