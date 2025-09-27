@@ -1,4 +1,4 @@
-import { Users, Calendar, Clock, AlertTriangle, TrendingUp, Activity, CheckCircle } from 'lucide-react';
+import { Users, Calendar, Clock, AlertTriangle, TrendingUp, Activity, CheckCircle, Stethoscope } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -41,6 +41,17 @@ export const StatsCards = ({ doctors, appointments }: StatsCardsProps) => {
   // Calculate occupation rate for today
   const activeDoctors = doctors.filter(d => d.ativo).length;
   const occupationRate = activeDoctors > 0 ? Math.round((activeDoctorsToday / activeDoctors) * 100) : 0;
+
+  // Calculate MAPA appointments by type
+  const mapa24hAppointments = validAppointments.filter(apt => 
+    apt.atendimentos?.nome === 'MAPA 24H'
+  ).length;
+  
+  const mapaMrpaAppointments = validAppointments.filter(apt => 
+    apt.atendimentos?.nome === 'MAPA MRPA'
+  ).length;
+  
+  const totalMapaAppointments = mapa24hAppointments + mapaMrpaAppointments;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mb-8">
@@ -112,19 +123,22 @@ export const StatsCards = ({ doctors, appointments }: StatsCardsProps) => {
         </CardContent>
       </Card>
 
-      {/* Occupation Rate */}
+      {/* MAPA Exams */}
       <Card>
         <CardContent className="p-4">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <Activity className="h-4 w-4 text-primary" />
-              <span className="text-xs font-medium">Ocupação Hoje</span>
+              <Stethoscope className="h-4 w-4 text-primary" />
+              <span className="text-xs font-medium">Exames MAPA</span>
             </div>
-            <div className="text-lg font-bold">{occupationRate}%</div>
-            <Progress value={occupationRate} className="h-2" />
-            <p className="text-xs text-muted-foreground">
-              {activeDoctorsToday}/{activeDoctors} médicos
-            </p>
+            <div className="text-lg font-bold">{totalMapaAppointments}</div>
+            {totalMapaAppointments > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">
+                  {mapa24hAppointments} MAPA 24H • {mapaMrpaAppointments} MRPA
+                </p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
