@@ -46,32 +46,22 @@ export const DoctorSearchField = ({
 
   const selectedDoctor = doctors.find(d => d.id === selectedDoctorId);
 
-  // Fechar dropdown quando clicar fora com cleanup melhorado
+  // Fechar dropdown quando clicar fora
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (!target) return;
-      
-      // Verificar se os elementos ainda existem no DOM
       if (
         dropdownRef.current && 
-        document.contains(dropdownRef.current) &&
-        !dropdownRef.current.contains(target) &&
+        !dropdownRef.current.contains(event.target as Node) &&
         inputRef.current &&
-        document.contains(inputRef.current) &&
-        !inputRef.current.contains(target)
+        !inputRef.current.contains(event.target as Node)
       ) {
         setIsOpen(false);
         setInputFocused(false);
       }
     };
 
-    // Usar passive listener para melhor performance
-    document.addEventListener('mousedown', handleClickOutside, { passive: true });
-    
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const handleDoctorSelect = (doctor: Doctor) => {

@@ -1,128 +1,79 @@
-// Service Worker para controle de cache melhorado
-const CACHE_NAME = 'inovaia-v1.2';
-const STATIC_ASSETS = [
+const CACHE_NAME = 'endogastro-v1.1';
+const urlsToCache = [
   '/',
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png'
 ];
 
-// Install event
+// Install event - cache resources
 self.addEventListener('install', (event) => {
-  console.log('Service Worker: Installing...');
+  console.log('Service Worker installing...');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
-        console.log('Service Worker: Caching static assets');
-        return cache.addAll(STATIC_ASSETS);
-      })
-      .then(() => {
-        console.log('Service Worker: Installed successfully');
-        return self.skipWaiting();
+        console.log('Caching app shell');
+        return cache.addAll(urlsToCache);
       })
       .catch((error) => {
-        console.error('Service Worker: Install failed:', error);
+        console.log('Cache install failed:', error);
       })
   );
+  // Force the waiting service worker to become the active service worker
+  self.skipWaiting();
 });
 
-// Activate event
+// Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
-  console.log('Service Worker: Activating...');
+  console.log('Service Worker activating...');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
-            console.log('Service Worker: Deleting old cache:', cacheName);
+            console.log('Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
-    }).then(() => {
-      console.log('Service Worker: Activated successfully');
-      return self.clients.claim();
     })
   );
+  // Ensure the new service worker takes control immediately
+  self.clients.claim();
 });
 
-// Fetch event - Cache first for static assets, network first for API calls
+// Fetch event - network first, then cache
 self.addEventListener('fetch', (event) => {
-  const request = event.request;
-  
-  // Skip non-GET requests
-  if (request.method !== 'GET') {
-    return;
-  }
-  
-  // Skip cross-origin requests
-  if (!request.url.startsWith(self.location.origin)) {
-    return;
-  }
-  
-  // Skip API calls - always use network
-  if (request.url.includes('/api/') || request.url.includes('supabase.co')) {
-    return;
-  }
-  
   event.respondWith(
-    caches.match(request)
+    fetch(event.request)
       .then((response) => {
-        // Return cached version if available
-        if (response) {
+        // Check if we received a valid response
+        if (!response || response.status !== 200 || response.type !== 'basic') {
           return response;
         }
-        
-        // Otherwise fetch from network
-        return fetch(request)
+
+        // Clone the response for caching
+        const responseToCache = response.clone();
+
+        caches.open(CACHE_NAME)
+          .then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
+
+        return response;
+      })
+      .catch(() => {
+        // If network fails, try to get from cache
+        return caches.match(event.request)
           .then((response) => {
-            // Don't cache non-successful responses
-            if (!response || response.status !== 200 || response.type !== 'basic') {
+            if (response) {
               return response;
             }
-            
-            // Clone the response
-            const responseToCache = response.clone();
-            
-            // Add to cache
-            caches.open(CACHE_NAME)
-              .then((cache) => {
-                cache.put(request, responseToCache);
-              });
-            
-            return response;
-          })
-          .catch((error) => {
-            console.error('Service Worker: Fetch failed:', error);
-            // Return cached version if available
-            return caches.match(request).then((cachedResponse) => {
-              if (cachedResponse) {
-                return cachedResponse;
-              }
-              // For navigation requests, return the index page
-              if (request.destination === 'document') {
-                return caches.match('/');
-              }
-              return new Response('Offline', { status: 503 });
-            });
+            // If not in cache and it's a navigation request, return the index page
+            if (event.request.destination === 'document') {
+              return caches.match('/');
+            }
           });
       })
   );
-});
-
-// Handle messages from the main thread for cache clearing
-self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'CLEAR_CACHE') {
-    console.log('Service Worker: Clearing cache on request');
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          return caches.delete(cacheName);
-        })
-      );
-    }).then(() => {
-      console.log('Service Worker: All caches cleared');
-      event.ports[0].postMessage({ success: true });
-    });
-  }
 });

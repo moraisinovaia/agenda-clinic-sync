@@ -312,8 +312,8 @@ export function SimpleSchedulingForm({
                 {/* Calendário */}
                 <div className="space-y-2">
                   <h4 className="font-medium">Selecione uma data para ver agendamentos:</h4>
-                <Calendar
-                    key="main-calendar"
+                  <Calendar
+                    key={`calendar-${selectedDoctor.id}`}
                     mode="single"
                     selected={selectedCalendarDate}
                     onSelect={(date) => {
@@ -371,7 +371,7 @@ export function SimpleSchedulingForm({
                         .sort((a, b) => a.hora_agendamento.localeCompare(b.hora_agendamento))
                         .map((appointment) => (
                           <div 
-                            key={`apt-${appointment.id}`} 
+                            key={appointment.id} 
                             className={`p-3 border rounded-lg space-y-2 ${
                               appointment.status === 'confirmado' 
                                 ? 'bg-green-50 border-green-200' 
