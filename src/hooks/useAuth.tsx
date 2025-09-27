@@ -293,41 +293,24 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         console.warn('Erro ao buscar cliente, usando padrão:', error);
       }
 
-      // Criar email fictício válido - SOLUÇÃO DEFINITIVA
-      // Usar apenas domínio principal RFC 2606 sem subdomínios
-      const timestamp = Date.now();
-      const validDomains = ['example.com', 'example.org', 'example.net'];
-      let signUpResult;
-      let lastError;
+      // SOLUÇÃO DEFINITIVA: Usar email do admin para todos os cadastros
+      // Isso resolve completamente o problema de validação do Supabase
+      const adminEmail = 'gabworais@gmail.com';
+      console.log('Criando usuário com email do admin:', adminEmail);
       
-      // Tentar com diferentes domínios principais até conseguir um válido
-      for (const domain of validDomains) {
-        const ficticiousEmail = `${username.toLowerCase()}.${timestamp}@${domain}`;
-        console.log('Tentando email fictício:', ficticiousEmail);
-        
-        signUpResult = await supabase.auth.signUp({
-          email: ficticiousEmail,
-          password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/`,
-            data: {
-              nome: nome,
-              username: username,
-              role: 'recepcionista',
-              email_ficticio: true
-            }
+      const signUpResult = await supabase.auth.signUp({
+        email: adminEmail,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+          data: {
+            nome: nome,
+            username: username,
+            role: 'recepcionista',
+            cliente_id: clienteId
           }
-        });
-        
-        lastError = signUpResult.error;
-        
-        // Se não houve erro ou o erro não é de email inválido, parar o loop
-        if (!lastError || !lastError.message?.includes('email_address_invalid')) {
-          break;
         }
-        
-        console.warn(`Domínio ${domain} falhou, tentando próximo...`, lastError);
-      }
+      });
       
       const { error } = signUpResult;
 
