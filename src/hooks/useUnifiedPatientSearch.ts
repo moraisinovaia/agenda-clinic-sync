@@ -24,6 +24,8 @@ export function useUnifiedPatientSearch() {
 
   // Função unificada de busca que evita chamadas duplicadas
   const performSearch = useCallback(async (query: string, type: 'birthDate' | 'name') => {
+    console.log('🔍 [PERFORM SEARCH] Tipo:', type, 'Query:', query);
+    
     // Cancelar busca anterior
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
@@ -31,11 +33,13 @@ export function useUnifiedPatientSearch() {
 
     // Validações básicas
     if (type === 'birthDate' && (!query || query.length !== 10)) {
+      console.log('🔍 [PERFORM SEARCH] Data inválida, limpando resultados');
       setState(prev => ({ ...prev, foundPatients: [], showResults: false }));
       return [];
     }
 
     if (type === 'name' && (!query?.trim() || query.trim().length < 3)) {
+      console.log('🔍 [PERFORM SEARCH] Nome inválido, limpando resultados');
       setState(prev => ({ ...prev, foundPatients: [], showResults: false }));
       return [];
     }
@@ -43,6 +47,7 @@ export function useUnifiedPatientSearch() {
     // Verificar cache
     const cacheKey = `${type}:${query}`;
     if (cacheRef.current[cacheKey]) {
+      console.log('🔍 [PERFORM SEARCH] Resultado encontrado no cache');
       const cachedResults = cacheRef.current[cacheKey];
       setState(prev => ({
         ...prev,
@@ -53,6 +58,7 @@ export function useUnifiedPatientSearch() {
       return cachedResults;
     }
 
+    console.log('🔍 [PERFORM SEARCH] Iniciando busca no banco de dados...');
     setState(prev => ({ ...prev, loading: true }));
 
     try {
@@ -152,22 +158,28 @@ export function useUnifiedPatientSearch() {
 
   // Buscar por data de nascimento com debounce
   const searchByBirthDate = useCallback((birthDate: string) => {
+    console.log('🔍 [UNIFIED SEARCH] Iniciando busca por data:', birthDate);
+    
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
 
     searchTimeoutRef.current = setTimeout(() => {
+      console.log('🔍 [UNIFIED SEARCH] Executando busca por data após debounce:', birthDate);
       performSearch(birthDate, 'birthDate');
     }, 300);
   }, [performSearch]);
 
   // Buscar por nome com debounce
   const searchByName = useCallback((name: string) => {
+    console.log('🔍 [UNIFIED SEARCH] Iniciando busca por nome:', name);
+    
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
 
     searchTimeoutRef.current = setTimeout(() => {
+      console.log('🔍 [UNIFIED SEARCH] Executando busca por nome após debounce:', name);
       performSearch(name, 'name');  
     }, 500);
   }, [performSearch]);
