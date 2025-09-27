@@ -279,32 +279,32 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                           .map((appointment) => (
                             <TableRow key={appointment.id} className="hover:bg-muted/20">
                               {/* Status/Hora */}
-                              <TableCell className="w-[120px]">
-                                <div className="flex flex-col gap-1">
+                              <TableCell className="w-[120px] py-1 px-2">
+                                <div className="flex items-center gap-2">
                                   <Badge 
-                                    className={`text-[10px] px-1 py-0 w-fit ${getStatusColor(appointment.status)}`}
+                                    className={`text-[9px] px-1 py-0 w-fit leading-none ${getStatusColor(appointment.status)}`}
                                   >
                                     {getStatusLabel(appointment.status)}
                                   </Badge>
-                                  <div className="font-mono text-[10px] font-medium">
+                                  <div className="font-mono text-[9px] font-medium leading-none">
                                     {appointment.hora_agendamento}
                                   </div>
                                 </div>
                               </TableCell>
                               
                               {/* Paciente/Idade */}
-                              <TableCell className="w-[180px]">
-                                <div className="space-y-1">
-                                  <div className="text-xs font-medium leading-tight">
+                              <TableCell className="w-[180px] py-1 px-2">
+                                <div className="leading-none">
+                                  <div className="text-[10px] font-medium leading-none">
                                     {appointment.pacientes?.nome_completo || 'Paciente não encontrado'}
                                     {appointment.pacientes?.data_nascimento && (
-                                      <span className="ml-2 text-[10px] text-muted-foreground">
-                                        ({differenceInYears(new Date(), new Date(appointment.pacientes.data_nascimento))} anos)
+                                      <span className="ml-1 text-[9px] text-muted-foreground">
+                                        ({differenceInYears(new Date(), new Date(appointment.pacientes.data_nascimento))}a)
                                       </span>
                                     )}
                                   </div>
                                   {appointment.observacoes && (
-                                    <div className="text-[10px] text-muted-foreground truncate">
+                                    <div className="text-[9px] text-muted-foreground truncate mt-0.5 leading-none">
                                       {appointment.observacoes}
                                     </div>
                                   )}
@@ -312,60 +312,60 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                               </TableCell>
                               
                               {/* Telefone */}
-                              <TableCell className="w-[120px] text-[10px]">
+                              <TableCell className="w-[120px] text-[9px] py-1 px-2 leading-none">
                                 {appointment.pacientes?.telefone || appointment.pacientes?.celular || 'N/A'}
                               </TableCell>
                               
                               {/* Convênio */}
-                              <TableCell className="w-[100px]">
-                                <Badge variant="outline" className="text-[10px] px-1 py-0">
+                              <TableCell className="w-[100px] py-1 px-2">
+                                <Badge variant="outline" className="text-[9px] px-1 py-0 leading-none">
                                   {appointment.pacientes?.convenio || 'N/A'}
                                 </Badge>
                               </TableCell>
                               
                               {/* Tipo */}
-                              <TableCell className="w-[120px] text-[10px] text-muted-foreground">
+                              <TableCell className="w-[120px] text-[9px] text-muted-foreground py-1 px-2 leading-none">
                                 {appointment.atendimentos?.nome || 'Consulta'}
                               </TableCell>
                               
                               {/* Registrado em */}
-                              <TableCell className="w-[120px] text-[10px]">
-                                <div className="space-y-1">
-                                  <div>
+                              <TableCell className="w-[120px] text-[9px] py-1 px-2 leading-none">
+                                <div className="leading-none">
+                                  <div className="leading-none">
                                     {formatInTimeZone(new Date(appointment.created_at), BRAZIL_TIMEZONE, 'dd/MM/yy HH:mm', { locale: ptBR })}
                                   </div>
-                                  <div className="text-muted-foreground">
-                                    por {appointment.criado_por_profile?.nome || appointment.criado_por || 'Sistema'}
+                                  <div className="text-muted-foreground text-[8px] leading-none mt-0.5">
+                                    {appointment.criado_por_profile?.nome?.split(' ')[0] || appointment.criado_por?.split(' ')[0] || 'Sistema'}
                                   </div>
                                 </div>
                               </TableCell>
                               
                               {/* Última alteração */}
-                              <TableCell className="w-[120px] text-[10px]">
-                                <div className="space-y-1">
-                                  <div>
+                              <TableCell className="w-[120px] text-[9px] py-1 px-2 leading-none">
+                                <div className="leading-none">
+                                  <div className="leading-none">
                                     {formatInTimeZone(new Date(appointment.updated_at), BRAZIL_TIMEZONE, 'dd/MM/yy HH:mm', { locale: ptBR })}
                                   </div>
                                   {appointment.alterado_por_profile?.nome && (
-                                    <div className="text-muted-foreground">
-                                      por {appointment.alterado_por_profile.nome}
+                                    <div className="text-muted-foreground text-[8px] leading-none mt-0.5">
+                                      {appointment.alterado_por_profile.nome.split(' ')[0]}
                                     </div>
                                   )}
                                 </div>
                               </TableCell>
                               
                               {/* Ações */}
-                              <TableCell className="w-[100px]">
-                                <div className="flex items-center justify-center gap-1">
+                              <TableCell className="w-[100px] py-1 px-2">
+                                <div className="flex items-center justify-center gap-0.5">
                                   {onEditAppointment && (
                                     <Button 
                                       variant="ghost" 
                                       size="sm"
                                       onClick={() => onEditAppointment(appointment)}
-                                      className="h-5 w-5 p-0"
+                                      className="h-4 w-4 p-0"
                                       title="Editar"
                                     >
-                                      <Edit className="h-2.5 w-2.5" />
+                                      <Edit className="h-2 w-2" />
                                     </Button>
                                   )}
                                   {appointment.status === 'agendado' && onConfirmAppointment && (
@@ -373,10 +373,10 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                                       variant="ghost" 
                                       size="sm"
                                       onClick={() => onConfirmAppointment(appointment.id)}
-                                      className="h-5 w-5 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                      className="h-4 w-4 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
                                       title="Confirmar"
                                     >
-                                      <CheckCircle className="h-2.5 w-2.5" />
+                                      <CheckCircle className="h-2 w-2" />
                                     </Button>
                                   )}
                                   {appointment.status === 'confirmado' && onUnconfirmAppointment && (
@@ -384,10 +384,10 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                                       variant="ghost" 
                                       size="sm"
                                       onClick={() => onUnconfirmAppointment(appointment.id)}
-                                      className="h-5 w-5 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                      className="h-4 w-4 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                                       title="Desconfirmar"
                                     >
-                                      <RotateCcw className="h-2.5 w-2.5" />
+                                      <RotateCcw className="h-2 w-2" />
                                     </Button>
                                   )}
                                   {appointment.status === 'agendado' && (
@@ -396,10 +396,10 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                                         <Button 
                                           variant="ghost" 
                                           size="sm"
-                                          className="h-5 w-5 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                          className="h-4 w-4 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
                                           title="Cancelar"
                                         >
-                                          <Trash2 className="h-2.5 w-2.5" />
+                                          <Trash2 className="h-2 w-2" />
                                         </Button>
                                       </AlertDialogTrigger>
                                       <AlertDialogContent>
