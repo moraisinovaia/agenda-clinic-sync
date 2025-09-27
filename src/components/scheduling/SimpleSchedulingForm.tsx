@@ -346,9 +346,23 @@ export function SimpleSchedulingForm({
 
                 {/* Lista de agendamentos do dia selecionado */}
                 <div className="space-y-3">
-                  <h4 className="font-medium">
-                    Agendamentos para {format(selectedCalendarDate, "dd 'de' MMMM", { locale: ptBR })}:
-                  </h4>
+                  {(() => {
+                    const validAppointments = selectedDateAppointments.filter(
+                      appointment => appointment.status !== 'cancelado' && appointment.status !== 'cancelado_bloqueio'
+                    );
+                    const count = validAppointments.length;
+                    
+                    return (
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-medium">
+                          Agendamentos para {format(selectedCalendarDate, "dd 'de' MMMM", { locale: ptBR })}:
+                        </h4>
+                        <Badge variant="secondary" className="text-xs">
+                          {count === 0 ? 'Nenhum agendamento' : `${count} ${count === 1 ? 'agendamento' : 'agendamentos'}`}
+                        </Badge>
+                      </div>
+                    );
+                  })()}
                   
                   <div className="space-y-2 max-h-[300px] overflow-y-auto">
                     {selectedDateAppointments.length > 0 ? (
