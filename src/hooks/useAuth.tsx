@@ -293,7 +293,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         console.warn('Erro ao buscar cliente, usando padrão:', error);
       }
 
-      const ficticiousEmail = `${username}@${clienteId}.inovaia.local`;
+      // Criar email fictício válido (usando .system em vez de .local)
+      const timestamp = Date.now();
+      const ficticiousEmail = `${username}.${clienteId}.${timestamp}@inovaia.system`;
+      
+      console.log('Email fictício gerado:', ficticiousEmail);
 
       const { error } = await supabase.auth.signUp({
         email: ficticiousEmail,
@@ -310,11 +314,17 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       });
 
       if (error) {
+        console.error('Erro no cadastro:', error);
         let errorMessage = 'Erro ao criar conta';
-        if (error.message.includes('User already registered')) {
-          errorMessage = 'Este email já está cadastrado. Você pode fazer login.';
-        } else if (error.message.includes('Password should be at least')) {
+        
+        if (error.message?.includes('email_address_invalid')) {
+          errorMessage = 'Erro interno de validação. Tente novamente ou contate o administrador.';
+        } else if (error.message?.includes('User already registered')) {
+          errorMessage = 'Este usuário já está cadastrado. Você pode fazer login.';
+        } else if (error.message?.includes('Password should be at least')) {
           errorMessage = 'A senha deve ter pelo menos 6 caracteres';
+        } else if (error.message) {
+          errorMessage = error.message;
         }
         
         toast({
