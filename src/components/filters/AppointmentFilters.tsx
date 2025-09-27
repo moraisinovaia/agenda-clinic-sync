@@ -147,6 +147,7 @@ export const AppointmentFilters = ({
                   selectedDoctorId={doctorFilter === 'all' ? undefined : doctorFilter}
                   onDoctorSelect={onDoctorFilterChange}
                   placeholder="Buscar médico por nome ou especialidade..."
+                  simpleMode={true}
                 />
               </div>
 

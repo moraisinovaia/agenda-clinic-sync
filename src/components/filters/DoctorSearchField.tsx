@@ -14,6 +14,7 @@ interface DoctorSearchFieldProps {
   onDoctorSelect: (doctorId: string) => void;
   placeholder?: string;
   className?: string;
+  simpleMode?: boolean;
 }
 
 export const DoctorSearchField = ({
@@ -23,6 +24,7 @@ export const DoctorSearchField = ({
   onDoctorSelect,
   placeholder = "Buscar médico por nome ou especialidade...",
   className = "",
+  simpleMode = false,
 }: DoctorSearchFieldProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
@@ -131,160 +133,206 @@ export const DoctorSearchField = ({
       {showDropdown && (
         <Card className="absolute top-full left-0 right-0 z-50 mt-1 max-h-96 overflow-hidden" ref={dropdownRef}>
           <CardContent className="p-0">
-            {/* Quick Filters */}
-            <div className="p-3 border-b bg-muted/30">
-              <div className="flex flex-wrap gap-2 mb-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowOnlyWithAppointments(!showOnlyWithAppointments)}
-                  className={showOnlyWithAppointments ? "bg-primary text-primary-foreground" : ""}
-                >
-                  <Calendar className="h-3 w-3 mr-1" />
-                  Com agendamentos hoje
-                </Button>
-              </div>
-              
-              {/* Specialty Filter */}
-              <div className="flex flex-wrap gap-1">
-                <Button
-                  variant={selectedSpecialty === 'all' ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setSelectedSpecialty('all')}
-                >
-                  Todas
-                </Button>
-                {specialties.slice(0, 3).map(specialty => (
-                  <Button
-                    key={specialty}
-                    variant={selectedSpecialty === specialty ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setSelectedSpecialty(specialty)}
-                  >
-                    {specialty}
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            {/* Quick Access - Doctors with today's appointments */}
-            {doctorsWithTodayAppointments.length > 0 && !searchTerm && (
-              <div className="p-3 border-b">
-                <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
-                  <Calendar className="h-3 w-3" />
-                  Com agendamentos hoje
-                </div>
-                <div className="space-y-1">
-                  {doctorsWithTodayAppointments.slice(0, 3).map(doctor => (
-                    <Button
-                      key={doctor.id}
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDoctorSelect(doctor)}
-                      className="w-full justify-start h-auto p-2"
-                    >
-                      <div className="flex flex-col items-start">
-                        <div className="flex items-center gap-2">
-                          <span>Dr(a). {doctor.nome}</span>
-                          <Badge variant="secondary" className="text-xs">
-                            {doctor.todayAppointments} hoje
-                          </Badge>
-                        </div>
-                        <span className="text-xs text-muted-foreground">{doctor.especialidade}</span>
+            {simpleMode ? (
+              /* Simple Mode - Just doctors list */
+              <div className="max-h-64 overflow-y-auto">
+                {filteredDoctors.length > 0 ? (
+                  <div className="p-1">
+                    {searchTerm && (
+                      <div className="px-2 py-1 text-xs text-muted-foreground">
+                        {filteredCount} médico(s) encontrado(s)
                       </div>
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Most Used Doctors */}
-            {mostUsedDoctors.length > 0 && !searchTerm && (
-              <div className="p-3 border-b">
-                <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  Mais utilizados
-                </div>
-                <div className="space-y-1">
-                  {mostUsedDoctors.slice(0, 3).map(doctor => (
-                    <Button
-                      key={doctor.id}
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDoctorSelect(doctor)}
-                      className="w-full justify-start h-auto p-2"
-                    >
-                      <div className="flex flex-col items-start">
-                        <div className="flex items-center gap-2">
-                          <span>Dr(a). {doctor.nome}</span>
-                          {doctor.recentlyUsed && (
-                            <Badge variant="outline" className="text-xs">
-                              Recente
-                            </Badge>
-                          )}
-                        </div>
-                        <span className="text-xs text-muted-foreground">{doctor.especialidade}</span>
-                      </div>
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Search Results */}
-            <div className="max-h-64 overflow-y-auto">
-              {filteredDoctors.length > 0 ? (
-                <div className="p-1">
-                  {searchTerm && (
-                    <div className="px-2 py-1 text-xs text-muted-foreground">
-                      {filteredCount} médico(s) encontrado(s)
-                    </div>
-                  )}
-                  {filteredDoctors.map(doctor => (
-                    <Button
-                      key={doctor.id}
-                      variant="ghost"
-                      onClick={() => handleDoctorSelect(doctor)}
-                      className="w-full justify-start h-auto p-2 hover:bg-accent"
-                    >
-                      <div className="flex flex-col items-start w-full">
-                        <div className="flex items-center justify-between w-full">
+                    )}
+                    {filteredDoctors.map(doctor => (
+                      <Button
+                        key={doctor.id}
+                        variant="ghost"
+                        onClick={() => handleDoctorSelect(doctor)}
+                        className="w-full justify-start h-auto p-2 hover:bg-accent"
+                      >
+                        <div className="flex flex-col items-start w-full">
                           <span className="font-medium">Dr(a). {doctor.nome}</span>
-                          <div className="flex gap-1">
-                            {doctor.todayAppointments > 0 && (
+                          <span className="text-sm text-muted-foreground">{doctor.especialidade}</span>
+                        </div>
+                      </Button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-4 text-center text-muted-foreground">
+                    <Stethoscope className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">Nenhum médico encontrado</p>
+                    {searchTerm && (
+                      <Button
+                        variant="link"
+                        size="sm"
+                        onClick={() => setSearchTerm('')}
+                        className="mt-1"
+                      >
+                        Limpar busca
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Complex Mode - All filters and sections */
+              <>
+                {/* Quick Filters */}
+                <div className="p-3 border-b bg-muted/30">
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowOnlyWithAppointments(!showOnlyWithAppointments)}
+                      className={showOnlyWithAppointments ? "bg-primary text-primary-foreground" : ""}
+                    >
+                      <Calendar className="h-3 w-3 mr-1" />
+                      Com agendamentos hoje
+                    </Button>
+                  </div>
+                  
+                  {/* Specialty Filter */}
+                  <div className="flex flex-wrap gap-1">
+                    <Button
+                      variant={selectedSpecialty === 'all' ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setSelectedSpecialty('all')}
+                    >
+                      Todas
+                    </Button>
+                    {specialties.slice(0, 3).map(specialty => (
+                      <Button
+                        key={specialty}
+                        variant={selectedSpecialty === specialty ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSelectedSpecialty(specialty)}
+                      >
+                        {specialty}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Quick Access - Doctors with today's appointments */}
+                {doctorsWithTodayAppointments.length > 0 && !searchTerm && (
+                  <div className="p-3 border-b">
+                    <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
+                      <Calendar className="h-3 w-3" />
+                      Com agendamentos hoje
+                    </div>
+                    <div className="space-y-1">
+                      {doctorsWithTodayAppointments.slice(0, 3).map(doctor => (
+                        <Button
+                          key={doctor.id}
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDoctorSelect(doctor)}
+                          className="w-full justify-start h-auto p-2"
+                        >
+                          <div className="flex flex-col items-start">
+                            <div className="flex items-center gap-2">
+                              <span>Dr(a). {doctor.nome}</span>
                               <Badge variant="secondary" className="text-xs">
                                 {doctor.todayAppointments} hoje
                               </Badge>
-                            )}
-                            {doctor.recentlyUsed && (
-                              <Badge variant="outline" className="text-xs">
-                                Recente
-                              </Badge>
-                            )}
+                            </div>
+                            <span className="text-xs text-muted-foreground">{doctor.especialidade}</span>
                           </div>
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Most Used Doctors */}
+                {mostUsedDoctors.length > 0 && !searchTerm && (
+                  <div className="p-3 border-b">
+                    <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      Mais utilizados
+                    </div>
+                    <div className="space-y-1">
+                      {mostUsedDoctors.slice(0, 3).map(doctor => (
+                        <Button
+                          key={doctor.id}
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDoctorSelect(doctor)}
+                          className="w-full justify-start h-auto p-2"
+                        >
+                          <div className="flex flex-col items-start">
+                            <div className="flex items-center gap-2">
+                              <span>Dr(a). {doctor.nome}</span>
+                              {doctor.recentlyUsed && (
+                                <Badge variant="outline" className="text-xs">
+                                  Recente
+                                </Badge>
+                              )}
+                            </div>
+                            <span className="text-xs text-muted-foreground">{doctor.especialidade}</span>
+                          </div>
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Search Results */}
+                <div className="max-h-64 overflow-y-auto">
+                  {filteredDoctors.length > 0 ? (
+                    <div className="p-1">
+                      {searchTerm && (
+                        <div className="px-2 py-1 text-xs text-muted-foreground">
+                          {filteredCount} médico(s) encontrado(s)
                         </div>
-                        <span className="text-sm text-muted-foreground">{doctor.especialidade}</span>
-                      </div>
-                    </Button>
-                  ))}
-                </div>
-              ) : (
-                <div className="p-4 text-center text-muted-foreground">
-                  <Stethoscope className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">Nenhum médico encontrado</p>
-                  {searchTerm && (
-                    <Button
-                      variant="link"
-                      size="sm"
-                      onClick={() => setSearchTerm('')}
-                      className="mt-1"
-                    >
-                      Limpar busca
-                    </Button>
+                      )}
+                      {filteredDoctors.map(doctor => (
+                        <Button
+                          key={doctor.id}
+                          variant="ghost"
+                          onClick={() => handleDoctorSelect(doctor)}
+                          className="w-full justify-start h-auto p-2 hover:bg-accent"
+                        >
+                          <div className="flex flex-col items-start w-full">
+                            <div className="flex items-center justify-between w-full">
+                              <span className="font-medium">Dr(a). {doctor.nome}</span>
+                              <div className="flex gap-1">
+                                {doctor.todayAppointments > 0 && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    {doctor.todayAppointments} hoje
+                                  </Badge>
+                                )}
+                                {doctor.recentlyUsed && (
+                                  <Badge variant="outline" className="text-xs">
+                                    Recente
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                            <span className="text-sm text-muted-foreground">{doctor.especialidade}</span>
+                          </div>
+                        </Button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-4 text-center text-muted-foreground">
+                      <Stethoscope className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">Nenhum médico encontrado</p>
+                      {searchTerm && (
+                        <Button
+                          variant="link"
+                          size="sm"
+                          onClick={() => setSearchTerm('')}
+                          className="mt-1"
+                        >
+                          Limpar busca
+                        </Button>
+                      )}
+                    </div>
                   )}
                 </div>
-              )}
-            </div>
+              </>
+            )}
           </CardContent>
         </Card>
       )}
