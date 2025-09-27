@@ -482,9 +482,9 @@ const Index = () => {
               showBack={true}
               showHome={true}
             />
-            <SchedulingErrorBoundary key={`scheduling-form-${selectedDoctor?.id || 'new'}`}>
+            <SchedulingErrorBoundary key="scheduling-form-boundary">
               <SimpleSchedulingForm
-                key={`simple-form-${selectedDoctor?.id || 'new'}-${editingAppointment?.id || 'new'}`}
+                key="simple-scheduling-form"
                 doctors={doctors}
                 atendimentos={atendimentos}
                 appointments={appointments}
@@ -560,9 +560,9 @@ const Index = () => {
               showBack={true}
               showHome={true}
             />
-            <SchedulingErrorBoundary key={`scheduling-form-edit-${editingAppointment?.id}`}>
+            <SchedulingErrorBoundary key="edit-form-boundary">
               <SimpleSchedulingForm
-                key={`edit-form-${editingAppointment?.id}`}
+                key="edit-scheduling-form"
                 doctors={doctors}
                 atendimentos={atendimentos}
                 appointments={appointments}
