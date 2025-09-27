@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAdvancedDoctorSearch } from '@/hooks/useAdvancedDoctorSearch';
+import { useDebounce } from '@/hooks/useDebounce';
 import { Doctor, AppointmentWithRelations } from '@/types/scheduling';
 
 interface DoctorSearchFieldProps {
@@ -28,23 +29,40 @@ export const DoctorSearchField = ({
 }: DoctorSearchFieldProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+
+  // Use advanced search only when not in simple mode
+  const advancedSearch = useAdvancedDoctorSearch(doctors, appointments);
+  
+  // Simple doctor filter for simple mode
+  const simpleFilteredDoctors = doctors
+    .filter(doctor => doctor.ativo)
+    .filter(doctor => 
+      !debouncedSearchTerm || 
+      doctor.nome.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+      doctor.especialidade.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+    )
+    .sort((a, b) => a.nome.localeCompare(b.nome));
+
+  // Choose which filter to use based on mode
+  const filteredDoctors = simpleMode ? simpleFilteredDoctors : advancedSearch.filteredDoctors;
+  const filteredCount = simpleMode ? simpleFilteredDoctors.length : advancedSearch.filteredCount;
+  
+  // Advanced search features (only used in complex mode)
   const {
-    searchTerm,
-    setSearchTerm,
     selectedSpecialty,
     setSelectedSpecialty,
     showOnlyWithAppointments,
     setShowOnlyWithAppointments,
-    filteredDoctors,
     mostUsedDoctors,
     doctorsWithTodayAppointments,
     specialties,
     clearSearch,
-    filteredCount,
-  } = useAdvancedDoctorSearch(doctors, appointments);
+  } = advancedSearch;
 
   const selectedDoctor = doctors.find(d => d.id === selectedDoctorId);
 
@@ -70,12 +88,20 @@ export const DoctorSearchField = ({
     onDoctorSelect(doctor.id);
     setIsOpen(false);
     setInputFocused(false);
-    clearSearch();
+    if (!simpleMode) {
+      clearSearch();
+    } else {
+      setSearchTerm('');
+    }
   };
 
   const handleClearSelection = () => {
     onDoctorSelect('all');
-    clearSearch();
+    if (!simpleMode) {
+      clearSearch();
+    } else {
+      setSearchTerm('');
+    }
     inputRef.current?.focus();
   };
 
@@ -286,7 +312,7 @@ export const DoctorSearchField = ({
                           {filteredCount} médico(s) encontrado(s)
                         </div>
                       )}
-                      {filteredDoctors.map(doctor => (
+                       {filteredDoctors.map(doctor => (
                         <Button
                           key={doctor.id}
                           variant="ghost"
@@ -296,18 +322,20 @@ export const DoctorSearchField = ({
                           <div className="flex flex-col items-start w-full">
                             <div className="flex items-center justify-between w-full">
                               <span className="font-medium">Dr(a). {doctor.nome}</span>
-                              <div className="flex gap-1">
-                                {doctor.todayAppointments > 0 && (
-                                  <Badge variant="secondary" className="text-xs">
-                                    {doctor.todayAppointments} hoje
-                                  </Badge>
-                                )}
-                                {doctor.recentlyUsed && (
-                                  <Badge variant="outline" className="text-xs">
-                                    Recente
-                                  </Badge>
-                                )}
-                              </div>
+                              {!simpleMode && (
+                                <div className="flex gap-1">
+                                  {(doctor as any).todayAppointments > 0 && (
+                                    <Badge variant="secondary" className="text-xs">
+                                      {(doctor as any).todayAppointments} hoje
+                                    </Badge>
+                                  )}
+                                  {(doctor as any).recentlyUsed && (
+                                    <Badge variant="outline" className="text-xs">
+                                      Recente
+                                    </Badge>
+                                  )}
+                                </div>
+                              )}
                             </div>
                             <span className="text-sm text-muted-foreground">{doctor.especialidade}</span>
                           </div>
@@ -322,7 +350,7 @@ export const DoctorSearchField = ({
                         <Button
                           variant="link"
                           size="sm"
-                          onClick={() => setSearchTerm('')}
+                          onClick={() => simpleMode ? setSearchTerm('') : clearSearch()}
                           className="mt-1"
                         >
                           Limpar busca
