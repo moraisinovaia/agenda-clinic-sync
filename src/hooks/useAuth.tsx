@@ -23,7 +23,7 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   signIn: (emailOrUsername: string, password: string) => Promise<{ error: any }>;
-  signUp: (email: string, password: string, nome: string, username: string) => Promise<{ error: any }>;
+  signUp: (password: string, nome: string, username: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
 }
 
@@ -246,7 +246,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
-  const signUp = async (email: string, password: string, nome: string, username: string) => {
+  const signUp = async (password: string, nome: string, username: string) => {
     try {
       // Verificar se o username já existe
       try {
@@ -269,15 +269,42 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         console.warn('Erro ao verificar username, continuando:', usernameCheckError);
       }
 
+      // Gerar email fictício baseado no username e cliente
+      let clienteId = 'ipado'; // padrão
+      try {
+        const { data: userProfile } = await supabase
+          .from('profiles')
+          .select('cliente_id')
+          .eq('user_id', user?.id)
+          .maybeSingle();
+        
+        if (userProfile?.cliente_id) {
+          const { data: cliente } = await supabase
+            .from('clientes')
+            .select('nome')
+            .eq('id', userProfile.cliente_id)
+            .single();
+          
+          if (cliente?.nome) {
+            clienteId = cliente.nome.toLowerCase().replace(/\s+/g, '');
+          }
+        }
+      } catch (error) {
+        console.warn('Erro ao buscar cliente, usando padrão:', error);
+      }
+
+      const ficticiousEmail = `${username}@${clienteId}.inovaia.local`;
+
       const { error } = await supabase.auth.signUp({
-        email,
+        email: ficticiousEmail,
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/`,
           data: {
             nome: nome,
             username: username,
-            role: 'recepcionista'
+            role: 'recepcionista',
+            email_ficticio: true
           }
         }
       });

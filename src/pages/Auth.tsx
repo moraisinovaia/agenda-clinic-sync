@@ -38,7 +38,6 @@ export default function Auth() {
   const [signupData, setSignupData] = useState({
     nome: '',
     username: '',
-    email: '',
     password: '',
     confirmPassword: ''
   });
@@ -140,7 +139,7 @@ export default function Auth() {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!signupData.nome || !signupData.username || !signupData.email || !signupData.password) {
+    if (!signupData.nome || !signupData.username || !signupData.password) {
       setError('Por favor, preencha todos os campos obrigatórios');
       return;
     }
@@ -159,7 +158,7 @@ export default function Auth() {
     setIsLoading(true);
     
     try {
-      const { error } = await signUp(signupData.email, signupData.password, signupData.nome, signupData.username);
+      const { error } = await signUp(signupData.password, signupData.nome, signupData.username);
       
       if (error) {
         // Se houve erro no cadastro
@@ -175,7 +174,6 @@ export default function Auth() {
         setSignupData({
           nome: '',
           username: '',
-          email: '',
           password: '',
           confirmPassword: ''
         });
@@ -627,26 +625,7 @@ export default function Auth() {
                     />
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Este será seu nome para login no sistema
-                  </p>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="signup-email" className="text-sm font-medium">Email</Label>
-                  <div className="relative group">
-                    <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
-                    <Input
-                      id="signup-email"
-                      type="email"
-                      placeholder="seu@email.com"
-                      className="pl-10 auth-input"
-                      value={signupData.email}
-                      onChange={(e) => setSignupData(prev => ({ ...prev, email: e.target.value }))}
-                      required
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Sua conta será enviada para aprovação
+                    Sistema automatizado - não requer email para cadastro
                   </p>
                 </div>
                 
