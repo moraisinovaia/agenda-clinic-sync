@@ -364,7 +364,7 @@ export function SimpleSchedulingForm({
                     );
                   })()}
                   
-                  <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                  <div className="space-y-1 max-h-[300px] overflow-y-auto">
                     {selectedDateAppointments.length > 0 ? (
                       selectedDateAppointments
                         .filter(appointment => appointment.status !== 'cancelado' && appointment.status !== 'cancelado_bloqueio' && appointment.status !== 'excluido') // Esconder cancelados e excluídos
@@ -372,7 +372,7 @@ export function SimpleSchedulingForm({
                         .map((appointment) => (
                           <div 
                             key={appointment.id} 
-                            className={`p-3 border rounded-lg space-y-2 ${
+                            className={`p-2 border rounded-lg space-y-1 ${
                               appointment.status === 'confirmado' 
                                 ? 'bg-green-50 border-green-200' 
                                 : 'bg-background'

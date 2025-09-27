@@ -275,7 +275,7 @@ export function SchedulingForm({
                     Agendamentos para {format(selectedCalendarDate, "dd 'de' MMMM", { locale: ptBR })}:
                   </h4>
                   
-                  <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                  <div className="space-y-1 max-h-[300px] overflow-y-auto">
                     {selectedDateAppointments.length > 0 ? (
                       selectedDateAppointments
                         .filter(appointment => appointment.status !== 'cancelado' && appointment.status !== 'cancelado_bloqueio' && appointment.status !== 'excluido') // Esconder cancelados e excluídos
@@ -283,7 +283,7 @@ export function SchedulingForm({
                         .map((appointment) => (
                           <div 
                             key={appointment.id} 
-                            className={`p-3 border rounded-lg space-y-2 hover-lift animate-slide-in shadow-card-enhanced transition-all duration-200 ${
+                            className={`p-2 border rounded-lg space-y-1 hover-lift animate-slide-in shadow-card-enhanced transition-all duration-200 ${
                               appointment.status === 'confirmado' 
                                 ? 'bg-gradient-success border-success' 
                                 : 'bg-background hover:bg-muted/50'
