@@ -78,7 +78,8 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
     const filtered = appointments.filter(
       appointment => 
         appointment.medico_id === doctor.id && 
-        appointment.data_agendamento === dateStr
+        appointment.data_agendamento === dateStr &&
+        appointment.status !== 'excluido' // Excluir agendamentos excluídos
     );
     
     return filtered;

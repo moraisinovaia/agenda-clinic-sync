@@ -348,7 +348,7 @@ export function SimpleSchedulingForm({
                 <div className="space-y-3">
                   {(() => {
                     const validAppointments = selectedDateAppointments.filter(
-                      appointment => appointment.status !== 'cancelado' && appointment.status !== 'cancelado_bloqueio'
+                      appointment => appointment.status !== 'cancelado' && appointment.status !== 'cancelado_bloqueio' && appointment.status !== 'excluido'
                     );
                     const count = validAppointments.length;
                     
@@ -367,7 +367,7 @@ export function SimpleSchedulingForm({
                   <div className="space-y-2 max-h-[300px] overflow-y-auto">
                     {selectedDateAppointments.length > 0 ? (
                       selectedDateAppointments
-                        .filter(appointment => appointment.status !== 'cancelado' && appointment.status !== 'cancelado_bloqueio') // Esconder cancelados
+                        .filter(appointment => appointment.status !== 'cancelado' && appointment.status !== 'cancelado_bloqueio' && appointment.status !== 'excluido') // Esconder cancelados e excluídos
                         .sort((a, b) => a.hora_agendamento.localeCompare(b.hora_agendamento))
                         .map((appointment) => (
                           <div 
