@@ -30,6 +30,9 @@ export type Database = {
           criado_por: string
           criado_por_user_id: string | null
           data_agendamento: string
+          excluido_em: string | null
+          excluido_por: string | null
+          excluido_por_user_id: string | null
           hora_agendamento: string
           id: string
           medico_id: string
@@ -53,6 +56,9 @@ export type Database = {
           criado_por?: string
           criado_por_user_id?: string | null
           data_agendamento: string
+          excluido_em?: string | null
+          excluido_por?: string | null
+          excluido_por_user_id?: string | null
           hora_agendamento: string
           id?: string
           medico_id: string
@@ -76,6 +82,9 @@ export type Database = {
           criado_por?: string
           criado_por_user_id?: string | null
           data_agendamento?: string
+          excluido_em?: string | null
+          excluido_por?: string | null
+          excluido_por_user_id?: string | null
           hora_agendamento?: string
           id?: string
           medico_id?: string
@@ -1453,6 +1462,14 @@ export type Database = {
       }
       enviar_whatsapp_via_invoke: {
         Args: { p_agendamento_id: string }
+        Returns: Json
+      }
+      excluir_agendamento_soft: {
+        Args: {
+          p_agendamento_id: string
+          p_excluido_por: string
+          p_excluido_por_user_id?: string
+        }
         Returns: Json
       }
       excluir_usuario: {
