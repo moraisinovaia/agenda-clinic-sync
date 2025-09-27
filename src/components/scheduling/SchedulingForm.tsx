@@ -275,7 +275,7 @@ export function SchedulingForm({
                     Agendamentos para {format(selectedCalendarDate, "dd 'de' MMMM", { locale: ptBR })}:
                   </h4>
                   
-                  <div className="space-y-1 max-h-[300px] overflow-y-auto">
+                  <div className="space-y-0.5 max-h-[300px] overflow-y-auto">
                     {selectedDateAppointments.length > 0 ? (
                       selectedDateAppointments
                         .filter(appointment => appointment.status !== 'cancelado' && appointment.status !== 'cancelado_bloqueio' && appointment.status !== 'excluido') // Esconder cancelados e excluídos
@@ -283,44 +283,36 @@ export function SchedulingForm({
                         .map((appointment) => (
                           <div 
                             key={appointment.id} 
-                            className={`p-2 border rounded-lg space-y-1 hover-lift animate-slide-in shadow-card-enhanced transition-all duration-200 ${
+                            className={`py-1 px-2 border rounded flex items-center justify-between gap-2 hover-lift animate-slide-in shadow-card-enhanced transition-all duration-200 ${
                               appointment.status === 'confirmado' 
                                 ? 'bg-gradient-success border-success' 
                                 : 'bg-background hover:bg-muted/50'
                             }`}
                           >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <Clock className="h-4 w-4 text-primary" />
-                                <span className="font-medium">
-                                  {appointment.hora_agendamento}
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <Clock className="h-3 w-3 text-primary flex-shrink-0" />
+                              <span className="text-sm font-medium flex-shrink-0">
+                                {appointment.hora_agendamento}
+                              </span>
+                              <span className="text-sm font-medium text-foreground truncate">
+                                {appointment.pacientes?.nome_completo || 'Paciente agendado'}
+                              </span>
+                              {appointment.pacientes?.convenio && (
+                                <span className="text-xs text-muted-foreground truncate">
+                                  - {appointment.pacientes.convenio}
                                 </span>
-                              </div>
-                              <Badge 
-                                variant="secondary" 
-                                className={`text-xs ${
-                                  appointment.status === 'confirmado'
-                                    ? 'bg-green-100 text-green-800 border-green-200'
-                                    : getStatusColor(appointment.status)
-                                }`}
-                              >
-                                {appointment.status === 'confirmado' ? 'confirmado' : appointment.status}
-                              </Badge>
+                              )}
                             </div>
-                            
-                            <div className="text-sm text-muted-foreground flex items-center gap-2">
-                              <User className="h-4 w-4" />
-                              <div className="flex flex-col">
-                                <span className="font-medium text-foreground">
-                                  {appointment.pacientes?.nome_completo || 'Paciente agendado'}
-                                </span>
-                                {appointment.pacientes?.convenio && (
-                                  <span className="text-xs">
-                                    {appointment.pacientes.convenio}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
+                            <Badge 
+                              variant="secondary" 
+                              className={`text-xs flex-shrink-0 ${
+                                appointment.status === 'confirmado'
+                                  ? 'bg-green-100 text-green-800 border-green-200'
+                                  : getStatusColor(appointment.status)
+                              }`}
+                            >
+                              {appointment.status === 'confirmado' ? 'confirmado' : appointment.status}
+                            </Badge>
                           </div>
                         ))
                     ) : (
