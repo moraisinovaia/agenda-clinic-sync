@@ -293,9 +293,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         console.warn('Erro ao buscar cliente, usando padrão:', error);
       }
 
-      // Criar email fictício válido com TLDs RFC-compliant
+      // Criar email fictício válido com domínios RFC 2606 oficialmente reservados
       const timestamp = Date.now();
-      const validTLDs = ['local', 'test', 'localhost'];
+      const validTLDs = ['example.com', 'example.org', 'example.net'];
       let signUpResult;
       let lastError;
       
