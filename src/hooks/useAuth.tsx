@@ -293,25 +293,42 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         console.warn('Erro ao buscar cliente, usando padrão:', error);
       }
 
-      // Criar email fictício válido (usando .system em vez de .local)
+      // Criar email fictício válido com TLDs RFC-compliant
       const timestamp = Date.now();
-      const ficticiousEmail = `${username}.${clienteId}.${timestamp}@inovaia.system`;
+      const validTLDs = ['local', 'test', 'localhost'];
+      let signUpResult;
+      let lastError;
       
-      console.log('Email fictício gerado:', ficticiousEmail);
-
-      const { error } = await supabase.auth.signUp({
-        email: ficticiousEmail,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/`,
-          data: {
-            nome: nome,
-            username: username,
-            role: 'recepcionista',
-            email_ficticio: true
+      // Tentar com diferentes TLDs até conseguir um válido
+      for (const tld of validTLDs) {
+        const ficticiousEmail = `${username}.${clienteId}.${timestamp}@inovaia.${tld}`;
+        console.log('Tentando email fictício:', ficticiousEmail);
+        
+        signUpResult = await supabase.auth.signUp({
+          email: ficticiousEmail,
+          password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/`,
+            data: {
+              nome: nome,
+              username: username,
+              role: 'recepcionista',
+              email_ficticio: true
+            }
           }
+        });
+        
+        lastError = signUpResult.error;
+        
+        // Se não houve erro ou o erro não é de email inválido, parar o loop
+        if (!lastError || !lastError.message?.includes('email_address_invalid')) {
+          break;
         }
-      });
+        
+        console.warn(`TLD ${tld} falhou, tentando próximo...`, lastError);
+      }
+      
+      const { error } = signUpResult;
 
       if (error) {
         console.error('Erro no cadastro:', error);
