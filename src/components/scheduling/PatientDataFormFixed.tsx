@@ -176,16 +176,35 @@ export function PatientDataFormFixed({
     hideResults();
   };
 
-  // Função para preencher com último paciente (F12)
+  // Função para preencher com último paciente (F12) - melhorada com logs e tratamento
   const fillLastPatientData = async () => {
+    console.log('🎯 F12: Iniciando preenchimento do último paciente');
+    
+    if (loadingLastPatient) {
+      console.log('⚠️ F12: Busca já em andamento, aguardando...');
+      return;
+    }
+    
     try {
       const lastPatient = await fetchLastScheduledPatient();
-      if (lastPatient) {
-        selectPatient(lastPatient);
-        toast.success(`Dados do paciente ${lastPatient.nome_completo} preenchidos`);
+      
+      if (!lastPatient) {
+        console.log('⚠️ F12: Nenhum paciente anterior encontrado');
+        toast.info('Nenhum paciente anterior encontrado');
+        return;
       }
+
+      console.log('✅ F12: Preenchendo dados do paciente:', lastPatient.nome_completo);
+      
+      // Preencher formulário com dados do último paciente
+      selectPatient(lastPatient);
+      toast.success(`✅ Dados do paciente ${lastPatient.nome_completo} preenchidos via F12`);
+      
+      console.log('✅ F12: Formulário preenchido com sucesso');
+      
     } catch (error) {
-      console.error('Erro ao preencher último paciente:', error);
+      console.error('❌ F12: Erro ao preencher último paciente:', error);
+      toast.error('Erro ao carregar dados do último paciente');
     }
   };
 

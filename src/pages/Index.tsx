@@ -115,37 +115,55 @@ const Index = () => {
     {
       key: 'n',
       ctrlKey: true,
-      action: () => setViewMode('new-appointment'),
+      action: () => {
+        console.log('🎯 Atalho Ctrl+N: Mudando para novo agendamento');
+        setViewMode('new-appointment');
+      },
       description: 'Ctrl+N - Novo agendamento'
     },
     {
       key: 'm',
       ctrlKey: true,
-      action: () => setViewMode('multiple-appointment'),
+      action: () => {
+        console.log('🎯 Atalho Ctrl+M: Mudando para agendamento múltiplo');
+        // Resetar estado do modal antes de mudar viewMode
+        setMultipleSchedulingOpen(false);
+        setViewMode('multiple-appointment');
+      },
       description: 'Ctrl+M - Agendamento múltiplo'
     },
     {
       key: 'l',
       ctrlKey: true,
-      action: () => setViewMode('appointments-list'),
+      action: () => {
+        console.log('🎯 Atalho Ctrl+L: Mudando para lista de agendamentos');
+        setViewMode('appointments-list');
+      },
       description: 'Ctrl+L - Lista de agendamentos'
     },
     {
       key: 'd',
       ctrlKey: true,
-      action: () => setViewMode('doctors'),
+      action: () => {
+        console.log('🎯 Atalho Ctrl+D: Mudando para dashboard/médicos');
+        setViewMode('doctors');
+      },
       description: 'Ctrl+D - Dashboard/Médicos'
     },
     {
       key: 'f',
       ctrlKey: true,
       shiftKey: true,
-      action: () => setViewMode('fila-espera'),
+      action: () => {
+        console.log('🎯 Atalho Ctrl+Shift+F: Mudando para fila de espera');
+        setViewMode('fila-espera');
+      },
       description: 'Ctrl+Shift+F - Fila de espera'
     },
     {
       key: 'Escape',
       action: () => {
+        console.log('🎯 Atalho Escape: Voltando...');
         if (viewMode !== 'doctors') {
           goBack();
         }
@@ -155,8 +173,20 @@ const Index = () => {
     {
       key: 'F12',
       action: () => {
-        if ((viewMode === 'new-appointment' || viewMode === 'edit-appointment') && fillLastPatientRef.current) {
-          fillLastPatientRef.current();
+        console.log('🎯 Atalho F12: Tentando preencher último paciente...');
+        if ((viewMode === 'new-appointment' || viewMode === 'edit-appointment')) {
+          if (fillLastPatientRef.current) {
+            console.log('✅ Executando função F12');
+            try {
+              fillLastPatientRef.current();
+            } catch (error) {
+              console.error('❌ Erro ao executar F12:', error);
+            }
+          } else {
+            console.log('⚠️ Função F12 não está disponível (ref não definida)');
+          }
+        } else {
+          console.log('⚠️ F12 disponível apenas nas telas de agendamento');
         }
       },
       description: 'F12 - Preencher último paciente agendado'
@@ -203,10 +233,12 @@ const Index = () => {
     }
   };
 
-  // Controlar fechamento do modal múltiplo
+  // Controlar fechamento do modal múltiplo com melhor sincronização
   const handleMultipleSchedulingClose = (open: boolean) => {
+    console.log('🎯 Fechando modal múltiplo:', { open, currentViewMode: viewMode });
     setMultipleSchedulingOpen(open);
     if (!open && viewMode === 'multiple-appointment') {
+      console.log('🎯 Voltando para doctors após fechar modal múltiplo');
       setViewMode('doctors');
     }
   };

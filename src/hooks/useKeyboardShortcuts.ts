@@ -12,21 +12,40 @@ interface ShortcutConfig {
 export const useKeyboardShortcuts = (shortcuts: ShortcutConfig[]) => {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      const matchedShortcut = shortcuts.find(shortcut => {
-        // Verificar se event.key e shortcut.key existem antes de usar toLowerCase
-        if (!event.key || !shortcut.key) return false;
-        
-        return (
-          event.key.toLowerCase() === shortcut.key.toLowerCase() &&
-          !!event.ctrlKey === !!shortcut.ctrlKey &&
-          !!event.altKey === !!shortcut.altKey &&
-          !!event.shiftKey === !!shortcut.shiftKey
-        );
-      });
+      try {
+        const matchedShortcut = shortcuts.find(shortcut => {
+          // Verificar se event.key e shortcut.key existem antes de usar toLowerCase
+          if (!event.key || !shortcut.key) return false;
+          
+          return (
+            event.key.toLowerCase() === shortcut.key.toLowerCase() &&
+            !!event.ctrlKey === !!shortcut.ctrlKey &&
+            !!event.altKey === !!shortcut.altKey &&
+            !!event.shiftKey === !!shortcut.shiftKey
+          );
+        });
 
-      if (matchedShortcut) {
-        event.preventDefault();
-        matchedShortcut.action();
+        if (matchedShortcut) {
+          // Log debug para rastreamento
+          console.log(`🔥 Atalho ativado: ${matchedShortcut.description}`);
+          
+          // Prevent default apenas para atalhos específicos
+          const needsPreventDefault = matchedShortcut.ctrlKey || matchedShortcut.key === 'F12' || matchedShortcut.key === 'Escape';
+          if (needsPreventDefault) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+          
+          // Executar ação com tratamento de erro
+          try {
+            matchedShortcut.action();
+            console.log(`✅ Ação do atalho executada com sucesso: ${matchedShortcut.description}`);
+          } catch (actionError) {
+            console.error(`❌ Erro ao executar ação do atalho ${matchedShortcut.description}:`, actionError);
+          }
+        }
+      } catch (error) {
+        console.error('❌ Erro no sistema de atalhos:', error);
       }
     };
 
