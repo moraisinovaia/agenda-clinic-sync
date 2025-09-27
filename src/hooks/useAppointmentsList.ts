@@ -53,6 +53,10 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           confirmado_em: apt.confirmado_em,
           confirmado_por: apt.confirmado_por,
           confirmado_por_user_id: apt.confirmado_por_user_id,
+          // Campos de exclusão
+          excluido_em: apt.excluido_em,
+          excluido_por: apt.excluido_por,
+          excluido_por_user_id: apt.excluido_por_user_id,
           convenio: apt.paciente_convenio,
           // Informações do perfil de quem criou o agendamento
           criado_por_profile: apt.profile_nome ? {
@@ -430,6 +434,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     } finally {
       isOperatingRef.current = false;
     }
+  };
+
   const deleteAppointment = async (appointmentId: string) => {
     isOperatingRef.current = true;
     try {

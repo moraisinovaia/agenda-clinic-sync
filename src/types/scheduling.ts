@@ -35,31 +35,28 @@ export interface OptimizedAppointmentRow {
   medico_especialidade: string;
   atendimento_nome: string;
   atendimento_tipo: string;
-  cancelado_por: string;
-  cancelado_por_user_id: string;
-  cancelado_em: string;
-  confirmado_por: string;
-  confirmado_por_user_id: string;
-  confirmado_em: string;
-  alterado_por_user_id: string;
-  excluido_por: string;
-  excluido_por_user_id: string;
-  excluido_em: string;
-  profile_nome: string;
-  profile_email: string;
-  profile_role: string;
-  alterado_por_profile_nome: string;
-  alterado_por_profile_email: string;
-  alterado_por_profile_role: string;
+  cancelado_por: string | null;
+  cancelado_por_user_id: string | null;
+  cancelado_em: string | null;
+  confirmado_por: string | null;
+  confirmado_por_user_id: string | null;
+  confirmado_em: string | null;
+  alterado_por_user_id: string | null;
+  excluido_por: string | null;
+  excluido_por_user_id: string | null;
+  excluido_em: string | null;
+  profile_nome: string | null;
+  profile_email: string | null;
+  profile_role: string | null;
+  alterado_por_profile_nome: string | null;
+  alterado_por_profile_email: string | null;
+  alterado_por_profile_role: string | null;
 }
 
 export interface AppointmentWithRelations extends Appointment {
   pacientes: Patient | null;
   medicos: Doctor | null;
   atendimentos: Atendimento | null;
-  excluido_por?: string | null;
-  excluido_por_user_id?: string | null;
-  excluido_em?: string | null;
   criado_por_profile?: {
     id: string;
     user_id: string;
