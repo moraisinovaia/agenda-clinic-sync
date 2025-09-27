@@ -27,9 +27,10 @@ interface AppointmentsListProps {
   onDeleteAppointment?: (appointmentId: string) => void;
   onConfirmAppointment?: (appointmentId: string) => void;
   onUnconfirmAppointment?: (appointmentId: string) => void;
+  allowCanceled?: boolean;
 }
 
-export function AppointmentsList({ appointments, doctors, onEditAppointment, onCancelAppointment, onDeleteAppointment, onConfirmAppointment, onUnconfirmAppointment }: AppointmentsListProps) {
+export function AppointmentsList({ appointments, doctors, onEditAppointment, onCancelAppointment, onDeleteAppointment, onConfirmAppointment, onUnconfirmAppointment, allowCanceled = false }: AppointmentsListProps) {
   const [selectedAuditId, setSelectedAuditId] = useState<string | null>(null);
   const [selectedPatientName, setSelectedPatientName] = useState<string>("");
   const {
@@ -45,7 +46,7 @@ export function AppointmentsList({ appointments, doctors, onEditAppointment, onC
     setConvenioFilter,
     filteredAppointments,
     getFilterStats,
-  } = useAdvancedAppointmentFilters(appointments);
+  } = useAdvancedAppointmentFilters(appointments, allowCanceled);
 
   // Debounce search to improve performance
   const debouncedSearchTerm = useDebounce(searchTerm, 300);

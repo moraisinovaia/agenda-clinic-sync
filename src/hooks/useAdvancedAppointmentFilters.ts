@@ -10,7 +10,10 @@ import {
   startOfDay 
 } from 'date-fns';
 
-export const useAdvancedAppointmentFilters = (appointments: AppointmentWithRelations[]) => {
+export const useAdvancedAppointmentFilters = (
+  appointments: AppointmentWithRelations[], 
+  allowCanceled: boolean = false
+) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
@@ -18,8 +21,8 @@ export const useAdvancedAppointmentFilters = (appointments: AppointmentWithRelat
   const [convenioFilter, setConvenioFilter] = useState('all');
 
   const filteredAppointments = useMemo(() => {
-    // Separar agendamentos cancelados e excluídos por padrão
-    const baseFilter = statusFilter === 'cancelado' || statusFilter === 'cancelado_bloqueio' || statusFilter === 'excluido'
+    // Separar agendamentos cancelados e excluídos por padrão, exceto quando explicitamente permitido
+    const baseFilter = allowCanceled || statusFilter === 'cancelado' || statusFilter === 'cancelado_bloqueio' || statusFilter === 'excluido'
       ? appointments 
       : appointments.filter(appointment => 
           appointment.status !== 'cancelado' && 
@@ -75,7 +78,7 @@ export const useAdvancedAppointmentFilters = (appointments: AppointmentWithRelat
 
       return matchesSearch && matchesStatus && matchesDate && matchesDoctor && matchesConvenio;
     });
-  }, [appointments, searchTerm, statusFilter, dateFilter, doctorFilter, convenioFilter]);
+  }, [appointments, searchTerm, statusFilter, dateFilter, doctorFilter, convenioFilter, allowCanceled]);
 
   const sortedAppointments = useMemo(() => {
     return filteredAppointments.sort((a, b) => {

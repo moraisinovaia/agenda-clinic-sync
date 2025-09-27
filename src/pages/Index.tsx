@@ -553,6 +553,7 @@ const Index = () => {
               onDeleteAppointment={deleteAppointment}
               onConfirmAppointment={handleConfirmAppointment}
               onUnconfirmAppointment={handleUnconfirmAppointment}
+              allowCanceled={true}
             />
           </div>
         )}
