@@ -37,6 +37,7 @@ export default function Auth() {
   
   const [signupData, setSignupData] = useState({
     nome: '',
+    email: '',
     username: '',
     password: '',
     confirmPassword: ''
@@ -139,8 +140,15 @@ export default function Auth() {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!signupData.nome || !signupData.username || !signupData.password) {
+    if (!signupData.nome || !signupData.email || !signupData.username || !signupData.password) {
       setError('Por favor, preencha todos os campos obrigatórios');
+      return;
+    }
+
+    // Validar formato de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(signupData.email)) {
+      setError('Por favor, insira um email válido');
       return;
     }
     
@@ -158,7 +166,7 @@ export default function Auth() {
     setIsLoading(true);
     
     try {
-      const { error } = await signUp(signupData.password, signupData.nome, signupData.username);
+      const { error } = await signUp(signupData.password, signupData.nome, signupData.username, signupData.email);
       
       if (error) {
         // Se houve erro no cadastro
@@ -173,6 +181,7 @@ export default function Auth() {
         // Limpar formulário após sucesso
         setSignupData({
           nome: '',
+          email: '',
           username: '',
           password: '',
           confirmPassword: ''
@@ -594,40 +603,56 @@ export default function Auth() {
               )}
               
               <form onSubmit={handleSignup} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="signup-nome" className="text-sm font-medium">Nome Completo</Label>
-                  <div className="relative group">
-                    <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
-                    <Input
-                      id="signup-nome"
-                      type="text"
-                      placeholder="Seu nome completo"
-                      className="pl-10 auth-input"
-                      value={signupData.nome}
-                      onChange={(e) => setSignupData(prev => ({ ...prev, nome: e.target.value }))}
-                      required
-                    />
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="signup-username" className="text-sm font-medium">Nome de Usuário</Label>
-                  <div className="relative group">
-                    <AtSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
-                    <Input
-                      id="signup-username"
-                      type="text"
-                      placeholder="usuario123"
-                      className="pl-10 auth-input"
-                      value={signupData.username}
-                      onChange={(e) => setSignupData(prev => ({ ...prev, username: e.target.value }))}
-                      required
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Sistema automatizado - não requer email para cadastro
-                  </p>
-                </div>
+                 <div className="space-y-2">
+                   <Label htmlFor="signup-nome" className="text-sm font-medium">Nome Completo</Label>
+                   <div className="relative group">
+                     <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                     <Input
+                       id="signup-nome"
+                       type="text"
+                       placeholder="Seu nome completo"
+                       className="pl-10 auth-input"
+                       value={signupData.nome}
+                       onChange={(e) => setSignupData(prev => ({ ...prev, nome: e.target.value }))}
+                       required
+                     />
+                   </div>
+                 </div>
+                 
+                 <div className="space-y-2">
+                   <Label htmlFor="signup-email" className="text-sm font-medium">Email</Label>
+                   <div className="relative group">
+                     <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                     <Input
+                       id="signup-email"
+                       type="email"
+                       placeholder="seu@email.com"
+                       className="pl-10 auth-input"
+                       value={signupData.email}
+                       onChange={(e) => setSignupData(prev => ({ ...prev, email: e.target.value }))}
+                       required
+                     />
+                   </div>
+                 </div>
+                 
+                 <div className="space-y-2">
+                   <Label htmlFor="signup-username" className="text-sm font-medium">Nome de Usuário</Label>
+                   <div className="relative group">
+                     <AtSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                     <Input
+                       id="signup-username"
+                       type="text"
+                       placeholder="usuario123"
+                       className="pl-10 auth-input"
+                       value={signupData.username}
+                       onChange={(e) => setSignupData(prev => ({ ...prev, username: e.target.value }))}
+                       required
+                     />
+                   </div>
+                   <p className="text-xs text-muted-foreground">
+                     Nome único para login no sistema
+                   </p>
+                 </div>
                 
                 <div className="space-y-2">
                   <Label htmlFor="signup-password" className="text-sm font-medium">Senha</Label>

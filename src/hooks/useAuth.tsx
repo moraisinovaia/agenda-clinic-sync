@@ -23,7 +23,7 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   signIn: (emailOrUsername: string, password: string) => Promise<{ error: any }>;
-  signUp: (password: string, nome: string, username: string) => Promise<{ error: any }>;
+  signUp: (password: string, nome: string, username: string, email: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
 }
 
@@ -246,7 +246,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
-  const signUp = async (password: string, nome: string, username: string) => {
+  const signUp = async (password: string, nome: string, username: string, email: string) => {
     try {
       // Verificar se o username já existe
       try {
@@ -269,44 +269,38 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         console.warn('Erro ao verificar username, continuando:', usernameCheckError);
       }
 
-      // Gerar email fictício baseado no username e cliente
-      let clienteId = 'ipado'; // padrão
+      // Verificar se o email já existe
       try {
-        const { data: userProfile } = await supabase
+        const { data: existingUser } = await supabase
           .from('profiles')
-          .select('cliente_id')
-          .eq('user_id', user?.id)
+          .select('email')
+          .eq('email', email)
           .maybeSingle();
-        
-        if (userProfile?.cliente_id) {
-          const { data: cliente } = await supabase
-            .from('clientes')
-            .select('nome')
-            .eq('id', userProfile.cliente_id)
-            .single();
           
-          if (cliente?.nome) {
-            clienteId = cliente.nome.toLowerCase().replace(/\s+/g, '');
-          }
+        if (existingUser) {
+          toast({
+            title: 'Erro no cadastro',
+            description: 'Este email já está cadastrado',
+            variant: 'destructive',
+          });
+          return { error: new Error('Este email já está cadastrado') };
         }
-      } catch (error) {
-        console.warn('Erro ao buscar cliente, usando padrão:', error);
+      } catch (emailCheckError) {
+        // Se falhar na verificação de email, continuar com cadastro
+        console.warn('Erro ao verificar email, continuando:', emailCheckError);
       }
 
-      // Gerar email único para cada usuário para evitar conflitos
-      const uniqueEmail = `${username}@sistema.local`;
-      console.log('Criando usuário com email único:', uniqueEmail);
+      console.log('Criando usuário com email fornecido:', email);
       
       const signUpResult = await supabase.auth.signUp({
-        email: uniqueEmail,
+        email: email,
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/`,
           data: {
             nome: nome,
             username: username,
-            role: 'recepcionista',
-            cliente_id: clienteId
+            role: 'recepcionista'
           }
         }
       });
