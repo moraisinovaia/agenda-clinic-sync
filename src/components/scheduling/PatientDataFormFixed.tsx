@@ -35,6 +35,17 @@ export function PatientDataFormFixed({
   selectedDoctor,
   onFillLastPatient
 }: PatientDataFormFixedProps) {
+  // Helper function to identify Dr. Marcelo doctors
+  const isDrMarcelo = (medicoId: string) => {
+    const drMarceloIds = [
+      '1e110923-50df-46ff-a57a-29d88e372900', // Dr. Marcelo D'Carli
+      'e6453b94-840d-4adf-ab0f-fc22be7cd7f5', // MAPA - Dr. Marcelo  
+      '9d5d0e63-098b-4282-aa03-db3c7e012579'  // Teste Ergométrico - Dr. Marcelo
+    ];
+    return drMarceloIds.includes(medicoId);
+  };
+
+  const isDateOfBirthRequired = !isDrMarcelo(formData.medicoId || '');
   const { 
     loading: searchingPatients, 
     foundPatients, 
@@ -260,7 +271,8 @@ export function PatientDataFormFixed({
             <DateOfBirthInput
               value={formData.dataNascimento}
               onChange={(value) => setFormData(prev => ({ ...prev, dataNascimento: value }))}
-              required
+              required={isDateOfBirthRequired}
+              label={isDateOfBirthRequired ? "Data de Nascimento *" : "Data de Nascimento"}
             />
             {searchingPatients && (
               <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin" />
