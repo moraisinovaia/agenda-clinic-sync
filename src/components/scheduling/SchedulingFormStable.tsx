@@ -102,23 +102,10 @@ export function SchedulingFormStable({
   // ✅ VALIDAÇÃO ROBUSTA: Função para validar se o passo atual está válido
   const isStepValid = (step: number): boolean => {
     if (step === 1) {
-      // Check if birth date is required for selected doctor
-      const isMedicoMarcelo = (medicoId?: string): boolean => {
-        if (!medicoId) return false;
-        const marceloIds = [
-          '1e110923-50df-46ff-a57a-29d88e372900', // Dr. Marcelo D'Carli
-          'e6453b94-840d-4adf-ab0f-fc22be7cd7f5', // MAPA - Dr. Marcelo  
-          '9d5d0e63-098b-4282-aa03-db3c7e012579'  // Teste Ergométrico - Dr. Marcelo
-        ];
-        return marceloIds.includes(medicoId);
-      };
-
-      const isBirthDateRequired = !isMedicoMarcelo(formData.medicoId);
-      
       // Validar dados do paciente
       const hasRequiredFields = !!(
         formData.nomeCompleto?.trim() && 
-        (formData.dataNascimento || !isBirthDateRequired) && // Birth date optional for Dr. Marcelo
+        formData.dataNascimento && 
         formData.convenio?.trim() && 
         formData.celular?.trim()
       );
