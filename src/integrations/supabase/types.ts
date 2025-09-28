@@ -1747,6 +1747,10 @@ export type Database = {
           similarity: number
         }[]
       }
+      prepare_production_deploy: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       recuperar_usuario_orfao: {
         Args: {
           p_admin_id?: string
@@ -1811,6 +1815,10 @@ export type Database = {
           p_hora_agendamento: string
           p_medico_id: string
         }
+        Returns: Json
+      }
+      validate_production_security: {
+        Args: Record<PropertyKey, never>
         Returns: Json
       }
       vector_avg: {
