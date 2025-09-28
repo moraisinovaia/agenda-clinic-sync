@@ -18,6 +18,16 @@ export function useAtomicAppointmentCreation() {
   // Função de delay para retry
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+  // Helper function to identify Dr. Marcelo doctors
+  const isDrMarcelo = (medicoId: string) => {
+    const drMarceloIds = [
+      '1e110923-50df-46ff-a57a-29d88e372900', // Dr. Marcelo D'Carli
+      'e6453b94-840d-4adf-ab0f-fc22be7cd7f5', // MAPA - Dr. Marcelo  
+      '9d5d0e63-098b-4282-aa03-db3c7e012579'  // Teste Ergométrico - Dr. Marcelo
+    ];
+    return drMarceloIds.includes(medicoId);
+  };
+
   // Validações básicas no frontend
   const validateFormData = (formData: SchedulingFormData) => {
     if (!formData.medicoId?.trim()) {
@@ -32,7 +42,8 @@ export function useAtomicAppointmentCreation() {
     if (formData.nomeCompleto.trim().length < 3) {
       throw new Error('Nome completo deve ter pelo menos 3 caracteres');
     }
-    if (!formData.dataNascimento) {
+    // Birth date is only required for non-Dr. Marcelo doctors
+    if (!formData.dataNascimento && !isDrMarcelo(formData.medicoId)) {
       throw new Error('Data de nascimento é obrigatória');
     }
     if (!formData.convenio?.trim()) {
@@ -76,12 +87,14 @@ export function useAtomicAppointmentCreation() {
       throw new Error(`Agendamento deve ser feito com pelo menos 1 hora de antecedência. Horário atual do Brasil: ${currentTimeFormatted} - Agendamento solicitado: ${requestedTimeFormatted}`);
     }
 
-    // Validar idade do paciente
-    const birthDate = new Date(formData.dataNascimento);
-    const age = Math.floor((nowBrazil.getTime() - birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
-    
-    if (age < 0 || age > 120) {
-      throw new Error('Data de nascimento inválida');
+    // Validar idade do paciente (only if birth date is provided)
+    if (formData.dataNascimento) {
+      const birthDate = new Date(formData.dataNascimento);
+      const age = Math.floor((nowBrazil.getTime() - birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+      
+      if (age < 0 || age > 120) {
+        throw new Error('Data de nascimento inválida');
+      }
     }
   };
 
@@ -104,7 +117,7 @@ export function useAtomicAppointmentCreation() {
       // Chamar função SQL atômica COM LOCKS (uma única tentativa)
       const { data, error } = await supabase.rpc('criar_agendamento_atomico', {
         p_nome_completo: formData.nomeCompleto,
-        p_data_nascimento: formData.dataNascimento,
+        p_data_nascimento: formData.dataNascimento || null,
         p_convenio: formData.convenio,
         p_telefone: formData.telefone || null,
         p_celular: formData.celular,

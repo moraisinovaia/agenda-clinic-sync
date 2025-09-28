@@ -15,6 +15,16 @@ interface UseFormValidationReturn {
   clearAllErrors: () => void;
 }
 
+// Helper function to identify Dr. Marcelo doctors
+const isDrMarcelo = (medicoId: string) => {
+  const drMarceloIds = [
+    '1e110923-50df-46ff-a57a-29d88e372900', // Dr. Marcelo D'Carli
+    'e6453b94-840d-4adf-ab0f-fc22be7cd7f5', // MAPA - Dr. Marcelo  
+    '9d5d0e63-098b-4282-aa03-db3c7e012579'  // Teste Ergométrico - Dr. Marcelo
+  ];
+  return drMarceloIds.includes(medicoId);
+};
+
 export function useFormValidation(): UseFormValidationReturn {
   const [errors, setErrors] = useState<ValidationErrors>({});
 
@@ -29,9 +39,11 @@ export function useFormValidation(): UseFormValidationReturn {
         break;
 
       case 'dataNascimento':
-        if (!value) {
+        // Birth date is only required for non-Dr. Marcelo doctors
+        const isDrMarceloDoctor = formData?.medicoId ? isDrMarcelo(formData.medicoId) : false;
+        if (!value && !isDrMarceloDoctor) {
           error = 'Data de nascimento é obrigatória';
-        } else {
+        } else if (value) {
           const birthDate = new Date(value);
           const today = new Date();
           if (birthDate >= today) {
@@ -92,9 +104,12 @@ export function useFormValidation(): UseFormValidationReturn {
 
   const validateForm = useCallback((formData: SchedulingFormData) => {
     const newErrors: ValidationErrors = {};
+    const isDrMarceloDoctor = formData.medicoId ? isDrMarcelo(formData.medicoId) : false;
+    
+    // Conditionally include dataNascimento in required fields
     const fieldsToValidate = [
       'nomeCompleto',
-      'dataNascimento', 
+      ...(isDrMarceloDoctor ? [] : ['dataNascimento']), // Optional for Dr. Marcelo
       'convenio',
       'celular',
       'medicoId',
