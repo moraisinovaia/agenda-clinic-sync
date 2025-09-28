@@ -2,6 +2,7 @@ import { useState, useEffect, createContext, useContext, useRef } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { cleanupGoogleOAuthElements } from '@/utils/domCleanup';
 
 interface Profile {
   id: string;
@@ -352,6 +353,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     try {
       // Marcar que estamos fazendo logout
       isLoggingOut.current = true;
+      
+      // Limpar elementos DOM do Google OAuth antes do logout
+      console.log('🧹 Auth: Limpando elementos Google OAuth...');
+      const removedElements = cleanupGoogleOAuthElements();
+      if (removedElements > 0) {
+        console.log(`🧹 Auth: Removidos ${removedElements} elementos órfãos do Google`);
+      }
       
       // Limpar estados locais primeiro
       setUser(null);

@@ -11,21 +11,51 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
+  errorInfo: React.ErrorInfo | null;
 }
 
 export class SchedulingErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, errorInfo: null };
   }
 
   static getDerivedStateFromError(error: Error): State {
     console.log('🔄 SchedulingErrorBoundary: Erro capturado:', error?.message);
-    return { hasError: true, error };
+    
+    // Log específico para erros de DOM (removeChild)
+    if (error.message?.includes('removeChild') || error.message?.includes('Node')) {
+      console.error('🚨 DOM Error detectado no agendamento:', {
+        message: error.message,
+        stack: error.stack,
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    return { hasError: true, error, errorInfo: null };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('🚨 SchedulingErrorBoundary capturou erro crítico:', error, errorInfo);
+    this.setState({ errorInfo });
+    
+    console.error('🚨 SchedulingErrorBoundary capturou erro crítico:', {
+      error: error.message,
+      stack: error.stack,
+      componentStack: errorInfo.componentStack,
+      timestamp: new Date().toISOString()
+    });
+
+    // Log específico para erros relacionados a OAuth
+    const userAgent = navigator.userAgent;
+    const isGoogleAuth = document.querySelector('[data-testid="google-signin"]') !== null;
+    
+    if (isGoogleAuth || error.message?.includes('removeChild')) {
+      console.error('🔍 Possível conflito Google OAuth + DOM:', {
+        userAgent,
+        hasGoogleElements: isGoogleAuth,
+        domNodes: document.querySelectorAll('[id*="google"], [class*="google"]').length
+      });
+    }
   }
 
   handleRetry = () => {

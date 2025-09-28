@@ -482,16 +482,17 @@ const Index = () => {
               showBack={true}
               showHome={true}
             />
-            <DoctorSchedule
-              doctor={selectedDoctor}
-              appointments={appointments.filter(apt => apt.medico_id === selectedDoctor.id)}
-              blockedDates={blockedDates}
-              isDateBlocked={isDateBlocked}
-              onCancelAppointment={cancelAppointment}
-              onConfirmAppointment={handleConfirmAppointment}
-              onUnconfirmAppointment={handleUnconfirmAppointment}
-              onEditAppointment={handleEditAppointment}
-              onNewAppointment={(selectedDate) => {
+            <SchedulingErrorBoundary>
+              <DoctorSchedule
+                doctor={selectedDoctor}
+                appointments={appointments.filter(apt => apt.medico_id === selectedDoctor.id)}
+                blockedDates={blockedDates}
+                isDateBlocked={isDateBlocked}
+                onCancelAppointment={cancelAppointment}
+                onConfirmAppointment={handleConfirmAppointment}
+                onUnconfirmAppointment={handleUnconfirmAppointment}
+                onEditAppointment={handleEditAppointment}
+                onNewAppointment={(selectedDate) => {
                 if (selectedDate) {
                   setSelectedAppointmentDate(selectedDate);
                 }
@@ -502,6 +503,7 @@ const Index = () => {
               adicionarFilaEspera={adicionarFilaEspera}
               searchPatientsByBirthDate={searchPatientsByBirthDate}
             />
+            </SchedulingErrorBoundary>
           </div>
         )}
 

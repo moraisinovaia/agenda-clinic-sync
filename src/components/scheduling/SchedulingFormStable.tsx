@@ -8,6 +8,7 @@ import { Doctor, SchedulingFormData, Atendimento, AppointmentWithRelations } fro
 import { useSchedulingForm } from '@/hooks/useSchedulingForm';
 import { useFormValidation } from '@/hooks/useFormValidation';
 import { useDebounce } from '@/hooks/useDebounce';
+import { SchedulingErrorBoundary } from '@/components/error/SchedulingErrorBoundary';
 import { AlertCircle, CheckCircle, X } from 'lucide-react';
 
 interface SchedulingFormStableProps {
@@ -182,8 +183,9 @@ export function SchedulingFormStable({
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto">
-      <Card>
+    <SchedulingErrorBoundary onRetry={() => window.location.reload()}>
+      <div className="w-full max-w-4xl mx-auto">
+        <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span>
@@ -327,7 +329,8 @@ export function SchedulingFormStable({
             </div>
           </form>
         </CardContent>
-      </Card>
-    </div>
+        </Card>
+      </div>
+    </SchedulingErrorBoundary>
   );
 }

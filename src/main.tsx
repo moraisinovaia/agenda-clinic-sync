@@ -23,8 +23,16 @@ const queryClient = new QueryClient({
   },
 });
 
+// StrictMode apenas em desenvolvimento para evitar problemas com Google OAuth
+const AppWrapper = ({ children }: { children: React.ReactNode }) => {
+  if (import.meta.env.DEV) {
+    return <StrictMode>{children}</StrictMode>;
+  }
+  return <>{children}</>;
+};
+
 createRoot(document.getElementById("root")!).render(
-  <StrictMode>
+  <AppWrapper>
     <GlobalErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
@@ -32,5 +40,5 @@ createRoot(document.getElementById("root")!).render(
         </AuthProvider>
       </QueryClientProvider>
     </GlobalErrorBoundary>
-  </StrictMode>
+  </AppWrapper>
 );
