@@ -1344,6 +1344,10 @@ export type Database = {
         }
         Returns: Json
       }
+      check_security_health: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       cleanup_expired_backups: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -1353,6 +1357,10 @@ export type Database = {
         Returns: undefined
       }
       cleanup_old_logs: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      cleanup_old_security_logs: {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
@@ -1711,6 +1719,14 @@ export type Database = {
       }
       log_access_audit: {
         Args: { p_action: string; p_details?: Json; p_resource: string }
+        Returns: undefined
+      }
+      log_security_event: {
+        Args: {
+          event_description: string
+          event_type: string
+          user_context?: Json
+        }
         Returns: undefined
       }
       log_super_admin_action: {
