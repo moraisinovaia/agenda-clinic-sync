@@ -13,6 +13,15 @@ export const useKeyboardShortcuts = (shortcuts: ShortcutConfig[]) => {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       try {
+        // Verificar elemento focado
+        const activeElement = document.activeElement;
+        const isInputFocused = activeElement && (
+          activeElement.tagName === 'INPUT' || 
+          activeElement.tagName === 'TEXTAREA' || 
+          activeElement.tagName === 'SELECT' ||
+          activeElement.getAttribute('contenteditable') === 'true'
+        );
+
         const matchedShortcut = shortcuts.find(shortcut => {
           // Verificar se event.key e shortcut.key existem antes de usar toLowerCase
           if (!event.key || !shortcut.key) return false;
@@ -27,9 +36,23 @@ export const useKeyboardShortcuts = (shortcuts: ShortcutConfig[]) => {
 
         if (matchedShortcut) {
           // Log debug para rastreamento
-          console.log(`🔥 Atalho ativado: ${matchedShortcut.description}`);
+          console.log(`🔥 Atalho detectado: ${matchedShortcut.description}`, {
+            isInputFocused,
+            activeElement: activeElement?.tagName,
+            key: matchedShortcut.key,
+            ctrlKey: matchedShortcut.ctrlKey
+          });
+
+          // Permitir Ctrl + N sempre, outros atalhos só quando não há input focado
+          const isCtrlN = matchedShortcut.key.toLowerCase() === 'n' && matchedShortcut.ctrlKey;
+          const isEscape = matchedShortcut.key === 'Escape';
           
-          // Prevent default apenas para atalhos específicos
+          if (isInputFocused && !isCtrlN && !isEscape) {
+            console.log(`⚠️ Atalho ${matchedShortcut.description} ignorado - input focado`);
+            return;
+          }
+          
+          // Prevent default IMEDIATAMENTE para atalhos com Ctrl (especialmente Ctrl + N)
           const needsPreventDefault = matchedShortcut.ctrlKey || matchedShortcut.key === 'F12' || matchedShortcut.key === 'Escape';
           if (needsPreventDefault) {
             event.preventDefault();
