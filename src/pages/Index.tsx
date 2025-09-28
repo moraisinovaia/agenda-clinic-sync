@@ -569,6 +569,10 @@ const Index = () => {
                 onFillLastPatient={(fn: () => void) => {
                   fillLastPatientRef.current = fn;
                 }}
+                onCancelAppointment={cancelAppointment}
+                onDeleteAppointment={deleteAppointment}
+                onConfirmAppointment={confirmAppointment}
+                onUnconfirmAppointment={unconfirmAppointment}
               />
             </SchedulingErrorBoundary>
           </div>
@@ -641,18 +645,22 @@ const Index = () => {
                 atendimentos={atendimentos}
                 appointments={appointments}
                 blockedDates={blockedDates}
-              isDateBlocked={isDateBlocked}
-              onSubmit={handleSimpleAppointmentSubmit}
-              onCancel={goBack}
-              getAtendimentosByDoctor={getAtendimentosByDoctor}
-              searchPatientsByBirthDate={searchPatientsByBirthDate}
-              editingAppointment={editingAppointment}
-              adicionarFilaEspera={adicionarFilaEspera}
-              onMultipleSuccess={handleMultipleAppointmentSuccess}
-              onFillLastPatient={(fn: () => void) => {
-                fillLastPatientRef.current = fn;
-              }}
-            />
+                isDateBlocked={isDateBlocked}
+                onSubmit={handleSimpleAppointmentSubmit}
+                onCancel={goBack}
+                getAtendimentosByDoctor={getAtendimentosByDoctor}
+                searchPatientsByBirthDate={searchPatientsByBirthDate}
+                editingAppointment={editingAppointment}
+                adicionarFilaEspera={adicionarFilaEspera}
+                onMultipleSuccess={handleMultipleAppointmentSuccess}
+                onFillLastPatient={(fn: () => void) => {
+                  fillLastPatientRef.current = fn;
+                }}
+                onCancelAppointment={cancelAppointment}
+                onDeleteAppointment={deleteAppointment}
+                onConfirmAppointment={confirmAppointment}
+                onUnconfirmAppointment={unconfirmAppointment}
+              />
             </SchedulingErrorBoundary>
           </div>
         )}

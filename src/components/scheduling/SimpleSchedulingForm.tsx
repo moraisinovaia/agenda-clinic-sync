@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar } from '@/components/ui/calendar';
 import { Badge } from '@/components/ui/badge';
-import { Calendar as CalendarIcon, Clock, User, AlertCircle } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, User, AlertCircle, Trash2, RotateCcw, Check } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Doctor, Atendimento, SchedulingFormData, AppointmentWithRelations } from '@/types/scheduling';
 import { PatientDataFormFixed } from './PatientDataFormFixed';
 import { AppointmentDataForm } from './AppointmentDataForm';
@@ -36,6 +37,10 @@ interface SimpleSchedulingFormProps {
   adicionarFilaEspera: (data: FilaEsperaFormData) => Promise<boolean>;
   onMultipleSuccess?: (data: MultipleAppointmentData) => void;
   onFillLastPatient?: (fn: () => void) => void;
+  onCancelAppointment?: (appointmentId: string) => Promise<void>;
+  onDeleteAppointment?: (appointmentId: string) => Promise<void>;
+  onConfirmAppointment?: (appointmentId: string) => Promise<void>;
+  onUnconfirmAppointment?: (appointmentId: string) => Promise<void>;
 }
 
 
@@ -55,7 +60,11 @@ export function SimpleSchedulingForm({
   preSelectedDate,
   adicionarFilaEspera,
   onMultipleSuccess,
-  onFillLastPatient
+  onFillLastPatient,
+  onCancelAppointment,
+  onDeleteAppointment,
+  onConfirmAppointment,
+  onUnconfirmAppointment
 }: SimpleSchedulingFormProps) {
   // Preparar dados iniciais para edição
   const initialEditData = editingAppointment ? {
@@ -85,6 +94,10 @@ export function SimpleSchedulingForm({
   const [timeConflictError, setTimeConflictError] = useState<string | null>(null);
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   const [multipleOpen, setMultipleOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [appointmentToDelete, setAppointmentToDelete] = useState<string | null>(null);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [appointmentToCancel, setAppointmentToCancel] = useState<string | null>(null);
   
   // ✅ Memoizar handleSubmit com detecção de conflito
   const memoizedHandleSubmit = useCallback(async (e: React.FormEvent) => {
@@ -135,6 +148,34 @@ export function SimpleSchedulingForm({
     setConflictMessage('');
     setConflictDetails(null);
   }, []);
+
+  const handleCancelAppointment = useCallback(async (appointmentId: string) => {
+    if (onCancelAppointment) {
+      await onCancelAppointment(appointmentId);
+    }
+    setCancelConfirmOpen(false);
+    setAppointmentToCancel(null);
+  }, [onCancelAppointment]);
+
+  const handleDeleteAppointment = useCallback(async (appointmentId: string) => {
+    if (onDeleteAppointment) {
+      await onDeleteAppointment(appointmentId);
+    }
+    setDeleteConfirmOpen(false);
+    setAppointmentToDelete(null);
+  }, [onDeleteAppointment]);
+
+  const handleConfirmAppointment = useCallback(async (appointmentId: string) => {
+    if (onConfirmAppointment) {
+      await onConfirmAppointment(appointmentId);
+    }
+  }, [onConfirmAppointment]);
+
+  const handleUnconfirmAppointment = useCallback(async (appointmentId: string) => {
+    if (onUnconfirmAppointment) {
+      await onUnconfirmAppointment(appointmentId);
+    }
+  }, [onUnconfirmAppointment]);
 
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date>(new Date());
 
@@ -367,7 +408,7 @@ export function SimpleSchedulingForm({
                   <div className="space-y-0.5 max-h-[300px] overflow-y-auto">
                     {selectedDateAppointments.length > 0 ? (
                       selectedDateAppointments
-                        .filter(appointment => appointment.status !== 'cancelado' && appointment.status !== 'cancelado_bloqueio' && appointment.status !== 'excluido') // Esconder cancelados e excluídos
+                        .filter(appointment => appointment.status !== 'excluido') // Esconder apenas excluídos
                         .sort((a, b) => a.hora_agendamento.localeCompare(b.hora_agendamento))
                         .map((appointment) => (
                           <div 
@@ -375,6 +416,8 @@ export function SimpleSchedulingForm({
                             className={`py-1 px-2 border rounded flex items-center justify-between gap-2 ${
                               appointment.status === 'confirmado' 
                                 ? 'bg-green-50 border-green-200' 
+                                : appointment.status === 'cancelado'
+                                ? 'bg-red-50 border-red-200 opacity-70'
                                 : 'bg-background'
                             }`}
                           >
@@ -392,16 +435,70 @@ export function SimpleSchedulingForm({
                                 </span>
                               )}
                             </div>
-                            <Badge 
-                              variant="secondary" 
-                              className={`text-xs flex-shrink-0 ${
-                                appointment.status === 'confirmado'
-                                  ? 'bg-green-100 text-green-800 border-green-200'
-                                  : getStatusColor(appointment.status)
-                              }`}
-                            >
-                              {appointment.status === 'confirmado' ? 'confirmado' : appointment.status}
-                            </Badge>
+                            <div className="flex items-center gap-1">
+                              <Badge 
+                                variant="secondary" 
+                                className={`text-xs flex-shrink-0 ${
+                                  appointment.status === 'confirmado'
+                                    ? 'bg-green-100 text-green-800 border-green-200'
+                                    : getStatusColor(appointment.status)
+                                }`}
+                              >
+                                {appointment.status === 'confirmado' ? 'confirmado' : appointment.status}
+                              </Badge>
+                              
+                              {/* Botões de ação */}
+                              {appointment.status === 'agendado' && onCancelAppointment && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 w-6 p-0 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                                  onClick={() => {
+                                    setAppointmentToCancel(appointment.id);
+                                    setCancelConfirmOpen(true);
+                                  }}
+                                  title="Cancelar agendamento"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              )}
+                              {appointment.status === 'cancelado' && onDeleteAppointment && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 w-6 p-0 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                                  onClick={() => {
+                                    setAppointmentToDelete(appointment.id);
+                                    setDeleteConfirmOpen(true);
+                                  }}
+                                  title="Excluir permanentemente"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              )}
+                              {appointment.status === 'confirmado' && onUnconfirmAppointment && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 w-6 p-0 text-primary hover:bg-primary hover:text-primary-foreground"
+                                  onClick={() => handleUnconfirmAppointment(appointment.id)}
+                                  title="Desconfirmar agendamento"
+                                >
+                                  <RotateCcw className="h-3 w-3" />
+                                </Button>
+                              )}
+                              {(appointment.status === 'agendado' || appointment.status === 'cancelado') && onConfirmAppointment && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 w-6 p-0 text-green-600 hover:bg-green-600 hover:text-white"
+                                  onClick={() => handleConfirmAppointment(appointment.id)}
+                                  title="Confirmar agendamento"
+                                >
+                                  <Check className="h-3 w-3" />
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         ))
                     ) : (
@@ -471,6 +568,55 @@ export function SimpleSchedulingForm({
           />
         </DialogContent>
       </Dialog>
+
+      {/* AlertDialogs de Confirmação */}
+      <AlertDialog open={cancelConfirmOpen} onOpenChange={setCancelConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar Agendamento</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja cancelar este agendamento? Esta ação pode ser revertida.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => appointmentToCancel && handleCancelAppointment(appointmentToCancel)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Sim, cancelar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Agendamento</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir permanentemente este agendamento? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => appointmentToDelete && handleDeleteAppointment(appointmentToDelete)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Sim, excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <ConflictConfirmationModal
+        open={showConflictModal}
+        onConfirm={handleConfirmConflict}
+        onCancel={handleCancelConflict}
+        conflictMessage={conflictMessage}
+        conflictDetails={conflictDetails}
+      />
     </div>
   );
 }
