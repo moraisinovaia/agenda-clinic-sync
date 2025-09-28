@@ -235,6 +235,19 @@ export function PatientDataFormFixed({
     setFormData(prev => ({ ...prev, [field]: formatted }));
   };
 
+  // Check if birth date is required for selected doctor
+  const isMedicoMarcelo = (medicoId?: string): boolean => {
+    if (!medicoId) return false;
+    const marceloIds = [
+      '1e110923-50df-46ff-a57a-29d88e372900', // Dr. Marcelo D'Carli
+      'e6453b94-840d-4adf-ab0f-fc22be7cd7f5', // MAPA - Dr. Marcelo  
+      '9d5d0e63-098b-4282-aa03-db3c7e012579'  // Teste Ergométrico - Dr. Marcelo
+    ];
+    return marceloIds.includes(medicoId);
+  };
+
+  const isBirthDateRequired = !isMedicoMarcelo(formData.medicoId);
+
   return (
     <div className="space-y-4 animate-fade-in notranslate">
       <h3 className="text-lg font-semibold flex items-center gap-2 animate-slide-in">
@@ -260,7 +273,8 @@ export function PatientDataFormFixed({
             <DateOfBirthInput
               value={formData.dataNascimento}
               onChange={(value) => setFormData(prev => ({ ...prev, dataNascimento: value }))}
-              required
+              required={isBirthDateRequired}
+              label={isBirthDateRequired ? "Data de Nascimento *" : "Data de Nascimento"}
             />
             {searchingPatients && (
               <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin" />

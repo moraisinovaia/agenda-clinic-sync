@@ -15,6 +15,17 @@ interface UseFormValidationReturn {
   clearAllErrors: () => void;
 }
 
+// Helper function to check if doctor is one of Dr. Marcelo's
+const isMedicoMarcelo = (medicoId?: string): boolean => {
+  if (!medicoId) return false;
+  const marceloIds = [
+    '1e110923-50df-46ff-a57a-29d88e372900', // Dr. Marcelo D'Carli
+    'e6453b94-840d-4adf-ab0f-fc22be7cd7f5', // MAPA - Dr. Marcelo  
+    '9d5d0e63-098b-4282-aa03-db3c7e012579'  // Teste Ergométrico - Dr. Marcelo
+  ];
+  return marceloIds.includes(medicoId);
+};
+
 export function useFormValidation(): UseFormValidationReturn {
   const [errors, setErrors] = useState<ValidationErrors>({});
 
@@ -29,9 +40,10 @@ export function useFormValidation(): UseFormValidationReturn {
         break;
 
       case 'dataNascimento':
-        if (!value) {
+        // Skip birth date validation for Dr. Marcelo's appointments
+        if (!value && !isMedicoMarcelo(formData?.medicoId)) {
           error = 'Data de nascimento é obrigatória';
-        } else {
+        } else if (value) {
           const birthDate = new Date(value);
           const today = new Date();
           if (birthDate >= today) {
