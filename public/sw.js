@@ -1,4 +1,4 @@
-const CACHE_NAME = 'inovaia-v1.2';
+const CACHE_NAME = 'inovaia-v1.3';
 const urlsToCache = [
   '/',
   '/manifest.json',
