@@ -908,7 +908,7 @@ export type Database = {
           cliente_id: string
           convenio: string
           created_at: string
-          data_nascimento: string
+          data_nascimento: string | null
           id: string
           nome_completo: string
           telefone: string | null
@@ -919,7 +919,7 @@ export type Database = {
           cliente_id: string
           convenio: string
           created_at?: string
-          data_nascimento: string
+          data_nascimento?: string | null
           id?: string
           nome_completo: string
           telefone?: string | null
@@ -930,7 +930,7 @@ export type Database = {
           cliente_id?: string
           convenio?: string
           created_at?: string
-          data_nascimento?: string
+          data_nascimento?: string | null
           id?: string
           nome_completo?: string
           telefone?: string | null
