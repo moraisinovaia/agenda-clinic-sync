@@ -256,7 +256,7 @@ const handleDateChange = (date: string) => {
             <SelectContent>
               {filteredAtendimentos.map((atendimento) => (
                 <SelectItem key={atendimento.id} value={atendimento.id}>
-                  {atendimento.nome}
+                  {atendimento.nome} - {atendimento.tipo}
                 </SelectItem>
               ))}
             </SelectContent>
