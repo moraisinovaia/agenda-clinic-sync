@@ -1,4 +1,4 @@
-const CACHE_NAME = 'endogastro-v1.1';
+const CACHE_NAME = 'inovaia-v1.2';
 const urlsToCache = [
   '/',
   '/manifest.json',
