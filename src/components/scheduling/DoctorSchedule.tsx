@@ -211,7 +211,7 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                 onSelect={(date) => date && setSelectedDate(date)}
                 defaultMonth={selectedDate} // Força navegação para o mês da data selecionada
                 locale={ptBR}
-                className="rounded-md border-none p-0 scale-90"
+                className="rounded-md border-none p-0 scale-90 notranslate"
                 modifiers={{
                   hasAppointments: (date) => {
                     const result = hasAppointments(date);

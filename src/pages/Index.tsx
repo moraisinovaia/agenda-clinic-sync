@@ -35,10 +35,12 @@ import { SchedulingErrorBoundary } from '@/components/error/SchedulingErrorBound
 
 import { useFilaEspera } from '@/hooks/useFilaEspera';
 import { useViewMode } from '@/hooks/useViewMode';
+import { useGoogleTranslateDetection } from '@/hooks/useGoogleTranslateDetection';
 import { SchedulingFormData, AppointmentWithRelations } from '@/types/scheduling';
 import { useStableAuth } from '@/hooks/useStableAuth';
 import { Button } from '@/components/ui/button';
 import { NavigationHeader } from '@/components/ui/navigation-header';
+import { GoogleTranslateWarning } from '@/components/ui/google-translate-warning';
 import PendingApproval from '@/components/PendingApproval';
 
 const Index = () => {
@@ -65,6 +67,27 @@ const Index = () => {
     goBack,
     goBackToFilaEspera
   } = useViewMode();
+
+  // Hook para detectar Google Translate
+  const { 
+    isGoogleTranslateActive, 
+    showWarning: shouldShowGoogleWarning, 
+    resetWarning 
+  } = useGoogleTranslateDetection();
+
+  const [showGoogleTranslateWarning, setShowGoogleTranslateWarning] = useState(false);
+
+  // Mostrar aviso quando Google Translate for detectado
+  useEffect(() => {
+    if (shouldShowGoogleWarning()) {
+      setShowGoogleTranslateWarning(true);
+    }
+  }, [isGoogleTranslateActive, shouldShowGoogleWarning]);
+
+  const handleDismissGoogleWarning = () => {
+    setShowGoogleTranslateWarning(false);
+    resetWarning();
+  };
 
   const {
     doctors,
@@ -433,6 +456,14 @@ const Index = () => {
         onBackToFilaEspera={goBackToFilaEspera}
         onSignOut={signOut}
       />
+
+      {/* Aviso sobre Google Translate */}
+      <div className="container mx-auto px-4 pt-4">
+        <GoogleTranslateWarning 
+          isVisible={showGoogleTranslateWarning}
+          onDismiss={handleDismissGoogleWarning}
+        />
+      </div>
 
       <div className="container mx-auto px-4 py-6">
         {viewMode === 'doctors' && (

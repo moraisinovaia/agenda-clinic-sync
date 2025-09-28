@@ -236,7 +236,7 @@ export function PatientDataFormFixed({
   };
 
   return (
-    <div className="space-y-4 animate-fade-in">
+    <div className="space-y-4 animate-fade-in notranslate">
       <h3 className="text-lg font-semibold flex items-center gap-2 animate-slide-in">
         <User className="h-4 w-4 animate-bounce-gentle" />
         Dados do Paciente

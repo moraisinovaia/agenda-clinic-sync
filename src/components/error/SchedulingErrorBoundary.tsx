@@ -28,7 +28,8 @@ export class SchedulingErrorBoundary extends Component<Props, State> {
       console.error('🚨 DOM Error detectado no agendamento:', {
         message: error.message,
         stack: error.stack,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        possibleGoogleTranslate: true
       });
     }
     
@@ -65,6 +66,9 @@ export class SchedulingErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
+      const isGoogleTranslateError = this.state.error?.message?.includes('removeChild') || 
+                                     this.state.error?.message?.includes('Node');
+      
       return (
         <div className="w-full max-w-4xl mx-auto p-4">
           <Alert variant="destructive" className="mb-4">
@@ -72,9 +76,20 @@ export class SchedulingErrorBoundary extends Component<Props, State> {
             <AlertDescription>
               <div className="space-y-2">
                 <p className="font-semibold">Erro no sistema de agendamento</p>
-                <p className="text-sm">
-                  {this.state.error?.message || 'Ocorreu um erro inesperado. Seus dados foram preservados.'}
-                </p>
+                {isGoogleTranslateError ? (
+                  <div className="space-y-2">
+                    <p className="text-sm">
+                      Este erro pode estar sendo causado pelo <strong>Google Tradutor</strong>.
+                    </p>
+                    <p className="text-sm">
+                      Para resolver: desative temporariamente o Google Tradutor nesta página ou use o navegador em modo incógnito.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-sm">
+                    {this.state.error?.message || 'Ocorreu um erro inesperado. Seus dados foram preservados.'}
+                  </p>
+                )}
                 <div className="flex gap-2 mt-3">
                   <Button
                     variant="outline"
