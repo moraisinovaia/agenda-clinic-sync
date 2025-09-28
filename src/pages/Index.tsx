@@ -520,6 +520,7 @@ const Index = () => {
                 blockedDates={blockedDates}
                 isDateBlocked={isDateBlocked}
                 onCancelAppointment={cancelAppointment}
+                onDeleteAppointment={deleteAppointment}
                 onConfirmAppointment={handleConfirmAppointment}
                 onUnconfirmAppointment={handleUnconfirmAppointment}
                 onEditAppointment={handleEditAppointment}

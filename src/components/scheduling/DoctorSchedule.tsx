@@ -32,6 +32,7 @@ interface DoctorScheduleProps {
   blockedDates?: any[];
   isDateBlocked?: (doctorId: string, date: Date) => boolean;
   onCancelAppointment: (appointmentId: string) => Promise<void>;
+  onDeleteAppointment?: (appointmentId: string) => Promise<void>;
   onConfirmAppointment?: (appointmentId: string) => Promise<void>;
   onUnconfirmAppointment?: (appointmentId: string) => Promise<void>;
   onEditAppointment?: (appointment: AppointmentWithRelations) => void;
@@ -42,7 +43,7 @@ interface DoctorScheduleProps {
   searchPatientsByBirthDate: (birthDate: string) => Promise<any[]>;
 }
 
-export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDateBlocked, onCancelAppointment, onConfirmAppointment, onUnconfirmAppointment, onEditAppointment, onNewAppointment, initialDate, atendimentos, adicionarFilaEspera, searchPatientsByBirthDate }: DoctorScheduleProps) {
+export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDateBlocked, onCancelAppointment, onDeleteAppointment, onConfirmAppointment, onUnconfirmAppointment, onEditAppointment, onNewAppointment, initialDate, atendimentos, adicionarFilaEspera, searchPatientsByBirthDate }: DoctorScheduleProps) {
   // Usar initialDate se fornecida, senão usar data do primeiro agendamento do médico, senão data atual
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     if (initialDate) {
@@ -390,38 +391,70 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                                       <RotateCcw className="h-2 w-2" />
                                     </Button>
                                   )}
-                                  {appointment.status === 'agendado' && (
-                                    <AlertDialog>
-                                      <AlertDialogTrigger asChild>
-                                        <Button 
-                                          variant="ghost" 
-                                          size="sm"
-                                          className="h-4 w-4 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                          title="Cancelar"
-                                        >
-                                          <Trash2 className="h-2 w-2" />
-                                        </Button>
-                                      </AlertDialogTrigger>
-                                      <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                          <AlertDialogTitle>Cancelar Agendamento</AlertDialogTitle>
-                                          <AlertDialogDescription>
-                                            Tem certeza que deseja cancelar este agendamento para {format(selectedDate, "dd/MM/yyyy")} às {appointment.hora_agendamento}? 
-                                            Esta ação não pode ser desfeita.
-                                          </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                          <AlertDialogCancel>Não cancelar</AlertDialogCancel>
-                                          <AlertDialogAction
-                                            onClick={() => onCancelAppointment(appointment.id)}
-                                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                          >
-                                            Sim, cancelar
-                                          </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                      </AlertDialogContent>
-                                    </AlertDialog>
-                                  )}
+                                   {appointment.status === 'agendado' && (
+                                     <AlertDialog>
+                                       <AlertDialogTrigger asChild>
+                                         <Button 
+                                           variant="ghost" 
+                                           size="sm"
+                                           className="h-4 w-4 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                           title="Cancelar"
+                                         >
+                                           <Trash2 className="h-2 w-2" />
+                                         </Button>
+                                       </AlertDialogTrigger>
+                                       <AlertDialogContent>
+                                         <AlertDialogHeader>
+                                           <AlertDialogTitle>Cancelar Agendamento</AlertDialogTitle>
+                                           <AlertDialogDescription>
+                                             Tem certeza que deseja cancelar este agendamento para {format(selectedDate, "dd/MM/yyyy")} às {appointment.hora_agendamento}? 
+                                             Esta ação não pode ser desfeita.
+                                           </AlertDialogDescription>
+                                         </AlertDialogHeader>
+                                         <AlertDialogFooter>
+                                           <AlertDialogCancel>Não cancelar</AlertDialogCancel>
+                                           <AlertDialogAction
+                                             onClick={() => onCancelAppointment(appointment.id)}
+                                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                           >
+                                             Sim, cancelar
+                                           </AlertDialogAction>
+                                         </AlertDialogFooter>
+                                       </AlertDialogContent>
+                                     </AlertDialog>
+                                   )}
+                                   {appointment.status === 'cancelado' && onDeleteAppointment && (
+                                     <AlertDialog>
+                                       <AlertDialogTrigger asChild>
+                                         <Button 
+                                           variant="ghost" 
+                                           size="sm"
+                                           className="h-4 w-4 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                           title="Excluir"
+                                         >
+                                           <Trash2 className="h-2 w-2" />
+                                         </Button>
+                                       </AlertDialogTrigger>
+                                       <AlertDialogContent>
+                                         <AlertDialogHeader>
+                                           <AlertDialogTitle>Excluir Agendamento</AlertDialogTitle>
+                                           <AlertDialogDescription>
+                                             Tem certeza que deseja excluir permanentemente este agendamento cancelado para {format(selectedDate, "dd/MM/yyyy")} às {appointment.hora_agendamento}? 
+                                             Esta ação não pode ser desfeita.
+                                           </AlertDialogDescription>
+                                         </AlertDialogHeader>
+                                         <AlertDialogFooter>
+                                           <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                           <AlertDialogAction
+                                             onClick={() => onDeleteAppointment(appointment.id)}
+                                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                           >
+                                             Sim, excluir
+                                           </AlertDialogAction>
+                                         </AlertDialogFooter>
+                                       </AlertDialogContent>
+                                     </AlertDialog>
+                                   )}
                                 </div>
                               </TableCell>
                             </TableRow>
