@@ -18,17 +18,6 @@ export function useAtomicAppointmentCreation() {
   // Função de delay para retry
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-  // Função helper para identificar médicos Marcelo
-  const isMedicoMarcelo = (medicoId?: string): boolean => {
-    if (!medicoId) return false;
-    const marceloIds = [
-      '1e110923-50df-46ff-a57a-29d88e372900', // Dr. Marcelo D'Carli (CONSULTAS)
-      'e6453b94-840d-4adf-ab0f-fc22be7cd7f5', // MAPA - Dr. Marcelo  
-      '9d5d0e63-098b-4282-aa03-db3c7e012579'  // Teste Ergométrico - Dr. Marcelo
-    ];
-    return marceloIds.includes(medicoId);
-  };
-
   // Validações básicas no frontend
   const validateFormData = (formData: SchedulingFormData) => {
     if (!formData.medicoId?.trim()) {
@@ -43,7 +32,7 @@ export function useAtomicAppointmentCreation() {
     if (formData.nomeCompleto.trim().length < 3) {
       throw new Error('Nome completo deve ter pelo menos 3 caracteres');
     }
-    if (!formData.dataNascimento && !isMedicoMarcelo(formData.medicoId)) {
+    if (!formData.dataNascimento) {
       throw new Error('Data de nascimento é obrigatória');
     }
     if (!formData.convenio?.trim()) {
@@ -87,14 +76,12 @@ export function useAtomicAppointmentCreation() {
       throw new Error(`Agendamento deve ser feito com pelo menos 1 hora de antecedência. Horário atual do Brasil: ${currentTimeFormatted} - Agendamento solicitado: ${requestedTimeFormatted}`);
     }
 
-    // Validar idade do paciente (apenas se data de nascimento foi fornecida)
-    if (formData.dataNascimento) {
-      const birthDate = new Date(formData.dataNascimento);
-      const age = Math.floor((nowBrazil.getTime() - birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
-      
-      if (age < 0 || age > 120) {
-        throw new Error('Data de nascimento inválida');
-      }
+    // Validar idade do paciente
+    const birthDate = new Date(formData.dataNascimento);
+    const age = Math.floor((nowBrazil.getTime() - birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+    
+    if (age < 0 || age > 120) {
+      throw new Error('Data de nascimento inválida');
     }
   };
 
