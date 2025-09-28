@@ -13,6 +13,14 @@ export function InstallButton() {
   const [isInstalled, setIsInstalled] = useState(false);
 
   useEffect(() => {
+    // Debug inicial - verificar se o PWA está sendo reconhecido
+    console.log('🔍 PWA Debug - Verificando estado inicial:', {
+      hasServiceWorker: 'serviceWorker' in navigator,
+      hasManifest: document.querySelector('link[rel="manifest"]') !== null,
+      isStandalone: window.matchMedia('(display-mode: standalone)').matches,
+      userAgent: navigator.userAgent.substring(0, 100)
+    });
+
     // Verificar se já está instalado
     const checkIfInstalled = () => {
       // Verificar se está rodando como PWA
@@ -20,13 +28,15 @@ export function InstallButton() {
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
       const isInWebAppiOS = isIOS && (window.navigator as any).standalone;
       
-      setIsInstalled(isStandalone || isInWebAppiOS);
+      const installed = isStandalone || isInWebAppiOS;
+      console.log('✅ PWA: Check if installed -', { installed, isStandalone, isInWebAppiOS });
+      setIsInstalled(installed);
     };
 
     checkIfInstalled();
 
     const handleBeforeInstallPrompt = (e: Event) => {
-      console.log('beforeinstallprompt fired');
+      console.log('🚀 PWA: beforeinstallprompt fired - App é instalável!');
       // Prevent the mini-infobar from appearing on mobile
       e.preventDefault();
       // Stash the event so it can be triggered later
@@ -35,11 +45,22 @@ export function InstallButton() {
     };
 
     const handleAppInstalled = () => {
-      console.log('PWA was installed');
+      console.log('🎉 PWA: App foi instalado com sucesso!');
       setIsInstallable(false);
       setIsInstalled(true);
       setDeferredPrompt(null);
     };
+
+    // Timeout para verificar se o evento beforeinstallprompt não disparou
+    const debugTimeout = setTimeout(() => {
+      if (!deferredPrompt && !isInstalled) {
+        console.log('⚠️ PWA: beforeinstallprompt não disparou após 3s. Possíveis causas:', {
+          manifestPresent: !!document.querySelector('link[rel="manifest"]'),
+          httpsProtocol: location.protocol === 'https:',
+          serviceWorkerRegistered: 'serviceWorker' in navigator
+        });
+      }
+    }, 3000);
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
@@ -49,6 +70,7 @@ export function InstallButton() {
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
+      clearTimeout(debugTimeout);
     };
   }, []);
 
