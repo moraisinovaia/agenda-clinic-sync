@@ -462,16 +462,16 @@ Vou te ajudar a agendar sua consulta! 😊
           // Criar agendamento usando função do Supabase
           try {
             const { data: resultado } = await supabase.rpc('criar_agendamento_atomico', {
-              p_nome_completo: dados.nome,
+              p_nome_completo: dados.nome.toUpperCase(),
               p_data_nascimento: dados.dataNascimento,
-              p_convenio: dados.convenio,
+              p_convenio: dados.convenio.toUpperCase(),
               p_telefone: dados.telefone,
               p_celular: dados.celular,
               p_medico_id: dados.medico.id,
               p_atendimento_id: dados.atendimento.id,
               p_data_agendamento: dados.dataAgendamento,
               p_hora_agendamento: dados.horaAgendamento,
-              p_observacoes: 'Agendado via WhatsApp',
+              p_observacoes: 'AGENDADO VIA WHATSAPP',
               p_criado_por: 'whatsapp_agent'
             });
             

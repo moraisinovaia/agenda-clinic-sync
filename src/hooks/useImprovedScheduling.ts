@@ -20,16 +20,16 @@ export function useImprovedScheduling() {
       console.log('🔄 Criando agendamento:', formData, { forceConflict });
 
       const { data, error } = await supabase.rpc('criar_agendamento_atomico', {
-        p_nome_completo: formData.nomeCompleto,
+        p_nome_completo: formData.nomeCompleto.toUpperCase(),
         p_data_nascimento: formData.dataNascimento,
-        p_convenio: formData.convenio,
+        p_convenio: formData.convenio.toUpperCase(),
         p_telefone: formData.telefone || '',
         p_celular: formData.celular || '',
         p_medico_id: formData.medicoId,
         p_atendimento_id: formData.atendimentoId,
         p_data_agendamento: formData.dataAgendamento,
         p_hora_agendamento: formData.horaAgendamento,
-        p_observacoes: formData.observacoes || null,
+        p_observacoes: formData.observacoes?.toUpperCase() || null,
         p_criado_por: 'recepcionista',
         p_criado_por_user_id: user.id,
         p_forcar_conflito: forceConflict  // NOVO PARÂMETRO
@@ -131,9 +131,9 @@ export function useImprovedScheduling() {
           const { error: updatePatientError } = await supabase
             .from('pacientes')
             .update({
-              nome_completo: formData.nomeCompleto,
+              nome_completo: formData.nomeCompleto.toUpperCase(),
               data_nascimento: formData.dataNascimento,
-              convenio: formData.convenio,
+              convenio: formData.convenio.toUpperCase(),
               telefone: formData.telefone || '',
               celular: formData.celular || ''
             })
@@ -154,8 +154,8 @@ export function useImprovedScheduling() {
           atendimento_id: formData.atendimentoId,
           data_agendamento: formData.dataAgendamento,
           hora_agendamento: formData.horaAgendamento,
-          convenio: formData.convenio,
-          observacoes: formData.observacoes || null,
+          convenio: formData.convenio.toUpperCase(),
+          observacoes: formData.observacoes?.toUpperCase() || null,
           updated_at: new Date().toISOString()
         })
         .eq('id', appointmentId);

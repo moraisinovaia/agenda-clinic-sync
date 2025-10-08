@@ -148,16 +148,16 @@ export async function handleCreateAppointment(supabase: any, body: any) {
   try {
     // Usar sempre função atômica para agendamento simples
     const { data: result, error } = await supabase.rpc('criar_agendamento_atomico', {
-      p_nome_completo: nomeCompleto,
+      p_nome_completo: nomeCompleto.toUpperCase(),
       p_data_nascimento: dataNascimento,
-      p_convenio: convenio,
+      p_convenio: convenio.toUpperCase(),
       p_telefone: telefone || null,
       p_celular: celular,
       p_medico_id: medicoId,
       p_atendimento_id: atendimentoId,
       p_data_agendamento: dataAgendamento,
       p_hora_agendamento: horaAgendamento,
-      p_observacoes: observacoes || null,
+      p_observacoes: observacoes?.toUpperCase() || null,
       p_criado_por: criadoPor,
       p_criado_por_user_id: usuarioResponsavel,
     });

@@ -188,16 +188,16 @@ async function handleSchedule(supabase: any, body: any) {
     
     const { data: result, error: agendamentoError } = await supabase
       .rpc('criar_agendamento_atomico', {
-        p_nome_completo: paciente_nome,
+        p_nome_completo: paciente_nome.toUpperCase(),
         p_data_nascimento: data_nascimento,
-        p_convenio: convenio,
+        p_convenio: convenio.toUpperCase(),
         p_telefone: telefone || null,
         p_celular: celular,
         p_medico_id: medico.id,
         p_atendimento_id: atendimento_id,
         p_data_agendamento: data_consulta,
         p_hora_agendamento: hora_consulta,
-        p_observacoes: observacoes || 'Agendamento via LLM Agent WhatsApp',
+        p_observacoes: (observacoes || 'Agendamento via LLM Agent WhatsApp').toUpperCase(),
         p_criado_por: 'LLM Agent WhatsApp',
         p_criado_por_user_id: null,
         p_agendamento_id_edicao: null,
