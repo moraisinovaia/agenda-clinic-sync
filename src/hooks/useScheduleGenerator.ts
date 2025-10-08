@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { parseISO } from 'date-fns';
+import { toZonedTime } from 'date-fns-tz';
+import { BRAZIL_TIMEZONE } from '@/utils/timezone';
 import { GenerationConfig, GenerationResult } from '@/types/schedule-generator';
 import { generateTimeSlotsForPeriod, validateScheduleConfig } from '@/utils/scheduleGenerator';
 
@@ -62,9 +64,9 @@ export function useScheduleGenerator() {
           cliente_id: userClienteId // Usar cliente_id do usuário logado
         };
         
-        // ✅ FIX CRÍTICO: Usar parseISO para evitar problema de timezone
-        const startDateParsed = parseISO(config.data_inicio + 'T00:00:00');
-        const endDateParsed = parseISO(config.data_fim + 'T00:00:00');
+        // ✅ FIX CRÍTICO: Usar toZonedTime com timezone do Brasil
+        const startDateParsed = toZonedTime(parseISO(config.data_inicio + 'T12:00:00'), BRAZIL_TIMEZONE);
+        const endDateParsed = toZonedTime(parseISO(config.data_fim + 'T12:00:00'), BRAZIL_TIMEZONE);
         
         console.log('🌍 Timezone Debug:', {
           data_inicio_string: config.data_inicio,

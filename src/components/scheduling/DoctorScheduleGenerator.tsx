@@ -8,6 +8,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { format, addDays, getDay, eachDayOfInterval, parseISO, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { toZonedTime } from 'date-fns-tz';
+import { BRAZIL_TIMEZONE } from '@/utils/timezone';
 import { Clock, CalendarDays, AlertCircle, Zap, AlertTriangle } from 'lucide-react';
 import { useScheduleGenerator } from '@/hooks/useScheduleGenerator';
 import { DaySchedule } from '@/types/schedule-generator';
@@ -110,9 +112,9 @@ export function DoctorScheduleGenerator({
   const calculatePreview = () => {
     if (!selectedDoctor) return 0;
     
-    // ✅ Parsing seguro de datas
-    const start = parseISO(dataInicio + 'T00:00:00');
-    const end = parseISO(dataFim + 'T23:59:59');
+    // ✅ Parsing seguro de datas com timezone do Brasil
+    const start = toZonedTime(parseISO(dataInicio + 'T12:00:00'), BRAZIL_TIMEZONE);
+    const end = toZonedTime(parseISO(dataFim + 'T12:00:00'), BRAZIL_TIMEZONE);
     
     // ✅ Validação de datas
     if (!isValid(start) || !isValid(end)) {
@@ -414,8 +416,8 @@ export function DoctorScheduleGenerator({
               {schedules.map((sched, idx) => {
                 // Calcular se este dia da semana existe no período selecionado
                 const daysInPeriod = dataInicio && dataFim ? (() => {
-                  const start = parseISO(dataInicio + 'T00:00:00');
-                  const end = parseISO(dataFim + 'T00:00:00');
+                  const start = toZonedTime(parseISO(dataInicio + 'T12:00:00'), BRAZIL_TIMEZONE);
+                  const end = toZonedTime(parseISO(dataFim + 'T12:00:00'), BRAZIL_TIMEZONE);
                   if (!isValid(start) || !isValid(end)) return [];
                   return eachDayOfInterval({ start, end }).map(d => getDay(d));
                 })() : [];
@@ -503,7 +505,7 @@ export function DoctorScheduleGenerator({
                   </div>
                   
                   <div className="text-sm space-y-1">
-                    <p><strong>Período:</strong> {format(new Date(dataInicio), 'dd/MM/yyyy')} até {format(new Date(dataFim), 'dd/MM/yyyy')}</p>
+                    <p><strong>Período:</strong> {format(toZonedTime(parseISO(dataInicio + 'T12:00:00'), BRAZIL_TIMEZONE), 'dd/MM/yyyy')} até {format(toZonedTime(parseISO(dataFim + 'T12:00:00'), BRAZIL_TIMEZONE), 'dd/MM/yyyy')}</p>
                     <p><strong>Intervalo:</strong> {intervaloMinutos} minutos</p>
                     <p><strong>Dias configurados:</strong></p>
                     <ul className="ml-4 list-disc">
@@ -522,8 +524,8 @@ export function DoctorScheduleGenerator({
               .map((s, i) => (s.manha.ativo || s.tarde.ativo) ? DIAS_SEMANA[i].label : null)
               .filter(Boolean);
             
-            const startDay = format(parseISO(dataInicio + 'T00:00:00'), 'EEEE', { locale: ptBR });
-            const endDay = format(parseISO(dataFim + 'T00:00:00'), 'EEEE', { locale: ptBR });
+            const startDay = format(toZonedTime(parseISO(dataInicio + 'T12:00:00'), BRAZIL_TIMEZONE), 'EEEE', { locale: ptBR });
+            const endDay = format(toZonedTime(parseISO(dataFim + 'T12:00:00'), BRAZIL_TIMEZONE), 'EEEE', { locale: ptBR });
             
             return (
               <Alert variant="destructive">
@@ -532,7 +534,7 @@ export function DoctorScheduleGenerator({
                   <strong>⚠️ Nenhum horário será gerado!</strong>
                   <div className="text-sm mt-2 space-y-1">
                     <p><strong>Dias configurados:</strong> {activeDaysNames.join(', ')}</p>
-                    <p><strong>Período selecionado:</strong> {startDay} ({format(parseISO(dataInicio + 'T00:00:00'), 'dd/MM')}) até {endDay} ({format(parseISO(dataFim + 'T00:00:00'), 'dd/MM')})</p>
+                    <p><strong>Período selecionado:</strong> {startDay} ({format(toZonedTime(parseISO(dataInicio + 'T12:00:00'), BRAZIL_TIMEZONE), 'dd/MM')}) até {endDay} ({format(toZonedTime(parseISO(dataFim + 'T12:00:00'), BRAZIL_TIMEZONE), 'dd/MM')})</p>
                     <p className="mt-2 font-medium">💡 Solução:</p>
                     <ul className="list-disc ml-5">
                       <li>Ajuste as <strong>datas</strong> para incluir os dias configurados, OU</li>
