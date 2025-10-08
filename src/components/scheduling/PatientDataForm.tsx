@@ -6,9 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DateOfBirthInput } from '@/components/ui/date-of-birth-input';
-
 import { User, Search, UserCheck, AlertCircle, CheckCircle } from 'lucide-react';
 import { SchedulingFormData } from '@/types/scheduling';
+import { formatPhone, isValidPhone } from '@/utils/phoneFormatter';
 
 interface PatientDataFormProps {
   formData: SchedulingFormData;
@@ -132,26 +132,6 @@ export function PatientDataForm({
   };
 
   // Função para aplicar máscara de telefone
-  const formatPhone = (value: string) => {
-    // Remove tudo que não é número
-    const numbers = value.replace(/\D/g, '');
-    
-    // Aplica máscara baseada no tamanho
-    if (numbers.length <= 10) {
-      // Telefone fixo: (xx) xxxx-xxxx
-      return numbers.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3').replace(/-$/, '');
-    } else {
-      // Celular: (xx) xxxxx-xxxx
-      return numbers.replace(/(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3').replace(/-$/, '');
-    }
-  };
-
-  // Função para validar se o número está completo
-  const isValidPhone = (value: string) => {
-    const numbers = value.replace(/\D/g, '');
-    return numbers.length === 10 || numbers.length === 11;
-  };
-
   const handlePhoneChange = (value: string, field: 'telefone' | 'celular') => {
     const formatted = formatPhone(value);
     setFormData(prev => ({ ...prev, [field]: formatted }));

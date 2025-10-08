@@ -12,6 +12,7 @@ import { useUnifiedPatientSearch } from '@/hooks/useUnifiedPatientSearch';
 import { useLastScheduledPatient } from '@/hooks/useLastScheduledPatient';
 import { ConsolidatedPatient } from '@/types/consolidated-patient';
 import { toast } from 'sonner';
+import { formatPhone, isValidPhone } from '@/utils/phoneFormatter';
 
 interface PatientDataFormFixedProps {
   formData: SchedulingFormData;
@@ -227,20 +228,6 @@ export function PatientDataFormFixed({
   }, [onFillLastPatient, fillLastPatientData]);
 
   // Função para aplicar máscara de telefone
-  const formatPhone = (value: string) => {
-    const numbers = value.replace(/\D/g, '');
-    if (numbers.length <= 10) {
-      return numbers.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3').replace(/-$/, '');
-    } else {
-      return numbers.replace(/(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3').replace(/-$/, '');
-    }
-  };
-
-  const isValidPhone = (value: string) => {
-    const numbers = value.replace(/\D/g, '');
-    return numbers.length === 10 || numbers.length === 11;
-  };
-
   const handlePhoneChange = (value: string, field: 'telefone' | 'celular') => {
     const formatted = formatPhone(value);
     setFormData(prev => ({ ...prev, [field]: formatted }));

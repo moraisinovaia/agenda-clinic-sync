@@ -17,6 +17,7 @@ import { Doctor, Atendimento } from '@/types/scheduling';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useUnifiedPatientSearch } from '@/hooks/useUnifiedPatientSearch';
+import { formatPhone, isValidPhone } from '@/utils/phoneFormatter';
 
 interface FilaEsperaFormProps {
   doctors: Doctor[];
@@ -264,13 +265,21 @@ export function FilaEsperaForm({
                 )}
 
                 <div className="space-y-2">
-                  <Label htmlFor="celular">Celular</Label>
+                  <Label htmlFor="celular">Celular *</Label>
                   <Input
                     id="celular"
                     value={pacienteData.celular}
-                    onChange={(e) => setPacienteData(prev => ({ ...prev, celular: e.target.value }))}
+                    onChange={(e) => {
+                      const formatted = formatPhone(e.target.value);
+                      setPacienteData(prev => ({ ...prev, celular: formatted }));
+                    }}
                     placeholder="(XX) XXXXX-XXXX"
+                    maxLength={15}
+                    className={pacienteData.celular && !isValidPhone(pacienteData.celular) ? 'border-red-500' : ''}
                   />
+                  {pacienteData.celular && !isValidPhone(pacienteData.celular) && (
+                    <p className="text-xs text-red-500">Formato de celular inválido. Use o formato (XX) XXXXX-XXXX</p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
