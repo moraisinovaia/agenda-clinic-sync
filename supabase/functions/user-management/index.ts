@@ -38,24 +38,14 @@ serve(async (req) => {
       );
     }
 
-    // Criar cliente com JWT para verificar usuário autenticado
-    const supabaseClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      },
-      global: {
-        headers: {
-          Authorization: authHeader
-        }
-      }
-    });
+    // Extrair token do header "Bearer <token>"
+    const token = authHeader.replace('Bearer ', '');
 
-    // Verificar usuário autenticado
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+    // Verificar usuário autenticado usando Admin API
+    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
     if (userError || !user) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Usuário não autenticado' }),
+        JSON.stringify({ success: false, error: 'Token inválido ou usuário não autenticado', details: userError?.message }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
       );
     }
@@ -67,11 +57,24 @@ serve(async (req) => {
       .eq('user_id', user.id)
       .single();
 
-    if (adminError || !adminProfile || adminProfile.role !== 'admin' || adminProfile.status !== 'aprovado') {
+    if (adminError || !adminProfile) {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Apenas administradores aprovados podem realizar esta ação' 
+          error: 'Perfil do usuário não encontrado',
+          details: adminError?.message
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+      );
+    }
+
+    if (adminProfile.role !== 'admin' || adminProfile.status !== 'aprovado') {
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Apenas administradores aprovados podem realizar esta ação',
+          user_role: adminProfile.role,
+          user_status: adminProfile.status
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
       );
