@@ -18,6 +18,7 @@ interface DoctorScheduleGeneratorProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   doctors: Doctor[];
+  preSelectedDoctorId?: string;
   onSuccess?: () => void;
 }
 
@@ -35,11 +36,12 @@ export function DoctorScheduleGenerator({
   open,
   onOpenChange,
   doctors,
+  preSelectedDoctorId,
   onSuccess
 }: DoctorScheduleGeneratorProps) {
   const { generateSchedule, loading } = useScheduleGenerator();
   
-  const [selectedDoctor, setSelectedDoctor] = useState<string>('');
+  const [selectedDoctor, setSelectedDoctor] = useState<string>(preSelectedDoctorId || '');
   const [dataInicio, setDataInicio] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [dataFim, setDataFim] = useState(format(addDays(new Date(), 30), 'yyyy-MM-dd'));
   const [intervaloMinutos, setIntervaloMinutos] = useState<10 | 15 | 20 | 30>(15);
@@ -90,6 +92,13 @@ export function DoctorScheduleGenerator({
     
     return totalSlots;
   };
+
+  // Atualizar selectedDoctor quando preSelectedDoctorId mudar
+  useEffect(() => {
+    if (preSelectedDoctorId) {
+      setSelectedDoctor(preSelectedDoctorId);
+    }
+  }, [preSelectedDoctorId]);
 
   useEffect(() => {
     setPreviewCount(calculatePreview());
