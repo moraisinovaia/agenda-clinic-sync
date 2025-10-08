@@ -1372,26 +1372,38 @@ export type Database = {
       buscar_agendamentos_otimizado: {
         Args: Record<PropertyKey, never>
         Returns: {
+          alterado_por_user_id: string
           atendimento_id: string
           atendimento_nome: string
+          atendimento_tipo: string
+          cancelado_em: string
+          cancelado_por: string
+          cancelado_por_user_id: string
           confirmado_em: string
           confirmado_por: string
+          confirmado_por_user_id: string
           convenio: string
           created_at: string
           criado_por: string
           criado_por_user_id: string
           data_agendamento: string
+          excluido_em: string
+          excluido_por: string
+          excluido_por_user_id: string
           hora_agendamento: string
           id: string
+          medico_especialidade: string
           medico_id: string
           medico_nome: string
           observacoes: string
           paciente_celular: string
           paciente_convenio: string
+          paciente_data_nascimento: string
           paciente_id: string
           paciente_nome: string
           paciente_telefone: string
           status: string
+          updated_at: string
         }[]
       }
       buscar_agendamentos_otimizado_ipado: {
