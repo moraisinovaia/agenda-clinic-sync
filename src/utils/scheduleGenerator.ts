@@ -10,11 +10,26 @@ export function generateTimeSlotsForPeriod(
   const slots: EmptyTimeSlot[] = [];
   const days = eachDayOfInterval({ start: startDate, end: endDate });
   
+  console.log('🔍 Iniciando geração de slots:', {
+    periodo: `${format(startDate, 'yyyy-MM-dd')} até ${format(endDate, 'yyyy-MM-dd')}`,
+    total_dias: days.length,
+    dia_semana_config: config.dia_semana,
+    periodo_config: config.periodo
+  });
+  
   for (const day of days) {
-    // Verificar se é o dia da semana configurado
-    if (getDay(day) !== config.dia_semana) continue;
-    
+    const dayOfWeek = getDay(day);
     const dateStr = format(day, 'yyyy-MM-dd');
+    
+    console.log(`📆 Processando ${dateStr}: getDay()=${dayOfWeek}, config=${config.dia_semana}, match=${dayOfWeek === config.dia_semana}`);
+    
+    // Verificar se é o dia da semana configurado
+    if (dayOfWeek !== config.dia_semana) {
+      console.log(`⏩ Pulando ${dateStr} - não é o dia da semana configurado`);
+      continue;
+    }
+    
+    console.log(`✅ ${dateStr} é o dia correto! Gerando slots...`);
     
     // Gerar slots de horário
     const timeSlots = generateTimeSlots(

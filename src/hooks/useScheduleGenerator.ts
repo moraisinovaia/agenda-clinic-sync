@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { parseISO } from 'date-fns';
 import { GenerationConfig, GenerationResult } from '@/types/schedule-generator';
 import { generateTimeSlotsForPeriod, validateScheduleConfig } from '@/utils/scheduleGenerator';
 
@@ -49,10 +50,22 @@ export function useScheduleGenerator() {
       // 2. Gerar slots para cada configuração
       let allSlots: any[] = [];
       for (const scheduleConfig of config.configuracoes) {
+        // ✅ FIX CRÍTICO: Usar parseISO para evitar problema de timezone
+        const startDateParsed = parseISO(config.data_inicio + 'T00:00:00');
+        const endDateParsed = parseISO(config.data_fim + 'T00:00:00');
+        
+        console.log('🌍 Timezone Debug:', {
+          data_inicio_string: config.data_inicio,
+          data_inicio_parsed: startDateParsed,
+          dia_semana_detectado: startDateParsed.getDay(),
+          dia_semana_configurado: scheduleConfig.dia_semana,
+          match: startDateParsed.getDay() === scheduleConfig.dia_semana
+        });
+        
         const slots = generateTimeSlotsForPeriod(
           scheduleConfig,
-          new Date(config.data_inicio),
-          new Date(config.data_fim),
+          startDateParsed,
+          endDateParsed,
           appointments || []
         );
         console.log(`📅 Gerados ${slots.length} slots para ${['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][scheduleConfig.dia_semana]} (${scheduleConfig.periodo})`);
