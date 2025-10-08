@@ -14,8 +14,27 @@ export function useScheduleGenerator() {
     setError(null);
     
     try {
+      // ✅ CORREÇÃO 1: Buscar cliente_id do usuário logado
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('cliente_id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (profileError || !profileData?.cliente_id) {
+        throw new Error('Cliente ID não encontrado. Faça login novamente.');
+      }
+
+      const userClienteId = profileData.cliente_id;
+
       console.log('🎯 Iniciando geração de horários:', {
         medico: config.medico_id,
+        cliente_id: userClienteId,
         periodo: `${config.data_inicio} - ${config.data_fim}`,
         configs_ativas: config.configuracoes.length
       });
@@ -47,9 +66,15 @@ export function useScheduleGenerator() {
       
       console.log(`✅ ${appointments?.length || 0} agendamentos existentes encontrados`);
       
-      // 2. Gerar slots para cada configuração
+      // 2. Gerar slots para cada configuração com cliente_id correto
       let allSlots: any[] = [];
       for (const scheduleConfig of config.configuracoes) {
+        // ✅ CORREÇÃO 2: Garantir que cliente_id está presente em TODAS as configs
+        const configWithClienteId = {
+          ...scheduleConfig,
+          cliente_id: userClienteId // Usar cliente_id do usuário logado
+        };
+        
         // ✅ FIX CRÍTICO: Usar parseISO para evitar problema de timezone
         const startDateParsed = parseISO(config.data_inicio + 'T00:00:00');
         const endDateParsed = parseISO(config.data_fim + 'T00:00:00');
@@ -63,7 +88,7 @@ export function useScheduleGenerator() {
         });
         
         const slots = generateTimeSlotsForPeriod(
-          scheduleConfig,
+          configWithClienteId, // ✅ Usar config com cliente_id garantido
           startDateParsed,
           endDateParsed,
           appointments || []
