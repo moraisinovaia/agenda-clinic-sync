@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { format, addDays, startOfWeek, isSameDay, parse, startOfDay, differenceInYears, isValid } from 'date-fns';
+import { format, addDays, startOfWeek, isSameDay, parse, startOfDay, differenceInYears, isValid, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatInTimeZone } from 'date-fns-tz';
 import { BRAZIL_TIMEZONE } from '@/utils/timezone';
@@ -41,37 +41,125 @@ interface DoctorScheduleProps {
   onUnconfirmAppointment?: (appointmentId: string) => Promise<void>;
   onEditAppointment?: (appointment: AppointmentWithRelations) => void;
   onNewAppointment?: (selectedDate?: string) => void;
-  onNewAppointmentWithTime?: (date: string, time: string) => void; // Nova prop para horário vazio
-  initialDate?: string; // Data inicial para posicionar o calendário
+  onNewAppointmentWithTime?: (date: string, time: string) => void;
+  initialDate?: string;
   atendimentos: Atendimento[];
   adicionarFilaEspera: (data: FilaEsperaFormData) => Promise<boolean>;
   searchPatientsByBirthDate: (birthDate: string) => Promise<any[]>;
-  emptySlots?: any[]; // Nova prop para horários vazios
+  emptySlots?: any[];
 }
 
-export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDateBlocked, onCancelAppointment, onDeleteAppointment, onConfirmAppointment, onUnconfirmAppointment, onEditAppointment, onNewAppointment, onNewAppointmentWithTime, initialDate, atendimentos, adicionarFilaEspera, searchPatientsByBirthDate, emptySlots = [] }: DoctorScheduleProps) {
-  // Usar initialDate se fornecida, senão usar data do primeiro agendamento do médico, senão data atual
-  const [selectedDate, setSelectedDate] = useState<Date>(() => {
-    if (initialDate) {
-      // Parse da data no formato YYYY-MM-DD para evitar problemas de timezone
-      console.log('🎯 DoctorSchedule: Usando initialDate fornecida:', initialDate);
-      return parse(initialDate, 'yyyy-MM-dd', new Date());
-    }
+// Função auxiliar para validar e formatar datas com segurança
+const safeFormatDate = (dateValue: any, formatStr: string = 'dd/MM/yy HH:mm'): string => {
+  if (!dateValue) return 'N/A';
+  
+  try {
+    let dateObj: Date;
     
-    // Se não há initialDate, tentar usar a data do agendamento mais recente do médico
-    if (appointments && appointments.length > 0) {
-      const doctorAppointments = appointments.filter(apt => apt.medico_id === doctor.id);
-      if (doctorAppointments.length > 0) {
-        // Usar o agendamento mais recente
-        const mostRecentAppointment = doctorAppointments.sort((a, b) => 
-          new Date(b.data_agendamento).getTime() - new Date(a.data_agendamento).getTime()
-        )[0];
-        console.log('🎯 DoctorSchedule: Usando data do agendamento mais recente:', mostRecentAppointment.data_agendamento);
-        return parse(mostRecentAppointment.data_agendamento, 'yyyy-MM-dd', new Date());
+    if (typeof dateValue === 'string') {
+      // Tenta parseISO primeiro (formato ISO 8601)
+      dateObj = parseISO(dateValue);
+      if (!isValid(dateObj)) {
+        // Fallback para new Date
+        dateObj = new Date(dateValue);
       }
+    } else if (dateValue instanceof Date) {
+      dateObj = dateValue;
+    } else {
+      return 'N/A';
     }
     
-    console.log('🎯 DoctorSchedule: Usando data atual como fallback');
+    if (!isValid(dateObj)) {
+      console.warn('⚠️ Data inválida detectada:', dateValue);
+      return 'N/A';
+    }
+    
+    return formatInTimeZone(dateObj, BRAZIL_TIMEZONE, formatStr, { locale: ptBR });
+  } catch (error) {
+    console.error('❌ Erro ao formatar data:', error, dateValue);
+    return 'N/A';
+  }
+};
+
+// Função para calcular idade com segurança
+const safeCalculateAge = (birthDate: any): string | null => {
+  if (!birthDate) return null;
+  
+  try {
+    let dateObj: Date;
+    
+    if (typeof birthDate === 'string') {
+      // Parse ISO ou formato padrão
+      dateObj = parseISO(birthDate);
+      if (!isValid(dateObj)) {
+        dateObj = new Date(birthDate);
+      }
+    } else if (birthDate instanceof Date) {
+      dateObj = birthDate;
+    } else {
+      return null;
+    }
+    
+    if (!isValid(dateObj)) {
+      console.warn('⚠️ Data de nascimento inválida:', birthDate);
+      return null;
+    }
+    
+    const age = differenceInYears(new Date(), dateObj);
+    return age >= 0 ? `${age}a` : null;
+  } catch (error) {
+    console.error('❌ Erro ao calcular idade:', error, birthDate);
+    return null;
+  }
+};
+
+export function DoctorSchedule({ 
+  doctor, 
+  appointments, 
+  blockedDates = [], 
+  isDateBlocked, 
+  onCancelAppointment, 
+  onDeleteAppointment, 
+  onConfirmAppointment, 
+  onUnconfirmAppointment, 
+  onEditAppointment, 
+  onNewAppointment, 
+  onNewAppointmentWithTime, 
+  initialDate, 
+  atendimentos, 
+  adicionarFilaEspera, 
+  searchPatientsByBirthDate, 
+  emptySlots = [] 
+}: DoctorScheduleProps) {
+  
+  // Estado para data selecionada com validação segura
+  const [selectedDate, setSelectedDate] = useState<Date>(() => {
+    try {
+      if (initialDate) {
+        console.log('🎯 Usando initialDate:', initialDate);
+        const parsed = parse(initialDate, 'yyyy-MM-dd', new Date());
+        if (isValid(parsed)) return parsed;
+      }
+      
+      if (appointments && appointments.length > 0) {
+        const doctorAppointments = appointments.filter(apt => apt.medico_id === doctor.id);
+        if (doctorAppointments.length > 0) {
+          const mostRecent = doctorAppointments.sort((a, b) => 
+            new Date(b.data_agendamento).getTime() - new Date(a.data_agendamento).getTime()
+          )[0];
+          
+          const parsed = parse(mostRecent.data_agendamento, 'yyyy-MM-dd', new Date());
+          if (isValid(parsed)) {
+            console.log('🎯 Usando data do agendamento:', mostRecent.data_agendamento);
+            return parsed;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('❌ Erro ao inicializar data:', error);
+    }
+    
+    console.log('🎯 Usando data atual');
     return new Date();
   });
   
@@ -80,51 +168,48 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
   const [scheduleGenOpen, setScheduleGenOpen] = useState(false);
   
   const getAppointmentsForDate = (date: Date) => {
-    // Normalizar a data para evitar problemas de timezone
-    const normalizedDate = startOfDay(date);
-    const dateStr = format(normalizedDate, 'yyyy-MM-dd');
-    
-    const filtered = appointments.filter(
-      appointment => 
-        appointment.medico_id === doctor.id && 
-        appointment.data_agendamento === dateStr &&
-        appointment.status !== 'excluido' // Excluir agendamentos excluídos
-    );
-    
-    return filtered;
-  };
-
-  // Função para verificar se uma data tem agendamentos
-  const hasAppointments = (date: Date) => {
-    const normalizedDate = startOfDay(date);
-    const dateStr = format(normalizedDate, 'yyyy-MM-dd');
-    
-    // Debug detalhado
-    console.log(`🔍 hasAppointments verificando data: ${dateStr}`);
-    console.log(`📋 Total appointments para médico ${doctor.id}:`, appointments.filter(apt => apt.medico_id === doctor.id).length);
-    console.log(`📅 Appointments para esta data:`, appointments.filter(apt => 
-      apt.medico_id === doctor.id && apt.data_agendamento === dateStr
-    ));
-    
-    const appointmentsForDate = getAppointmentsForDate(date);
-    console.log(`✅ hasAppointments retornando:`, appointmentsForDate.length > 0);
-    
-    return appointmentsForDate.length > 0;
-  };
-
-  // Função para verificar se uma data está bloqueada
-  const hasBlocks = (date: Date) => {
-    if (isDateBlocked) {
-      return isDateBlocked(doctor.id, date);
+    try {
+      const normalizedDate = startOfDay(date);
+      const dateStr = format(normalizedDate, 'yyyy-MM-dd');
+      
+      return appointments.filter(
+        appointment => 
+          appointment.medico_id === doctor.id && 
+          appointment.data_agendamento === dateStr &&
+          appointment.status !== 'excluido'
+      );
+    } catch (error) {
+      console.error('❌ Erro ao buscar agendamentos:', error);
+      return [];
     }
-    // Fallback manual se isDateBlocked não estiver disponível
-    const dateStr = date.toISOString().split('T')[0];
-    return blockedDates.some(blocked => 
-      blocked.medico_id === doctor.id &&
-      blocked.status === 'ativo' &&
-      dateStr >= blocked.data_inicio &&
-      dateStr <= blocked.data_fim
-    );
+  };
+
+  const hasAppointments = (date: Date) => {
+    try {
+      const appointmentsForDate = getAppointmentsForDate(date);
+      return appointmentsForDate.length > 0;
+    } catch (error) {
+      console.error('❌ Erro em hasAppointments:', error);
+      return false;
+    }
+  };
+
+  const hasBlocks = (date: Date) => {
+    try {
+      if (isDateBlocked) {
+        return isDateBlocked(doctor.id, date);
+      }
+      const dateStr = date.toISOString().split('T')[0];
+      return blockedDates.some(blocked => 
+        blocked.medico_id === doctor.id &&
+        blocked.status === 'ativo' &&
+        dateStr >= blocked.data_inicio &&
+        dateStr <= blocked.data_fim
+      );
+    } catch (error) {
+      console.error('❌ Erro em hasBlocks:', error);
+      return false;
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -158,13 +243,10 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
   };
 
   const selectedDateAppointments = getAppointmentsForDate(selectedDate);
-  
-  // Filter only active appointments (scheduled and confirmed) for counting
   const activeAppointments = selectedDateAppointments.filter(
     apt => apt.status === 'agendado' || apt.status === 'confirmado'
   );
 
-  // Buscar horários vazios para a data selecionada
   const emptyTimeSlots = useMemo(() => {
     try {
       const dateStr = format(selectedDate, 'yyyy-MM-dd');
@@ -181,19 +263,25 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
     }
   }, [emptySlots, doctor.id, selectedDate]);
 
-  // Combinar slots vazios com agendamentos
-  const allSlots = [
-    ...emptyTimeSlots.map(slot => ({
-      type: 'empty' as const,
-      hora: slot.hora,
-      data: slot
-    })),
-    ...selectedDateAppointments.map(apt => ({
-      type: 'appointment' as const,
-      hora: apt.hora_agendamento,
-      data: apt
-    }))
-  ].sort((a, b) => a.hora.localeCompare(b.hora));
+  const allSlots = useMemo(() => {
+    try {
+      return [
+        ...emptyTimeSlots.map(slot => ({
+          type: 'empty' as const,
+          hora: slot.hora,
+          data: slot
+        })),
+        ...selectedDateAppointments.map(apt => ({
+          type: 'appointment' as const,
+          hora: apt.hora_agendamento,
+          data: apt
+        }))
+      ].sort((a, b) => a.hora.localeCompare(b.hora));
+    } catch (error) {
+      console.error('❌ Erro ao combinar slots:', error);
+      return [];
+    }
+  }, [emptyTimeSlots, selectedDateAppointments]);
 
   const handlePrint = () => {
     window.print();
@@ -201,7 +289,6 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
 
   return (
     <div className="space-y-6">
-      {/* CSS customizado para destacar datas com agendamentos */}
       <style>{`
         .calendar-has-appointments {
           background-color: hsl(var(--primary)) !important;
@@ -224,46 +311,18 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
         }
 
         @media print {
-          body {
-            font-size: 9px;
-            line-height: 1.2;
-          }
-          
-          .print\\:hidden {
-            display: none !important;
-          }
-          
-          .print\\:block {
-            display: block !important;
-          }
-          
-          .print\\:text-\\[9px\\] {
-            font-size: 9px !important;
-          }
-          
-          .print\\:text-\\[10px\\] {
-            font-size: 10px !important;
-          }
-          
-          .print\\:text-\\[7px\\] {
-            font-size: 7px !important;
-          }
-
-          @page {
-            size: A4 portrait;
-            margin: 10mm;
-          }
-          
-          table {
-            page-break-inside: auto;
-          }
-          
-          tr {
-            page-break-inside: avoid;
-            page-break-after: auto;
-          }
+          body { font-size: 9px; line-height: 1.2; }
+          .print\\:hidden { display: none !important; }
+          .print\\:block { display: block !important; }
+          .print\\:text-\\[9px\\] { font-size: 9px !important; }
+          .print\\:text-\\[10px\\] { font-size: 10px !important; }
+          .print\\:text-\\[7px\\] { font-size: 7px !important; }
+          @page { size: A4 portrait; margin: 10mm; }
+          table { page-break-inside: auto; }
+          tr { page-break-inside: avoid; page-break-after: auto; }
         }
       `}</style>
+
       <Card className="w-full">
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
@@ -300,29 +359,25 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
         
         <CardContent className="p-0">
           <div className="grid lg:grid-cols-3 xl:grid-cols-4 min-h-[60vh] max-h-[600px]">
-            {/* Calendário - Lado Esquerdo */}
+            {/* Calendário */}
             <div className="border-r p-3 space-y-3 print:hidden">
               <h3 className="font-semibold text-xs">Selecione uma data</h3>
               <Calendar
                 mode="single"
                 selected={selectedDate}
                 onSelect={(date) => date && setSelectedDate(date)}
-                defaultMonth={selectedDate} // Força navegação para o mês da data selecionada
+                defaultMonth={selectedDate}
                 locale={ptBR}
                 className="rounded-md border-none p-0 scale-90 notranslate"
                 modifiers={{
-                  hasAppointments: (date) => {
-                    const result = hasAppointments(date);
-                    console.log(`📅 Calendar modifier hasAppointments para ${format(date, 'yyyy-MM-dd')}: ${result}`);
-                    return result;
-                  },
+                  hasAppointments: (date) => hasAppointments(date),
                   hasBlocks: (date) => hasBlocks(date)
                 }}
                 modifiersClassNames={{
                   hasAppointments: "calendar-has-appointments !bg-primary !text-primary-foreground !font-bold hover:!bg-primary/90",
                   hasBlocks: "calendar-has-blocks !bg-destructive !text-destructive-foreground !font-bold line-through hover:!bg-destructive/90"
                 }}
-                key={`calendar-${doctor.id}-${selectedDate.getTime()}-${appointments?.filter(apt => apt.medico_id === doctor.id)?.length || 0}`} // Force re-render with selected date
+                key={`calendar-${doctor.id}-${selectedDate.getTime()}`}
               />
               <div className="text-xs text-muted-foreground space-y-1">
                 <div className="flex items-center gap-1">
@@ -336,9 +391,8 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
               </div>
             </div>
 
-            {/* Tabela de Agendamentos - Lado Direito */}
+            {/* Tabela de Agendamentos */}
             <div className="lg:col-span-2 xl:col-span-3 flex flex-col">
-              {/* Cabeçalho de impressão */}
               <div className="hidden print:block p-4 border-b mb-4">
                 <h1 className="text-xl font-bold mb-2">{doctor.nome}</h1>
                 <p className="text-sm text-muted-foreground mb-1">{doctor.especialidade}</p>
@@ -347,9 +401,6 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                 </p>
                 {activeAppointments.length > 0 && (
                   <div className="text-xs">
-                    Consultas: {activeAppointments.filter(apt => apt.atendimentos?.nome?.toLowerCase().includes('consulta') || !apt.atendimentos?.nome?.toLowerCase().includes('retorno') && !apt.atendimentos?.nome?.toLowerCase().includes('exame')).length} | 
-                    Retornos: {activeAppointments.filter(apt => apt.atendimentos?.nome?.toLowerCase().includes('retorno')).length} | 
-                    Exames: {activeAppointments.filter(apt => apt.atendimentos?.nome?.toLowerCase().includes('exame')).length} | 
                     Total: {activeAppointments.length}
                   </div>
                 )}
@@ -359,24 +410,18 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                 <h3 className="font-semibold text-base">
                   Agendamentos para {format(selectedDate, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
                 </h3>
-                {/* Resumo dos agendamentos da data selecionada */}
                 {selectedDateAppointments.length > 0 && (
                   <div className="mt-2 text-xs text-muted-foreground">
-                    <span>
-                      Consultas: {activeAppointments.filter(apt => apt.atendimentos?.nome?.toLowerCase().includes('consulta') || !apt.atendimentos?.nome?.toLowerCase().includes('retorno') && !apt.atendimentos?.nome?.toLowerCase().includes('exame')).length}, 
-                      Retornos: {activeAppointments.filter(apt => apt.atendimentos?.nome?.toLowerCase().includes('retorno')).length}, 
-                      Exames: {activeAppointments.filter(apt => apt.atendimentos?.nome?.toLowerCase().includes('exame')).length}, 
-                      Total: {activeAppointments.length}
-                    </span>
+                    <span>Total: {activeAppointments.length}</span>
                   </div>
                 )}
               </div>
               
               <div className="flex-1 w-full">
                 {allSlots.length > 0 ? (
-                    <ScrollArea className="h-[450px] w-full">
-                      <Table className="min-w-[900px]">
-                        <TableHeader>
+                  <ScrollArea className="h-[450px] w-full">
+                    <Table className="min-w-[900px]">
+                      <TableHeader>
                         <TableRow>
                           <TableHead className="w-[120px] print:text-[9px]">Status/Hora</TableHead>
                           <TableHead className="w-[180px] print:text-[9px]">Paciente/Idade</TableHead>
@@ -412,14 +457,13 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                             </TableRow>
                           ) : (() => {
                             const appointment = slot.data;
+                            const patientAge = safeCalculateAge(appointment.pacientes?.data_nascimento);
+                            
                             return (
                             <TableRow key={appointment.id} className="hover:bg-muted/20">
-                              {/* Status/Hora */}
                               <TableCell className="w-[120px] py-1 px-2 print:text-[9px]">
                                 <div className="flex items-center gap-2">
-                                  <Badge 
-                                    className={`text-[9px] px-1 py-0 w-fit leading-none ${getStatusColor(appointment.status)}`}
-                                  >
+                                  <Badge className={`text-[9px] px-1 py-0 w-fit leading-none ${getStatusColor(appointment.status)}`}>
                                     {getStatusLabel(appointment.status)}
                                   </Badge>
                                   <div className="font-mono text-[10px] print:text-[10px] font-medium leading-none">
@@ -428,14 +472,13 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                                 </div>
                               </TableCell>
                               
-                              {/* Paciente/Idade */}
                               <TableCell className="w-[180px] py-1 px-2 print:text-[9px]">
                                 <div className="leading-none">
                                   <div className="text-[10px] font-medium leading-none">
                                     {appointment.pacientes?.nome_completo || 'Paciente não encontrado'}
-                                    {appointment.pacientes?.data_nascimento && (
+                                    {patientAge && (
                                       <span className="ml-1 text-[9px] text-muted-foreground">
-                                        ({differenceInYears(new Date(), new Date(appointment.pacientes.data_nascimento))}a)
+                                        ({patientAge})
                                       </span>
                                     )}
                                   </div>
@@ -447,31 +490,24 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                                 </div>
                               </TableCell>
                               
-                              {/* Telefone */}
                               <TableCell className="w-[120px] text-[9px] py-1 px-2 leading-none print:text-[7px]">
                                 {appointment.pacientes?.telefone || appointment.pacientes?.celular || 'N/A'}
                               </TableCell>
                               
-                              {/* Convênio */}
                               <TableCell className="w-[100px] py-1 px-2 print:text-[7px]">
                                 <Badge variant="outline" className="text-[9px] px-1 py-0 leading-none print:text-[7px]">
                                   {appointment.pacientes?.convenio || 'N/A'}
                                 </Badge>
                               </TableCell>
                               
-                              {/* Tipo */}
                               <TableCell className="w-[120px] text-[9px] text-muted-foreground py-1 px-2 leading-none print:text-[7px]">
                                 {appointment.atendimentos?.nome || 'Consulta'}
                               </TableCell>
                               
-                              {/* Registrado em */}
                               <TableCell className="w-[120px] text-[9px] py-1 px-2 leading-none print:text-[7px]">
                                 <div className="leading-none">
                                   <div className="leading-none">
-                                    {appointment.created_at && isValid(new Date(appointment.created_at))
-                                      ? formatInTimeZone(new Date(appointment.created_at), BRAZIL_TIMEZONE, 'dd/MM/yy HH:mm', { locale: ptBR })
-                                      : 'N/A'
-                                    }
+                                    {safeFormatDate(appointment.created_at)}
                                   </div>
                                   <div className="text-muted-foreground text-[8px] leading-none mt-0.5">
                                     {appointment.criado_por_profile?.nome?.split(' ')[0] || appointment.criado_por?.split(' ')[0] || 'Sistema'}
@@ -479,14 +515,10 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                                 </div>
                               </TableCell>
                               
-                              {/* Última alteração */}
                               <TableCell className="w-[120px] text-[9px] py-1 px-2 leading-none print:text-[7px]">
                                 <div className="leading-none">
                                   <div className="leading-none">
-                                    {appointment.updated_at && isValid(new Date(appointment.updated_at))
-                                      ? formatInTimeZone(new Date(appointment.updated_at), BRAZIL_TIMEZONE, 'dd/MM/yy HH:mm', { locale: ptBR })
-                                      : 'N/A'
-                                    }
+                                    {safeFormatDate(appointment.updated_at)}
                                   </div>
                                   {appointment.alterado_por_profile?.nome && (
                                     <div className="text-muted-foreground text-[8px] leading-none mt-0.5">
@@ -496,7 +528,6 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                                 </div>
                               </TableCell>
                               
-                              {/* Ações */}
                               <TableCell className="w-[100px] py-1 px-2 print:hidden">
                                 <div className="flex items-center justify-center gap-0.5">
                                   {onEditAppointment && (
@@ -532,77 +563,77 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                                       <RotateCcw className="h-2 w-2" />
                                     </Button>
                                   )}
-                                   {appointment.status === 'agendado' && (
-                                     <AlertDialog>
-                                       <AlertDialogTrigger asChild>
-                                         <Button 
-                                           variant="ghost" 
-                                           size="sm"
-                                           className="h-4 w-4 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                           title="Cancelar"
-                                         >
-                                           <Trash2 className="h-2 w-2" />
-                                         </Button>
-                                       </AlertDialogTrigger>
-                                       <AlertDialogContent>
-                                         <AlertDialogHeader>
-                                           <AlertDialogTitle>Cancelar Agendamento</AlertDialogTitle>
-                                           <AlertDialogDescription>
-                                             Tem certeza que deseja cancelar este agendamento para {format(selectedDate, "dd/MM/yyyy")} às {appointment.hora_agendamento}? 
-                                             Esta ação não pode ser desfeita.
-                                           </AlertDialogDescription>
-                                         </AlertDialogHeader>
-                                         <AlertDialogFooter>
-                                           <AlertDialogCancel>Não cancelar</AlertDialogCancel>
-                                           <AlertDialogAction
-                                             onClick={() => onCancelAppointment(appointment.id)}
-                                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                           >
-                                             Sim, cancelar
-                                           </AlertDialogAction>
-                                         </AlertDialogFooter>
-                                       </AlertDialogContent>
-                                     </AlertDialog>
-                                   )}
-                                   {appointment.status === 'cancelado' && onDeleteAppointment && (
-                                     <AlertDialog>
-                                       <AlertDialogTrigger asChild>
-                                         <Button 
-                                           variant="ghost" 
-                                           size="sm"
-                                           className="h-4 w-4 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                           title="Excluir"
-                                         >
-                                           <Trash2 className="h-2 w-2" />
-                                         </Button>
-                                       </AlertDialogTrigger>
-                                       <AlertDialogContent>
-                                         <AlertDialogHeader>
-                                           <AlertDialogTitle>Excluir Agendamento</AlertDialogTitle>
-                                           <AlertDialogDescription>
-                                             Tem certeza que deseja excluir permanentemente este agendamento cancelado para {format(selectedDate, "dd/MM/yyyy")} às {appointment.hora_agendamento}? 
-                                             Esta ação não pode ser desfeita.
-                                           </AlertDialogDescription>
-                                         </AlertDialogHeader>
-                                         <AlertDialogFooter>
-                                           <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                           <AlertDialogAction
-                                             onClick={() => onDeleteAppointment(appointment.id)}
-                                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                           >
-                                             Sim, excluir
-                                           </AlertDialogAction>
-                                         </AlertDialogFooter>
-                                       </AlertDialogContent>
-                                     </AlertDialog>
-                                   )}
-                                 </div>
-                               </TableCell>
-                             </TableRow>
+                                  {appointment.status === 'agendado' && (
+                                    <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                        <Button 
+                                          variant="ghost" 
+                                          size="sm"
+                                          className="h-4 w-4 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                          title="Cancelar"
+                                        >
+                                          <Trash2 className="h-2 w-2" />
+                                        </Button>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                          <AlertDialogTitle>Cancelar Agendamento</AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                            Tem certeza que deseja cancelar este agendamento para {format(selectedDate, "dd/MM/yyyy")} às {appointment.hora_agendamento}? 
+                                            Esta ação não pode ser desfeita.
+                                          </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                          <AlertDialogCancel>Não cancelar</AlertDialogCancel>
+                                          <AlertDialogAction
+                                            onClick={() => onCancelAppointment(appointment.id)}
+                                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                          >
+                                            Sim, cancelar
+                                          </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                    </AlertDialog>
+                                  )}
+                                  {appointment.status === 'cancelado' && onDeleteAppointment && (
+                                    <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                        <Button 
+                                          variant="ghost" 
+                                          size="sm"
+                                          className="h-4 w-4 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                          title="Excluir"
+                                        >
+                                          <Trash2 className="h-2 w-2" />
+                                        </Button>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                          <AlertDialogTitle>Excluir Agendamento</AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                            Tem certeza que deseja excluir permanentemente este agendamento cancelado para {format(selectedDate, "dd/MM/yyyy")} às {appointment.hora_agendamento}? 
+                                            Esta ação não pode ser desfeita.
+                                          </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                          <AlertDialogAction
+                                            onClick={() => onDeleteAppointment(appointment.id)}
+                                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                          >
+                                            Sim, excluir
+                                          </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                    </AlertDialog>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
                             );
                           })()
                         )}
-                       </TableBody>
+                      </TableBody>
                     </Table>
                     <ScrollBar orientation="horizontal" />
                   </ScrollArea>
@@ -647,7 +678,7 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
         </DialogContent>
       </Dialog>
 
-      {/* Resumo estatístico - Versão compacta */}
+      {/* Resumo estatístico */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 print:hidden">
         <Card className="p-2">
           <div className="flex items-center gap-2">
@@ -706,40 +737,25 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
         </Card>
       </div>
 
-      {/* Dialog de Fila de Espera */}
-      <Dialog open={waitlistOpen} onOpenChange={setWaitlistOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Adicionar à Fila de Espera</DialogTitle>
-          </DialogHeader>
-          <FilaEsperaForm
-            doctors={[doctor]}
-            atendimentos={atendimentos}
-            onSubmit={adicionarFilaEspera}
-            onCancel={() => setWaitlistOpen(false)}
-            searchPatientsByBirthDate={searchPatientsByBirthDate}
-          />
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog de Relatório */}
+      {/* Modal de Relatório */}
       <Dialog open={showReport} onOpenChange={setShowReport}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle>Relatório de Agenda</DialogTitle>
+          </DialogHeader>
           <RelatorioAgenda
             doctors={[doctor]}
-            appointments={appointments}
+            appointments={appointments.filter(apt => apt.medico_id === doctor.id)}
             onBack={() => setShowReport(false)}
-            preSelectedDoctorId={doctor.id}
           />
         </DialogContent>
       </Dialog>
 
-      {/* Dialog de Configurar Horários */}
+      {/* Modal de Configuração de Horários */}
       <DoctorScheduleGenerator
         open={scheduleGenOpen}
         onOpenChange={setScheduleGenOpen}
         doctors={[doctor]}
-        preSelectedDoctorId={doctor.id}
         onSuccess={() => {
           toast.success('Horários gerados com sucesso!');
           setScheduleGenOpen(false);
