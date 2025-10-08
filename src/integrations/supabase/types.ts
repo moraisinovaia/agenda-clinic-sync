@@ -1457,6 +1457,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      cleanup_expired_horarios_vazios: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       cleanup_expired_slots: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -1929,6 +1933,10 @@ export type Database = {
         Returns: Json
       }
       validate_production_security: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      validate_system_health: {
         Args: Record<PropertyKey, never>
         Returns: Json
       }
