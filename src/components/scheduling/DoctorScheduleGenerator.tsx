@@ -6,13 +6,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { format, addDays, getDay, eachDayOfInterval, parseISO, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toZonedTime } from 'date-fns-tz';
 import { BRAZIL_TIMEZONE } from '@/utils/timezone';
-import { Clock, CalendarDays, AlertCircle, Zap, AlertTriangle, Check, ChevronsUpDown } from 'lucide-react';
+import { Clock, CalendarDays, AlertCircle, Zap, AlertTriangle } from 'lucide-react';
 import { useScheduleGenerator } from '@/hooks/useScheduleGenerator';
 import { DaySchedule } from '@/types/schedule-generator';
 import { Doctor } from '@/types/scheduling';
@@ -56,7 +54,6 @@ export function DoctorScheduleGenerator({
   const [intervaloMinutos, setIntervaloMinutos] = useState<10 | 15 | 20 | 30>(15);
   const [previewCount, setPreviewCount] = useState(0);
   const [showValidation, setShowValidation] = useState(false);
-  const [openDoctorSearch, setOpenDoctorSearch] = useState(false);
   
   const [schedules, setSchedules] = useState<DaySchedule[]>(
     DIAS_SEMANA.map(dia => ({
@@ -327,49 +324,24 @@ export function DoctorScheduleGenerator({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Médico *</Label>
-              <Popover open={openDoctorSearch} onOpenChange={setOpenDoctorSearch}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={openDoctorSearch}
-                    className={`w-full justify-between ${showValidation && !selectedDoctor ? 'border-red-500 border-2' : ''}`}
-                  >
-                    {selectedDoctor 
-                      ? doctors.find(d => d.id === selectedDoctor)?.nome 
-                      : "Pesquisar médico..."}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[400px] p-0" align="start">
-                  <Command>
-                    <CommandInput placeholder="Digite o nome ou especialidade..." />
-                    <CommandEmpty>Nenhum médico encontrado.</CommandEmpty>
-                    <CommandList>
-                      <CommandGroup>
-                        {doctors.map((doc) => (
-                          <CommandItem
-                            key={doc.id}
-                            value={`${doc.nome} ${doc.especialidade}`}
-                            onSelect={() => {
-                              setSelectedDoctor(doc.id);
-                              setShowValidation(false);
-                              setOpenDoctorSearch(false);
-                            }}
-                            className="cursor-pointer"
-                          >
-                            <Check className={`mr-2 h-4 w-4 ${selectedDoctor === doc.id ? "opacity-100" : "opacity-0"}`} />
-                            <div className="flex flex-col">
-                              <span className="font-medium">{doc.nome}</span>
-                              <span className="text-xs text-muted-foreground">{doc.especialidade}</span>
-                            </div>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+              <Select 
+                value={selectedDoctor} 
+                onValueChange={(value) => {
+                  setSelectedDoctor(value);
+                  setShowValidation(false);
+                }}
+              >
+                <SelectTrigger className={showValidation && !selectedDoctor ? 'border-red-500 border-2' : ''}>
+                  <SelectValue placeholder="Selecione o médico" />
+                </SelectTrigger>
+                <SelectContent>
+                  {doctors.map(doc => (
+                    <SelectItem key={doc.id} value={doc.id}>
+                      {doc.nome} - {doc.especialidade}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {showValidation && !selectedDoctor && (
                 <p className="text-sm text-red-500 font-medium">Selecione um médico para continuar</p>
               )}
