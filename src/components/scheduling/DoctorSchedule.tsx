@@ -37,13 +37,15 @@ interface DoctorScheduleProps {
   onUnconfirmAppointment?: (appointmentId: string) => Promise<void>;
   onEditAppointment?: (appointment: AppointmentWithRelations) => void;
   onNewAppointment?: (selectedDate?: string) => void;
+  onNewAppointmentWithTime?: (date: string, time: string) => void; // Nova prop para horário vazio
   initialDate?: string; // Data inicial para posicionar o calendário
   atendimentos: Atendimento[];
   adicionarFilaEspera: (data: FilaEsperaFormData) => Promise<boolean>;
   searchPatientsByBirthDate: (birthDate: string) => Promise<any[]>;
+  emptySlots?: any[]; // Nova prop para horários vazios
 }
 
-export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDateBlocked, onCancelAppointment, onDeleteAppointment, onConfirmAppointment, onUnconfirmAppointment, onEditAppointment, onNewAppointment, initialDate, atendimentos, adicionarFilaEspera, searchPatientsByBirthDate }: DoctorScheduleProps) {
+export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDateBlocked, onCancelAppointment, onDeleteAppointment, onConfirmAppointment, onUnconfirmAppointment, onEditAppointment, onNewAppointment, onNewAppointmentWithTime, initialDate, atendimentos, adicionarFilaEspera, searchPatientsByBirthDate, emptySlots = [] }: DoctorScheduleProps) {
   // Usar initialDate se fornecida, senão usar data do primeiro agendamento do médico, senão data atual
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     if (initialDate) {
@@ -155,6 +157,27 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
   const activeAppointments = selectedDateAppointments.filter(
     apt => apt.status === 'agendado' || apt.status === 'confirmado'
   );
+
+  // Buscar horários vazios para a data selecionada
+  const emptyTimeSlots = (emptySlots || []).filter(
+    slot => slot.medico_id === doctor.id && 
+            slot.data === format(selectedDate, 'yyyy-MM-dd') &&
+            slot.status === 'disponivel'
+  );
+
+  // Combinar slots vazios com agendamentos
+  const allSlots = [
+    ...emptyTimeSlots.map(slot => ({
+      type: 'empty' as const,
+      hora: slot.hora,
+      data: slot
+    })),
+    ...selectedDateAppointments.map(apt => ({
+      type: 'appointment' as const,
+      hora: apt.hora_agendamento,
+      data: apt
+    }))
+  ].sort((a, b) => a.hora.localeCompare(b.hora));
 
   const handlePrint = () => {
     window.print();
@@ -330,7 +353,7 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
               </div>
               
               <div className="flex-1 w-full">
-                {selectedDateAppointments.length > 0 ? (
+                {allSlots.length > 0 ? (
                     <ScrollArea className="h-[450px] w-full">
                       <Table className="min-w-[900px]">
                         <TableHeader>
@@ -346,9 +369,30 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {selectedDateAppointments
-                          .sort((a, b) => a.hora_agendamento.localeCompare(b.hora_agendamento))
-                          .map((appointment) => (
+                        {allSlots.map((slot, index) => 
+                          slot.type === 'empty' ? (
+                            <TableRow 
+                              key={`empty-${index}`}
+                              className="hover:bg-blue-50 cursor-pointer transition-colors"
+                              onDoubleClick={() => onNewAppointmentWithTime?.(
+                                format(selectedDate, 'yyyy-MM-dd'),
+                                slot.hora
+                              )}
+                              title="Duplo clique para agendar neste horário"
+                            >
+                              <TableCell colSpan={8} className="text-center py-3">
+                                <div className="flex items-center justify-center gap-3 text-muted-foreground">
+                                  <Clock className="h-4 w-4" />
+                                  <span className="font-mono font-semibold">{slot.hora}</span>
+                                  <Badge variant="outline" className="text-xs bg-blue-50">
+                                    Horário Vago - Duplo clique para agendar
+                                  </Badge>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ) : (() => {
+                            const appointment = slot.data;
+                            return (
                             <TableRow key={appointment.id} className="hover:bg-muted/20">
                               {/* Status/Hora */}
                               <TableCell className="w-[120px] py-1 px-2 print:text-[9px]">
@@ -526,11 +570,13 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                                        </AlertDialogContent>
                                      </AlertDialog>
                                    )}
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                      </TableBody>
+                                 </div>
+                               </TableCell>
+                             </TableRow>
+                            );
+                          })()
+                        )}
+                       </TableBody>
                     </Table>
                     <ScrollBar orientation="horizontal" />
                   </ScrollArea>

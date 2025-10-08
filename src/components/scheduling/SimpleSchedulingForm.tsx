@@ -34,6 +34,7 @@ interface SimpleSchedulingFormProps {
   editingAppointment?: AppointmentWithRelations;
   preSelectedDoctor?: string;
   preSelectedDate?: string;
+  preSelectedTime?: string; // Nova prop para hora pré-selecionada
   adicionarFilaEspera: (data: FilaEsperaFormData) => Promise<boolean>;
   onMultipleSuccess?: (data: MultipleAppointmentData) => void;
   onFillLastPatient?: (fn: () => void) => void;
@@ -58,6 +59,7 @@ export function SimpleSchedulingForm({
   editingAppointment,
   preSelectedDoctor,
   preSelectedDate,
+  preSelectedTime, // Nova prop
   adicionarFilaEspera,
   onMultipleSuccess,
   onFillLastPatient,
@@ -185,6 +187,13 @@ export function SimpleSchedulingForm({
       setSelectedCalendarDate(new Date(preSelectedDate + 'T12:00:00'));
     }
   }, [preSelectedDate]);
+
+  // Pré-preencher hora quando navega de horário vazio
+  useEffect(() => {
+    if (preSelectedTime && !editingAppointment) {
+      setFormData(prev => ({ ...prev, horaAgendamento: preSelectedTime }));
+    }
+  }, [preSelectedTime, editingAppointment]);
 
   const selectedDoctor = doctors.find(doctor => doctor.id === formData.medicoId);
   const availableConvenios = selectedDoctor?.convenios_aceitos || [];

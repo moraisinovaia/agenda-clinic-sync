@@ -810,6 +810,111 @@ export type Database = {
           },
         ]
       }
+      horarios_configuracao: {
+        Row: {
+          ativo: boolean | null
+          cliente_id: string
+          created_at: string | null
+          dia_semana: number
+          hora_fim: string
+          hora_inicio: string
+          id: string
+          intervalo_minutos: number | null
+          medico_id: string
+          periodo: string
+          updated_at: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          cliente_id: string
+          created_at?: string | null
+          dia_semana: number
+          hora_fim: string
+          hora_inicio: string
+          id?: string
+          intervalo_minutos?: number | null
+          medico_id: string
+          periodo: string
+          updated_at?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          cliente_id?: string
+          created_at?: string | null
+          dia_semana?: number
+          hora_fim?: string
+          hora_inicio?: string
+          id?: string
+          intervalo_minutos?: number | null
+          medico_id?: string
+          periodo?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "horarios_configuracao_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "horarios_configuracao_medico_id_fkey"
+            columns: ["medico_id"]
+            isOneToOne: false
+            referencedRelation: "medicos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      horarios_vazios: {
+        Row: {
+          cliente_id: string
+          created_at: string | null
+          data: string
+          hora: string
+          id: string
+          medico_id: string
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          cliente_id: string
+          created_at?: string | null
+          data: string
+          hora: string
+          id?: string
+          medico_id: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          cliente_id?: string
+          created_at?: string | null
+          data?: string
+          hora?: string
+          id?: string
+          medico_id?: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "horarios_vazios_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "horarios_vazios_medico_id_fkey"
+            columns: ["medico_id"]
+            isOneToOne: false
+            referencedRelation: "medicos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       medicos: {
         Row: {
           ativo: boolean | null
@@ -1349,6 +1454,10 @@ export type Database = {
         Returns: Json
       }
       cleanup_expired_backups: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      cleanup_expired_slots: {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }

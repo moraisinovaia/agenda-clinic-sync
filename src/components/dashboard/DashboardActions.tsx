@@ -1,13 +1,14 @@
-import { Calendar, Clock, CalendarDays, XCircle, FileText, Ban } from 'lucide-react';
+import { Calendar, Clock, CalendarDays, XCircle, FileText, Ban, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'fila-espera' | 'nova-fila' | 'bloqueio-agenda' | 'relatorio-agenda' | 'multiple-appointment' | 'canceled-appointments';
 
 interface DashboardActionsProps {
   onViewChange: (view: ViewMode) => void;
+  onConfigureSchedule?: () => void; // Nova prop
 }
 
-export const DashboardActions = ({ onViewChange }: DashboardActionsProps) => {
+export const DashboardActions = ({ onViewChange, onConfigureSchedule }: DashboardActionsProps) => {
   return (
     <div className="flex flex-wrap gap-2 w-full overflow-x-auto pb-2">
       <Button 
@@ -27,6 +28,17 @@ export const DashboardActions = ({ onViewChange }: DashboardActionsProps) => {
         <CalendarDays className="h-4 w-4" />
         Múltiplos Exames
       </Button>
+
+      {onConfigureSchedule && (
+        <Button 
+          onClick={onConfigureSchedule}
+          variant="outline"
+          className="flex items-center gap-2 whitespace-nowrap"
+        >
+          <Settings className="h-4 w-4" />
+          Configurar Horários
+        </Button>
+      )}
       
       <Button 
         onClick={() => onViewChange('appointments-list')}

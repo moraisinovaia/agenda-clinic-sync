@@ -42,6 +42,9 @@ import { Button } from '@/components/ui/button';
 import { NavigationHeader } from '@/components/ui/navigation-header';
 import { GoogleTranslateWarning } from '@/components/ui/google-translate-warning';
 import PendingApproval from '@/components/PendingApproval';
+import { DoctorScheduleGenerator } from '@/components/scheduling/DoctorScheduleGenerator';
+import { supabase } from '@/integrations/supabase/client';
+import { format } from 'date-fns';
 
 const Index = () => {
   const { user, profile, loading: authLoading, signOut } = useStableAuth();
@@ -49,6 +52,9 @@ const Index = () => {
   // Estados sempre inicializados na mesma ordem (antes de qualquer return)
   const [searchTerm, setSearchTerm] = useState('');
   const [multipleSchedulingOpen, setMultipleSchedulingOpen] = useState(false);
+  const [emptySlots, setEmptySlots] = useState<any[]>([]);
+  const [scheduleGenOpen, setScheduleGenOpen] = useState(false);
+  const [selectedAppointmentTime, setSelectedAppointmentTime] = useState<string | undefined>();
   
   // Ref para função de preencher último paciente (F12)
   const fillLastPatientRef = useRef<(() => void) | null>(null);
@@ -115,6 +121,25 @@ const Index = () => {
       refetch();
     }
   }, [viewMode, selectedDoctor, refetch]);
+
+  // Buscar horários vazios
+  useEffect(() => {
+    const fetchEmptySlots = async () => {
+      const { data } = await supabase
+        .from('horarios_vazios')
+        .select('*')
+        .eq('status', 'disponivel')
+        .gte('data', format(new Date(), 'yyyy-MM-dd'));
+      
+      if (data) setEmptySlots(data);
+    };
+    
+    fetchEmptySlots();
+    
+    // Refresh a cada 30 segundos
+    const interval = setInterval(fetchEmptySlots, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const {
     filaEspera,
@@ -408,6 +433,12 @@ const Index = () => {
     handleEditAppointment(appointment);
   };
 
+  const handleNewAppointmentWithTime = (date: string, time: string) => {
+    setSelectedAppointmentDate(date);
+    setSelectedAppointmentTime(time);
+    setViewMode('new-appointment');
+  };
+
   const handleEditAppointment = (appointment: AppointmentWithRelations) => {
     const doctor = doctors.find(d => d.id === appointment.medico_id);
     if (doctor) {
@@ -490,7 +521,10 @@ const Index = () => {
                       <div className="relative max-w-md">
                         {/* This will be moved to DoctorsView component */}
                       </div>
-                      <DashboardActions onViewChange={setViewMode} />
+                      <DashboardActions 
+                        onViewChange={setViewMode}
+                        onConfigureSchedule={() => setScheduleGenOpen(true)}
+                      />
                     </div>
 
                     <DoctorsView
@@ -535,13 +569,16 @@ const Index = () => {
                 onNewAppointment={(selectedDate) => {
                 if (selectedDate) {
                   setSelectedAppointmentDate(selectedDate);
+                  setSelectedAppointmentTime(undefined);
                 }
                 setViewMode('new-appointment');
               }}
+              onNewAppointmentWithTime={handleNewAppointmentWithTime}
               initialDate={lastAppointmentDate || undefined}
               atendimentos={atendimentos}
               adicionarFilaEspera={adicionarFilaEspera}
               searchPatientsByBirthDate={searchPatientsByBirthDate}
+              emptySlots={emptySlots}
             />
             </SchedulingErrorBoundary>
           </div>
@@ -572,6 +609,7 @@ const Index = () => {
                 searchPatientsByBirthDate={searchPatientsByBirthDate}
                 preSelectedDoctor={selectedDoctor?.id}
                 preSelectedDate={selectedAppointmentDate || undefined}
+                preSelectedTime={selectedAppointmentTime}
                 adicionarFilaEspera={adicionarFilaEspera}
                 onMultipleSuccess={handleMultipleAppointmentSuccess}
                 onFillLastPatient={(fn: () => void) => {
@@ -731,6 +769,23 @@ const Index = () => {
         atendimentos={atendimentos}
         availableConvenios={uniqueConvenios}
         onSuccess={handleMultipleAppointmentSuccess}
+      />
+
+      {/* Modal de Configuração de Horários */}
+      <DoctorScheduleGenerator
+        open={scheduleGenOpen}
+        onOpenChange={setScheduleGenOpen}
+        doctors={doctors}
+        onSuccess={async () => {
+          // Recarregar horários vazios após geração
+          const { data } = await supabase
+            .from('horarios_vazios')
+            .select('*')
+            .eq('status', 'disponivel')
+            .gte('data', format(new Date(), 'yyyy-MM-dd'));
+          
+          if (data) setEmptySlots(data);
+        }}
       />
     </div>
   );
