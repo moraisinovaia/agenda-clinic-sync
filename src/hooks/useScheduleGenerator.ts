@@ -9,28 +9,15 @@ export function useScheduleGenerator() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const generateSchedule = async (config: GenerationConfig): Promise<GenerationResult> => {
+  const generateSchedule = async (config: GenerationConfig, userClienteId: string): Promise<GenerationResult> => {
     setLoading(true);
     setError(null);
     
     try {
-      // ✅ CORREÇÃO 1: Buscar cliente_id do usuário logado
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        throw new Error('Usuário não autenticado');
+      // ✅ CORREÇÃO: Receber cliente_id como parâmetro (já validado no componente)
+      if (!userClienteId) {
+        throw new Error('Cliente ID não encontrado. Recarregue a página.');
       }
-
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('cliente_id')
-        .eq('user_id', user.id)
-        .single();
-
-      if (profileError || !profileData?.cliente_id) {
-        throw new Error('Cliente ID não encontrado. Faça login novamente.');
-      }
-
-      const userClienteId = profileData.cliente_id;
 
       console.log('🎯 Iniciando geração de horários:', {
         medico: config.medico_id,

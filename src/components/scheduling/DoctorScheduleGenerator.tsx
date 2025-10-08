@@ -44,7 +44,7 @@ export function DoctorScheduleGenerator({
   onSuccess
 }: DoctorScheduleGeneratorProps) {
   const { generateSchedule, loading } = useScheduleGenerator();
-  const { profile } = useAuth();
+  const { profile, loading: authLoading } = useAuth();
   
   const [selectedDoctor, setSelectedDoctor] = useState<string>(preSelectedDoctorId || '');
   const [dataInicio, setDataInicio] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -214,9 +214,27 @@ export function DoctorScheduleGenerator({
       return;
     }
     
+    // ✅ CORREÇÃO DEFINITIVA: Aguardar até 3 segundos pelo cliente_id
     if (!profile?.cliente_id) {
-      toast.error('Erro: cliente_id não encontrado. Faça login novamente.');
-      return;
+      console.warn('⏳ Cliente ID ainda não carregado, aguardando...');
+      toast.loading('Aguardando dados do usuário...', { id: 'waiting-profile' });
+      
+      // Aguardar até 3 segundos pelo profile
+      let attempts = 0;
+      while (!profile?.cliente_id && attempts < 6) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        attempts++;
+      }
+      
+      toast.dismiss('waiting-profile');
+      
+      if (!profile?.cliente_id) {
+        console.error('❌ Cliente ID não encontrado após aguardar');
+        toast.error('Erro: Dados do usuário não carregados. Recarregue a página.');
+        return;
+      }
+      
+      console.log('✅ Cliente ID carregado:', profile.cliente_id);
     }
     
     setShowValidation(false);
@@ -251,12 +269,13 @@ export function DoctorScheduleGenerator({
       estimativa: previewCount
     });
 
+    // ✅ Passar cliente_id como parâmetro
     const result = await generateSchedule({
       medico_id: selectedDoctor,
       data_inicio: dataInicio,
       data_fim: dataFim,
       configuracoes: activeConfigs
-    });
+    }, profile.cliente_id!);
 
     if (result.success) {
       onSuccess?.();
@@ -536,22 +555,26 @@ export function DoctorScheduleGenerator({
                 <span className="inline-block">
                   <Button 
                     onClick={handleGenerate} 
-                    disabled={loading || !selectedDoctor || previewCount === 0 || !hasActiveConfig}
+                    disabled={loading || authLoading || !selectedDoctor || previewCount === 0 || !hasActiveConfig || !profile?.cliente_id}
                   >
-                    {loading 
-                      ? 'Gerando...' 
-                      : !selectedDoctor 
-                        ? 'Selecione um médico' 
-                        : !hasActiveConfig 
-                          ? 'Configure horários' 
-                          : previewCount === 0 
-                            ? 'Nenhum horário será gerado' 
-                            : `Gerar ${previewCount} Horários`
+                    {authLoading 
+                      ? 'Carregando dados...' 
+                      : loading 
+                        ? 'Gerando...' 
+                        : !profile?.cliente_id
+                          ? 'Aguardando dados...'
+                          : !selectedDoctor 
+                            ? 'Selecione um médico' 
+                            : !hasActiveConfig 
+                              ? 'Configure horários' 
+                              : previewCount === 0 
+                                ? 'Nenhum horário será gerado' 
+                                : `Gerar ${previewCount} Horários`
                     }
                   </Button>
                 </span>
               </TooltipTrigger>
-              {(!selectedDoctor || !hasActiveConfig || previewCount === 0) && (
+              {(!selectedDoctor || !hasActiveConfig || previewCount === 0 || !profile?.cliente_id) && (
                 <TooltipContent>
                   <p>
                     {!selectedDoctor && "Selecione um médico primeiro"}
