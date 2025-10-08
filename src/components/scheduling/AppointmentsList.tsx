@@ -27,10 +27,11 @@ interface AppointmentsListProps {
   onDeleteAppointment?: (appointmentId: string) => void;
   onConfirmAppointment?: (appointmentId: string) => void;
   onUnconfirmAppointment?: (appointmentId: string) => void;
+  onNavigateToAppointment?: (appointment: AppointmentWithRelations) => void;
   allowCanceled?: boolean;
 }
 
-export function AppointmentsList({ appointments, doctors, onEditAppointment, onCancelAppointment, onDeleteAppointment, onConfirmAppointment, onUnconfirmAppointment, allowCanceled = false }: AppointmentsListProps) {
+export function AppointmentsList({ appointments, doctors, onEditAppointment, onCancelAppointment, onDeleteAppointment, onConfirmAppointment, onUnconfirmAppointment, onNavigateToAppointment, allowCanceled = false }: AppointmentsListProps) {
   const [selectedAuditId, setSelectedAuditId] = useState<string | null>(null);
   const [selectedPatientName, setSelectedPatientName] = useState<string>("");
   const {
@@ -170,7 +171,11 @@ export function AppointmentsList({ appointments, doctors, onEditAppointment, onC
                         {appointment.hora_agendamento}
                       </TableCell>
                       <TableCell className="max-w-[200px]">
-                        <div className="font-medium truncate">
+                        <div 
+                          className="font-medium truncate cursor-pointer hover:text-primary transition-colors"
+                          onDoubleClick={() => onNavigateToAppointment?.(appointment)}
+                          title="Duplo clique para navegar até a data"
+                        >
                           {appointment.pacientes?.nome_completo || 'Paciente não encontrado'}
                           {appointment.pacientes?.data_nascimento && (
                             <span className="ml-2 text-xs text-muted-foreground">

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -178,6 +178,13 @@ export function SimpleSchedulingForm({
   }, [onUnconfirmAppointment]);
 
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date>(new Date());
+
+  // Sincronizar calendário com data pré-selecionada (navegação de lista)
+  useEffect(() => {
+    if (preSelectedDate) {
+      setSelectedCalendarDate(new Date(preSelectedDate + 'T12:00:00'));
+    }
+  }, [preSelectedDate]);
 
   const selectedDoctor = doctors.find(doctor => doctor.id === formData.medicoId);
   const availableConvenios = selectedDoctor?.convenios_aceitos || [];

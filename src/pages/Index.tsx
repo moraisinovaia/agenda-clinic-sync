@@ -400,6 +400,14 @@ const Index = () => {
     }
   };
 
+  const handleNavigateToAppointment = (appointment: AppointmentWithRelations) => {
+    // Navegar calendário para a data do agendamento
+    setSelectedAppointmentDate(appointment.data_agendamento);
+    
+    // Abrir formulário de edição
+    handleEditAppointment(appointment);
+  };
+
   const handleEditAppointment = (appointment: AppointmentWithRelations) => {
     const doctor = doctors.find(d => d.id === appointment.medico_id);
     if (doctor) {
@@ -593,6 +601,7 @@ const Index = () => {
               appointments={appointments}
               doctors={doctors}
               onEditAppointment={handleEditAppointment}
+              onNavigateToAppointment={handleNavigateToAppointment}
               onCancelAppointment={cancelAppointment}
               onDeleteAppointment={deleteAppointment}
               onConfirmAppointment={handleConfirmAppointment}
@@ -619,6 +628,7 @@ const Index = () => {
               )}
               doctors={doctors}
               onEditAppointment={handleEditAppointment}
+              onNavigateToAppointment={handleNavigateToAppointment}
               onCancelAppointment={cancelAppointment}
               onDeleteAppointment={deleteAppointment}
               onConfirmAppointment={handleConfirmAppointment}
