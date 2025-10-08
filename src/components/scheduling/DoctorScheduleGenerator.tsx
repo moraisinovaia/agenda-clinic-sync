@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { format, addDays, getDay, eachDayOfInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Clock, CalendarDays, AlertCircle, Zap, AlertTriangle } from 'lucide-react';
@@ -47,6 +48,7 @@ export function DoctorScheduleGenerator({
   const [dataFim, setDataFim] = useState(format(addDays(new Date(), 30), 'yyyy-MM-dd'));
   const [intervaloMinutos, setIntervaloMinutos] = useState<10 | 15 | 20 | 30>(15);
   const [previewCount, setPreviewCount] = useState(0);
+  const [showValidation, setShowValidation] = useState(false);
   
   const [schedules, setSchedules] = useState<DaySchedule[]>(
     DIAS_SEMANA.map(dia => ({
@@ -157,14 +159,26 @@ export function DoctorScheduleGenerator({
   }, [preSelectedDoctorId]);
 
   useEffect(() => {
-    setPreviewCount(calculatePreview());
+    const count = calculatePreview();
+    setPreviewCount(count);
+    
+    console.log('📊 Preview atualizado:', {
+      selectedDoctor,
+      hasActiveConfig,
+      previewCount: count,
+      dataInicio,
+      dataFim
+    });
   }, [selectedDoctor, dataInicio, dataFim, intervaloMinutos, schedules]);
 
   const handleGenerate = async () => {
     if (!selectedDoctor) {
-      toast.error('Selecione um médico');
+      setShowValidation(true);
+      toast.error('Selecione um médico primeiro');
       return;
     }
+    
+    setShowValidation(false);
 
     const activeConfigs = schedules.flatMap(sched => 
       (['manha', 'tarde'] as const).flatMap(periodo => 
@@ -237,8 +251,14 @@ export function DoctorScheduleGenerator({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Médico *</Label>
-              <Select value={selectedDoctor} onValueChange={setSelectedDoctor}>
-                <SelectTrigger>
+              <Select 
+                value={selectedDoctor} 
+                onValueChange={(value) => {
+                  setSelectedDoctor(value);
+                  setShowValidation(false);
+                }}
+              >
+                <SelectTrigger className={showValidation && !selectedDoctor ? 'border-red-500 border-2' : ''}>
                   <SelectValue placeholder="Selecione o médico" />
                 </SelectTrigger>
                 <SelectContent>
@@ -249,6 +269,9 @@ export function DoctorScheduleGenerator({
                   ))}
                 </SelectContent>
               </Select>
+              {showValidation && !selectedDoctor && (
+                <p className="text-sm text-red-500 font-medium">Selecione um médico para continuar</p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -429,12 +452,38 @@ export function DoctorScheduleGenerator({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             Cancelar
           </Button>
-          <Button 
-            onClick={handleGenerate} 
-            disabled={loading || !selectedDoctor || previewCount === 0 || !hasActiveConfig}
-          >
-            {loading ? 'Gerando...' : `Gerar ${previewCount} Horários`}
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-block">
+                  <Button 
+                    onClick={handleGenerate} 
+                    disabled={loading || !selectedDoctor || previewCount === 0 || !hasActiveConfig}
+                  >
+                    {loading 
+                      ? 'Gerando...' 
+                      : !selectedDoctor 
+                        ? 'Selecione um médico' 
+                        : !hasActiveConfig 
+                          ? 'Configure horários' 
+                          : previewCount === 0 
+                            ? 'Nenhum horário será gerado' 
+                            : `Gerar ${previewCount} Horários`
+                    }
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              {(!selectedDoctor || !hasActiveConfig || previewCount === 0) && (
+                <TooltipContent>
+                  <p>
+                    {!selectedDoctor && "Selecione um médico primeiro"}
+                    {selectedDoctor && !hasActiveConfig && "Configure pelo menos um período (Manhã ou Tarde)"}
+                    {selectedDoctor && hasActiveConfig && previewCount === 0 && "Nenhum horário será gerado com esta configuração"}
+                  </p>
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
         </DialogFooter>
       </DialogContent>
     </Dialog>
