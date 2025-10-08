@@ -299,8 +299,8 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
               <div className="hidden print:block p-4 border-b mb-4">
                 <h1 className="text-xl font-bold mb-2">{doctor.nome}</h1>
                 <p className="text-sm text-muted-foreground mb-1">{doctor.especialidade}</p>
-                <p className="text-sm font-semibold mb-2">
-                  Agendamentos para {format(selectedDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                <p className="text-base font-semibold mb-2">
+                  Agendamentos para {format(selectedDate, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
                 </p>
                 {activeAppointments.length > 0 && (
                   <div className="text-xs">
@@ -313,8 +313,8 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
               </div>
               
               <div className="p-3 border-b bg-muted/30 print:hidden">
-                <h3 className="font-semibold text-xs">
-                  Agendamentos para {format(selectedDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                <h3 className="font-semibold text-base">
+                  Agendamentos para {format(selectedDate, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
                 </h3>
                 {/* Resumo dos agendamentos da data selecionada */}
                 {selectedDateAppointments.length > 0 && (
