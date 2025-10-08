@@ -13,6 +13,12 @@ export function useScheduleGenerator() {
     setError(null);
     
     try {
+      console.log('🎯 Iniciando geração de horários:', {
+        medico: config.medico_id,
+        periodo: `${config.data_inicio} - ${config.data_fim}`,
+        configs_ativas: config.configuracoes.length
+      });
+
       // Validar configurações
       const validationErrors: string[] = [];
       config.configuracoes.forEach((cfg, idx) => {
@@ -27,6 +33,7 @@ export function useScheduleGenerator() {
       }
       
       // 1. Buscar agendamentos existentes no período (CRÍTICO para não sobrescrever)
+      console.log('📋 Buscando agendamentos existentes...');
       const { data: appointments, error: aptError } = await supabase
         .from('agendamentos')
         .select('data_agendamento, hora_agendamento')
@@ -37,6 +44,8 @@ export function useScheduleGenerator() {
       
       if (aptError) throw aptError;
       
+      console.log(`✅ ${appointments?.length || 0} agendamentos existentes encontrados`);
+      
       // 2. Gerar slots para cada configuração
       let allSlots: any[] = [];
       for (const scheduleConfig of config.configuracoes) {
@@ -46,29 +55,58 @@ export function useScheduleGenerator() {
           new Date(config.data_fim),
           appointments || []
         );
+        console.log(`📅 Gerados ${slots.length} slots para ${['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][scheduleConfig.dia_semana]} (${scheduleConfig.periodo})`);
         allSlots = [...allSlots, ...slots];
       }
       
-      // 3. Inserir slots no banco (upsert para evitar duplicatas)
-      let insertedCount = 0;
-      if (allSlots.length > 0) {
-        const { data: inserted, error: insertError } = await supabase
-          .from('horarios_vazios')
-          .upsert(allSlots, { 
-            onConflict: 'medico_id,data,hora,cliente_id',
-            ignoreDuplicates: true 
-          })
-          .select();
+      console.log(`🔢 Total de slots gerados ANTES da inserção: ${allSlots.length}`);
+      
+      if (allSlots.length === 0) {
+        toast.warning(
+          '⚠️ Nenhum horário foi gerado!\n\nPossíveis motivos:\n• Não há dias da semana configurados no período selecionado\n• Todos os horários já estão ocupados',
+          { duration: 5000 }
+        );
         
-        if (insertError) throw insertError;
-        insertedCount = inserted?.length || 0;
+        return {
+          success: true,
+          slots_criados: 0,
+          slots_ignorados: 0,
+          errors: ['Nenhum slot gerado - verifique a configuração']
+        };
       }
       
+      // 3. Inserir slots no banco (upsert para evitar duplicatas)
+      console.log('💾 Inserindo slots no banco de dados...');
+      const { data: inserted, error: insertError } = await supabase
+        .from('horarios_vazios')
+        .upsert(allSlots, { 
+          onConflict: 'medico_id,data,hora,cliente_id',
+          ignoreDuplicates: true 
+        })
+        .select();
+      
+      if (insertError) throw insertError;
+      
+      const insertedCount = inserted?.length || 0;
       const ignoredCount = allSlots.length - insertedCount;
       
-      toast.success(
-        `${insertedCount} horários gerados! ${ignoredCount > 0 ? `(${ignoredCount} já existiam)` : ''}`
-      );
+      console.log(`✅ Inserção concluída:`, {
+        inseridos: insertedCount,
+        ignorados: ignoredCount,
+        total: allSlots.length
+      });
+      
+      if (insertedCount === 0 && ignoredCount > 0) {
+        toast.info(
+          `ℹ️ Todos os ${ignoredCount} horários já existiam na agenda!`,
+          { duration: 4000 }
+        );
+      } else {
+        toast.success(
+          `✅ ${insertedCount} horários gerados com sucesso! ${ignoredCount > 0 ? `(${ignoredCount} já existiam)` : ''}`,
+          { duration: 4000 }
+        );
+      }
       
       return {
         success: true,
@@ -77,9 +115,10 @@ export function useScheduleGenerator() {
       };
       
     } catch (err: any) {
+      console.error('❌ Erro ao gerar horários:', err);
       const errorMsg = err.message || 'Erro ao gerar horários';
       setError(errorMsg);
-      toast.error(errorMsg);
+      toast.error(`❌ ${errorMsg}`);
       
       return {
         success: false,
