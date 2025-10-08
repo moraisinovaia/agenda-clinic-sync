@@ -41,36 +41,60 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           status: apt.status,
           observacoes: apt.observacoes,
           created_at: apt.created_at,
-          updated_at: apt.updated_at || apt.created_at,
+          updated_at: apt.updated_at,
           criado_por: apt.criado_por,
           criado_por_user_id: apt.criado_por_user_id,
-          alterado_por_user_id: apt.alterado_por_user_id || null,
-          cliente_id: '00000000-0000-0000-0000-000000000000',
-          cancelado_em: apt.cancelado_em || null,
-          cancelado_por: apt.cancelado_por || null,
-          cancelado_por_user_id: apt.cancelado_por_user_id || null,
+          alterado_por_user_id: apt.alterado_por_user_id,
+          cliente_id: '00000000-0000-0000-0000-000000000000', // Usar ID padrão temporário
+          // Campos adicionais para cancelamento e confirmação
+          cancelado_em: apt.cancelado_em,
+          cancelado_por: apt.cancelado_por,
+          cancelado_por_user_id: apt.cancelado_por_user_id,
           confirmado_em: apt.confirmado_em,
           confirmado_por: apt.confirmado_por,
-          confirmado_por_user_id: apt.confirmado_por_user_id || null,
-          excluido_em: apt.excluido_em || null,
-          excluido_por: apt.excluido_por || null,
-          excluido_por_user_id: apt.excluido_por_user_id || null,
+          confirmado_por_user_id: apt.confirmado_por_user_id,
+          // Campos de exclusão
+          excluido_em: apt.excluido_em,
+          excluido_por: apt.excluido_por,
+          excluido_por_user_id: apt.excluido_por_user_id,
           convenio: apt.paciente_convenio,
+          // Informações do perfil de quem criou o agendamento
+          criado_por_profile: apt.profile_nome ? {
+            id: apt.criado_por_user_id || '',
+            user_id: apt.criado_por_user_id || '',
+            nome: apt.profile_nome,
+            email: apt.profile_email || '',
+            role: apt.profile_role || 'recepcionista',
+            ativo: true,
+            created_at: apt.created_at || '',
+            updated_at: apt.updated_at || ''
+          } : null,
+          // Informações do perfil de quem alterou o agendamento
+          alterado_por_profile: apt.alterado_por_profile_nome ? {
+            id: apt.alterado_por_user_id || '',
+            user_id: apt.alterado_por_user_id || '',
+            nome: apt.alterado_por_profile_nome,
+            email: apt.alterado_por_profile_email || '',
+            role: apt.alterado_por_profile_role || 'recepcionista',
+            ativo: true,
+            created_at: apt.created_at || '',
+            updated_at: apt.updated_at || ''
+          } : null,
           pacientes: {
             id: apt.paciente_id,
             nome_completo: apt.paciente_nome,
             convenio: apt.paciente_convenio,
             celular: apt.paciente_celular,
             telefone: apt.paciente_telefone || '',
-            data_nascimento: apt.paciente_data_nascimento || null,
+            data_nascimento: apt.paciente_data_nascimento || '',
             created_at: '',
             updated_at: '',
-            cliente_id: '00000000-0000-0000-0000-000000000000'
+            cliente_id: '00000000-0000-0000-0000-000000000000' // Usar ID padrão temporário
           },
           medicos: {
             id: apt.medico_id,
             nome: apt.medico_nome,
-            especialidade: apt.medico_especialidade || '',
+            especialidade: apt.medico_especialidade,
             ativo: true,
             crm: '',
             created_at: '',

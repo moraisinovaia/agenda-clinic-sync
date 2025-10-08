@@ -64,46 +64,23 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       const { data: functionData, error: functionError } = await supabase
         .rpc('get_current_user_profile');
 
-      if (!functionData || !Array.isArray(functionData) || functionData.length === 0) {
-        // Fallback para query direta
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('user_id', userId)
-          .maybeSingle();
-
-        if (profileError || !profileData) {
-          return null;
-        }
-
-        // Buscar role da tabela user_roles
-        const { data: roleData } = await supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', userId)
-          .maybeSingle();
-
-        return {
-          ...profileData,
-          role: roleData?.role || 'recepcionista'
-        } as Profile;
+      if (!functionError && functionData && functionData.length > 0) {
+        return functionData[0] as Profile;
       }
 
-      const profile = functionData[0];
-
-      // Buscar role da tabela user_roles
-      const { data: roleData } = await supabase
-        .from('user_roles')
-        .select('role')
+      // Fallback para query direta se a função falhar
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
         .eq('user_id', userId)
         .maybeSingle();
 
-      return {
-        ...profile,
-        role: roleData?.role || 'recepcionista'
-      } as Profile;
+      if (error || !data) {
+        return null;
+      }
+
+      return data;
     } catch (error) {
-      console.error('Error fetching profile:', error);
       return null;
     }
   };

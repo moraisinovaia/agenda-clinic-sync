@@ -1126,6 +1126,7 @@ export type Database = {
           email: string
           id: string
           nome: string
+          role: string
           status: string
           updated_at: string | null
           user_id: string
@@ -1140,6 +1141,7 @@ export type Database = {
           email: string
           id?: string
           nome: string
+          role?: string
           status?: string
           updated_at?: string | null
           user_id: string
@@ -1154,6 +1156,7 @@ export type Database = {
           email?: string
           id?: string
           nome?: string
+          role?: string
           status?: string
           updated_at?: string | null
           user_id?: string
@@ -1293,30 +1296,6 @@ export type Database = {
         }
         Relationships: []
       }
-      user_roles: {
-        Row: {
-          created_at: string | null
-          created_by: string | null
-          id: string
-          role: Database["public"]["Enums"]["app_role"]
-          user_id: string
-        }
-        Insert: {
-          created_at?: string | null
-          created_by?: string | null
-          id?: string
-          role: Database["public"]["Enums"]["app_role"]
-          user_id: string
-        }
-        Update: {
-          created_at?: string | null
-          created_by?: string | null
-          id?: string
-          role?: Database["public"]["Enums"]["app_role"]
-          user_id?: string
-        }
-        Relationships: []
-      }
     }
     Views: {
       v_historico_endogastro: {
@@ -1372,6 +1351,9 @@ export type Database = {
       buscar_agendamentos_otimizado: {
         Args: Record<PropertyKey, never>
         Returns: {
+          alterado_por_profile_email: string
+          alterado_por_profile_nome: string
+          alterado_por_profile_role: string
           alterado_por_user_id: string
           atendimento_id: string
           atendimento_nome: string
@@ -1402,6 +1384,9 @@ export type Database = {
           paciente_id: string
           paciente_nome: string
           paciente_telefone: string
+          profile_email: string
+          profile_nome: string
+          profile_role: string
           status: string
           updated_at: string
         }[]
@@ -1670,6 +1655,7 @@ export type Database = {
           email: string
           id: string
           nome: string
+          role: string
           status: string
           updated_at: string
           user_id: string
@@ -1728,13 +1714,6 @@ export type Database = {
       halfvec_typmod_in: {
         Args: { "": unknown[] }
         Returns: number
-      }
-      has_role: {
-        Args: {
-          _role: Database["public"]["Enums"]["app_role"]
-          _user_id: string
-        }
-        Returns: boolean
       }
       hnsw_bit_support: {
         Args: { "": unknown }
@@ -1991,7 +1970,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "recepcionista" | "medico"
+      [_ in never]: never
     }
     CompositeTypes: {
       http_header: {
@@ -2134,8 +2113,6 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {
-      app_role: ["admin", "recepcionista", "medico"],
-    },
+    Enums: {},
   },
 } as const

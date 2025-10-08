@@ -11,6 +11,7 @@ interface UserManagementRequest {
   user_email?: string;
   user_id?: string;
   user_ids?: string[];
+  admin_id: string;
 }
 
 serve(async (req) => {
@@ -29,85 +30,29 @@ serve(async (req) => {
       }
     });
 
-    // Obter JWT do header Authorization
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Token de autenticação não fornecido' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
-      );
-    }
+    const { action, user_email, user_id, user_ids, admin_id }: UserManagementRequest = await req.json();
 
-    // Extrair token do header "Bearer <token>"
-    const token = authHeader.replace('Bearer ', '');
-
-    // Verificar usuário autenticado usando Admin API
-    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
-    if (userError || !user) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Token inválido ou usuário não autenticado', details: userError?.message }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
-      );
-    }
-
-    console.log('[USER-MGMT] Verificando perfil do usuário autenticado:', user.id);
-    
-    // Verificar perfil do usuário
+    // Verificar se quem está fazendo a ação é admin
     const { data: adminProfile, error: adminError } = await supabaseAdmin
       .from('profiles')
-      .select('id, status')
-      .eq('user_id', user.id)
+      .select('role, status')
+      .eq('id', admin_id)
       .single();
 
-    if (adminError || !adminProfile) {
-      console.error('[USER-MGMT] Erro ao buscar perfil:', adminError);
+    if (adminError || !adminProfile || adminProfile.role !== 'admin' || adminProfile.status !== 'aprovado') {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Perfil do usuário não encontrado',
-          details: adminError?.message
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
-      );
-    }
-
-    // Verificar role na tabela user_roles
-    const { data: roleData, error: roleError } = await supabaseAdmin
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('role', 'admin')
-      .maybeSingle();
-
-    console.log('[USER-MGMT] Role verificado:', roleData?.role, 'Status:', adminProfile.status);
-
-    if (roleError || !roleData || adminProfile.status !== 'aprovado') {
-      console.error('[USER-MGMT] Usuário não é admin ou não aprovado:', {
-        role: roleData?.role,
-        status: adminProfile.status,
-        error: roleError?.message
-      });
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Apenas administradores aprovados podem realizar esta ação',
-          user_role: roleData?.role || 'none',
-          user_status: adminProfile.status
+          error: 'Apenas administradores aprovados podem realizar esta ação' 
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
       );
     }
 
-    const { action, user_email, user_id, user_ids }: Omit<UserManagementRequest, 'admin_id'> = await req.json();
-    const admin_id = adminProfile.id;
-
     let result;
 
-    console.log('[USER-MGMT] Processando ação:', action);
-    
     switch (action) {
       case 'confirm_email': {
-        console.log('[USER-MGMT] Confirmando email:', user_email);
         if (!user_email) {
           throw new Error('user_email é obrigatório para confirm_email');
         }
@@ -148,7 +93,6 @@ serve(async (req) => {
       }
 
       case 'delete_user': {
-        console.log('[USER-MGMT] Deletando usuário:', user_id);
         if (!user_id) {
           throw new Error('user_id é obrigatório para delete_user');
         }
@@ -161,56 +105,16 @@ serve(async (req) => {
           .single();
 
         if (profileError || !profile) {
-          console.error('[USER-MGMT] Perfil não encontrado:', profileError);
           return new Response(
             JSON.stringify({ success: false, error: 'Perfil não encontrado' }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
           );
         }
 
-        console.log('[USER-MGMT] Deletando roles do usuário:', profile.user_id);
-        // Deletar roles do usuário primeiro
-        const { error: roleDeleteError } = await supabaseAdmin
-          .from('user_roles')
-          .delete()
-          .eq('user_id', profile.user_id);
-        
-        if (roleDeleteError) {
-          console.error('[USER-MGMT] Erro ao deletar roles:', roleDeleteError);
-        }
-
-        console.log('[USER-MGMT] Deletando perfil do usuário:', user_id);
-        // Deletar perfil do usuário
-        const { error: profileDeleteError } = await supabaseAdmin
-          .from('profiles')
-          .delete()
-          .eq('id', user_id);
-        
-        if (profileDeleteError) {
-          console.error('[USER-MGMT] Erro ao deletar perfil:', profileDeleteError);
-          return new Response(
-            JSON.stringify({ 
-              success: false, 
-              error: 'Erro ao deletar perfil do usuário',
-              details: profileDeleteError.message 
-            }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-          );
-        }
-
-        console.log('[USER-MGMT] Deletando usuário do Auth:', profile.user_id);
-        // Deletar o usuário do Auth
+        // Deletar usuário via Admin API (cascade deletará o profile)
         const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(profile.user_id);
-        
-        if (deleteError) {
-          console.error('[USER-MGMT] Erro ao deletar usuário do Auth:', deleteError);
-          return new Response(
-            JSON.stringify({ success: false, error: deleteError.message }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-          );
-        }
 
-        console.log('[USER-MGMT] Usuário deletado com sucesso:', user_id);
+        if (deleteError) throw deleteError;
 
         // Log da exclusão
         await supabaseAdmin.from('system_logs').insert({

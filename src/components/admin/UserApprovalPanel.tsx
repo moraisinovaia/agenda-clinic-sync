@@ -117,7 +117,8 @@ export function UserApprovalPanel() {
       const { data, error } = await supabase.functions.invoke('user-management', {
         body: {
           action: 'batch_check_emails',
-          user_ids: userIds
+          user_ids: userIds,
+          admin_id: profile.id
         }
       });
 
@@ -264,7 +265,8 @@ export function UserApprovalPanel() {
       const { data, error } = await supabase.functions.invoke('user-management', {
         body: {
           action: 'confirm_email',
-          user_email: email
+          user_email: email,
+          admin_id: profile.id
         }
       });
 
@@ -301,7 +303,8 @@ export function UserApprovalPanel() {
       const { data, error } = await supabase.functions.invoke('user-management', {
         body: {
           action: 'delete_user',
-          user_id: userToDelete.id
+          user_id: userToDelete.id,
+          admin_id: profile.id
         }
       });
 
@@ -346,8 +349,8 @@ export function UserApprovalPanel() {
     setUserToDelete(null);
   };
 
-  // Se não é admin aprovado, não mostrar nada (usando isAdmin do hook estável)
-  if (!isAdmin || !isApproved) {
+  // Se não é admin aprovado, não mostrar nada
+  if (profile?.role !== 'admin' || profile?.status !== 'aprovado') {
     return null;
   }
 
