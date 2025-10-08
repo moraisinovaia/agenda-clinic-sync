@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { format, addDays, startOfWeek, isSameDay, parse, startOfDay, differenceInYears } from 'date-fns';
+import { useState, useMemo } from 'react';
+import { format, addDays, startOfWeek, isSameDay, parse, startOfDay, differenceInYears, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatInTimeZone } from 'date-fns-tz';
 import { BRAZIL_TIMEZONE } from '@/utils/timezone';
@@ -165,11 +165,21 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
   );
 
   // Buscar horários vazios para a data selecionada
-  const emptyTimeSlots = (emptySlots || []).filter(
-    slot => slot.medico_id === doctor.id && 
-            slot.data === format(selectedDate, 'yyyy-MM-dd') &&
-            slot.status === 'disponivel'
-  );
+  const emptyTimeSlots = useMemo(() => {
+    try {
+      const dateStr = format(selectedDate, 'yyyy-MM-dd');
+      const filtered = (emptySlots || []).filter(
+        slot => slot.medico_id === doctor.id && 
+                slot.data === dateStr &&
+                slot.status === 'disponivel'
+      );
+      console.log(`📊 Horários vazios para ${dateStr}:`, filtered.length);
+      return filtered;
+    } catch (error) {
+      console.error('❌ Erro ao filtrar horários vazios:', error);
+      return [];
+    }
+  }, [emptySlots, doctor.id, selectedDate]);
 
   // Combinar slots vazios com agendamentos
   const allSlots = [
@@ -458,7 +468,10 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                               <TableCell className="w-[120px] text-[9px] py-1 px-2 leading-none print:text-[7px]">
                                 <div className="leading-none">
                                   <div className="leading-none">
-                                    {formatInTimeZone(new Date(appointment.created_at), BRAZIL_TIMEZONE, 'dd/MM/yy HH:mm', { locale: ptBR })}
+                                    {appointment.created_at && isValid(new Date(appointment.created_at))
+                                      ? formatInTimeZone(new Date(appointment.created_at), BRAZIL_TIMEZONE, 'dd/MM/yy HH:mm', { locale: ptBR })
+                                      : 'N/A'
+                                    }
                                   </div>
                                   <div className="text-muted-foreground text-[8px] leading-none mt-0.5">
                                     {appointment.criado_por_profile?.nome?.split(' ')[0] || appointment.criado_por?.split(' ')[0] || 'Sistema'}
@@ -470,7 +483,10 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                               <TableCell className="w-[120px] text-[9px] py-1 px-2 leading-none print:text-[7px]">
                                 <div className="leading-none">
                                   <div className="leading-none">
-                                    {formatInTimeZone(new Date(appointment.updated_at), BRAZIL_TIMEZONE, 'dd/MM/yy HH:mm', { locale: ptBR })}
+                                    {appointment.updated_at && isValid(new Date(appointment.updated_at))
+                                      ? formatInTimeZone(new Date(appointment.updated_at), BRAZIL_TIMEZONE, 'dd/MM/yy HH:mm', { locale: ptBR })
+                                      : 'N/A'
+                                    }
                                   </div>
                                   {appointment.alterado_por_profile?.nome && (
                                     <div className="text-muted-foreground text-[8px] leading-none mt-0.5">
