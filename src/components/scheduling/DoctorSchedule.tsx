@@ -150,6 +150,11 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
   };
 
   const selectedDateAppointments = getAppointmentsForDate(selectedDate);
+  
+  // Filter only active appointments (scheduled and confirmed) for counting
+  const activeAppointments = selectedDateAppointments.filter(
+    apt => apt.status === 'agendado' || apt.status === 'confirmado'
+  );
 
   return (
     <div className="space-y-6">
@@ -249,10 +254,10 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                 {selectedDateAppointments.length > 0 && (
                   <div className="mt-2 text-xs text-muted-foreground">
                     <span>
-                      Consultas: {selectedDateAppointments.filter(apt => apt.atendimentos?.nome?.toLowerCase().includes('consulta') || !apt.atendimentos?.nome?.toLowerCase().includes('retorno') && !apt.atendimentos?.nome?.toLowerCase().includes('exame')).length}, 
-                      Retornos: {selectedDateAppointments.filter(apt => apt.atendimentos?.nome?.toLowerCase().includes('retorno')).length}, 
-                      Exames: {selectedDateAppointments.filter(apt => apt.atendimentos?.nome?.toLowerCase().includes('exame')).length}, 
-                      Total: {selectedDateAppointments.length}
+                      Consultas: {activeAppointments.filter(apt => apt.atendimentos?.nome?.toLowerCase().includes('consulta') || !apt.atendimentos?.nome?.toLowerCase().includes('retorno') && !apt.atendimentos?.nome?.toLowerCase().includes('exame')).length}, 
+                      Retornos: {activeAppointments.filter(apt => apt.atendimentos?.nome?.toLowerCase().includes('retorno')).length}, 
+                      Exames: {activeAppointments.filter(apt => apt.atendimentos?.nome?.toLowerCase().includes('exame')).length}, 
+                      Total: {activeAppointments.length}
                     </span>
                   </div>
                 )}
