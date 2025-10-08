@@ -100,13 +100,12 @@ export function RelatorioAgenda({ doctors, appointments, onBack }: RelatorioAgen
         }
         body {
           font-family: Arial, sans-serif;
-          font-size: 6px !important;
-          line-height: 1.0 !important;
+          font-size: 9px !important;
+          line-height: 1.2 !important;
         }
-        .print\\:text-\\[5px\\] { font-size: 5px !important; }
-        .print\\:text-\\[6px\\] { font-size: 6px !important; }
         .print\\:text-\\[7px\\] { font-size: 7px !important; }
-        .print\\:text-\\[8px\\] { font-size: 8px !important; }
+        .print\\:text-\\[9px\\] { font-size: 9px !important; }
+        .print\\:text-\\[10px\\] { font-size: 10px !important; }
         .print\\:p-0 { padding: 0 !important; }
         .print\\:px-0\\.5 { padding-left: 0.125rem !important; padding-right: 0.125rem !important; }
         .print\\:py-0 { padding-top: 0 !important; padding-bottom: 0 !important; }
@@ -118,7 +117,7 @@ export function RelatorioAgenda({ doctors, appointments, onBack }: RelatorioAgen
         .print\\:border-gray-400 { border-color: #9ca3af !important; }
         .print\\:border-t { border-top-width: 1px !important; }
         .print\\:hidden { display: none !important; }
-        .print\\:line-height-tight { line-height: 1.0 !important; }
+        .print\\:line-height-tight { line-height: 1.2 !important; }
         table { page-break-inside: avoid; border-collapse: collapse !important; }
         tr { page-break-inside: avoid; page-break-after: auto; }
         thead { display: table-header-group; }
@@ -255,9 +254,9 @@ export function RelatorioAgenda({ doctors, appointments, onBack }: RelatorioAgen
           <Card className="shadow-xl border-0 overflow-hidden">
             <CardHeader className="print:py-1 print:mb-2 bg-gradient-to-r from-primary/5 to-primary/10 border-b border-primary/20 py-4">
               <div className="text-center space-y-2">
-                <h1 className="text-2xl print:text-sm font-bold text-primary">Relatório de Agenda Médica</h1>
+                <h1 className="text-2xl print:text-base font-bold text-primary">Relatório de Agenda Médica</h1>
                 
-                <div className="flex items-center justify-center gap-4 text-sm print:text-xs">
+                <div className="flex items-center justify-center gap-4 text-sm print:text-[10px]">
                   <div className="font-semibold">
                     Dr. {selectedDoctor?.nome} - {selectedDoctor?.especialidade}
                   </div>
@@ -280,55 +279,55 @@ export function RelatorioAgenda({ doctors, appointments, onBack }: RelatorioAgen
               {filteredAppointments.length > 0 ? (
                 <div className="space-y-2">
                   <div className="text-center mb-3 print:mb-1">
-                    <Badge variant="secondary" className="text-sm print:text-[8px] px-3 py-1 print:px-1 print:py-0">
+                    <Badge variant="secondary" className="text-sm print:text-[10px] px-3 py-1 print:px-1 print:py-0">
                       {filteredAppointments.length} agendamento{filteredAppointments.length !== 1 ? 's' : ''}
                     </Badge>
                   </div>
                   
                   <div className="border rounded-lg print:border-gray-400 print:border-t">
                     <Table>
-                      <TableHeader className="print:text-[6px]">
+                      <TableHeader className="print:text-[9px]">
                         <TableRow className="print:border-gray-400">
-                          <TableHead className="print:py-0.5 print:px-0.5 print:text-[6px] w-16">Hora</TableHead>
-                          <TableHead className="print:py-0.5 print:px-0.5 print:text-[6px]">Paciente / Observações</TableHead>
-                          <TableHead className="print:py-0.5 print:px-0.5 print:text-[6px] w-24">Telefone</TableHead>
-                          <TableHead className="print:py-0.5 print:px-0.5 print:text-[6px] w-32">Convênio / Procedimento</TableHead>
-                          <TableHead className="print:py-0.5 print:px-0.5 print:text-[6px] w-16">Status</TableHead>
+                          <TableHead className="print:py-0.5 print:px-0.5 print:text-[9px] w-16">Hora</TableHead>
+                          <TableHead className="print:py-0.5 print:px-0.5 print:text-[9px]">Paciente / Observações</TableHead>
+                          <TableHead className="print:py-0.5 print:px-0.5 print:text-[9px] w-24">Telefone</TableHead>
+                          <TableHead className="print:py-0.5 print:px-0.5 print:text-[9px] w-32">Convênio / Procedimento</TableHead>
+                          <TableHead className="print:py-0.5 print:px-0.5 print:text-[9px] w-16">Status</TableHead>
                           {dataInicio !== dataFim && (
-                            <TableHead className="print:py-0.5 print:px-0.5 print:text-[6px] w-20">Data</TableHead>
+                            <TableHead className="print:py-0.5 print:px-0.5 print:text-[9px] w-20">Data</TableHead>
                           )}
                         </TableRow>
                       </TableHeader>
-                      <TableBody className="print:text-[6px] print:line-height-tight">
+                      <TableBody className="print:text-[9px] print:line-height-tight">
                         {filteredAppointments.map((appointment, index) => (
                           <TableRow key={appointment.id} className="print:border-gray-400 hover:bg-muted/50">
-                            <TableCell className="print:py-0 print:px-0.5 print:text-[6px] font-medium">
+                            <TableCell className="print:py-0 print:px-0.5 print:text-[10px] font-medium">
                               {formatTime(appointment.hora_agendamento)}
                             </TableCell>
-                            <TableCell className="print:py-0 print:px-0.5 print:text-[6px]">
-                              <div className="font-medium print:text-[6px]">{appointment.pacientes?.nome_completo}</div>
+                            <TableCell className="print:py-0 print:px-0.5 print:text-[9px]">
+                              <div className="font-medium print:text-[9px]">{appointment.pacientes?.nome_completo}</div>
                               {appointment.observacoes && (
-                                <div className="text-xs print:text-[5px] text-muted-foreground mt-0.5 print:mt-0 print:line-height-tight">
+                                <div className="text-xs print:text-[7px] text-muted-foreground mt-0.5 print:mt-0 print:line-height-tight">
                                   {appointment.observacoes}
                                 </div>
                               )}
                             </TableCell>
-                            <TableCell className="print:py-0 print:px-0.5 print:text-[6px]">
+                            <TableCell className="print:py-0 print:px-0.5 print:text-[9px]">
                               {appointment.pacientes?.celular || appointment.pacientes?.telefone || '-'}
                             </TableCell>
-                            <TableCell className="print:py-0 print:px-0.5 print:text-[6px]">
-                              <div className="print:text-[6px]">{appointment.pacientes?.convenio}</div>
-                              <div className="text-xs print:text-[5px] text-muted-foreground print:line-height-tight">
+                            <TableCell className="print:py-0 print:px-0.5 print:text-[9px]">
+                              <div className="print:text-[9px]">{appointment.pacientes?.convenio}</div>
+                              <div className="text-xs print:text-[7px] text-muted-foreground print:line-height-tight">
                                 {appointment.atendimentos?.nome}
                               </div>
                             </TableCell>
-                            <TableCell className="print:py-0 print:px-0.5 print:text-[6px]">
-                              <span className="text-xs print:text-[5px]">
+                            <TableCell className="print:py-0 print:px-0.5 print:text-[9px]">
+                              <span className="text-xs print:text-[7px]">
                                 {appointment.status === 'confirmado' ? 'Conf.' : 'Agend.'}
                               </span>
                             </TableCell>
                             {dataInicio !== dataFim && (
-                              <TableCell className="print:py-0 print:px-0.5 print:text-[6px]">
+                              <TableCell className="print:py-0 print:px-0.5 print:text-[9px]">
                                 {formatDate(appointment.data_agendamento)}
                               </TableCell>
                             )}
