@@ -79,3 +79,6 @@ verify_jwt = false
 
 [functions.llm-agent-api]
 verify_jwt = false
+
+[functions.user-management]
+verify_jwt = false

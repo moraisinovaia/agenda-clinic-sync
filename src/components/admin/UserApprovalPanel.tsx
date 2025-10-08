@@ -26,14 +26,20 @@ interface ApprovedUser {
   username: string;
   role: string;
   status: string;
-  email_confirmed: boolean;
   created_at: string;
   data_aprovacao: string;
+}
+
+interface EmailStatus {
+  profile_id: string;
+  email_confirmed: boolean;
+  email_confirmed_at: string | null;
 }
 
 export function UserApprovalPanel() {
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([]);
   const [approvedUsers, setApprovedUsers] = useState<ApprovedUser[]>([]);
+  const [emailStatuses, setEmailStatuses] = useState<Map<string, EmailStatus>>(new Map());
   const [loading, setLoading] = useState(true);
   const [processingUser, setProcessingUser] = useState<string | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -77,48 +83,59 @@ export function UserApprovalPanel() {
     try {
       console.log('🔍 Buscando usuários aprovados...');
       
-      // Usar a função RPC que já inclui verificação de email
-      const { data, error } = await supabase
-        .rpc('get_approved_users_safe');
+      const { data, error } = await supabase.rpc('get_approved_users_safe');
 
       if (error) {
         console.error('❌ Erro ao buscar usuários aprovados:', error);
-        // Fallback para query direta se a RPC falhar
-        console.log('🔄 Tentando query direta como fallback...');
-        
-        const { data: fallbackData, error: fallbackError } = await supabase
-          .from('profiles')
-          .select('id, nome, email, username, role, status, created_at, data_aprovacao, user_id')
-          .eq('status', 'aprovado')
-          .order('data_aprovacao', { ascending: false });
-
-        if (fallbackError) {
-          console.error('❌ Erro também no fallback:', fallbackError);
-          toast({
-            title: 'Aviso',
-            description: 'Não foi possível carregar usuários aprovados',
-            variant: 'default',
-          });
-          setApprovedUsers([]);
-          return;
-        }
-
-        // Usar dados do fallback
-        const usersWithEmailStatus: ApprovedUser[] = (fallbackData || []).map(user => ({
-          ...user,
-          email_confirmed: true // Assumir confirmado por não conseguir verificar
-        }));
-
-        setApprovedUsers(usersWithEmailStatus);
-        console.log('✅ Usuários aprovados carregados via fallback:', usersWithEmailStatus.length);
+        toast({
+          title: 'Aviso',
+          description: 'Não foi possível carregar usuários aprovados',
+          variant: 'default',
+        });
+        setApprovedUsers([]);
         return;
       }
 
       console.log('✅ Usuários aprovados encontrados:', data?.length || 0);
-      setApprovedUsers(data || []);
+      const users = data || [];
+      setApprovedUsers(users);
+
+      // Buscar status de emails em lote via Edge Function
+      if (users.length > 0 && profile?.id) {
+        await fetchEmailStatuses(users.map(u => u.id));
+      }
     } catch (error) {
       console.error('❌ Erro inesperado ao buscar usuários aprovados:', error);
       setApprovedUsers([]);
+    }
+  };
+
+  const fetchEmailStatuses = async (userIds: string[]) => {
+    if (!profile?.id) return;
+
+    try {
+      const { data, error } = await supabase.functions.invoke('user-management', {
+        body: {
+          action: 'batch_check_emails',
+          user_ids: userIds,
+          admin_id: profile.id
+        }
+      });
+
+      if (error) {
+        console.error('❌ Erro ao buscar status de emails:', error);
+        return;
+      }
+
+      if (data?.success && data?.email_statuses) {
+        const statusMap = new Map<string, EmailStatus>();
+        data.email_statuses.forEach((status: EmailStatus) => {
+          statusMap.set(status.profile_id, status);
+        });
+        setEmailStatuses(statusMap);
+      }
+    } catch (error) {
+      console.error('❌ Erro ao buscar status de emails:', error);
     }
   };
 
@@ -245,27 +262,33 @@ export function UserApprovalPanel() {
 
     setProcessingUser(email);
     try {
-      const { data, error } = await supabase.rpc('confirmar_email_usuario_aprovado', {
-        p_user_email: email,
-        p_admin_id: profile.id
+      const { data, error } = await supabase.functions.invoke('user-management', {
+        body: {
+          action: 'confirm_email',
+          user_email: email,
+          admin_id: profile.id
+        }
       });
 
-      if (error || !(data as any)?.success) {
-        throw new Error((data as any)?.error || 'Erro ao confirmar email');
+      if (error) throw error;
+
+      if (!data?.success) {
+        throw new Error(data?.error || 'Erro ao confirmar email');
       }
 
       toast({
-        title: 'Email confirmado',
-        description: 'O email do usuário foi confirmado com sucesso',
+        title: 'Sucesso',
+        description: 'Email confirmado com sucesso'
       });
 
       // Recarregar dados
-      fetchApprovedUsers();
+      await fetchApprovedUsers();
     } catch (error: any) {
+      console.error('Erro ao confirmar email:', error);
       toast({
-        title: 'Erro ao confirmar email',
-        description: error.message || 'Erro inesperado',
-        variant: 'destructive',
+        title: 'Erro',
+        description: error.message || 'Erro ao confirmar email do usuário',
+        variant: 'destructive'
       });
     } finally {
       setProcessingUser(null);
@@ -277,29 +300,39 @@ export function UserApprovalPanel() {
 
     setProcessingUser(userToDelete.id);
     try {
-      const { data, error } = await supabase.rpc('excluir_usuario', {
-        p_user_id: userToDelete.id,
-        p_admin_id: profile.id
+      const { data, error } = await supabase.functions.invoke('user-management', {
+        body: {
+          action: 'delete_user',
+          user_id: userToDelete.id,
+          admin_id: profile.id
+        }
       });
 
-      if (error || !(data as any)?.success) {
-        throw new Error((data as any)?.error || 'Erro ao excluir usuário');
+      if (error) throw error;
+
+      if (!data?.success) {
+        throw new Error(data?.error || 'Erro ao excluir usuário');
       }
 
       toast({
-        title: 'Usuário excluído',
-        description: 'O usuário foi excluído permanentemente do sistema',
+        title: 'Sucesso',
+        description: 'Usuário excluído com sucesso'
       });
 
       // Remover da lista local
       setApprovedUsers(prev => prev.filter(user => user.id !== userToDelete.id));
-      setDeleteModalOpen(false);
-      setUserToDelete(null);
+      setEmailStatuses(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(userToDelete.id);
+        return newMap;
+      });
+      closeDeleteModal();
     } catch (error: any) {
+      console.error('Erro ao excluir usuário:', error);
       toast({
-        title: 'Erro ao excluir',
-        description: error.message || 'Erro inesperado',
-        variant: 'destructive',
+        title: 'Erro',
+        description: error.message || 'Erro ao excluir usuário',
+        variant: 'destructive'
       });
     } finally {
       setProcessingUser(null);
@@ -478,15 +511,20 @@ export function UserApprovalPanel() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          {user.email_confirmed ? (
+                          {emailStatuses.get(user.id)?.email_confirmed ? (
                             <>
                               <MailCheck className="h-4 w-4 text-green-500" />
                               <span className="text-green-600 text-sm">Confirmado</span>
                             </>
-                          ) : (
+                          ) : emailStatuses.has(user.id) ? (
                             <>
                               <Mail className="h-4 w-4 text-orange-500" />
                               <span className="text-orange-600 text-sm">Não confirmado</span>
+                            </>
+                          ) : (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                              <span className="text-muted-foreground text-sm">Verificando...</span>
                             </>
                           )}
                         </div>
@@ -502,7 +540,7 @@ export function UserApprovalPanel() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex gap-2 justify-end">
-                          {!user.email_confirmed && (
+                          {emailStatuses.has(user.id) && !emailStatuses.get(user.id)?.email_confirmed && (
                             <Button
                               size="sm"
                               variant="outline"

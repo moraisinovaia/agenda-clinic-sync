@@ -1612,10 +1612,12 @@ export type Database = {
       get_approved_users_safe: {
         Args: Record<PropertyKey, never>
         Returns: {
+          aprovado_por: string
+          aprovador_nome: string
+          ativo: boolean
           created_at: string
           data_aprovacao: string
           email: string
-          email_confirmed: boolean
           id: string
           nome: string
           role: string
