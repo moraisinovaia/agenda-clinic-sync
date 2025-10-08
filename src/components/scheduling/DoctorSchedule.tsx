@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User, Trash2, Plus, Edit, CheckCircle, Phone, RotateCcw, Printer } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User, Trash2, Plus, Edit, CheckCircle, Phone, RotateCcw, Printer, Settings } from 'lucide-react';
 import { 
   AlertDialog, 
   AlertDialogAction, 
@@ -27,6 +27,8 @@ import { FilaEsperaForm } from '@/components/fila-espera/FilaEsperaForm';
 import { FilaEsperaFormData } from '@/types/fila-espera';
 import { RelatorioAgenda } from './RelatorioAgenda';
 import { FileText } from 'lucide-react';
+import { DoctorScheduleGenerator } from './DoctorScheduleGenerator';
+import { toast } from 'sonner';
 
 interface DoctorScheduleProps {
   doctor: Doctor;
@@ -75,6 +77,7 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
   
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   const [showReport, setShowReport] = useState(false);
+  const [scheduleGenOpen, setScheduleGenOpen] = useState(false);
   
   const getAppointmentsForDate = (date: Date) => {
     // Normalizar a data para evitar problemas de timezone
@@ -269,9 +272,9 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                   <FileText className="h-4 w-4" />
                   Gerar Relatório
                 </Button>
-                <Button onClick={handlePrint} variant="outline" className="flex items-center gap-2">
-                  <Printer className="h-4 w-4" />
-                  Imprimir
+                <Button onClick={() => setScheduleGenOpen(true)} variant="outline" className="flex items-center gap-2">
+                  <Settings className="h-4 w-4" />
+                  Configurar Horários
                 </Button>
                 <Button onClick={() => onNewAppointment(format(selectedDate, 'yyyy-MM-dd'))} className="flex items-center gap-2">
                   <Plus className="h-4 w-4" />
@@ -714,6 +717,17 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
           />
         </DialogContent>
       </Dialog>
+
+      {/* Dialog de Configurar Horários */}
+      <DoctorScheduleGenerator
+        open={scheduleGenOpen}
+        onOpenChange={setScheduleGenOpen}
+        doctors={[doctor]}
+        onSuccess={() => {
+          toast.success('Horários gerados com sucesso!');
+          setScheduleGenOpen(false);
+        }}
+      />
     </div>
   );
 }
