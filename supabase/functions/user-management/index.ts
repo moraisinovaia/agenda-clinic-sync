@@ -11,7 +11,6 @@ interface UserManagementRequest {
   user_email?: string;
   user_id?: string;
   user_ids?: string[];
-  admin_id: string;
 }
 
 serve(async (req) => {
@@ -30,13 +29,42 @@ serve(async (req) => {
       }
     });
 
-    const { action, user_email, user_id, user_ids, admin_id }: UserManagementRequest = await req.json();
+    // Obter JWT do header Authorization
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Token de autenticação não fornecido' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+      );
+    }
+
+    // Criar cliente com JWT para verificar usuário autenticado
+    const supabaseClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      },
+      global: {
+        headers: {
+          Authorization: authHeader
+        }
+      }
+    });
+
+    // Verificar usuário autenticado
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+    if (userError || !user) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Usuário não autenticado' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+      );
+    }
 
     // Verificar se quem está fazendo a ação é admin
     const { data: adminProfile, error: adminError } = await supabaseAdmin
       .from('profiles')
-      .select('role, status')
-      .eq('id', admin_id)
+      .select('id, role, status')
+      .eq('user_id', user.id)
       .single();
 
     if (adminError || !adminProfile || adminProfile.role !== 'admin' || adminProfile.status !== 'aprovado') {
@@ -48,6 +76,9 @@ serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
       );
     }
+
+    const { action, user_email, user_id, user_ids }: Omit<UserManagementRequest, 'admin_id'> = await req.json();
+    const admin_id = adminProfile.id;
 
     let result;
 

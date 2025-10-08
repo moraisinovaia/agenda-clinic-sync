@@ -117,8 +117,7 @@ export function UserApprovalPanel() {
       const { data, error } = await supabase.functions.invoke('user-management', {
         body: {
           action: 'batch_check_emails',
-          user_ids: userIds,
-          admin_id: profile.id
+          user_ids: userIds
         }
       });
 
@@ -265,8 +264,7 @@ export function UserApprovalPanel() {
       const { data, error } = await supabase.functions.invoke('user-management', {
         body: {
           action: 'confirm_email',
-          user_email: email,
-          admin_id: profile.id
+          user_email: email
         }
       });
 
@@ -303,8 +301,7 @@ export function UserApprovalPanel() {
       const { data, error } = await supabase.functions.invoke('user-management', {
         body: {
           action: 'delete_user',
-          user_id: userToDelete.id,
-          admin_id: profile.id
+          user_id: userToDelete.id
         }
       });
 
