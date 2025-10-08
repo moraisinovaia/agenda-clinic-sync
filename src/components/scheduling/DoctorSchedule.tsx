@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User, Trash2, Plus, Edit, CheckCircle, Phone, RotateCcw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User, Trash2, Plus, Edit, CheckCircle, Phone, RotateCcw, Printer } from 'lucide-react';
 import { 
   AlertDialog, 
   AlertDialogAction, 
@@ -156,6 +156,10 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
     apt => apt.status === 'agendado' || apt.status === 'confirmado'
   );
 
+  const handlePrint = () => {
+    window.print();
+  };
+
   return (
     <div className="space-y-6">
       {/* CSS customizado para destacar datas com agendamentos */}
@@ -179,6 +183,47 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
         .calendar-has-blocks:hover {
           background-color: hsl(var(--destructive) / 0.9) !important;
         }
+
+        @media print {
+          body {
+            font-size: 9px;
+            line-height: 1.2;
+          }
+          
+          .print\\:hidden {
+            display: none !important;
+          }
+          
+          .print\\:block {
+            display: block !important;
+          }
+          
+          .print\\:text-\\[9px\\] {
+            font-size: 9px !important;
+          }
+          
+          .print\\:text-\\[10px\\] {
+            font-size: 10px !important;
+          }
+          
+          .print\\:text-\\[7px\\] {
+            font-size: 7px !important;
+          }
+
+          @page {
+            size: A4 portrait;
+            margin: 10mm;
+          }
+          
+          table {
+            page-break-inside: auto;
+          }
+          
+          tr {
+            page-break-inside: avoid;
+            page-break-after: auto;
+          }
+        }
       `}</style>
       <Card className="w-full">
         <CardHeader className="pb-4">
@@ -193,7 +238,11 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
               </div>
             </div>
             {onNewAppointment && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 print:hidden">
+                <Button onClick={handlePrint} variant="outline" className="flex items-center gap-2">
+                  <Printer className="h-4 w-4" />
+                  Imprimir
+                </Button>
                 <Button onClick={() => onNewAppointment(format(selectedDate, 'yyyy-MM-dd'))} className="flex items-center gap-2">
                   <Plus className="h-4 w-4" />
                   Novo Agendamento
@@ -209,7 +258,7 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
         <CardContent className="p-0">
           <div className="grid lg:grid-cols-3 xl:grid-cols-4 min-h-[60vh] max-h-[600px]">
             {/* Calendário - Lado Esquerdo */}
-            <div className="border-r p-3 space-y-3">
+            <div className="border-r p-3 space-y-3 print:hidden">
               <h3 className="font-semibold text-xs">Selecione uma data</h3>
               <Calendar
                 mode="single"
@@ -246,7 +295,24 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
 
             {/* Tabela de Agendamentos - Lado Direito */}
             <div className="lg:col-span-2 xl:col-span-3 flex flex-col">
-              <div className="p-3 border-b bg-muted/30">
+              {/* Cabeçalho de impressão */}
+              <div className="hidden print:block p-4 border-b mb-4">
+                <h1 className="text-xl font-bold mb-2">{doctor.nome}</h1>
+                <p className="text-sm text-muted-foreground mb-1">{doctor.especialidade}</p>
+                <p className="text-sm font-semibold mb-2">
+                  Agendamentos para {format(selectedDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                </p>
+                {activeAppointments.length > 0 && (
+                  <div className="text-xs">
+                    Consultas: {activeAppointments.filter(apt => apt.atendimentos?.nome?.toLowerCase().includes('consulta') || !apt.atendimentos?.nome?.toLowerCase().includes('retorno') && !apt.atendimentos?.nome?.toLowerCase().includes('exame')).length} | 
+                    Retornos: {activeAppointments.filter(apt => apt.atendimentos?.nome?.toLowerCase().includes('retorno')).length} | 
+                    Exames: {activeAppointments.filter(apt => apt.atendimentos?.nome?.toLowerCase().includes('exame')).length} | 
+                    Total: {activeAppointments.length}
+                  </div>
+                )}
+              </div>
+              
+              <div className="p-3 border-b bg-muted/30 print:hidden">
                 <h3 className="font-semibold text-xs">
                   Agendamentos para {format(selectedDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
                 </h3>
@@ -269,14 +335,14 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                       <Table className="min-w-[900px]">
                         <TableHeader>
                         <TableRow>
-                          <TableHead className="w-[120px]">Status/Hora</TableHead>
-                          <TableHead className="w-[180px]">Paciente/Idade</TableHead>
-                          <TableHead className="w-[120px]">Telefone</TableHead>
-                          <TableHead className="w-[100px]">Convênio</TableHead>
-                          <TableHead className="w-[120px]">Tipo</TableHead>
-                          <TableHead className="w-[120px]">Registrado em</TableHead>
-                          <TableHead className="w-[120px]">Última alteração</TableHead>
-                          <TableHead className="w-[100px] text-center">Ações</TableHead>
+                          <TableHead className="w-[120px] print:text-[9px]">Status/Hora</TableHead>
+                          <TableHead className="w-[180px] print:text-[9px]">Paciente/Idade</TableHead>
+                          <TableHead className="w-[120px] print:text-[9px]">Telefone</TableHead>
+                          <TableHead className="w-[100px] print:text-[9px]">Convênio</TableHead>
+                          <TableHead className="w-[120px] print:text-[9px]">Tipo</TableHead>
+                          <TableHead className="w-[120px] print:text-[9px]">Registrado em</TableHead>
+                          <TableHead className="w-[120px] print:text-[9px]">Última alteração</TableHead>
+                          <TableHead className="w-[100px] text-center print:hidden">Ações</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -285,21 +351,21 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                           .map((appointment) => (
                             <TableRow key={appointment.id} className="hover:bg-muted/20">
                               {/* Status/Hora */}
-                              <TableCell className="w-[120px] py-1 px-2">
+                              <TableCell className="w-[120px] py-1 px-2 print:text-[9px]">
                                 <div className="flex items-center gap-2">
                                   <Badge 
                                     className={`text-[9px] px-1 py-0 w-fit leading-none ${getStatusColor(appointment.status)}`}
                                   >
                                     {getStatusLabel(appointment.status)}
                                   </Badge>
-                                  <div className="font-mono text-[9px] font-medium leading-none">
+                                  <div className="font-mono text-[10px] print:text-[10px] font-medium leading-none">
                                     {appointment.hora_agendamento}
                                   </div>
                                 </div>
                               </TableCell>
                               
                               {/* Paciente/Idade */}
-                              <TableCell className="w-[180px] py-1 px-2">
+                              <TableCell className="w-[180px] py-1 px-2 print:text-[9px]">
                                 <div className="leading-none">
                                   <div className="text-[10px] font-medium leading-none">
                                     {appointment.pacientes?.nome_completo || 'Paciente não encontrado'}
@@ -318,24 +384,24 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                               </TableCell>
                               
                               {/* Telefone */}
-                              <TableCell className="w-[120px] text-[9px] py-1 px-2 leading-none">
+                              <TableCell className="w-[120px] text-[9px] py-1 px-2 leading-none print:text-[7px]">
                                 {appointment.pacientes?.telefone || appointment.pacientes?.celular || 'N/A'}
                               </TableCell>
                               
                               {/* Convênio */}
-                              <TableCell className="w-[100px] py-1 px-2">
-                                <Badge variant="outline" className="text-[9px] px-1 py-0 leading-none">
+                              <TableCell className="w-[100px] py-1 px-2 print:text-[7px]">
+                                <Badge variant="outline" className="text-[9px] px-1 py-0 leading-none print:text-[7px]">
                                   {appointment.pacientes?.convenio || 'N/A'}
                                 </Badge>
                               </TableCell>
                               
                               {/* Tipo */}
-                              <TableCell className="w-[120px] text-[9px] text-muted-foreground py-1 px-2 leading-none">
+                              <TableCell className="w-[120px] text-[9px] text-muted-foreground py-1 px-2 leading-none print:text-[7px]">
                                 {appointment.atendimentos?.nome || 'Consulta'}
                               </TableCell>
                               
                               {/* Registrado em */}
-                              <TableCell className="w-[120px] text-[9px] py-1 px-2 leading-none">
+                              <TableCell className="w-[120px] text-[9px] py-1 px-2 leading-none print:text-[7px]">
                                 <div className="leading-none">
                                   <div className="leading-none">
                                     {formatInTimeZone(new Date(appointment.created_at), BRAZIL_TIMEZONE, 'dd/MM/yy HH:mm', { locale: ptBR })}
@@ -347,7 +413,7 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                               </TableCell>
                               
                               {/* Última alteração */}
-                              <TableCell className="w-[120px] text-[9px] py-1 px-2 leading-none">
+                              <TableCell className="w-[120px] text-[9px] py-1 px-2 leading-none print:text-[7px]">
                                 <div className="leading-none">
                                   <div className="leading-none">
                                     {formatInTimeZone(new Date(appointment.updated_at), BRAZIL_TIMEZONE, 'dd/MM/yy HH:mm', { locale: ptBR })}
@@ -361,7 +427,7 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
                               </TableCell>
                               
                               {/* Ações */}
-                              <TableCell className="w-[100px] py-1 px-2">
+                              <TableCell className="w-[100px] py-1 px-2 print:hidden">
                                 <div className="flex items-center justify-center gap-0.5">
                                   {onEditAppointment && (
                                     <Button 
@@ -510,7 +576,7 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
       </Dialog>
 
       {/* Resumo estatístico - Versão compacta */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 print:hidden">
         <Card className="p-2">
           <div className="flex items-center gap-2">
             <div className="p-1 bg-blue-100 rounded">
