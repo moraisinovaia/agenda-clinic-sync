@@ -10,6 +10,44 @@ import {
   startOfDay 
 } from 'date-fns';
 
+// Helper functions for date search
+const isDateSearch = (term: string): boolean => {
+  // Detectar formatos de data brasileira: DD/MM/YYYY, DD/MM/YY, DD/MM
+  const datePatterns = [
+    /^\d{2}\/\d{2}\/\d{4}$/,  // DD/MM/YYYY
+    /^\d{2}\/\d{2}\/\d{2}$/,   // DD/MM/YY
+    /^\d{2}\/\d{2}$/           // DD/MM
+  ];
+  return datePatterns.some(pattern => pattern.test(term.trim()));
+};
+
+const matchesBirthDate = (dbDate: string | null | undefined, searchTerm: string): boolean => {
+  if (!dbDate) return false;
+  
+  const cleanTerm = searchTerm.trim();
+  const [day, month, year] = cleanTerm.split('/');
+  
+  // Converter data do banco (YYYY-MM-DD) para comparação
+  const dbParts = dbDate.split('-');
+  const dbYear = dbParts[0];
+  const dbMonth = dbParts[1];
+  const dbDay = dbParts[2];
+  
+  // Se tem ano completo (DD/MM/YYYY)
+  if (year && year.length === 4) {
+    return dbDay === day && dbMonth === month && dbYear === year;
+  }
+  
+  // Se tem ano curto (DD/MM/YY)
+  if (year && year.length === 2) {
+    const shortDbYear = dbYear.slice(-2);
+    return dbDay === day && dbMonth === month && shortDbYear === year;
+  }
+  
+  // Se tem apenas dia/mês (DD/MM)
+  return dbDay === day && dbMonth === month;
+};
+
 export const useAdvancedAppointmentFilters = (
   appointments: AppointmentWithRelations[], 
   allowCanceled: boolean = false
@@ -35,7 +73,8 @@ export const useAdvancedAppointmentFilters = (
       const matchesSearch = !searchTerm || 
         appointment.pacientes?.nome_completo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         appointment.medicos?.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        appointment.atendimentos?.nome?.toLowerCase().includes(searchTerm.toLowerCase());
+        appointment.atendimentos?.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (isDateSearch(searchTerm) && matchesBirthDate(appointment.pacientes?.data_nascimento, searchTerm));
 
       // Status filter
       const matchesStatus = statusFilter === 'all' || appointment.status === statusFilter;

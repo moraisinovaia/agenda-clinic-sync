@@ -158,7 +158,7 @@ export const AppointmentFilters = ({
                   Buscar Paciente
                 </label>
                 <Input
-                  placeholder="Nome do paciente, exame..."
+                  placeholder="Nome, data nascimento (DD/MM/AAAA), exame..."
                   value={searchTerm}
                   onChange={(e) => onSearchChange(e.target.value)}
                 />
