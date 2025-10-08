@@ -375,11 +375,11 @@ export function DoctorScheduleGenerator({
             </div>
           </div>
 
-          <div className="border rounded-lg p-4 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold flex items-center gap-2">
+          <div className="border rounded-lg overflow-hidden">
+            <div className="bg-muted/50 px-4 py-3 border-b flex items-center justify-between">
+              <h3 className="font-semibold flex items-center gap-2 text-sm">
                 <CalendarDays className="h-4 w-4" />
-                Configuração Semanal
+                Horários de Atendimento
               </h3>
               
               <div className="flex gap-2">
@@ -388,7 +388,7 @@ export function DoctorScheduleGenerator({
                   variant="outline" 
                   size="sm"
                   onClick={() => applyQuickConfig('weekdays')}
-                  className="flex items-center gap-1"
+                  className="flex items-center gap-1 h-8 text-xs"
                 >
                   <Zap className="h-3 w-3" />
                   Seg-Sex 8-18h
@@ -398,6 +398,7 @@ export function DoctorScheduleGenerator({
                   variant="outline" 
                   size="sm"
                   onClick={() => applyQuickConfig('allMornings')}
+                  className="h-8 text-xs"
                 >
                   Todas Manhãs
                 </Button>
@@ -406,13 +407,21 @@ export function DoctorScheduleGenerator({
                   variant="outline" 
                   size="sm"
                   onClick={() => applyQuickConfig('allAfternoons')}
+                  className="h-8 text-xs"
                 >
                   Todas Tardes
                 </Button>
               </div>
             </div>
+
+            {/* Table Header */}
+            <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-muted/30 border-b text-xs font-medium text-muted-foreground">
+              <div className="col-span-2">Dia da Semana</div>
+              <div className="col-span-5 text-center">Período da Manhã</div>
+              <div className="col-span-5 text-center">Período da Tarde</div>
+            </div>
             
-            <div className="space-y-3">
+            <div className="divide-y">
               {schedules.map((sched, idx) => {
                 // Calcular se este dia da semana existe no período selecionado
                 const daysInPeriod = dataInicio && dataFim ? (() => {
@@ -427,65 +436,75 @@ export function DoctorScheduleGenerator({
                 return (
                   <div 
                     key={idx} 
-                    className={`grid grid-cols-12 gap-2 items-center border-b pb-2 transition-opacity ${!dayExistsInPeriod ? 'opacity-40' : ''}`}
+                    className={`grid grid-cols-12 gap-2 items-center px-4 py-3 transition-all hover:bg-muted/30 ${
+                      idx % 2 === 0 ? 'bg-background' : 'bg-muted/10'
+                    } ${!dayExistsInPeriod ? 'opacity-40' : ''}`}
                   >
-                    <div className="col-span-2 font-medium text-sm flex items-center gap-1">
-                      {DIAS_SEMANA[idx].label}
+                    <div className="col-span-2 font-medium text-sm flex items-center gap-2">
+                      <span className={sched.manha.ativo || sched.tarde.ativo ? 'text-primary' : ''}>
+                        {DIAS_SEMANA[idx].label}
+                      </span>
                       {!dayExistsInPeriod && dataInicio && dataFim && (
-                        <Badge variant="outline" className="text-[10px] px-1 py-0">
-                          não no período
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
+                          fora do período
                         </Badge>
                       )}
                     </div>
                   
-                  <div className="col-span-5 flex items-center gap-2">
-                    <Checkbox 
-                      checked={sched.manha.ativo}
-                      onCheckedChange={(checked) => 
-                        updateSchedule(idx, 'manha', 'ativo', checked)
-                      }
-                    />
-                    <Label className="text-xs">Manhã</Label>
-                    <Input 
-                      type="time" 
-                      className="h-8 text-xs"
-                      value={sched.manha.hora_inicio}
-                      disabled={!sched.manha.ativo}
-                      onChange={(e) => updateSchedule(idx, 'manha', 'hora_inicio', e.target.value)}
-                    />
-                    <span className="text-xs">às</span>
-                    <Input 
-                      type="time" 
-                      className="h-8 text-xs"
-                      value={sched.manha.hora_fim}
-                      disabled={!sched.manha.ativo}
-                      onChange={(e) => updateSchedule(idx, 'manha', 'hora_fim', e.target.value)}
-                    />
-                  </div>
+                    <div className="col-span-5 flex items-center gap-2">
+                      <Checkbox 
+                        id={`manha-${idx}`}
+                        checked={sched.manha.ativo}
+                        onCheckedChange={(checked) => 
+                          updateSchedule(idx, 'manha', 'ativo', checked)
+                        }
+                        className="data-[state=checked]:bg-primary"
+                      />
+                      <div className="flex items-center gap-1.5 flex-1">
+                        <Input 
+                          type="time" 
+                          className="h-9 text-xs font-mono"
+                          value={sched.manha.hora_inicio}
+                          disabled={!sched.manha.ativo}
+                          onChange={(e) => updateSchedule(idx, 'manha', 'hora_inicio', e.target.value)}
+                        />
+                        <span className="text-xs text-muted-foreground">até</span>
+                        <Input 
+                          type="time" 
+                          className="h-9 text-xs font-mono"
+                          value={sched.manha.hora_fim}
+                          disabled={!sched.manha.ativo}
+                          onChange={(e) => updateSchedule(idx, 'manha', 'hora_fim', e.target.value)}
+                        />
+                      </div>
+                    </div>
                   
-                  <div className="col-span-5 flex items-center gap-2">
-                    <Checkbox 
-                      checked={sched.tarde.ativo}
-                      onCheckedChange={(checked) => 
-                        updateSchedule(idx, 'tarde', 'ativo', checked)
-                      }
-                    />
-                    <Label className="text-xs">Tarde</Label>
-                    <Input 
-                      type="time" 
-                      className="h-8 text-xs"
-                      value={sched.tarde.hora_inicio}
-                      disabled={!sched.tarde.ativo}
-                      onChange={(e) => updateSchedule(idx, 'tarde', 'hora_inicio', e.target.value)}
-                    />
-                    <span className="text-xs">às</span>
-                    <Input 
-                      type="time" 
-                      className="h-8 text-xs"
-                      value={sched.tarde.hora_fim}
-                      disabled={!sched.tarde.ativo}
-                      onChange={(e) => updateSchedule(idx, 'tarde', 'hora_fim', e.target.value)}
-                    />
+                    <div className="col-span-5 flex items-center gap-2">
+                      <Checkbox 
+                        id={`tarde-${idx}`}
+                        checked={sched.tarde.ativo}
+                        onCheckedChange={(checked) => 
+                          updateSchedule(idx, 'tarde', 'ativo', checked)
+                        }
+                        className="data-[state=checked]:bg-primary"
+                      />
+                      <div className="flex items-center gap-1.5 flex-1">
+                        <Input 
+                          type="time" 
+                          className="h-9 text-xs font-mono"
+                          value={sched.tarde.hora_inicio}
+                          disabled={!sched.tarde.ativo}
+                          onChange={(e) => updateSchedule(idx, 'tarde', 'hora_inicio', e.target.value)}
+                        />
+                        <span className="text-xs text-muted-foreground">até</span>
+                        <Input 
+                          type="time" 
+                          className="h-9 text-xs font-mono"
+                          value={sched.tarde.hora_fim}
+                          disabled={!sched.tarde.ativo}
+                          onChange={(e) => updateSchedule(idx, 'tarde', 'hora_fim', e.target.value)}
+                        />
+                      </div>
                     </div>
                   </div>
                 );
