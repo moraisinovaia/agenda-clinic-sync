@@ -55,6 +55,15 @@ const Index = () => {
   const [emptySlots, setEmptySlots] = useState<any[]>([]);
   const [scheduleGenOpen, setScheduleGenOpen] = useState(false);
   const [selectedAppointmentTime, setSelectedAppointmentTime] = useState<string | undefined>();
+  const [userClienteId, setUserClienteId] = useState<string | null>(null);
+  
+  // Atualizar cliente_id quando profile carregar
+  useEffect(() => {
+    if (profile?.cliente_id) {
+      console.log('🔑 Cliente ID do usuário:', profile.cliente_id);
+      setUserClienteId(profile.cliente_id);
+    }
+  }, [profile]);
   
   // Ref para função de preencher último paciente (F12)
   const fillLastPatientRef = useRef<(() => void) | null>(null);
@@ -125,13 +134,38 @@ const Index = () => {
   // Buscar horários vazios
   useEffect(() => {
     const fetchEmptySlots = async () => {
-      const { data } = await supabase
+      // Verificar se cliente_id está disponível
+      if (!userClienteId) {
+        console.warn('⚠️ cliente_id não disponível, aguardando...');
+        return;
+      }
+
+      console.log('🔍 Buscando horários vazios:', {
+        cliente_id: userClienteId,
+        user_role: profile?.role,
+        data_inicio: format(new Date(), 'yyyy-MM-dd')
+      });
+
+      const { data, error } = await supabase
         .from('horarios_vazios')
         .select('*')
+        .eq('cliente_id', userClienteId)
         .eq('status', 'disponivel')
         .gte('data', format(new Date(), 'yyyy-MM-dd'));
       
-      if (data) setEmptySlots(data);
+      if (error) {
+        if (error.code === '42501') {
+          console.error('🚫 Erro de permissão RLS ao buscar horários vazios:', error.message);
+        } else {
+          console.error('❌ Erro ao buscar horários vazios:', error);
+        }
+        return;
+      }
+
+      if (data) {
+        console.log('✅ Horários vazios carregados:', data.length);
+        setEmptySlots(data);
+      }
     };
     
     fetchEmptySlots();
@@ -139,7 +173,7 @@ const Index = () => {
     // Refresh a cada 30 segundos
     const interval = setInterval(fetchEmptySlots, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [userClienteId, profile?.role]);
 
   const {
     filaEspera,
@@ -778,13 +812,33 @@ const Index = () => {
         doctors={doctors}
         onSuccess={async () => {
           // Recarregar horários vazios após geração
-          const { data } = await supabase
+          if (!userClienteId) {
+            console.warn('⚠️ cliente_id não disponível para recarregar horários');
+            return;
+          }
+
+          console.log('🔄 Recarregando horários vazios após geração');
+          
+          const { data, error } = await supabase
             .from('horarios_vazios')
             .select('*')
+            .eq('cliente_id', userClienteId)
             .eq('status', 'disponivel')
             .gte('data', format(new Date(), 'yyyy-MM-dd'));
           
-          if (data) setEmptySlots(data);
+          if (error) {
+            if (error.code === '42501') {
+              console.error('🚫 Erro de permissão RLS ao recarregar horários:', error.message);
+            } else {
+              console.error('❌ Erro ao recarregar horários:', error);
+            }
+            return;
+          }
+
+          if (data) {
+            console.log('✅ Horários vazios recarregados:', data.length);
+            setEmptySlots(data);
+          }
         }}
       />
     </div>
