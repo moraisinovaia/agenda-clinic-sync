@@ -15,6 +15,8 @@ import { Doctor } from '@/types/scheduling';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { generateTimeSlots } from '@/utils/scheduleGenerator';
+import { useAuth } from '@/hooks/useAuth';
 
 interface DoctorScheduleGeneratorProps {
   open: boolean;
@@ -42,6 +44,7 @@ export function DoctorScheduleGenerator({
   onSuccess
 }: DoctorScheduleGeneratorProps) {
   const { generateSchedule, loading } = useScheduleGenerator();
+  const { profile } = useAuth();
   
   const [selectedDoctor, setSelectedDoctor] = useState<string>(preSelectedDoctorId || '');
   const [dataInicio, setDataInicio] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -138,12 +141,14 @@ export function DoctorScheduleGenerator({
       ['manha', 'tarde'].forEach((periodo) => {
         const p = periodo as 'manha' | 'tarde';
         if (schedule[p].ativo) {
-          const [startH, startM] = schedule[p].hora_inicio.split(':').map(Number);
-          const [endH, endM] = schedule[p].hora_fim.split(':').map(Number);
-          const minutes = (endH * 60 + endM) - (startH * 60 + startM);
-          const slots = Math.floor(minutes / intervaloMinutos);
-          daySlotsCount += slots;
-          totalSlots += slots;
+          // ✅ USAR A MESMA LÓGICA do generateTimeSlots real
+          const timeSlots = generateTimeSlots(
+            schedule[p].hora_inicio,
+            schedule[p].hora_fim,
+            intervaloMinutos
+          );
+          daySlotsCount += timeSlots.length;
+          totalSlots += timeSlots.length;
         }
       });
       
@@ -209,6 +214,11 @@ export function DoctorScheduleGenerator({
       return;
     }
     
+    if (!profile?.cliente_id) {
+      toast.error('Erro: cliente_id não encontrado. Faça login novamente.');
+      return;
+    }
+    
     setShowValidation(false);
 
     const activeConfigs = schedules.flatMap(sched => 
@@ -216,6 +226,7 @@ export function DoctorScheduleGenerator({
         sched[periodo].ativo
           ? [{
               medico_id: selectedDoctor,
+              cliente_id: profile.cliente_id, // ✅ ADICIONAR cliente_id
               dia_semana: sched.dia_semana,
               periodo,
               hora_inicio: sched[periodo].hora_inicio,
@@ -234,6 +245,7 @@ export function DoctorScheduleGenerator({
 
     console.log('🚀 Gerando horários com configuração:', {
       medico_id: selectedDoctor,
+      cliente_id: profile.cliente_id,
       periodo: `${dataInicio} até ${dataFim}`,
       configuracoes_ativas: activeConfigs.length,
       estimativa: previewCount
