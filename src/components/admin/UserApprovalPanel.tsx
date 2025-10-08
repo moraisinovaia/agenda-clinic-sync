@@ -346,8 +346,8 @@ export function UserApprovalPanel() {
     setUserToDelete(null);
   };
 
-  // Se não é admin aprovado, não mostrar nada
-  if (profile?.role !== 'admin' || profile?.status !== 'aprovado') {
+  // Se não é admin aprovado, não mostrar nada (usando isAdmin do hook estável)
+  if (!isAdmin || !isApproved) {
     return null;
   }
 
