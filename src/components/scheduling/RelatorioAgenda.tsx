@@ -15,10 +15,11 @@ interface RelatorioAgendaProps {
   doctors: Doctor[];
   appointments: AppointmentWithRelations[];
   onBack: () => void;
+  preSelectedDoctorId?: string;
 }
 
-export function RelatorioAgenda({ doctors, appointments, onBack }: RelatorioAgendaProps) {
-  const [selectedDoctorId, setSelectedDoctorId] = useState<string>('');
+export function RelatorioAgenda({ doctors, appointments, onBack, preSelectedDoctorId }: RelatorioAgendaProps) {
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string>(preSelectedDoctorId || '');
   const [dataInicio, setDataInicio] = useState<string>('');
   const [dataFim, setDataFim] = useState<string>('');
   const [horaInicio, setHoraInicio] = useState<string>('00:00');

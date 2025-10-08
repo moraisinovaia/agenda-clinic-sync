@@ -25,6 +25,8 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { FilaEsperaForm } from '@/components/fila-espera/FilaEsperaForm';
 import { FilaEsperaFormData } from '@/types/fila-espera';
+import { RelatorioAgenda } from './RelatorioAgenda';
+import { FileText } from 'lucide-react';
 
 interface DoctorScheduleProps {
   doctor: Doctor;
@@ -72,6 +74,7 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
   });
   
   const [waitlistOpen, setWaitlistOpen] = useState(false);
+  const [showReport, setShowReport] = useState(false);
   
   const getAppointmentsForDate = (date: Date) => {
     // Normalizar a data para evitar problemas de timezone
@@ -262,6 +265,10 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
             </div>
             {onNewAppointment && (
               <div className="flex items-center gap-2 print:hidden">
+                <Button onClick={() => setShowReport(true)} variant="outline" className="flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Gerar Relatório
+                </Button>
                 <Button onClick={handlePrint} variant="outline" className="flex items-center gap-2">
                   <Printer className="h-4 w-4" />
                   Imprimir
@@ -679,6 +686,34 @@ export function DoctorSchedule({ doctor, appointments, blockedDates = [], isDate
           </div>
         </Card>
       </div>
+
+      {/* Dialog de Fila de Espera */}
+      <Dialog open={waitlistOpen} onOpenChange={setWaitlistOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Adicionar à Fila de Espera</DialogTitle>
+          </DialogHeader>
+          <FilaEsperaForm
+            doctors={[doctor]}
+            atendimentos={atendimentos}
+            onSubmit={adicionarFilaEspera}
+            onCancel={() => setWaitlistOpen(false)}
+            searchPatientsByBirthDate={searchPatientsByBirthDate}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Relatório */}
+      <Dialog open={showReport} onOpenChange={setShowReport}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+          <RelatorioAgenda
+            doctors={[doctor]}
+            appointments={appointments}
+            onBack={() => setShowReport(false)}
+            preSelectedDoctorId={doctor.id}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
