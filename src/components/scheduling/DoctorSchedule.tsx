@@ -756,6 +756,7 @@ export function DoctorSchedule({
         open={scheduleGenOpen}
         onOpenChange={setScheduleGenOpen}
         doctors={[doctor]}
+        preSelectedDoctorId={doctor.id}
         onSuccess={() => {
           toast.success('Horários gerados com sucesso!');
           setScheduleGenOpen(false);

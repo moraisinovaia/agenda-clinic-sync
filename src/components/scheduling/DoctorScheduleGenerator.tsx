@@ -189,12 +189,21 @@ export function DoctorScheduleGenerator({
 
   const hasActiveConfig = schedules.some(s => s.manha.ativo || s.tarde.ativo);
 
-  // Atualizar selectedDoctor quando preSelectedDoctorId mudar
+  // Atualizar selectedDoctor quando preSelectedDoctorId mudar ou quando o modal abrir
   useEffect(() => {
     if (preSelectedDoctorId) {
       setSelectedDoctor(preSelectedDoctorId);
+      console.log('🎯 Médico pré-selecionado:', preSelectedDoctorId);
     }
   }, [preSelectedDoctorId]);
+  
+  // Garantir que o médico seja selecionado quando o modal abrir
+  useEffect(() => {
+    if (open && preSelectedDoctorId && selectedDoctor !== preSelectedDoctorId) {
+      setSelectedDoctor(preSelectedDoctorId);
+      console.log('🔄 Atualizando médico ao abrir modal:', preSelectedDoctorId);
+    }
+  }, [open, preSelectedDoctorId, selectedDoctor]);
 
   useEffect(() => {
     const count = calculatePreview();
