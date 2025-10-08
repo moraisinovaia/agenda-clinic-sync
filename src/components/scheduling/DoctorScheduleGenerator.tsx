@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { format, addDays, getDay, eachDayOfInterval } from 'date-fns';
+import { format, addDays, getDay, eachDayOfInterval, parseISO, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Clock, CalendarDays, AlertCircle, Zap, AlertTriangle } from 'lucide-react';
 import { useScheduleGenerator } from '@/hooks/useScheduleGenerator';
@@ -107,15 +107,33 @@ export function DoctorScheduleGenerator({
   const calculatePreview = () => {
     if (!selectedDoctor) return 0;
     
-    const start = new Date(dataInicio);
-    const end = new Date(dataFim);
-    const allDays = eachDayOfInterval({ start, end });
+    // ✅ Parsing seguro de datas
+    const start = parseISO(dataInicio + 'T00:00:00');
+    const end = parseISO(dataFim + 'T23:59:59');
     
+    // ✅ Validação de datas
+    if (!isValid(start) || !isValid(end)) {
+      console.error('❌ Datas inválidas:', { dataInicio, dataFim });
+      return 0;
+    }
+    
+    if (start > end) {
+      console.warn('⚠️ Data início posterior à data fim');
+      return 0;
+    }
+    
+    const allDays = eachDayOfInterval({ start, end });
     let totalSlots = 0;
+    
+    console.log('🔍 Calculando preview de slots:');
+    console.log(`📅 Período: ${format(start, 'dd/MM/yyyy')} até ${format(end, 'dd/MM/yyyy')}`);
+    console.log(`📊 Total de dias no intervalo: ${allDays.length}`);
     
     allDays.forEach(day => {
       const dayOfWeek = getDay(day);
+      const dayName = DIAS_SEMANA[dayOfWeek].label;
       const schedule = schedules[dayOfWeek];
+      let daySlotsCount = 0;
       
       ['manha', 'tarde'].forEach((periodo) => {
         const p = periodo as 'manha' | 'tarde';
@@ -124,11 +142,24 @@ export function DoctorScheduleGenerator({
           const [endH, endM] = schedule[p].hora_fim.split(':').map(Number);
           const minutes = (endH * 60 + endM) - (startH * 60 + startM);
           const slots = Math.floor(minutes / intervaloMinutos);
+          daySlotsCount += slots;
           totalSlots += slots;
         }
       });
+      
+      // Log detalhado por dia
+      if (daySlotsCount > 0) {
+        console.log(`  ✅ ${format(day, 'dd/MM/yyyy')} (${dayName}):`, {
+          manha_ativo: schedule.manha.ativo,
+          manha_horario: schedule.manha.ativo ? `${schedule.manha.hora_inicio}-${schedule.manha.hora_fim}` : 'N/A',
+          tarde_ativo: schedule.tarde.ativo,
+          tarde_horario: schedule.tarde.ativo ? `${schedule.tarde.hora_inicio}-${schedule.tarde.hora_fim}` : 'N/A',
+          slots_gerados: daySlotsCount
+        });
+      }
     });
     
+    console.log(`🎯 Total de slots a serem gerados: ${totalSlots}`);
     return totalSlots;
   };
 
@@ -349,11 +380,30 @@ export function DoctorScheduleGenerator({
             </div>
             
             <div className="space-y-3">
-              {schedules.map((sched, idx) => (
-                <div key={idx} className="grid grid-cols-12 gap-2 items-center border-b pb-2">
-                  <div className="col-span-2 font-medium text-sm">
-                    {DIAS_SEMANA[idx].label}
-                  </div>
+              {schedules.map((sched, idx) => {
+                // Calcular se este dia da semana existe no período selecionado
+                const daysInPeriod = dataInicio && dataFim ? (() => {
+                  const start = parseISO(dataInicio + 'T00:00:00');
+                  const end = parseISO(dataFim + 'T00:00:00');
+                  if (!isValid(start) || !isValid(end)) return [];
+                  return eachDayOfInterval({ start, end }).map(d => getDay(d));
+                })() : [];
+                
+                const dayExistsInPeriod = daysInPeriod.includes(idx);
+                
+                return (
+                  <div 
+                    key={idx} 
+                    className={`grid grid-cols-12 gap-2 items-center border-b pb-2 transition-opacity ${!dayExistsInPeriod ? 'opacity-40' : ''}`}
+                  >
+                    <div className="col-span-2 font-medium text-sm flex items-center gap-1">
+                      {DIAS_SEMANA[idx].label}
+                      {!dayExistsInPeriod && dataInicio && dataFim && (
+                        <Badge variant="outline" className="text-[10px] px-1 py-0">
+                          não no período
+                        </Badge>
+                      )}
+                    </div>
                   
                   <div className="col-span-5 flex items-center gap-2">
                     <Checkbox 
@@ -403,9 +453,10 @@ export function DoctorScheduleGenerator({
                       disabled={!sched.tarde.ativo}
                       onChange={(e) => updateSchedule(idx, 'tarde', 'hora_fim', e.target.value)}
                     />
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -435,17 +486,32 @@ export function DoctorScheduleGenerator({
             </Alert>
           )}
 
-          {previewCount === 0 && hasActiveConfig && selectedDoctor && (
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                <strong>⚠️ Nenhum horário será gerado!</strong>
-                <p className="text-sm mt-1">
-                  Verifique se os dias da semana configurados existem no período selecionado.
-                </p>
-              </AlertDescription>
-            </Alert>
-          )}
+          {previewCount === 0 && hasActiveConfig && selectedDoctor && (() => {
+            const activeDaysNames = schedules
+              .map((s, i) => (s.manha.ativo || s.tarde.ativo) ? DIAS_SEMANA[i].label : null)
+              .filter(Boolean);
+            
+            const startDay = format(parseISO(dataInicio + 'T00:00:00'), 'EEEE', { locale: ptBR });
+            const endDay = format(parseISO(dataFim + 'T00:00:00'), 'EEEE', { locale: ptBR });
+            
+            return (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>⚠️ Nenhum horário será gerado!</strong>
+                  <div className="text-sm mt-2 space-y-1">
+                    <p><strong>Dias configurados:</strong> {activeDaysNames.join(', ')}</p>
+                    <p><strong>Período selecionado:</strong> {startDay} ({format(parseISO(dataInicio + 'T00:00:00'), 'dd/MM')}) até {endDay} ({format(parseISO(dataFim + 'T00:00:00'), 'dd/MM')})</p>
+                    <p className="mt-2 font-medium">💡 Solução:</p>
+                    <ul className="list-disc ml-5">
+                      <li>Ajuste as <strong>datas</strong> para incluir os dias configurados, OU</li>
+                      <li>Configure os <strong>dias da semana</strong> que existem no período selecionado</li>
+                    </ul>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            );
+          })()}
         </div>
 
         <DialogFooter>
