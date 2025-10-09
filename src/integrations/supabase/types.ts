@@ -1841,7 +1841,7 @@ export type Database = {
       }
       l2_normalize: {
         Args: { "": string } | { "": unknown } | { "": unknown }
-        Returns: unknown
+        Returns: string
       }
       listar_usuarios_orfaos: {
         Args: Record<PropertyKey, never>
