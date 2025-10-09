@@ -743,11 +743,13 @@ export function DoctorSchedule({
           <DialogHeader>
             <DialogTitle>Relatório de Agenda</DialogTitle>
           </DialogHeader>
-          <RelatorioAgenda
-            doctors={[doctor]}
-            appointments={appointments.filter(apt => apt.medico_id === doctor.id)}
-            onBack={() => setShowReport(false)}
-          />
+      <RelatorioAgenda
+        doctors={[doctor]}
+        appointments={appointments.filter(apt => apt.medico_id === doctor.id)}
+        onBack={() => setShowReport(false)}
+        preSelectedDoctorId={doctor.id}
+        preSelectedDate={format(selectedDate, 'yyyy-MM-dd')}
+      />
         </DialogContent>
       </Dialog>
 

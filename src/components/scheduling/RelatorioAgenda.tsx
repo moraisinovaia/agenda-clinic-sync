@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Calendar, Clock, Printer, FileText, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,16 +16,24 @@ interface RelatorioAgendaProps {
   appointments: AppointmentWithRelations[];
   onBack: () => void;
   preSelectedDoctorId?: string;
+  preSelectedDate?: string;
 }
 
-export function RelatorioAgenda({ doctors, appointments, onBack, preSelectedDoctorId }: RelatorioAgendaProps) {
+export function RelatorioAgenda({ doctors, appointments, onBack, preSelectedDoctorId, preSelectedDate }: RelatorioAgendaProps) {
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>(preSelectedDoctorId || '');
-  const [dataInicio, setDataInicio] = useState<string>('');
-  const [dataFim, setDataFim] = useState<string>('');
+  const [dataInicio, setDataInicio] = useState<string>(preSelectedDate || '');
+  const [dataFim, setDataFim] = useState<string>(preSelectedDate || '');
   const [horaInicio, setHoraInicio] = useState<string>('00:00');
   const [horaFim, setHoraFim] = useState<string>('23:59');
   const [showReport, setShowReport] = useState(false);
   const [searchDoctor, setSearchDoctor] = useState<string>('');
+
+  // Auto-gerar relatório se médico e data estiverem pré-selecionados
+  useEffect(() => {
+    if (preSelectedDoctorId && preSelectedDate) {
+      setShowReport(true);
+    }
+  }, [preSelectedDoctorId, preSelectedDate]);
 
   const selectedDoctor = doctors.find(d => d.id === selectedDoctorId);
   
