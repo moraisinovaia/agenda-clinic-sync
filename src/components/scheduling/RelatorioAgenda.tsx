@@ -95,35 +95,114 @@ export function RelatorioAgenda({ doctors, appointments, onBack, preSelectedDoct
   return (
     <div className="space-y-6">
       <style type="text/css" media="print">{`
+        /* Configuração da página A4 */
         @page {
-          margin: 0.1in;
           size: A4;
+          margin: 10mm;
         }
-        body {
+
+        /* Reset completo - forçar fundo branco e texto preto */
+        body, html {
+          background-color: white !important;
+          color: black !important;
+          margin: 0 !important;
+          padding: 0 !important;
           font-family: Arial, sans-serif;
           font-size: 9px !important;
           line-height: 1.2 !important;
         }
+
+        /* Remover fundos escuros de TODOS os elementos */
+        *, *::before, *::after {
+          background-color: transparent !important;
+          background-image: none !important;
+          box-shadow: none !important;
+          text-shadow: none !important;
+        }
+
+        /* Forçar fundo branco para containers principais */
+        [role="card"], .card, div[class*="card"],
+        [class*="Card"], [class*="bg-gradient"] {
+          background-color: white !important;
+          background-image: none !important;
+          border: none !important;
+          box-shadow: none !important;
+        }
+
+        /* Header do relatório com fundo cinza claro */
+        [role="card"] > div:first-child,
+        .card > div:first-child {
+          background-color: #f3f4f6 !important;
+          background-image: none !important;
+          border-bottom: 1px solid #9ca3af !important;
+          padding: 8px !important;
+        }
+
+        /* Textos em preto */
+        h1, h2, h3, h4, h5, h6, p, span, div, label, td, th {
+          color: black !important;
+          background-color: transparent !important;
+          background-image: none !important;
+        }
+
+        /* Tabela - cabeçalho cinza claro */
+        thead, thead tr, thead th {
+          background-color: #f3f4f6 !important;
+          color: black !important;
+          font-weight: bold !important;
+          border: 1px solid #9ca3af !important;
+        }
+
+        /* Tabela - células com fundo branco */
+        table, tbody, tbody tr, tbody td {
+          background-color: white !important;
+          color: black !important;
+          border: 1px solid #9ca3af !important;
+        }
+
+        /* Zebra striping para melhor legibilidade */
+        tbody tr:nth-child(even) {
+          background-color: #f9fafb !important;
+        }
+
+        /* Garantir quebras de página adequadas */
+        table { 
+          page-break-inside: avoid; 
+          border-collapse: collapse !important;
+          width: 100% !important;
+        }
+        tr { page-break-inside: avoid; page-break-after: auto; }
+        thead { display: table-header-group; }
+        tfoot { display: table-footer-group; }
+
+        /* Classes utilitárias de impressão */
+        .print\\:hidden { display: none !important; }
         .print\\:text-\\[7px\\] { font-size: 7px !important; }
         .print\\:text-\\[9px\\] { font-size: 9px !important; }
         .print\\:text-\\[10px\\] { font-size: 10px !important; }
+        .print\\:text-base { font-size: 12px !important; }
+        .print\\:text-xs { font-size: 8px !important; }
         .print\\:p-0 { padding: 0 !important; }
+        .print\\:p-1 { padding: 0.25rem !important; }
         .print\\:px-0\\.5 { padding-left: 0.125rem !important; padding-right: 0.125rem !important; }
+        .print\\:px-1 { padding-left: 0.25rem !important; padding-right: 0.25rem !important; }
         .print\\:py-0 { padding-top: 0 !important; padding-bottom: 0 !important; }
         .print\\:py-0\\.5 { padding-top: 0.125rem !important; padding-bottom: 0.125rem !important; }
+        .print\\:py-1 { padding-top: 0.25rem !important; padding-bottom: 0.25rem !important; }
         .print\\:mb-0\\.5 { margin-bottom: 0.125rem !important; }
         .print\\:mb-1 { margin-bottom: 0.25rem !important; }
+        .print\\:mb-2 { margin-bottom: 0.5rem !important; }
+        .print\\:mt-0 { margin-top: 0 !important; }
         .print\\:shadow-none { box-shadow: none !important; }
         .print\\:border-none { border: none !important; }
         .print\\:border-gray-400 { border-color: #9ca3af !important; }
         .print\\:border-t { border-top-width: 1px !important; }
-        .print\\:hidden { display: none !important; }
         .print\\:line-height-tight { line-height: 1.2 !important; }
-        table { page-break-inside: avoid; border-collapse: collapse !important; }
-        tr { page-break-inside: avoid; page-break-after: auto; }
-        thead { display: table-header-group; }
-        tfoot { display: table-footer-group; }
-        th, td { border: 1px solid #9ca3af !important; }
+
+        /* Ocultar hover effects */
+        .hover\\:bg-muted\\/50:hover {
+          background-color: transparent !important;
+        }
       `}</style>
       
       <div className="print:hidden">
