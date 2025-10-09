@@ -1,0 +1,291 @@
+{
+  "name": "WhatsApp Chatbot com IA - Agendamentos",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-whatsapp",
+      "name": "Webhook WhatsApp",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-5-mini",
+        "systemMessage": "Você é Noah, o assistente virtual da clínica IPADO, especializada em gastroenterologia e endoscopia.\n\n**Sua Personalidade:**\n- Amigável, profissional e empático\n- Use uma linguagem clara e acessível\n- Sempre confirme informações importantes\n- Seja proativo em ajudar o paciente\n\n**Suas Responsabilidades:**\n1. **Agendamentos**: Criar, consultar, remarcar e cancelar consultas\n2. **Informações**: Fornecer dados sobre médicos, horários e procedimentos\n3. **Confirmações**: Sempre confirmar os dados antes de finalizar qualquer ação\n\n**Regras de Negócio:**\n- SEMPRE pergunte o nome completo do paciente\n- SEMPRE pergunte a data de nascimento (formato DD/MM/AAAA)\n- SEMPRE pergunte o convênio (ou se é particular)\n- Para agendamentos, SEMPRE confirme: médico, data, horário e tipo de atendimento\n- Se o paciente tiver dúvidas, liste as opções disponíveis\n- Não finalize agendamentos sem confirmação explícita do paciente\n\n**Fluxo de Agendamento:**\n1. Cumprimente e pergunte como pode ajudar\n2. Se for agendamento novo:\n   - Colete: nome completo, data de nascimento, convênio\n   - Liste os médicos disponíveis\n   - Após escolha do médico, verifique horários disponíveis\n   - Apresente as opções de data/hora\n   - Confirme todos os dados antes de agendar\n3. Se for consulta de agendamento existente:\n   - Peça nome e data de nascimento\n   - Busque e apresente os agendamentos\n4. Se for cancelamento/remarcação:\n   - Confirme a identidade do paciente\n   - Mostre o agendamento atual\n   - Execute a ação solicitada após confirmação\n\n**Tratamento de Erros:**\n- Se não conseguir encontrar horários, sugira datas alternativas\n- Se houver conflito, explique e ofereça outras opções\n- Se faltar alguma informação, pergunte educadamente\n\n**Formato de Respostas:**\n- Use emojis moderadamente para deixar a conversa mais amigável\n- Seja conciso mas completo\n- Use formatação clara (listas, quebras de linha)\n- Sempre termine perguntando se precisa de mais alguma coisa",
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "listar_medicos",
+              "description": "Lista todos os médicos ativos da clínica com suas especialidades e convênios aceitos. Use esta função quando o paciente quiser saber quais médicos estão disponíveis ou quando precisar escolher um médico para agendamento.",
+              "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "listar_horarios_disponiveis",
+              "description": "Verifica os horários disponíveis para um médico específico em um período. Retorna as datas e horários livres para agendamento. Use após o paciente escolher o médico.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "medico_id": {
+                    "type": "string",
+                    "description": "ID único do médico (UUID)"
+                  },
+                  "data_inicio": {
+                    "type": "string",
+                    "description": "Data inicial para busca no formato YYYY-MM-DD"
+                  },
+                  "data_fim": {
+                    "type": "string",
+                    "description": "Data final para busca no formato YYYY-MM-DD"
+                  }
+                },
+                "required": ["medico_id", "data_inicio", "data_fim"]
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "buscar_agendamentos_paciente",
+              "description": "Busca todos os agendamentos de um paciente usando nome completo e data de nascimento. Retorna histórico completo de consultas (agendadas, confirmadas, canceladas). Use quando o paciente quiser consultar seus agendamentos.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "nome_completo": {
+                    "type": "string",
+                    "description": "Nome completo do paciente"
+                  },
+                  "data_nascimento": {
+                    "type": "string",
+                    "description": "Data de nascimento no formato YYYY-MM-DD"
+                  }
+                },
+                "required": ["nome_completo", "data_nascimento"]
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "criar_agendamento",
+              "description": "Cria um novo agendamento de consulta. SEMPRE confirme todos os dados com o paciente antes de chamar esta função. Requer: dados do paciente, médico, tipo de atendimento, data, hora e convênio.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "nome_completo": {
+                    "type": "string",
+                    "description": "Nome completo do paciente"
+                  },
+                  "data_nascimento": {
+                    "type": "string",
+                    "description": "Data de nascimento no formato YYYY-MM-DD"
+                  },
+                  "convenio": {
+                    "type": "string",
+                    "description": "Nome do convênio ou 'Particular'"
+                  },
+                  "telefone": {
+                    "type": "string",
+                    "description": "Telefone fixo do paciente (opcional)"
+                  },
+                  "celular": {
+                    "type": "string",
+                    "description": "Celular do paciente (obrigatório)"
+                  },
+                  "medico_id": {
+                    "type": "string",
+                    "description": "ID do médico escolhido (UUID)"
+                  },
+                  "atendimento_id": {
+                    "type": "string",
+                    "description": "ID do tipo de atendimento (UUID)"
+                  },
+                  "data_agendamento": {
+                    "type": "string",
+                    "description": "Data do agendamento no formato YYYY-MM-DD"
+                  },
+                  "hora_agendamento": {
+                    "type": "string",
+                    "description": "Hora do agendamento no formato HH:MM"
+                  },
+                  "observacoes": {
+                    "type": "string",
+                    "description": "Observações adicionais (opcional)"
+                  }
+                },
+                "required": [
+                  "nome_completo",
+                  "data_nascimento",
+                  "convenio",
+                  "celular",
+                  "medico_id",
+                  "atendimento_id",
+                  "data_agendamento",
+                  "hora_agendamento"
+                ]
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "remarcar_agendamento",
+              "description": "Remarca um agendamento existente para nova data/hora. SEMPRE confirme a identidade do paciente e os novos dados antes de chamar esta função.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "agendamento_id": {
+                    "type": "string",
+                    "description": "ID do agendamento a ser remarcado (UUID)"
+                  },
+                  "nova_data": {
+                    "type": "string",
+                    "description": "Nova data no formato YYYY-MM-DD"
+                  },
+                  "nova_hora": {
+                    "type": "string",
+                    "description": "Nova hora no formato HH:MM"
+                  },
+                  "observacoes": {
+                    "type": "string",
+                    "description": "Motivo da remarcação (opcional)"
+                  }
+                },
+                "required": ["agendamento_id", "nova_data", "nova_hora"]
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "cancelar_agendamento",
+              "description": "Cancela um agendamento existente. SEMPRE confirme a identidade do paciente e o agendamento específico antes de chamar esta função.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "agendamento_id": {
+                    "type": "string",
+                    "description": "ID do agendamento a ser cancelado (UUID)"
+                  },
+                  "motivo": {
+                    "type": "string",
+                    "description": "Motivo do cancelamento"
+                  }
+                },
+                "required": ["agendamento_id", "motivo"]
+              }
+            }
+          },
+          {
+            "type": "function",
+            "function": {
+              "name": "buscar_paciente",
+              "description": "Busca informações de um paciente pelo nome completo e data de nascimento. Retorna dados cadastrais e ID do paciente.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "nome_completo": {
+                    "type": "string",
+                    "description": "Nome completo do paciente"
+                  },
+                  "data_nascimento": {
+                    "type": "string",
+                    "description": "Data de nascimento no formato YYYY-MM-DD"
+                  }
+                },
+                "required": ["nome_completo", "data_nascimento"]
+              }
+            }
+          }
+        ],
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 1000
+        }
+      },
+      "id": "openai-agent",
+      "name": "AI Agent - Noah",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Configuração da API\nconst baseUrl = 'https://qxlvzbvzajibdtlzngdy.supabase.co/functions/v1/llm-agent-api';\nconst apiKey = 'YOUR_API_KEY_HERE'; // Substitua pela sua chave\n\n// Função para fazer requisições HTTP\nasync function callAPI(endpoint, method = 'GET', body = null) {\n  const options = {\n    method,\n    headers: {\n      'Content-Type': 'application/json',\n      'Authorization': `Bearer ${apiKey}`\n    }\n  };\n  \n  if (body && method !== 'GET') {\n    options.body = JSON.stringify(body);\n  }\n  \n  const url = method === 'GET' && body \n    ? `${baseUrl}${endpoint}?${new URLSearchParams(body)}`\n    : `${baseUrl}${endpoint}`;\n  \n  const response = await fetch(url, options);\n  return await response.json();\n}\n\n// Processar a chamada da ferramenta\nconst toolName = $input.item.json.tool;\nconst args = $input.item.json.arguments;\n\nlet result;\n\nswitch(toolName) {\n  case 'listar_medicos':\n    result = await callAPI('/medicos');\n    break;\n    \n  case 'listar_horarios_disponiveis':\n    result = await callAPI('/availability', 'POST', {\n      medico_id: args.medico_id,\n      data_inicio: args.data_inicio,\n      data_fim: args.data_fim\n    });\n    break;\n    \n  case 'buscar_agendamentos_paciente':\n    result = await callAPI('/check-patient', 'POST', {\n      nome_completo: args.nome_completo,\n      data_nascimento: args.data_nascimento\n    });\n    break;\n    \n  case 'criar_agendamento':\n    result = await callAPI('/schedule', 'POST', args);\n    break;\n    \n  case 'remarcar_agendamento':\n    result = await callAPI('/reschedule', 'POST', {\n      agendamento_id: args.agendamento_id,\n      nova_data: args.nova_data,\n      nova_hora: args.nova_hora,\n      observacoes: args.observacoes\n    });\n    break;\n    \n  case 'cancelar_agendamento':\n    result = await callAPI('/cancel', 'POST', {\n      agendamento_id: args.agendamento_id,\n      motivo: args.motivo\n    });\n    break;\n    \n  case 'buscar_paciente':\n    result = await callAPI('/patient-search', 'POST', {\n      nome_completo: args.nome_completo,\n      data_nascimento: args.data_nascimento\n    });\n    break;\n    \n  default:\n    result = { error: 'Ferramenta não encontrada' };\n}\n\nreturn { json: result };"
+      },
+      "id": "tool-executor",
+      "name": "Executar Ferramentas",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "response-whatsapp",
+      "name": "Responder WhatsApp",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [850, 300]
+    }
+  ],
+  "connections": {
+    "Webhook WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "AI Agent - Noah",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent - Noah": {
+      "main": [
+        [
+          {
+            "node": "Executar Ferramentas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Executar Ferramentas": {
+      "main": [
+        [
+          {
+            "node": "Responder WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-01-09T00:00:00.000Z",
+  "versionId": "1"
+}
