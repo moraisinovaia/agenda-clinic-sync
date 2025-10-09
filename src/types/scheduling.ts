@@ -47,10 +47,8 @@ export interface OptimizedAppointmentRow {
   excluido_em: string | null;
   profile_nome: string | null;
   profile_email: string | null;
-  profile_role: string | null;
   alterado_por_profile_nome: string | null;
   alterado_por_profile_email: string | null;
-  alterado_por_profile_role: string | null;
 }
 
 export interface AppointmentWithRelations extends Appointment {
@@ -62,7 +60,6 @@ export interface AppointmentWithRelations extends Appointment {
     user_id: string;
     nome: string;
     email: string;
-    role: string;
     ativo: boolean;
     created_at: string;
     updated_at: string;
@@ -72,7 +69,6 @@ export interface AppointmentWithRelations extends Appointment {
     user_id: string;
     nome: string;
     email: string;
-    role: string;
     ativo: boolean;
     created_at: string;
     updated_at: string;

@@ -96,12 +96,6 @@ export function AuthTest() {
                 <span className="font-medium">Username:</span> {profile.username || 'Não definido'}
               </div>
               <div>
-                <span className="font-medium">Role:</span> 
-                <Badge variant="outline" className="ml-1">
-                  {profile.role}
-                </Badge>
-              </div>
-              <div>
                 <span className="font-medium">Ativo:</span> 
                 <Badge variant={profile.ativo ? "default" : "destructive"} className="ml-1">
                   {profile.ativo ? "Sim" : "Não"}

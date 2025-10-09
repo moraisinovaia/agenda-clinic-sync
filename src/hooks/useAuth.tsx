@@ -9,7 +9,6 @@ interface Profile {
   user_id: string;
   nome: string;
   email: string;
-  role: string;
   ativo: boolean;
   status: string;
   username?: string;

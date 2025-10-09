@@ -58,28 +58,9 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           excluido_por: apt.excluido_por,
           excluido_por_user_id: apt.excluido_por_user_id,
           convenio: apt.paciente_convenio,
-          // Informações do perfil de quem criou o agendamento
-          criado_por_profile: apt.profile_nome ? {
-            id: apt.criado_por_user_id || '',
-            user_id: apt.criado_por_user_id || '',
-            nome: apt.profile_nome,
-            email: apt.profile_email || '',
-            role: apt.profile_role || 'recepcionista',
-            ativo: true,
-            created_at: apt.created_at || '',
-            updated_at: apt.updated_at || ''
-          } : null,
-          // Informações do perfil de quem alterou o agendamento
-          alterado_por_profile: apt.alterado_por_profile_nome ? {
-            id: apt.alterado_por_user_id || '',
-            user_id: apt.alterado_por_user_id || '',
-            nome: apt.alterado_por_profile_nome,
-            email: apt.alterado_por_profile_email || '',
-            role: apt.alterado_por_profile_role || 'recepcionista',
-            ativo: true,
-            created_at: apt.created_at || '',
-            updated_at: apt.updated_at || ''
-          } : null,
+          // Profiles não mais disponíveis via RPC otimizado
+          criado_por_profile: null,
+          alterado_por_profile: null,
           pacientes: {
             id: apt.paciente_id,
             nome_completo: apt.paciente_nome,

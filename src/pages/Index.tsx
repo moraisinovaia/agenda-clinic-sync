@@ -149,7 +149,6 @@ const Index = () => {
 
       console.log('🔍 Buscando horários vazios:', {
         cliente_id: userClienteId,
-        user_role: profile?.role,
         data_inicio: format(new Date(), 'yyyy-MM-dd')
       });
 
@@ -180,7 +179,7 @@ const Index = () => {
     // Refresh a cada 30 segundos
     const interval = setInterval(fetchEmptySlots, 30000);
     return () => clearInterval(interval);
-  }, [userClienteId, profile?.role]);
+  }, [userClienteId]);
 
   const {
     filaEspera,

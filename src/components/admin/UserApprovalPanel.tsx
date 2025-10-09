@@ -350,7 +350,7 @@ export function UserApprovalPanel() {
   };
 
   // Se não é admin aprovado, não mostrar nada
-  if (profile?.role !== 'admin' || profile?.status !== 'aprovado') {
+  if (!isAdmin) {
     return null;
   }
 
