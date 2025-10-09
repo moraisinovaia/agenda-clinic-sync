@@ -164,7 +164,7 @@ export function DoctorSchedule({
   });
   
   const [waitlistOpen, setWaitlistOpen] = useState(false);
-  const [showReport, setShowReport] = useState(false);
+  const [viewMode, setViewMode] = useState<'schedule' | 'report'>('schedule');
   const [scheduleGenOpen, setScheduleGenOpen] = useState(false);
   
   const getAppointmentsForDate = (date: Date) => {
@@ -287,6 +287,19 @@ export function DoctorSchedule({
     window.print();
   };
 
+  // Se estiver no modo relatório, renderizar apenas o RelatorioAgenda
+  if (viewMode === 'report') {
+    return (
+      <RelatorioAgenda
+        doctors={[doctor]}
+        appointments={appointments.filter(apt => apt.medico_id === doctor.id)}
+        onBack={() => setViewMode('schedule')}
+        preSelectedDoctorId={doctor.id}
+        preSelectedDate={format(selectedDate, 'yyyy-MM-dd')}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
       <style>{`
@@ -337,7 +350,7 @@ export function DoctorSchedule({
             </div>
             {onNewAppointment && (
               <div className="flex items-center gap-2 print:hidden">
-                <Button onClick={() => setShowReport(true)} variant="outline" className="flex items-center gap-2">
+                <Button onClick={() => setViewMode('report')} variant="outline" className="flex items-center gap-2">
                   <FileText className="h-4 w-4" />
                   Gerar Relatório
                 </Button>
@@ -736,22 +749,6 @@ export function DoctorSchedule({
           </div>
         </Card>
       </div>
-
-      {/* Modal de Relatório */}
-      <Dialog open={showReport} onOpenChange={setShowReport}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-auto">
-          <DialogHeader>
-            <DialogTitle>Relatório de Agenda</DialogTitle>
-          </DialogHeader>
-      <RelatorioAgenda
-        doctors={[doctor]}
-        appointments={appointments.filter(apt => apt.medico_id === doctor.id)}
-        onBack={() => setShowReport(false)}
-        preSelectedDoctorId={doctor.id}
-        preSelectedDate={format(selectedDate, 'yyyy-MM-dd')}
-      />
-        </DialogContent>
-      </Dialog>
 
       {/* Modal de Configuração de Horários */}
       <DoctorScheduleGenerator
