@@ -82,3 +82,6 @@ verify_jwt = false
 
 [functions.user-management]
 verify_jwt = false
+
+[functions.n8n-api]
+verify_jwt = false

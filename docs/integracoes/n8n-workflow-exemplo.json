@@ -1,0 +1,193 @@
+{
+  "name": "Sistema Agendamentos - Exemplo Completo",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "webhook-agendar",
+        "responseMode": "responseNode"
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook - Receber Solicitação",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://qxlvzbvzajibdtlzngdy.supabase.co/functions/v1/n8n-api/medicos",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": "={{$credentials.N8N_API_KEY}}",
+        "options": {}
+      },
+      "id": "listar-medicos",
+      "name": "1. Listar Médicos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://qxlvzbvzajibdtlzngdy.supabase.co/functions/v1/n8n-api/atendimentos",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": "={{$credentials.N8N_API_KEY}}",
+        "options": {}
+      },
+      "id": "listar-atendimentos",
+      "name": "2. Listar Atendimentos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "url": "=https://qxlvzbvzajibdtlzngdy.supabase.co/functions/v1/n8n-api/disponibilidade?medico_id={{$json.medico_id}}&data_inicio={{$json.data_inicio}}&data_fim={{$json.data_fim}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": "={{$credentials.N8N_API_KEY}}",
+        "options": {}
+      },
+      "id": "verificar-disponibilidade",
+      "name": "3. Verificar Disponibilidade",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://qxlvzbvzajibdtlzngdy.supabase.co/functions/v1/n8n-api/agendamento",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": "={{$credentials.N8N_API_KEY}}",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "paciente_nome",
+              "value": "={{$json.paciente_nome}}"
+            },
+            {
+              "name": "paciente_data_nascimento",
+              "value": "={{$json.paciente_data_nascimento}}"
+            },
+            {
+              "name": "paciente_convenio",
+              "value": "={{$json.paciente_convenio}}"
+            },
+            {
+              "name": "paciente_telefone",
+              "value": "={{$json.paciente_telefone}}"
+            },
+            {
+              "name": "paciente_celular",
+              "value": "={{$json.paciente_celular}}"
+            },
+            {
+              "name": "medico_id",
+              "value": "={{$json.medico_id}}"
+            },
+            {
+              "name": "atendimento_id",
+              "value": "={{$json.atendimento_id}}"
+            },
+            {
+              "name": "data_agendamento",
+              "value": "={{$json.data_agendamento}}"
+            },
+            {
+              "name": "hora_agendamento",
+              "value": "={{$json.hora_agendamento}}"
+            },
+            {
+              "name": "observacoes",
+              "value": "={{$json.observacoes}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "criar-agendamento",
+      "name": "4. Criar Agendamento",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "responder-webhook",
+      "name": "Responder ao Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1250, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - Receber Solicitação": {
+      "main": [
+        [
+          {
+            "node": "1. Listar Médicos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1. Listar Médicos": {
+      "main": [
+        [
+          {
+            "node": "2. Listar Atendimentos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. Listar Atendimentos": {
+      "main": [
+        [
+          {
+            "node": "3. Verificar Disponibilidade",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. Verificar Disponibilidade": {
+      "main": [
+        [
+          {
+            "node": "4. Criar Agendamento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4. Criar Agendamento": {
+      "main": [
+        [
+          {
+            "node": "Responder ao Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {},
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-01-09T02:30:00.000Z",
+  "versionId": "1"
+}
