@@ -18,7 +18,7 @@ export function DoctorCard({ doctor, onSchedule }: DoctorCardProps) {
           {doctor.nome}
         </CardTitle>
         <Badge variant="secondary" className="w-fit">
-          {doctor.especialidade} - Consultas
+          {doctor.especialidade}{doctor.nome.includes("Marcelo D'Carli") ? " - Consultas" : ""}
         </Badge>
       </CardHeader>
       
