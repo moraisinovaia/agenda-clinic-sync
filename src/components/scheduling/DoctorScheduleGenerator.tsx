@@ -53,7 +53,7 @@ export function DoctorScheduleGenerator({
   const [selectedDoctor, setSelectedDoctor] = useState<string>(preSelectedDoctorId || '');
   const [dataInicio, setDataInicio] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [dataFim, setDataFim] = useState(format(addDays(new Date(), 30), 'yyyy-MM-dd'));
-  const [intervaloMinutos, setIntervaloMinutos] = useState<10 | 15 | 20 | 30>(15);
+  const [intervaloMinutos, setIntervaloMinutos] = useState<1 | 5 | 10 | 15 | 20 | 30>(15);
   const [previewCount, setPreviewCount] = useState(0);
   const [showValidation, setShowValidation] = useState(false);
   const [openDoctorSearch, setOpenDoctorSearch] = useState(false);
@@ -381,18 +381,23 @@ export function DoctorScheduleGenerator({
               <Label>Intervalo entre horários</Label>
               <Select 
                 value={String(intervaloMinutos)} 
-                onValueChange={(v) => setIntervaloMinutos(Number(v) as 10 | 15 | 20 | 30)}
+                onValueChange={(v) => setIntervaloMinutos(Number(v) as 1 | 5 | 10 | 15 | 20 | 30)}
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="1">1 minuto (máxima flexibilidade)</SelectItem>
+                  <SelectItem value="5">5 minutos</SelectItem>
                   <SelectItem value="10">10 minutos</SelectItem>
                   <SelectItem value="15">15 minutos</SelectItem>
                   <SelectItem value="20">20 minutos</SelectItem>
                   <SelectItem value="30">30 minutos</SelectItem>
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">
+                💡 Intervalos menores geram mais horários disponíveis
+              </p>
             </div>
 
             <div className="space-y-2">

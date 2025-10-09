@@ -5,7 +5,7 @@ export interface ScheduleConfiguration {
   periodo: 'manha' | 'tarde' | 'noite';
   hora_inicio: string; // HH:mm
   hora_fim: string; // HH:mm
-  intervalo_minutos: 10 | 15 | 20 | 30;
+  intervalo_minutos: 1 | 5 | 10 | 15 | 20 | 30;
   ativo: boolean;
   cliente_id?: string;
 }

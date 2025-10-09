@@ -28,6 +28,8 @@ import { FilaEsperaFormData } from '@/types/fila-espera';
 import { RelatorioAgenda } from './RelatorioAgenda';
 import { FileText } from 'lucide-react';
 import { DoctorScheduleGenerator } from './DoctorScheduleGenerator';
+import { AddEmptySlotModal } from './AddEmptySlotModal';
+import { EmptySlotsManager } from './EmptySlotsManager';
 import { toast } from 'sonner';
 
 interface DoctorScheduleProps {
@@ -166,6 +168,9 @@ export function DoctorSchedule({
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'schedule' | 'report'>('schedule');
   const [scheduleGenOpen, setScheduleGenOpen] = useState(false);
+  const [addSlotOpen, setAddSlotOpen] = useState(false);
+  const [manageSlotsOpen, setManageSlotsOpen] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   
   const getAppointmentsForDate = (date: Date) => {
     try {
@@ -349,21 +354,29 @@ export function DoctorSchedule({
               </div>
             </div>
             {onNewAppointment && (
-              <div className="flex items-center gap-2 print:hidden">
-                <Button onClick={() => setViewMode('report')} variant="outline" className="flex items-center gap-2">
+              <div className="flex items-center gap-2 print:hidden flex-wrap">
+                <Button onClick={() => setViewMode('report')} variant="outline" size="sm">
                   <FileText className="h-4 w-4" />
-                  Gerar Relatório
+                  Relatório
                 </Button>
-                <Button onClick={() => setScheduleGenOpen(true)} variant="outline" className="flex items-center gap-2">
+                <Button onClick={() => setScheduleGenOpen(true)} variant="outline" size="sm">
                   <Settings className="h-4 w-4" />
-                  Configurar Horários
+                  Gerar Horários
                 </Button>
-                <Button onClick={() => onNewAppointment(format(selectedDate, 'yyyy-MM-dd'))} className="flex items-center gap-2">
+                <Button onClick={() => setAddSlotOpen(true)} variant="outline" size="sm">
+                  <Plus className="h-4 w-4" />
+                  Adicionar Horário
+                </Button>
+                <Button onClick={() => setManageSlotsOpen(true)} variant="outline" size="sm">
+                  <Trash2 className="h-4 w-4" />
+                  Gerenciar ({emptySlots.length})
+                </Button>
+                <Button onClick={() => onNewAppointment(format(selectedDate, 'yyyy-MM-dd'))} size="sm">
                   <Plus className="h-4 w-4" />
                   Novo Agendamento
                 </Button>
-                <Button variant="outline" onClick={() => setWaitlistOpen(true)}>
-                  Adicionar à Fila
+                <Button variant="outline" onClick={() => setWaitlistOpen(true)} size="sm">
+                  Fila de Espera
                 </Button>
               </div>
             )}
@@ -759,6 +772,30 @@ export function DoctorSchedule({
         onSuccess={() => {
           toast.success('Horários gerados com sucesso!');
           setScheduleGenOpen(false);
+          setRefreshTrigger(prev => prev + 1);
+        }}
+      />
+
+      {/* Modal de Adicionar Horário Manual */}
+      <AddEmptySlotModal
+        open={addSlotOpen}
+        onOpenChange={setAddSlotOpen}
+        doctorId={doctor.id}
+        doctorName={doctor.nome}
+        preSelectedDate={selectedDate}
+        onSuccess={() => {
+          setRefreshTrigger(prev => prev + 1);
+        }}
+      />
+
+      {/* Modal de Gerenciar Horários Vazios */}
+      <EmptySlotsManager
+        open={manageSlotsOpen}
+        onOpenChange={setManageSlotsOpen}
+        doctorId={doctor.id}
+        doctorName={doctor.nome}
+        onSuccess={() => {
+          setRefreshTrigger(prev => prev + 1);
         }}
       />
     </div>
