@@ -32,6 +32,8 @@ serve(async (req) => {
 
     const { action, user_email, user_id, user_ids, admin_id }: UserManagementRequest = await req.json();
 
+    console.log('[DEBUG] Admin verification starting', { admin_id, action });
+
     // Verificar se quem está fazendo a ação é admin
     const { data: adminProfile, error: adminError } = await supabaseAdmin
       .from('profiles')
@@ -39,7 +41,10 @@ serve(async (req) => {
       .eq('id', admin_id)
       .single();
 
+    console.log('[DEBUG] Admin profile fetched', { adminProfile, adminError });
+
     if (adminError || !adminProfile) {
+      console.error('[ERROR] Admin profile not found', { admin_id, adminError });
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -49,6 +54,8 @@ serve(async (req) => {
       );
     }
 
+    console.log('[DEBUG] Checking has_role for user_id:', adminProfile.user_id);
+
     // Verificar se é admin usando has_role
     const { data: isAdmin, error: roleError } = await supabaseAdmin
       .rpc('has_role', {
@@ -56,7 +63,22 @@ serve(async (req) => {
         _role: 'admin'
       });
 
-    if (roleError || !isAdmin || adminProfile.status !== 'aprovado') {
+    console.log('[DEBUG] Has role result', { isAdmin, roleError, status: adminProfile.status });
+
+    if (roleError) {
+      console.error('[ERROR] Role check failed', roleError);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Erro ao verificar permissões: ' + roleError.message,
+          details: roleError
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
+
+    if (!isAdmin || adminProfile.status !== 'aprovado') {
+      console.error('[ERROR] Admin verification failed', { isAdmin, status: adminProfile.status });
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -65,6 +87,8 @@ serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
       );
     }
+
+    console.log('[DEBUG] Admin verification passed');
 
     let result;
 
@@ -220,11 +244,13 @@ serve(async (req) => {
     );
 
   } catch (error: any) {
-    console.error('Erro em user-management:', error);
+    console.error('[ERROR] Exception in user-management:', error);
+    console.error('[ERROR] Error stack:', error.stack);
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error.message || 'Erro interno ao processar requisição' 
+        error: error.message || 'Erro interno ao processar requisição',
+        stack: error.stack
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
