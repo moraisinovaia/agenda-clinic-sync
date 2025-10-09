@@ -310,8 +310,6 @@ const handleDateChange = (date: string) => {
             }}
             onBlur={(e) => validateField('horaAgendamento', e.target.value)}
             min={getMinTime(formData.dataAgendamento)}
-            max="18:00"
-            step="60" // Intervalos de 1 minuto
             required
             className={cn((validationErrors.horaAgendamento || timeConflictError) && "border-destructive")}
           />
@@ -327,10 +325,8 @@ const handleDateChange = (date: string) => {
             </p>
           ) : (
             <p className="text-xs text-muted-foreground mt-1">
-              {formData.dataAgendamento === today 
-                ? `Horário mínimo para hoje: ${getMinTime(formData.dataAgendamento)}`
-                : 'Horário de funcionamento: 07:00 às 18:00'
-              }
+              💡 Você pode agendar em qualquer horário (ex: 07:02, 14:37). 
+              {formData.dataAgendamento === today && ` Horário mínimo hoje: ${getMinTime(formData.dataAgendamento)}`}
             </p>
           )}
         </div>

@@ -354,30 +354,35 @@ export function DoctorSchedule({
               </div>
             </div>
             {onNewAppointment && (
-              <div className="flex items-center gap-2 print:hidden flex-wrap">
-                <Button onClick={() => setViewMode('report')} variant="outline" size="sm">
-                  <FileText className="h-4 w-4" />
-                  Relatório
-                </Button>
-                <Button onClick={() => setScheduleGenOpen(true)} variant="outline" size="sm">
-                  <Settings className="h-4 w-4" />
-                  Gerar Horários
-                </Button>
-                <Button onClick={() => setAddSlotOpen(true)} variant="outline" size="sm">
-                  <Plus className="h-4 w-4" />
-                  Adicionar Horário
-                </Button>
-                <Button onClick={() => setManageSlotsOpen(true)} variant="outline" size="sm">
-                  <Trash2 className="h-4 w-4" />
-                  Gerenciar ({emptySlots.length})
-                </Button>
-                <Button onClick={() => onNewAppointment(format(selectedDate, 'yyyy-MM-dd'))} size="sm">
-                  <Plus className="h-4 w-4" />
-                  Novo Agendamento
-                </Button>
-                <Button variant="outline" onClick={() => setWaitlistOpen(true)} size="sm">
-                  Fila de Espera
-                </Button>
+              <div className="print:hidden">
+                <p className="text-xs text-muted-foreground mb-2">
+                  💡 Horários livres são opcionais - você pode agendar em qualquer horário disponível
+                </p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button onClick={() => setViewMode('report')} variant="outline" size="sm">
+                    <FileText className="h-4 w-4" />
+                    Relatório
+                  </Button>
+                  <Button onClick={() => setScheduleGenOpen(true)} variant="outline" size="sm">
+                    <Settings className="h-4 w-4" />
+                    Gerar Horários
+                  </Button>
+                  <Button onClick={() => setAddSlotOpen(true)} variant="outline" size="sm">
+                    <Plus className="h-4 w-4" />
+                    Adicionar Horário
+                  </Button>
+                  <Button onClick={() => setManageSlotsOpen(true)} variant="outline" size="sm">
+                    <Trash2 className="h-4 w-4" />
+                    Gerenciar ({emptySlots.length})
+                  </Button>
+                  <Button onClick={() => onNewAppointment(format(selectedDate, 'yyyy-MM-dd'))} size="sm">
+                    <Plus className="h-4 w-4" />
+                    Novo Agendamento
+                  </Button>
+                  <Button variant="outline" onClick={() => setWaitlistOpen(true)} size="sm">
+                    Fila de Espera
+                  </Button>
+                </div>
               </div>
             )}
           </div>
