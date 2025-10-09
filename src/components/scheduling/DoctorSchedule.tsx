@@ -28,8 +28,6 @@ import { FilaEsperaFormData } from '@/types/fila-espera';
 import { RelatorioAgenda } from './RelatorioAgenda';
 import { FileText } from 'lucide-react';
 import { DoctorScheduleGenerator } from './DoctorScheduleGenerator';
-import { AddEmptySlotModal } from './AddEmptySlotModal';
-import { EmptySlotsManager } from './EmptySlotsManager';
 import { toast } from 'sonner';
 
 interface DoctorScheduleProps {
@@ -168,8 +166,6 @@ export function DoctorSchedule({
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'schedule' | 'report'>('schedule');
   const [scheduleGenOpen, setScheduleGenOpen] = useState(false);
-  const [addSlotOpen, setAddSlotOpen] = useState(false);
-  const [manageSlotsOpen, setManageSlotsOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   
   const getAppointmentsForDate = (date: Date) => {
@@ -365,15 +361,7 @@ export function DoctorSchedule({
                   </Button>
                   <Button onClick={() => setScheduleGenOpen(true)} variant="outline" size="sm">
                     <Settings className="h-4 w-4" />
-                    Gerar Horários
-                  </Button>
-                  <Button onClick={() => setAddSlotOpen(true)} variant="outline" size="sm">
-                    <Plus className="h-4 w-4" />
-                    Adicionar Horário
-                  </Button>
-                  <Button onClick={() => setManageSlotsOpen(true)} variant="outline" size="sm">
-                    <Trash2 className="h-4 w-4" />
-                    Gerenciar ({emptySlots.length})
+                    Gerenciar Horários ({emptySlots.length})
                   </Button>
                   <Button onClick={() => onNewAppointment(format(selectedDate, 'yyyy-MM-dd'))} size="sm">
                     <Plus className="h-4 w-4" />
