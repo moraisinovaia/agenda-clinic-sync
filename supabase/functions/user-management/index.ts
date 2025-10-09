@@ -23,12 +23,8 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    });
+  // Cliente admin com service role key - bypassa RLS automaticamente
+  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     const { action, user_email, user_id, user_ids, admin_id }: UserManagementRequest = await req.json();
 
