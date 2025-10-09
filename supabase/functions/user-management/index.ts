@@ -30,17 +30,36 @@ serve(async (req) => {
 
     console.log('[DEBUG] Admin verification starting', { admin_id, action });
 
-    // Verificar se quem está fazendo a ação é admin
+    // Buscar profile do admin - usando schema explicito
     const { data: adminProfile, error: adminError } = await supabaseAdmin
       .from('profiles')
-      .select('status, user_id')
+      .select('status, user_id, nome, email')
       .eq('id', admin_id)
-      .single();
+      .maybeSingle();
 
-    console.log('[DEBUG] Admin profile fetched', { adminProfile, adminError });
+    console.log('[DEBUG] Admin profile query result', { 
+      found: !!adminProfile, 
+      error: adminError?.message,
+      errorCode: adminError?.code 
+    });
 
-    if (adminError || !adminProfile) {
-      console.error('[ERROR] Admin profile not found', { admin_id, adminError });
+    if (adminError) {
+      console.error('[ERROR] Database error fetching admin profile', {
+        error: adminError,
+        admin_id
+      });
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Erro ao verificar permissões do administrador: ' + adminError.message,
+          code: adminError.code
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
+
+    if (!adminProfile) {
+      console.error('[ERROR] Admin profile not found', { admin_id });
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -50,41 +69,67 @@ serve(async (req) => {
       );
     }
 
-    console.log('[DEBUG] Checking has_role for user_id:', adminProfile.user_id);
-
     // Verificar se é admin usando has_role
+    console.log('[DEBUG] Checking admin role for user_id:', adminProfile.user_id);
+    
     const { data: isAdmin, error: roleError } = await supabaseAdmin
       .rpc('has_role', {
         _user_id: adminProfile.user_id,
         _role: 'admin'
       });
 
-    console.log('[DEBUG] Has role result', { isAdmin, roleError, status: adminProfile.status });
+    console.log('[DEBUG] Role check result', { 
+      isAdmin, 
+      error: roleError?.message,
+      status: adminProfile.status 
+    });
 
     if (roleError) {
-      console.error('[ERROR] Role check failed', roleError);
+      console.error('[ERROR] Role check failed', { 
+        error: roleError,
+        user_id: adminProfile.user_id 
+      });
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Erro ao verificar permissões: ' + roleError.message,
-          details: roleError
+          error: 'Erro ao verificar permissões: ' + roleError.message
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
 
-    if (!isAdmin || adminProfile.status !== 'aprovado') {
-      console.error('[ERROR] Admin verification failed', { isAdmin, status: adminProfile.status });
+    if (!isAdmin) {
+      console.error('[ERROR] User is not admin', { 
+        user_id: adminProfile.user_id,
+        nome: adminProfile.nome 
+      });
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Apenas administradores aprovados podem realizar esta ação' 
+          error: 'Usuário não possui permissão de administrador' 
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
       );
     }
 
-    console.log('[DEBUG] Admin verification passed');
+    if (adminProfile.status !== 'aprovado') {
+      console.error('[ERROR] Admin not approved', { 
+        status: adminProfile.status,
+        nome: adminProfile.nome 
+      });
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Administrador não está aprovado no sistema' 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
+      );
+    }
+
+    console.log('[DEBUG] Admin verification passed successfully', {
+      admin: adminProfile.nome,
+      action
+    });
 
     let result;
 
