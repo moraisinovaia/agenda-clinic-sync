@@ -1,4 +1,5 @@
-// User Management Edge Function - v2.1
+// User Management Edge Function - v2.2 (Updated: 2025-10-09)
+// Handles user management operations: email confirmation, deletion, status checks
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.50.3";
 
