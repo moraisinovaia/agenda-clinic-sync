@@ -1991,6 +1991,10 @@ export type Database = {
         Args: { p_email: string }
         Returns: Json
       }
+      verify_admin_access: {
+        Args: { p_profile_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       app_role: "admin" | "recepcionista" | "medico"

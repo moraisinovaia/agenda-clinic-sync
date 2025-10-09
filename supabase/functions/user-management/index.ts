@@ -30,104 +30,43 @@ serve(async (req) => {
 
     console.log('[DEBUG] Admin verification starting', { admin_id, action });
 
-    // Buscar profile do admin - usando schema explicito
-    const { data: adminProfile, error: adminError } = await supabaseAdmin
-      .from('profiles')
-      .select('status, user_id, nome, email')
-      .eq('id', admin_id)
-      .maybeSingle();
+    // Usar função SQL com SECURITY DEFINER para verificar admin
+    const { data: adminVerification, error: verifyError } = await supabaseAdmin
+      .rpc('verify_admin_access', { p_profile_id: admin_id });
 
-    console.log('[DEBUG] Admin profile query result', { 
-      found: !!adminProfile, 
-      error: adminError?.message,
-      errorCode: adminError?.code 
+    console.log('[DEBUG] Admin verification result', { 
+      success: adminVerification?.success,
+      error: verifyError?.message || adminVerification?.error
     });
 
-    if (adminError) {
-      console.error('[ERROR] Database error fetching admin profile', {
-        error: adminError,
-        admin_id
-      });
+    if (verifyError) {
+      console.error('[ERROR] Failed to verify admin', { error: verifyError, admin_id });
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Erro ao verificar permissões do administrador: ' + adminError.message,
-          code: adminError.code
+          error: 'Erro ao verificar permissões: ' + verifyError.message
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
 
-    if (!adminProfile) {
-      console.error('[ERROR] Admin profile not found', { admin_id });
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Perfil do administrador não encontrado' 
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
-      );
-    }
-
-    // Verificar se é admin usando has_role
-    console.log('[DEBUG] Checking admin role for user_id:', adminProfile.user_id);
-    
-    const { data: isAdmin, error: roleError } = await supabaseAdmin
-      .rpc('has_role', {
-        _user_id: adminProfile.user_id,
-        _role: 'admin'
-      });
-
-    console.log('[DEBUG] Role check result', { 
-      isAdmin, 
-      error: roleError?.message,
-      status: adminProfile.status 
-    });
-
-    if (roleError) {
-      console.error('[ERROR] Role check failed', { 
-        error: roleError,
-        user_id: adminProfile.user_id 
+    if (!adminVerification.success) {
+      console.error('[ERROR] Admin verification failed', { 
+        admin_id,
+        reason: adminVerification.error 
       });
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Erro ao verificar permissões: ' + roleError.message
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-      );
-    }
-
-    if (!isAdmin) {
-      console.error('[ERROR] User is not admin', { 
-        user_id: adminProfile.user_id,
-        nome: adminProfile.nome 
-      });
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Usuário não possui permissão de administrador' 
+          error: adminVerification.error
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
       );
     }
 
-    if (adminProfile.status !== 'aprovado') {
-      console.error('[ERROR] Admin not approved', { 
-        status: adminProfile.status,
-        nome: adminProfile.nome 
-      });
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Administrador não está aprovado no sistema' 
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
-      );
-    }
-
-    console.log('[DEBUG] Admin verification passed successfully', {
-      admin: adminProfile.nome,
+    console.log('[DEBUG] Admin verified successfully', {
+      admin: adminVerification.nome,
+      email: adminVerification.email,
       action
     });
 
