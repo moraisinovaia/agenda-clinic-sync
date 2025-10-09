@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Check, X, Users, Clock, CheckCircle, XCircle, Mail, MailCheck, Trash2 } from 'lucide-react';
+import { Loader2, Check, X, Users, Clock, CheckCircle, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useStableAuth } from '@/hooks/useStableAuth';
@@ -30,16 +30,9 @@ interface ApprovedUser {
   data_aprovacao: string;
 }
 
-interface EmailStatus {
-  profile_id: string;
-  email_confirmed: boolean;
-  email_confirmed_at: string | null;
-}
-
 export function UserApprovalPanel() {
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([]);
   const [approvedUsers, setApprovedUsers] = useState<ApprovedUser[]>([]);
-  const [emailStatuses, setEmailStatuses] = useState<Map<string, EmailStatus>>(new Map());
   const [loading, setLoading] = useState(true);
   const [processingUser, setProcessingUser] = useState<string | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -97,52 +90,13 @@ export function UserApprovalPanel() {
       }
 
       console.log('✅ Usuários aprovados encontrados:', data?.length || 0);
-      const users = data || [];
-      setApprovedUsers(users);
-
-      // Buscar status de emails em lote via Edge Function
-      if (users.length > 0 && profile?.id) {
-        await fetchEmailStatuses(users.map(u => u.id));
-      }
+      setApprovedUsers(data || []);
     } catch (error) {
       console.error('❌ Erro inesperado ao buscar usuários aprovados:', error);
       setApprovedUsers([]);
     }
   };
 
-  const fetchEmailStatuses = async (userIds: string[]) => {
-    if (!profile?.id) return;
-
-    try {
-      const { data, error } = await supabase.functions.invoke('user-management', {
-        body: {
-          action: 'batch_check_emails',
-          user_ids: userIds,
-          admin_id: profile.id
-        }
-      });
-
-      if (error) {
-        console.error('❌ Erro ao buscar status de emails:', error);
-        return;
-      }
-
-      if (data?.success && data?.email_statuses) {
-        const statusMap = new Map<string, EmailStatus>();
-        // email_statuses é um objeto { profile_id: boolean }
-        Object.entries(data.email_statuses).forEach(([profile_id, email_confirmed]) => {
-          statusMap.set(profile_id, {
-            profile_id,
-            email_confirmed: email_confirmed as boolean,
-            email_confirmed_at: null
-          });
-        });
-        setEmailStatuses(statusMap);
-      }
-    } catch (error) {
-      console.error('❌ Erro ao buscar status de emails:', error);
-    }
-  };
 
   // Usar useEffect mais estável que não causa loops
   useEffect(() => {
@@ -262,43 +216,6 @@ export function UserApprovalPanel() {
     }
   };
 
-  const handleConfirmEmail = async (email: string) => {
-    if (!profile?.id) return;
-
-    setProcessingUser(email);
-    try {
-      const { data, error } = await supabase.functions.invoke('user-management', {
-        body: {
-          action: 'confirm_email',
-          user_email: email,
-          admin_id: profile.id
-        }
-      });
-
-      if (error) throw error;
-
-      if (!data?.success) {
-        throw new Error(data?.error || 'Erro ao confirmar email');
-      }
-
-      toast({
-        title: 'Sucesso',
-        description: 'Email confirmado com sucesso'
-      });
-
-      // Recarregar dados
-      await fetchApprovedUsers();
-    } catch (error: any) {
-      console.error('Erro ao confirmar email:', error);
-      toast({
-        title: 'Erro',
-        description: error.message || 'Erro ao confirmar email do usuário',
-        variant: 'destructive'
-      });
-    } finally {
-      setProcessingUser(null);
-    }
-  };
 
   const handleDeleteUser = async () => {
     if (!profile?.id || !userToDelete) return;
@@ -326,11 +243,6 @@ export function UserApprovalPanel() {
 
       // Remover da lista local
       setApprovedUsers(prev => prev.filter(user => user.id !== userToDelete.id));
-      setEmailStatuses(prev => {
-        const newMap = new Map(prev);
-        newMap.delete(userToDelete.id);
-        return newMap;
-      });
       closeDeleteModal();
     } catch (error: any) {
       console.error('Erro ao excluir usuário:', error);
@@ -500,7 +412,6 @@ export function UserApprovalPanel() {
                     <TableHead>Email</TableHead>
                     <TableHead>Usuário</TableHead>
                     <TableHead>Função</TableHead>
-                    <TableHead>Status Email</TableHead>
                     <TableHead>Aprovado em</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
@@ -515,26 +426,6 @@ export function UserApprovalPanel() {
                         <Badge variant="outline">{user.cargo}</Badge>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          {emailStatuses.get(user.id)?.email_confirmed ? (
-                            <>
-                              <MailCheck className="h-4 w-4 text-green-500" />
-                              <span className="text-green-600 text-sm">Confirmado</span>
-                            </>
-                          ) : emailStatuses.has(user.id) ? (
-                            <>
-                              <Mail className="h-4 w-4 text-orange-500" />
-                              <span className="text-orange-600 text-sm">Não confirmado</span>
-                            </>
-                          ) : (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                              <span className="text-muted-foreground text-sm">Verificando...</span>
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
                         {user.data_aprovacao && new Date(user.data_aprovacao).toLocaleDateString('pt-BR', {
                           day: '2-digit',
                           month: '2-digit',
@@ -544,35 +435,17 @@ export function UserApprovalPanel() {
                         })}
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex gap-2 justify-end">
-                          {emailStatuses.has(user.id) && !emailStatuses.get(user.id)?.email_confirmed && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleConfirmEmail(user.email)}
-                              disabled={processingUser === user.email}
-                              className="text-blue-600 border-blue-200 hover:bg-blue-50"
-                            >
-                              {processingUser === user.email ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <MailCheck className="h-4 w-4" />
-                              )}
-                              Confirmar Email
-                            </Button>
-                          )}
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => openDeleteModal(user)}
-                            disabled={processingUser === user.id || user.id === profile?.id}
-                            className="text-red-600 border-red-200 hover:bg-red-50 disabled:opacity-50"
-                            title={user.id === profile?.id ? 'Não é possível excluir seu próprio usuário' : 'Excluir usuário'}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            Excluir
-                          </Button>
-                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openDeleteModal(user)}
+                          disabled={processingUser === user.id || user.id === profile?.id}
+                          className="text-red-600 border-red-200 hover:bg-red-50 disabled:opacity-50"
+                          title={user.id === profile?.id ? 'Não é possível excluir seu próprio usuário' : 'Excluir usuário'}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Excluir
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
