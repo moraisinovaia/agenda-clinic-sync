@@ -1631,9 +1631,6 @@ export type Database = {
       get_approved_users_safe: {
         Args: Record<PropertyKey, never>
         Returns: {
-          aprovado_por: string
-          aprovador_nome: string
-          ativo: boolean
           created_at: string
           data_aprovacao: string
           email: string
@@ -1641,7 +1638,6 @@ export type Database = {
           nome: string
           role: string
           status: string
-          user_id: string
           username: string
         }[]
       }
@@ -1696,14 +1692,11 @@ export type Database = {
       get_pending_users_safe: {
         Args: Record<PropertyKey, never>
         Returns: {
-          ativo: boolean
           created_at: string
           email: string
           id: string
           nome: string
           role: string
-          status: string
-          user_id: string
           username: string
         }[]
       }
