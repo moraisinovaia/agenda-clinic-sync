@@ -15,7 +15,7 @@ interface PendingUser {
   nome: string;
   email: string;
   username: string;
-  role: string;
+  cargo: string;
   created_at: string;
 }
 
@@ -24,7 +24,7 @@ interface ApprovedUser {
   nome: string;
   email: string;
   username: string;
-  role: string;
+  cargo: string;
   status: string;
   created_at: string;
   data_aprovacao: string;
@@ -431,9 +431,9 @@ export function UserApprovalPanel() {
                     <TableRow key={user.id}>
                       <TableCell className="font-medium">{user.nome}</TableCell>
                       <TableCell>{user.email}</TableCell>
-                      <TableCell>{user.username}</TableCell>
+                      <TableCell>{user.username || '-'}</TableCell>
                       <TableCell>
-                        <Badge variant="outline">{user.role}</Badge>
+                        <Badge variant="outline">{user.cargo}</Badge>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
@@ -510,9 +510,9 @@ export function UserApprovalPanel() {
                     <TableRow key={user.id}>
                       <TableCell className="font-medium">{user.nome}</TableCell>
                       <TableCell>{user.email}</TableCell>
-                      <TableCell>{user.username}</TableCell>
+                      <TableCell>{user.username || '-'}</TableCell>
                       <TableCell>
-                        <Badge variant="outline">{user.role}</Badge>
+                        <Badge variant="outline">{user.cargo}</Badge>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">

@@ -1120,6 +1120,7 @@ export type Database = {
         Row: {
           aprovado_por: string | null
           ativo: boolean | null
+          cargo: string | null
           cliente_id: string | null
           created_at: string | null
           data_aprovacao: string | null
@@ -1134,6 +1135,7 @@ export type Database = {
         Insert: {
           aprovado_por?: string | null
           ativo?: boolean | null
+          cargo?: string | null
           cliente_id?: string | null
           created_at?: string | null
           data_aprovacao?: string | null
@@ -1148,6 +1150,7 @@ export type Database = {
         Update: {
           aprovado_por?: string | null
           ativo?: boolean | null
+          cargo?: string | null
           cliente_id?: string | null
           created_at?: string | null
           data_aprovacao?: string | null
@@ -1631,12 +1634,12 @@ export type Database = {
       get_approved_users_safe: {
         Args: Record<PropertyKey, never>
         Returns: {
+          cargo: string
           created_at: string
           data_aprovacao: string
           email: string
           id: string
           nome: string
-          role: string
           status: string
           username: string
         }[]
@@ -1692,11 +1695,11 @@ export type Database = {
       get_pending_users_safe: {
         Args: Record<PropertyKey, never>
         Returns: {
+          cargo: string
           created_at: string
           email: string
           id: string
           nome: string
-          role: string
           username: string
         }[]
       }
