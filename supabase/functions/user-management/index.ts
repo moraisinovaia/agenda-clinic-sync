@@ -35,11 +35,28 @@ serve(async (req) => {
     // Verificar se quem está fazendo a ação é admin
     const { data: adminProfile, error: adminError } = await supabaseAdmin
       .from('profiles')
-      .select('role, status')
+      .select('status, user_id')
       .eq('id', admin_id)
       .single();
 
-    if (adminError || !adminProfile || adminProfile.role !== 'admin' || adminProfile.status !== 'aprovado') {
+    if (adminError || !adminProfile) {
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Perfil do administrador não encontrado' 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+      );
+    }
+
+    // Verificar se é admin usando has_role
+    const { data: isAdmin, error: roleError } = await supabaseAdmin
+      .rpc('has_role', {
+        _user_id: adminProfile.user_id,
+        _role: 'admin'
+      });
+
+    if (roleError || !isAdmin || adminProfile.status !== 'aprovado') {
       return new Response(
         JSON.stringify({ 
           success: false, 
