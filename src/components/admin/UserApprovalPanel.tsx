@@ -129,8 +129,13 @@ export function UserApprovalPanel() {
 
       if (data?.success && data?.email_statuses) {
         const statusMap = new Map<string, EmailStatus>();
-        data.email_statuses.forEach((status: EmailStatus) => {
-          statusMap.set(status.profile_id, status);
+        // email_statuses é um objeto { profile_id: boolean }
+        Object.entries(data.email_statuses).forEach(([profile_id, email_confirmed]) => {
+          statusMap.set(profile_id, {
+            profile_id,
+            email_confirmed: email_confirmed as boolean,
+            email_confirmed_at: null
+          });
         });
         setEmailStatuses(statusMap);
       }
