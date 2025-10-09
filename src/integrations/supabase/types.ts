@@ -1707,6 +1707,10 @@ export type Database = {
           username: string
         }[]
       }
+      get_profile_auth_id: {
+        Args: { p_profile_id: string }
+        Returns: Json
+      }
       get_user_cliente_id: {
         Args: Record<PropertyKey, never>
         Returns: string

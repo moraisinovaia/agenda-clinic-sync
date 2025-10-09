@@ -120,14 +120,14 @@ serve(async (req) => {
 
         console.log('[DEBUG] Deleting user with profile_id:', user_id);
 
-        // Usar função SQL para buscar user_id sem problema de RLS
+        // Buscar user_id do perfil usando função SEGURA (não verifica se ele é admin)
         const { data: profileData, error: profileRpcError } = await supabaseAdmin
-          .rpc('verify_admin_access', { p_profile_id: user_id });
+          .rpc('get_profile_auth_id', { p_profile_id: user_id });
 
-        if (profileRpcError || !profileData?.success) {
+        if (profileRpcError || !profileData?.success || !profileData?.user_id) {
           console.error('[ERROR] Failed to get profile data', { profileRpcError, profileData });
           return new Response(
-            JSON.stringify({ success: false, error: 'Perfil não encontrado ou erro ao acessar' }),
+            JSON.stringify({ success: false, error: profileData?.error || 'Perfil não encontrado' }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
           );
         }
@@ -136,7 +136,7 @@ serve(async (req) => {
         const userName = profileData.nome;
         const userEmail = profileData.email;
 
-        console.log('[DEBUG] Found auth user_id:', authUserId);
+        console.log('[DEBUG] Found auth user_id:', authUserId, 'name:', userName);
 
         // Deletar usuário via Admin API (cascade deletará o profile automaticamente)
         const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(authUserId);
@@ -168,14 +168,14 @@ serve(async (req) => {
 
         console.log('[DEBUG] Checking email status for profile_id:', user_id);
 
-        // Usar função SQL para buscar user_id
+        // Buscar user_id do perfil
         const { data: profileData, error: profileRpcError } = await supabaseAdmin
-          .rpc('verify_admin_access', { p_profile_id: user_id });
+          .rpc('get_profile_auth_id', { p_profile_id: user_id });
 
-        if (profileRpcError || !profileData?.success) {
+        if (profileRpcError || !profileData?.success || !profileData?.user_id) {
           console.error('[ERROR] Failed to get profile', { profileRpcError, profileData });
           return new Response(
-            JSON.stringify({ success: false, error: 'Perfil não encontrado' }),
+            JSON.stringify({ success: false, error: profileData?.error || 'Perfil não encontrado' }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
           );
         }
@@ -205,28 +205,38 @@ serve(async (req) => {
 
         console.log('[DEBUG] Batch check emails for profile IDs:', user_ids);
 
-        // Buscar todos os usuários via Admin API
-        const { data: userData, error: usersError } = await supabaseAdmin.auth.admin.listUsers();
-        
-        if (usersError) {
-          console.error('[ERROR] Failed to list users', usersError);
-          throw usersError;
+        // Mapear status de confirmação para cada profile_id
+        const emailStatuses: Record<string, boolean> = {};
+
+        for (const profile_id of user_ids) {
+          try {
+            // Buscar user_id do profile
+            const { data: profileData } = await supabaseAdmin
+              .rpc('get_profile_auth_id', { p_profile_id: profile_id });
+
+            if (!profileData?.success || !profileData?.user_id) {
+              console.warn('[WARN] Profile not found:', profile_id);
+              emailStatuses[profile_id] = false;
+              continue;
+            }
+
+            // Buscar dados do auth.users via Admin API
+            const { data: userData, error } = await supabaseAdmin.auth.admin.getUserById(profileData.user_id);
+            
+            if (error) {
+              console.error(`[ERROR] Failed to get user ${profile_id}:`, error);
+              emailStatuses[profile_id] = false;
+              continue;
+            }
+
+            emailStatuses[profile_id] = !!userData.user.email_confirmed_at;
+          } catch (err) {
+            console.error(`[ERROR] Exception checking user ${profile_id}:`, err);
+            emailStatuses[profile_id] = false;
+          }
         }
 
-        console.log('[DEBUG] Total users found:', userData.users.length);
-
-        // Mapear status de confirmação para cada profile_id
-        // Não precisamos acessar a tabela profiles, usamos apenas Auth API
-        const emailStatuses = user_ids.map(profile_id => {
-          // Buscar user_id correspondente através da função SQL
-          return {
-            profile_id: profile_id,
-            email_confirmed: false, // Será preenchido no frontend através de outra chamada
-            email_confirmed_at: null
-          };
-        });
-
-        console.log('[DEBUG] Email statuses prepared for', emailStatuses.length, 'profiles');
+        console.log('[DEBUG] Email statuses checked for', Object.keys(emailStatuses).length, 'profiles');
 
         result = { success: true, email_statuses: emailStatuses };
         break;
