@@ -49,6 +49,13 @@ import { format } from 'date-fns';
 const Index = () => {
   const { user, profile, loading: authLoading, signOut, isAdmin } = useStableAuth();
   
+  // Debug log
+  console.log('🏠 Index: Estado atual -', {
+    isAdmin,
+    profileStatus: profile?.status,
+    userId: user?.id
+  });
+  
   // Estados sempre inicializados na mesma ordem (antes de qualquer return)
   const [searchTerm, setSearchTerm] = useState('');
   const [multipleSchedulingOpen, setMultipleSchedulingOpen] = useState(false);

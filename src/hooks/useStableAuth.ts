@@ -17,25 +17,46 @@ export const useStableAuth = () => {
   React.useEffect(() => {
     const checkAdmin = async () => {
       if (!user?.id) {
+        console.log('🔒 useStableAuth: Sem usuário, isAdmin = false');
         setIsAdmin(false);
         return;
       }
       
-      // Usar cast temporário até tipos serem regenerados
-      const { data, error } = await (supabase.rpc as any)('has_role', {
-        _user_id: user.id,
-        _role: 'admin'
-      });
+      if (!profile?.status) {
+        console.log('⏳ useStableAuth: Profile ainda não carregado, aguardando...');
+        return; // Aguardar profile carregar
+      }
       
-      if (!error && data) {
-        setIsAdmin(data && profile?.status === 'aprovado');
-      } else {
+      console.log('🔍 useStableAuth: Verificando role admin para', user.id);
+      
+      try {
+        const { data, error } = await (supabase.rpc as any)('has_role', {
+          _user_id: user.id,
+          _role: 'admin'
+        });
+        
+        if (error) {
+          console.error('❌ useStableAuth: Erro ao verificar role:', error);
+          setIsAdmin(false);
+          return;
+        }
+        
+        const isApprovedAdmin = data === true && profile?.status === 'aprovado';
+        console.log('✅ useStableAuth: Resultado -', {
+          hasAdminRole: data,
+          profileStatus: profile?.status,
+          isApprovedAdmin
+        });
+        
+        setIsAdmin(isApprovedAdmin);
+      } catch (err) {
+        console.error('❌ useStableAuth: Exception ao verificar role:', err);
         setIsAdmin(false);
       }
     };
     
     checkAdmin();
-  }, [user?.id, profile?.status]);
+  }, [user?.id, profile?.status, loading]);
 
   // Criar valores estáveis para usar como dependências
   const stableValues = useMemo(() => {
