@@ -1344,9 +1344,7 @@ export type Database = {
     }
     Functions: {
       aprovar_usuario: {
-        Args:
-          | { p_aprovador_id: string; p_cliente_id: string; p_user_id: string }
-          | { p_aprovador_id: string; p_user_id: string }
+        Args: { p_aprovador_user_id: string; p_user_id: string }
         Returns: Json
       }
       atualizar_cliente_usuario: {
@@ -1843,7 +1841,7 @@ export type Database = {
       }
       l2_normalize: {
         Args: { "": string } | { "": unknown } | { "": unknown }
-        Returns: string
+        Returns: unknown
       }
       listar_usuarios_orfaos: {
         Args: Record<PropertyKey, never>
@@ -1900,7 +1898,7 @@ export type Database = {
         Returns: Json
       }
       rejeitar_usuario: {
-        Args: { p_aprovador_id: string; p_user_id: string }
+        Args: { p_aprovador_user_id: string; p_user_id: string }
         Returns: Json
       }
       sparsevec_out: {

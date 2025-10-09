@@ -134,8 +134,8 @@ export function UserApprovalPanel() {
   }, [isAdmin, isApproved]); // Dependências estáveis
 
   const handleApproveUser = async (userId: string) => {
-    if (!profile?.id) {
-      console.error('❌ Profile ID não encontrado:', profile);
+    if (!profile?.user_id) {
+      console.error('❌ User ID não encontrado:', profile);
       toast({
         title: 'Erro de autenticação',
         description: 'Não foi possível identificar o administrador. Tente fazer login novamente.',
@@ -144,13 +144,13 @@ export function UserApprovalPanel() {
       return;
     }
 
-    console.log('🔄 Iniciando aprovação de usuário:', { userId, aprovadorId: profile.id });
+    console.log('🔄 Iniciando aprovação de usuário:', { userId, aprovadorUserId: profile.user_id });
     setProcessingUser(userId);
     
     try {
       const { data, error } = await supabase.rpc('aprovar_usuario', {
         p_user_id: userId,
-        p_aprovador_id: profile.id
+        p_aprovador_user_id: profile.user_id
       });
 
       console.log('📡 Resposta da função aprovar_usuario:', { data, error });
@@ -185,13 +185,13 @@ export function UserApprovalPanel() {
   };
 
   const handleRejectUser = async (userId: string) => {
-    if (!profile?.id) return;
+    if (!profile?.user_id) return;
 
     setProcessingUser(userId);
     try {
       const { data, error } = await supabase.rpc('rejeitar_usuario', {
         p_user_id: userId,
-        p_aprovador_id: profile.id
+        p_aprovador_user_id: profile.user_id
       });
 
       if (error || !(data as any)?.success) {
@@ -218,7 +218,7 @@ export function UserApprovalPanel() {
 
 
   const handleDeleteUser = async () => {
-    if (!profile?.id || !userToDelete) return;
+    if (!profile?.user_id || !userToDelete) return;
 
     setProcessingUser(userToDelete.id);
     try {
@@ -226,7 +226,7 @@ export function UserApprovalPanel() {
         body: {
           action: 'delete_user',
           user_id: userToDelete.id,
-          admin_id: profile.id
+          admin_id: profile.user_id
         }
       });
 
