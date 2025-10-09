@@ -47,7 +47,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 
 const Index = () => {
-  const { user, profile, loading: authLoading, signOut } = useStableAuth();
+  const { user, profile, loading: authLoading, signOut, isAdmin } = useStableAuth();
   
   // Estados sempre inicializados na mesma ordem (antes de qualquer return)
   const [searchTerm, setSearchTerm] = useState('');
@@ -524,7 +524,7 @@ const Index = () => {
       <DashboardHeader
         viewMode={viewMode}
         profileName={profile?.nome}
-        profileRole={profile?.role}
+        profileRole={isAdmin ? 'admin' : 'user'}
         onBack={goBack}
         onBackToFilaEspera={goBackToFilaEspera}
         onSignOut={signOut}
@@ -542,7 +542,7 @@ const Index = () => {
         {viewMode === 'doctors' && (
           <div className="space-y-6">
             {/* Admin view - apenas gerenciamento de usuários */}
-            {profile?.role === 'admin' && profile?.status === 'aprovado' ? (
+            {isAdmin ? (
               <UserApprovalPanel />
             ) : (
               // Receptionist view - dashboard completo
