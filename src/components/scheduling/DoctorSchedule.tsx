@@ -757,37 +757,15 @@ export function DoctorSchedule({
       </div>
 
       {/* Modal de Configuração de Horários */}
+      {/* Modal Unificado de Gerenciamento de Horários */}
       <DoctorScheduleGenerator
         open={scheduleGenOpen}
         onOpenChange={setScheduleGenOpen}
         doctors={[doctor]}
         preSelectedDoctorId={doctor.id}
+        emptySlots={emptySlots}
         onSuccess={() => {
-          toast.success('Horários gerados com sucesso!');
-          setScheduleGenOpen(false);
-          setRefreshTrigger(prev => prev + 1);
-        }}
-      />
-
-      {/* Modal de Adicionar Horário Manual */}
-      <AddEmptySlotModal
-        open={addSlotOpen}
-        onOpenChange={setAddSlotOpen}
-        doctorId={doctor.id}
-        doctorName={doctor.nome}
-        preSelectedDate={selectedDate}
-        onSuccess={() => {
-          setRefreshTrigger(prev => prev + 1);
-        }}
-      />
-
-      {/* Modal de Gerenciar Horários Vazios */}
-      <EmptySlotsManager
-        open={manageSlotsOpen}
-        onOpenChange={setManageSlotsOpen}
-        doctorId={doctor.id}
-        doctorName={doctor.nome}
-        onSuccess={() => {
+          toast.success('Operação realizada com sucesso!');
           setRefreshTrigger(prev => prev + 1);
         }}
       />
