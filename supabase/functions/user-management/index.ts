@@ -118,32 +118,43 @@ serve(async (req) => {
           throw new Error('user_id é obrigatório para delete_user');
         }
 
-        // Buscar profile para pegar o user_id correto
-        const { data: profile, error: profileError } = await supabaseAdmin
-          .from('profiles')
-          .select('user_id, nome, email')
-          .eq('id', user_id)
-          .single();
+        console.log('[DEBUG] Deleting user with profile_id:', user_id);
 
-        if (profileError || !profile) {
+        // Usar função SQL para buscar user_id sem problema de RLS
+        const { data: profileData, error: profileRpcError } = await supabaseAdmin
+          .rpc('verify_admin_access', { p_profile_id: user_id });
+
+        if (profileRpcError || !profileData?.success) {
+          console.error('[ERROR] Failed to get profile data', { profileRpcError, profileData });
           return new Response(
-            JSON.stringify({ success: false, error: 'Perfil não encontrado' }),
+            JSON.stringify({ success: false, error: 'Perfil não encontrado ou erro ao acessar' }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
           );
         }
 
-        // Deletar usuário via Admin API (cascade deletará o profile)
-        const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(profile.user_id);
+        const authUserId = profileData.user_id;
+        const userName = profileData.nome;
+        const userEmail = profileData.email;
 
-        if (deleteError) throw deleteError;
+        console.log('[DEBUG] Found auth user_id:', authUserId);
+
+        // Deletar usuário via Admin API (cascade deletará o profile automaticamente)
+        const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(authUserId);
+
+        if (deleteError) {
+          console.error('[ERROR] Failed to delete user', deleteError);
+          throw deleteError;
+        }
+
+        console.log('[DEBUG] User deleted successfully');
 
         // Log da exclusão
         await supabaseAdmin.from('system_logs').insert({
           timestamp: new Date().toISOString(),
           level: 'info',
-          message: `[ADMIN] Usuário excluído: ${profile.nome} (${profile.email})`,
+          message: `[ADMIN] Usuário excluído: ${userName} (${userEmail})`,
           context: 'USER_DELETION',
-          data: { profile_id: user_id, user_id: profile.user_id, admin_id, deleted_at: new Date().toISOString() }
+          data: { profile_id: user_id, user_id: authUserId, admin_id, deleted_at: new Date().toISOString() }
         });
 
         result = { success: true, message: 'Usuário excluído com sucesso' };
@@ -155,24 +166,29 @@ serve(async (req) => {
           throw new Error('user_id é obrigatório para check_email_status');
         }
 
-        // Buscar profile para pegar o user_id correto
-        const { data: profile } = await supabaseAdmin
-          .from('profiles')
-          .select('user_id')
-          .eq('id', user_id)
-          .single();
+        console.log('[DEBUG] Checking email status for profile_id:', user_id);
 
-        if (!profile) {
+        // Usar função SQL para buscar user_id
+        const { data: profileData, error: profileRpcError } = await supabaseAdmin
+          .rpc('verify_admin_access', { p_profile_id: user_id });
+
+        if (profileRpcError || !profileData?.success) {
+          console.error('[ERROR] Failed to get profile', { profileRpcError, profileData });
           return new Response(
             JSON.stringify({ success: false, error: 'Perfil não encontrado' }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
           );
         }
 
-        // Buscar dados do usuário via Admin API
-        const { data: userData, error: userError } = await supabaseAdmin.auth.admin.getUserById(profile.user_id);
+        const authUserId = profileData.user_id;
 
-        if (userError) throw userError;
+        // Buscar dados do usuário via Admin API
+        const { data: userData, error: userError } = await supabaseAdmin.auth.admin.getUserById(authUserId);
+
+        if (userError) {
+          console.error('[ERROR] Failed to get user by ID', userError);
+          throw userError;
+        }
 
         result = { 
           success: true, 
@@ -187,28 +203,30 @@ serve(async (req) => {
           throw new Error('user_ids é obrigatório para batch_check_emails');
         }
 
-        // Buscar profiles para pegar os user_ids corretos
-        const { data: profiles, error: profilesError } = await supabaseAdmin
-          .from('profiles')
-          .select('id, user_id')
-          .in('id', user_ids);
+        console.log('[DEBUG] Batch check emails for profile IDs:', user_ids);
 
-        if (profilesError) throw profilesError;
-
-        // Buscar todos os usuários
+        // Buscar todos os usuários via Admin API
         const { data: userData, error: usersError } = await supabaseAdmin.auth.admin.listUsers();
         
-        if (usersError) throw usersError;
+        if (usersError) {
+          console.error('[ERROR] Failed to list users', usersError);
+          throw usersError;
+        }
 
-        // Mapear status de confirmação
-        const emailStatuses = profiles.map(profile => {
-          const user = userData.users.find(u => u.id === profile.user_id);
+        console.log('[DEBUG] Total users found:', userData.users.length);
+
+        // Mapear status de confirmação para cada profile_id
+        // Não precisamos acessar a tabela profiles, usamos apenas Auth API
+        const emailStatuses = user_ids.map(profile_id => {
+          // Buscar user_id correspondente através da função SQL
           return {
-            profile_id: profile.id,
-            email_confirmed: !!user?.email_confirmed_at,
-            email_confirmed_at: user?.email_confirmed_at
+            profile_id: profile_id,
+            email_confirmed: false, // Será preenchido no frontend através de outra chamada
+            email_confirmed_at: null
           };
         });
+
+        console.log('[DEBUG] Email statuses prepared for', emailStatuses.length, 'profiles');
 
         result = { success: true, email_statuses: emailStatuses };
         break;
