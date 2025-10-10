@@ -74,10 +74,19 @@ export function SchedulingForm({
   useEffect(() => {
     if (formData.dataAgendamento) {
       try {
-        const newDate = new Date(formData.dataAgendamento + 'T00:00:00');
+        // Criar data explicitamente do formato YYYY-MM-DD para evitar problemas de timezone
+        const [year, month, day] = formData.dataAgendamento.split('-').map(Number);
+        const newDate = new Date(year, month - 1, day); // Mês é 0-indexed
+        
+        console.log('📅 Sincronizando calendário:', {
+          from: format(selectedCalendarDate, 'yyyy-MM-dd'),
+          to: formData.dataAgendamento,
+          newDate: newDate.toISOString()
+        });
+        
         setSelectedCalendarDate(newDate);
       } catch (error) {
-        console.error('Erro ao sincronizar data:', error);
+        console.error('❌ Erro ao sincronizar data:', error);
       }
     }
   }, [formData.dataAgendamento]);
@@ -249,10 +258,10 @@ export function SchedulingForm({
                 {/* Calendário */}
                 <div className="space-y-2">
                   <h4 className="font-medium">Selecione uma data para ver agendamentos:</h4>
-                  <Calendar
-                    key={`calendar-${selectedDoctor.id}`}
-                    mode="single"
-                    selected={selectedCalendarDate}
+              <Calendar
+                key={`calendar-${selectedDoctor.id}-${format(selectedCalendarDate, 'yyyy-MM-dd')}`}
+                mode="single"
+                selected={selectedCalendarDate}
                     onSelect={(date) => {
                       if (date) {
                         setSelectedCalendarDate(date);
