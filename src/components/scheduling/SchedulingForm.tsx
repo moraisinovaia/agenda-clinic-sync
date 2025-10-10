@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -69,6 +69,21 @@ export function SchedulingForm({
     await handleSubmit(e, onSubmit);
   };
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date>(new Date());
+
+  // Sincronização automática: Campo Data → Calendário
+  useEffect(() => {
+    if (formData.dataAgendamento) {
+      try {
+        const newDate = new Date(formData.dataAgendamento + 'T00:00:00');
+        // Só atualizar se a data for diferente (evitar loops)
+        if (format(selectedCalendarDate, 'yyyy-MM-dd') !== formData.dataAgendamento) {
+          setSelectedCalendarDate(newDate);
+        }
+      } catch (error) {
+        console.error('Erro ao sincronizar data:', error);
+      }
+    }
+  }, [formData.dataAgendamento]);
 
   const selectedDoctor = doctors.find(doctor => doctor.id === formData.medicoId);
   const availableConvenios = selectedDoctor?.convenios_aceitos || [];
@@ -171,6 +186,10 @@ export function SchedulingForm({
                 setFormData={setFormData}
                 doctors={doctors}
                 atendimentos={atendimentos}
+                onDateChange={(date) => {
+                  const newDate = new Date(date + 'T00:00:00');
+                  setSelectedCalendarDate(newDate);
+                }}
               />
 
               {/* CRITICAL: Exibir erro SEMPRE que existir, com destaque máximo */}

@@ -21,6 +21,7 @@ interface AppointmentDataFormProps {
   atendimentos: Atendimento[];
   timeConflictError?: string;
   onClearTimeConflict?: () => void;
+  onDateChange?: (date: string) => void;
 }
 
 export function AppointmentDataForm({ 
@@ -30,6 +31,7 @@ export function AppointmentDataForm({
   atendimentos,
   timeConflictError,
   onClearTimeConflict,
+  onDateChange,
 }: AppointmentDataFormProps) {
   const [openDoctorCombo, setOpenDoctorCombo] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
@@ -158,6 +160,9 @@ const handleDateChange = (date: string) => {
   
   // Limpar conflito de horário externo ao alterar a data
   onClearTimeConflict?.();
+  
+  // Notificar componente pai sobre mudança de data (sincronização com calendário)
+  onDateChange?.(date);
   
   validateField('dataAgendamento', date);
   
