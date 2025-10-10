@@ -186,7 +186,7 @@ serve(async (req) => {
         const { data: novoPaciente, error: pacienteError } = await supabase
           .from('pacientes')
           .insert({
-            nome_completo: body.paciente_nome,
+            nome_completo: body.paciente_nome.toUpperCase(),
             data_nascimento: body.paciente_data_nascimento,
             convenio: body.paciente_convenio,
             telefone: body.paciente_telefone || '',

@@ -111,7 +111,7 @@ export function PatientDataForm({
   const selectPatient = (patient: any) => {
     setFormData(prev => ({
       ...prev,
-      nomeCompleto: patient.nome_completo,
+      nomeCompleto: patient.nome_completo.toUpperCase(),
       telefone: patient.telefone || '',
       celular: patient.celular,
       convenio: patient.convenio,
@@ -150,7 +150,7 @@ export function PatientDataForm({
           <Input
             id="nomeCompleto"
             value={formData.nomeCompleto}
-            onChange={(e) => setFormData(prev => ({ ...prev, nomeCompleto: e.target.value }))}
+            onChange={(e) => setFormData(prev => ({ ...prev, nomeCompleto: e.target.value.toUpperCase() }))}
             placeholder="Nome completo do paciente"
             required
           />
