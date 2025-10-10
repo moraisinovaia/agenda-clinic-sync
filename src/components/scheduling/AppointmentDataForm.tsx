@@ -26,7 +26,7 @@ interface AppointmentDataFormProps {
 export function AppointmentDataForm({ 
   formData, 
   setFormData, 
-  doctors, 
+  doctors,
   atendimentos,
   timeConflictError,
   onClearTimeConflict,

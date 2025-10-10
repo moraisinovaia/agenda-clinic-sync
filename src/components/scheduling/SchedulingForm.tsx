@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -69,27 +69,6 @@ export function SchedulingForm({
     await handleSubmit(e, onSubmit);
   };
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date>(new Date());
-
-  // Sincronização automática: Campo Data → Calendário
-  useEffect(() => {
-    if (formData.dataAgendamento) {
-      try {
-        // Criar data explicitamente do formato YYYY-MM-DD para evitar problemas de timezone
-        const [year, month, day] = formData.dataAgendamento.split('-').map(Number);
-        const newDate = new Date(year, month - 1, day); // Mês é 0-indexed
-        
-        console.log('📅 Sincronizando calendário:', {
-          from: format(selectedCalendarDate, 'yyyy-MM-dd'),
-          to: formData.dataAgendamento,
-          newDate: newDate.toISOString()
-        });
-        
-        setSelectedCalendarDate(newDate);
-      } catch (error) {
-        console.error('❌ Erro ao sincronizar data:', error);
-      }
-    }
-  }, [formData.dataAgendamento]);
 
   const selectedDoctor = doctors.find(doctor => doctor.id === formData.medicoId);
   const availableConvenios = selectedDoctor?.convenios_aceitos || [];
@@ -258,10 +237,10 @@ export function SchedulingForm({
                 {/* Calendário */}
                 <div className="space-y-2">
                   <h4 className="font-medium">Selecione uma data para ver agendamentos:</h4>
-              <Calendar
-                key={`calendar-${selectedDoctor.id}-${format(selectedCalendarDate, 'yyyy-MM-dd')}`}
-                mode="single"
-                selected={selectedCalendarDate}
+                  <Calendar
+                    key={`calendar-${selectedDoctor.id}`}
+                    mode="single"
+                    selected={selectedCalendarDate}
                     onSelect={(date) => {
                       if (date) {
                         setSelectedCalendarDate(date);
