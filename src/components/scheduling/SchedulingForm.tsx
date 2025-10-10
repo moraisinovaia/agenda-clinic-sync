@@ -75,10 +75,7 @@ export function SchedulingForm({
     if (formData.dataAgendamento) {
       try {
         const newDate = new Date(formData.dataAgendamento + 'T00:00:00');
-        // Só atualizar se a data for diferente (evitar loops)
-        if (format(selectedCalendarDate, 'yyyy-MM-dd') !== formData.dataAgendamento) {
-          setSelectedCalendarDate(newDate);
-        }
+        setSelectedCalendarDate(newDate);
       } catch (error) {
         console.error('Erro ao sincronizar data:', error);
       }
@@ -186,10 +183,6 @@ export function SchedulingForm({
                 setFormData={setFormData}
                 doctors={doctors}
                 atendimentos={atendimentos}
-                onDateChange={(date) => {
-                  const newDate = new Date(date + 'T00:00:00');
-                  setSelectedCalendarDate(newDate);
-                }}
               />
 
               {/* CRITICAL: Exibir erro SEMPRE que existir, com destaque máximo */}
