@@ -1515,7 +1515,7 @@ export type Database = {
           p_criado_por_user_id?: string
           p_data_agendamento: string
           p_data_nascimento: string
-          p_forcar_conflito?: boolean
+          p_force_conflict?: boolean
           p_hora_agendamento: string
           p_medico_id: string
           p_nome_completo: string
