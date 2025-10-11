@@ -18,6 +18,7 @@ import { toZonedTime } from 'date-fns-tz';
 import { BRAZIL_TIMEZONE } from '@/utils/timezone';
 import { Clock, CalendarDays, AlertCircle, Zap, AlertTriangle, Check, ChevronsUpDown, Plus, Trash2, Settings, CalendarIcon, Loader2 } from 'lucide-react';
 import { useScheduleGenerator } from '@/hooks/useScheduleGenerator';
+import { useDebouncedCallback } from '@/hooks/useDebounce';
 import { DaySchedule } from '@/types/schedule-generator';
 import { Doctor } from '@/types/scheduling';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -27,6 +28,7 @@ import { generateTimeSlots } from '@/utils/scheduleGenerator';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useEmptySlotsManager, EmptySlot } from '@/hooks/useEmptySlotsManager';
+import { Progress } from '@/components/ui/progress';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -66,7 +68,7 @@ export function DoctorScheduleGenerator({
   onSuccess,
   emptySlots = []
 }: DoctorScheduleGeneratorProps) {
-  const { generateSchedule, loading } = useScheduleGenerator();
+  const { generateSchedule, loading, progress } = useScheduleGenerator();
   const { profile, loading: authLoading } = useAuth();
   const { loading: slotsLoading, fetchEmptySlots, deleteSlot, deleteSlotsForDate, deleteSlotsForPeriod } = useEmptySlotsManager();
   
@@ -176,6 +178,12 @@ export function DoctorScheduleGenerator({
     return totalSlots;
   };
 
+  // Debounce do cálculo de preview para evitar lag
+  const debouncedCalculatePreview = useDebouncedCallback(() => {
+    const count = calculatePreview();
+    setPreviewCount(count);
+  }, 300);
+
   const getActiveDaysSummary = () => {
     const activeDays = schedules
       .map((sched, idx) => {
@@ -207,10 +215,10 @@ export function DoctorScheduleGenerator({
     }
   }, [open, preSelectedDoctorId, selectedDoctor]);
 
+  // Recalcular preview quando mudar configurações (com debounce)
   useEffect(() => {
-    const count = calculatePreview();
-    setPreviewCount(count);
-  }, [selectedDoctor, dataInicio, dataFim, intervaloMinutos, schedules]);
+    debouncedCalculatePreview();
+  }, [selectedDoctor, dataInicio, dataFim, intervaloMinutos, schedules, debouncedCalculatePreview]);
   
   useEffect(() => {
     if (open && activeTab === 'gerenciar' && selectedDoctor) {

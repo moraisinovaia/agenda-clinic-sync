@@ -32,7 +32,7 @@ export function useImprovedScheduling() {
         p_observacoes: formData.observacoes?.toUpperCase() || null,
         p_criado_por: 'recepcionista',
         p_criado_por_user_id: user.id,
-        p_forcar_conflito: forceConflict  // NOVO PARÂMETRO
+        p_force_conflict: forceConflict
       });
 
       if (error) {

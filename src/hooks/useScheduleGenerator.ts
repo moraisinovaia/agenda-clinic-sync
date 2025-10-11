@@ -10,10 +10,12 @@ import { generateTimeSlotsForPeriod, validateScheduleConfig } from '@/utils/sche
 export function useScheduleGenerator() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState({ current: 0, total: 0, message: '' });
 
   const generateSchedule = async (config: GenerationConfig, userClienteId: string): Promise<GenerationResult> => {
     setLoading(true);
     setError(null);
+    setProgress({ current: 0, total: config.configuracoes.length, message: 'Iniciando...' });
     
     try {
       // ✅ CORREÇÃO: Receber cliente_id como parâmetro (já validado no componente)
@@ -42,6 +44,7 @@ export function useScheduleGenerator() {
       }
       
       // 1. Buscar agendamentos existentes no período (CRÍTICO para não sobrescrever)
+      setProgress(prev => ({ ...prev, message: 'Buscando agendamentos existentes...' }));
       console.log('📋 Buscando agendamentos existentes...');
       const { data: appointments, error: aptError } = await supabase
         .from('agendamentos')
@@ -57,7 +60,15 @@ export function useScheduleGenerator() {
       
       // 2. Gerar slots para cada configuração com cliente_id correto
       let allSlots: any[] = [];
-      for (const scheduleConfig of config.configuracoes) {
+      const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+      
+      for (let i = 0; i < config.configuracoes.length; i++) {
+        const scheduleConfig = config.configuracoes[i];
+        setProgress({
+          current: i + 1,
+          total: config.configuracoes.length,
+          message: `Gerando slots para ${dayNames[scheduleConfig.dia_semana]}...`
+        });
         // ✅ CORREÇÃO 2: Garantir que cliente_id está presente em TODAS as configs
         const configWithClienteId = {
           ...scheduleConfig,
@@ -86,6 +97,7 @@ export function useScheduleGenerator() {
         allSlots = [...allSlots, ...slots];
       }
       
+      setProgress(prev => ({ ...prev, message: 'Salvando no banco de dados...' }));
       console.log(`🔢 Total de slots gerados ANTES da inserção: ${allSlots.length}`);
       
       if (allSlots.length === 0) {
@@ -155,8 +167,9 @@ export function useScheduleGenerator() {
       };
     } finally {
       setLoading(false);
+      setProgress({ current: 0, total: 0, message: '' });
     }
   };
   
-  return { generateSchedule, loading, error };
+  return { generateSchedule, loading, error, progress };
 }

@@ -1,6 +1,9 @@
 import { format, eachDayOfInterval, getDay } from 'date-fns';
 import { ScheduleConfiguration, EmptyTimeSlot } from '@/types/schedule-generator';
 
+// Cache global para memoização de slots de tempo
+const timeSlotsCache = new Map<string, string[]>();
+
 export function generateTimeSlotsForPeriod(
   config: ScheduleConfiguration,
   startDate: Date,
@@ -61,6 +64,16 @@ export function generateTimeSlotsForPeriod(
 }
 
 export function generateTimeSlots(start: string, end: string, interval: number): string[] {
+  // Criar chave única para cache
+  const cacheKey = `${start}-${end}-${interval}`;
+  
+  // Verificar se já existe no cache
+  if (timeSlotsCache.has(cacheKey)) {
+    console.log(`✅ Cache hit: ${cacheKey}`);
+    return timeSlotsCache.get(cacheKey)!;
+  }
+  
+  console.log(`🔄 Calculando slots: ${cacheKey}`);
   const slots: string[] = [];
   const [startHour, startMinute] = start.split(':').map(Number);
   const [endHour, endMinute] = end.split(':').map(Number);
@@ -74,6 +87,9 @@ export function generateTimeSlots(start: string, end: string, interval: number):
     slots.push(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
     currentMinutes += interval;
   }
+  
+  // Armazenar no cache
+  timeSlotsCache.set(cacheKey, slots);
   
   return slots;
 }
