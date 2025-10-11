@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -179,10 +179,16 @@ export function DoctorScheduleGenerator({
   };
 
   // Debounce do cálculo de preview para evitar lag
-  const debouncedCalculatePreview = useDebouncedCallback(() => {
-    const count = calculatePreview();
-    setPreviewCount(count);
-  }, 300);
+  const debouncedCalculatePreview = useMemo(() => {
+    let timeoutId: NodeJS.Timeout | null = null;
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        const count = calculatePreview();
+        setPreviewCount(count);
+      }, 300);
+    };
+  }, []); // Função estável - não causa re-renders
 
   const getActiveDaysSummary = () => {
     const activeDays = schedules
@@ -218,7 +224,7 @@ export function DoctorScheduleGenerator({
   // Recalcular preview quando mudar configurações (com debounce)
   useEffect(() => {
     debouncedCalculatePreview();
-  }, [selectedDoctor, dataInicio, dataFim, intervaloMinutos, schedules, debouncedCalculatePreview]);
+  }, [selectedDoctor, dataInicio, dataFim, intervaloMinutos, schedules]);
   
   useEffect(() => {
     if (open && activeTab === 'gerenciar' && selectedDoctor) {
