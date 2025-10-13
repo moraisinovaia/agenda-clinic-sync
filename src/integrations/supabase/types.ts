@@ -1371,14 +1371,12 @@ export type Database = {
         Returns: unknown
       }
       buscar_agendamentos_otimizado: {
-        Args:
-          | Record<PropertyKey, never>
-          | {
-              p_data_fim?: string
-              p_data_inicio?: string
-              p_medico_id?: string
-              p_status?: string
-            }
+        Args: {
+          p_data_fim?: string
+          p_data_inicio?: string
+          p_medico_id?: string
+          p_status?: string
+        }
         Returns: {
           alterado_por_profile_email: string
           alterado_por_profile_nome: string

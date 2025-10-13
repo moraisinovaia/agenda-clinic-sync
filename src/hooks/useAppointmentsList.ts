@@ -23,7 +23,12 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     return measureApiCall(async () => {
         // Usar função RPC otimizada que já filtra cancelados e inclui relacionamentos
         const { data: appointmentsWithRelations, error } = await supabase
-          .rpc('buscar_agendamentos_otimizado');
+          .rpc('buscar_agendamentos_otimizado', {
+            p_data_inicio: null,
+            p_data_fim: null,
+            p_medico_id: null,
+            p_status: null
+          });
 
         if (error) {
           logger.error('Erro na consulta de agendamentos otimizada', error, 'APPOINTMENTS');
