@@ -1371,8 +1371,17 @@ export type Database = {
         Returns: unknown
       }
       buscar_agendamentos_otimizado: {
-        Args: Record<PropertyKey, never>
+        Args:
+          | Record<PropertyKey, never>
+          | {
+              p_data_fim?: string
+              p_data_inicio?: string
+              p_medico_id?: string
+              p_status?: string
+            }
         Returns: {
+          alterado_por_profile_email: string
+          alterado_por_profile_nome: string
           alterado_por_user_id: string
           atendimento_id: string
           atendimento_nome: string
@@ -1403,6 +1412,8 @@ export type Database = {
           paciente_id: string
           paciente_nome: string
           paciente_telefone: string
+          profile_email: string
+          profile_nome: string
           status: string
           updated_at: string
         }[]
@@ -1841,7 +1852,7 @@ export type Database = {
       }
       l2_normalize: {
         Args: { "": string } | { "": unknown } | { "": unknown }
-        Returns: string
+        Returns: unknown
       }
       listar_usuarios_orfaos: {
         Args: Record<PropertyKey, never>
