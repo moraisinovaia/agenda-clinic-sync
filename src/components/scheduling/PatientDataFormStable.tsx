@@ -10,6 +10,7 @@ import { User, Search, UserCheck, AlertCircle, CheckCircle } from 'lucide-react'
 import { SchedulingFormData } from '@/types/scheduling';
 import { useUnifiedPatientSearch } from '@/hooks/useUnifiedPatientSearch';
 import { useDebounce } from '@/hooks/useDebounce';
+import { formatPhone, isValidPhone } from '@/utils/phoneFormatter';
 
 interface PatientDataFormStableProps {
   formData: SchedulingFormData;
@@ -130,26 +131,11 @@ export const PatientDataFormStable = React.memo(({
     clearSearch();
   }, [setFormData, clearSearch]);
 
-  // Formatação de telefone estável
-  const formatPhone = useCallback((value: string) => {
-    const numbers = value.replace(/\D/g, '');
-    
-    if (numbers.length <= 10) {
-      return numbers.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3').replace(/-$/, '');
-    } else {
-      return numbers.replace(/(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3').replace(/-$/, '');
-    }
-  }, []);
-
-  const isValidPhone = useCallback((value: string) => {
-    const numbers = value.replace(/\D/g, '');
-    return numbers.length === 10 || numbers.length === 11;
-  }, []);
 
   const handlePhoneChange = useCallback((value: string, field: 'telefone' | 'celular') => {
     const formatted = formatPhone(value);
     setFormData(prev => ({ ...prev, [field]: formatted }));
-  }, [formatPhone, setFormData]);
+  }, [setFormData]);
 
   const handleInputChange = useCallback((field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));

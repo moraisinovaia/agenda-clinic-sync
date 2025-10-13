@@ -6,6 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { toZonedTime, formatInTimeZone } from 'date-fns-tz';
 import { BRAZIL_TIMEZONE } from '@/utils/timezone';
+import { formatPhone, isValidPhone } from '@/utils/phoneFormatter';
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 segundo
@@ -53,9 +54,9 @@ export function useAtomicAppointmentCreation() {
       throw new Error('Celular é obrigatório');
     }
     
-    // Validação de formato de celular brasileiro
-    const celularRegex = /^\(\d{2}\)\s\d{4,5}-\d{4}$/;
-    if (!celularRegex.test(formData.celular)) {
+    // Validação de formato de celular brasileiro com normalização
+    const normalizedCelular = formatPhone(formData.celular);
+    if (!isValidPhone(normalizedCelular)) {
       throw new Error('Formato de celular inválido. Use o formato (XX) XXXXX-XXXX');
     }
     
