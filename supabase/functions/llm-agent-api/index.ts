@@ -49,8 +49,24 @@ serve(async (req) => {
   try {
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
+
+    // 🔑 Buscar cliente_id do IPADO
+    console.log('🔍 Buscando cliente IPADO...');
+    const { data: clienteIpado, error: clienteError } = await supabase
+      .from('clientes')
+      .select('id')
+      .eq('nome', 'IPADO')
+      .single();
+
+    if (clienteError || !clienteIpado) {
+      console.error('❌ Cliente IPADO não encontrado:', clienteError);
+      return errorResponse('Cliente IPADO não configurado no sistema', 500);
+    }
+
+    const CLIENTE_ID = clienteIpado.id;
+    console.log('✅ Cliente IPADO encontrado:', CLIENTE_ID);
 
     const url = new URL(req.url);
     const method = req.method;
@@ -64,17 +80,17 @@ serve(async (req) => {
 
       switch (action) {
         case 'schedule':
-          return await handleSchedule(supabase, body);
+          return await handleSchedule(supabase, body, CLIENTE_ID);
         case 'check-patient':
-          return await handleCheckPatient(supabase, body);
+          return await handleCheckPatient(supabase, body, CLIENTE_ID);
         case 'reschedule':
-          return await handleReschedule(supabase, body);
+          return await handleReschedule(supabase, body, CLIENTE_ID);
         case 'cancel':
-          return await handleCancel(supabase, body);
+          return await handleCancel(supabase, body, CLIENTE_ID);
         case 'availability':
-          return await handleAvailability(supabase, body);
+          return await handleAvailability(supabase, body, CLIENTE_ID);
         case 'patient-search':
-          return await handlePatientSearch(supabase, body);
+          return await handlePatientSearch(supabase, body, CLIENTE_ID);
         default:
           return errorResponse('Ação não reconhecida. Ações disponíveis: schedule, check-patient, reschedule, cancel, availability, patient-search');
       }
@@ -89,7 +105,7 @@ serve(async (req) => {
 })
 
 // Agendar consulta
-async function handleSchedule(supabase: any, body: any) {
+async function handleSchedule(supabase: any, body: any, clienteId: string) {
   try {
     console.log('📥 Dados recebidos na API:', JSON.stringify(body, null, 2));
     
@@ -125,13 +141,14 @@ async function handleSchedule(supabase: any, body: any) {
       return errorResponse(`Campos obrigatórios faltando: ${missingFields.join(', ')}`);
     }
 
-    // Buscar médico por ID ou nome
+    // Buscar médico por ID ou nome (COM filtro de cliente)
     let medico;
     if (medico_id) {
       const { data, error } = await supabase
         .from('medicos')
         .select('id, nome, ativo')
         .eq('id', medico_id)
+        .eq('cliente_id', clienteId)
         .eq('ativo', true)
         .single();
       
@@ -144,6 +161,7 @@ async function handleSchedule(supabase: any, body: any) {
         .from('medicos')
         .select('id, nome, ativo')
         .ilike('nome', `%${medico_nome}%`)
+        .eq('cliente_id', clienteId)
         .eq('ativo', true)
         .single();
       
@@ -153,7 +171,7 @@ async function handleSchedule(supabase: any, body: any) {
       }
     }
 
-    // Buscar atendimento por nome (se especificado)
+    // Buscar atendimento por nome (se especificado) COM filtro de cliente
     let atendimento_id = null;
     if (atendimento_nome) {
       const { data: atendimento, error: atendimentoError } = await supabase
@@ -161,6 +179,7 @@ async function handleSchedule(supabase: any, body: any) {
         .select('id, nome')
         .ilike('nome', `%${atendimento_nome}%`)
         .eq('medico_id', medico.id)
+        .eq('cliente_id', clienteId)
         .eq('ativo', true)
         .single();
 
@@ -169,11 +188,12 @@ async function handleSchedule(supabase: any, body: any) {
       }
       atendimento_id = atendimento.id;
     } else {
-      // Buscar primeiro atendimento disponível do médico
+      // Buscar primeiro atendimento disponível do médico COM filtro de cliente
       const { data: atendimentos } = await supabase
         .from('atendimentos')
         .select('id')
         .eq('medico_id', medico.id)
+        .eq('cliente_id', clienteId)
         .eq('ativo', true)
         .limit(1);
 
@@ -233,7 +253,7 @@ async function handleSchedule(supabase: any, body: any) {
 }
 
 // Verificar se paciente tem consultas agendadas
-async function handleCheckPatient(supabase: any, body: any) {
+async function handleCheckPatient(supabase: any, body: any, clienteId: string) {
   try {
     const { paciente_nome, data_nascimento, celular } = body;
 
@@ -253,16 +273,18 @@ async function handleCheckPatient(supabase: any, body: any) {
         medicos(nome, especialidade),
         atendimentos(nome, tipo)
       `)
+      .eq('cliente_id', clienteId)
       .in('status', ['agendado', 'confirmado'])
       .gte('data_agendamento', new Date().toISOString().split('T')[0])
       .order('data_agendamento', { ascending: true });
 
-    // Buscar por nome do paciente
+    // Buscar por nome do paciente COM filtro de cliente
     if (paciente_nome) {
       const { data: pacientes } = await supabase
         .from('pacientes')
         .select('id')
-        .ilike('nome_completo', `%${paciente_nome}%`);
+        .ilike('nome_completo', `%${paciente_nome}%`)
+        .eq('cliente_id', clienteId);
 
       if (pacientes && pacientes.length > 0) {
         const paciente_ids = pacientes.map((p: any) => p.id);
@@ -324,7 +346,7 @@ async function handleCheckPatient(supabase: any, body: any) {
 }
 
 // Remarcar consulta
-async function handleReschedule(supabase: any, body: any) {
+async function handleReschedule(supabase: any, body: any, clienteId: string) {
   try {
     const { agendamento_id, nova_data, nova_hora, observacoes } = body;
 
@@ -332,7 +354,7 @@ async function handleReschedule(supabase: any, body: any) {
       return errorResponse('Campos obrigatórios: agendamento_id, nova_data, nova_hora');
     }
 
-    // Verificar se agendamento existe
+    // Verificar se agendamento existe COM filtro de cliente
     const { data: agendamento, error: checkError } = await supabase
       .from('agendamentos')
       .select(`
@@ -345,6 +367,7 @@ async function handleReschedule(supabase: any, body: any) {
         medicos(nome)
       `)
       .eq('id', agendamento_id)
+      .eq('cliente_id', clienteId)
       .single();
 
     if (checkError || !agendamento) {
@@ -355,13 +378,14 @@ async function handleReschedule(supabase: any, body: any) {
       return errorResponse('Não é possível remarcar consulta cancelada');
     }
 
-    // Verificar disponibilidade do novo horário
+    // Verificar disponibilidade do novo horário COM filtro de cliente
     const { data: conflitos } = await supabase
       .from('agendamentos')
       .select('id')
       .eq('medico_id', agendamento.medico_id)
       .eq('data_agendamento', nova_data)
       .eq('hora_agendamento', nova_hora)
+      .eq('cliente_id', clienteId)
       .in('status', ['agendado', 'confirmado'])
       .neq('id', agendamento_id);
 
@@ -406,7 +430,7 @@ async function handleReschedule(supabase: any, body: any) {
 }
 
 // Cancelar consulta
-async function handleCancel(supabase: any, body: any) {
+async function handleCancel(supabase: any, body: any, clienteId: string) {
   try {
     const { agendamento_id, motivo } = body;
 
@@ -414,7 +438,7 @@ async function handleCancel(supabase: any, body: any) {
       return errorResponse('Campo obrigatório: agendamento_id');
     }
 
-    // Verificar se agendamento existe
+    // Verificar se agendamento existe COM filtro de cliente
     const { data: agendamento, error: checkError } = await supabase
       .from('agendamentos')
       .select(`
@@ -427,6 +451,7 @@ async function handleCancel(supabase: any, body: any) {
         medicos(nome)
       `)
       .eq('id', agendamento_id)
+      .eq('cliente_id', clienteId)
       .single();
 
     if (checkError || !agendamento) {
@@ -471,7 +496,7 @@ async function handleCancel(supabase: any, body: any) {
 }
 
 // Verificar disponibilidade de horários
-async function handleAvailability(supabase: any, body: any) {
+async function handleAvailability(supabase: any, body: any, clienteId: string) {
   try {
     const { medico_nome, data_consulta, periodo } = body;
 
@@ -479,11 +504,12 @@ async function handleAvailability(supabase: any, body: any) {
       return errorResponse('Campos obrigatórios: medico_nome, data_consulta');
     }
 
-    // Buscar médico
+    // Buscar médico COM filtro de cliente
     const { data: medico, error: medicoError } = await supabase
       .from('medicos')
       .select('id, nome, ativo')
       .ilike('nome', `%${medico_nome}%`)
+      .eq('cliente_id', clienteId)
       .eq('ativo', true)
       .single();
 
@@ -491,12 +517,13 @@ async function handleAvailability(supabase: any, body: any) {
       return errorResponse(`Médico "${medico_nome}" não encontrado ou inativo`);
     }
 
-    // Buscar agendamentos ocupados
+    // Buscar agendamentos ocupados COM filtro de cliente
     const { data: agendamentos } = await supabase
       .from('agendamentos')
       .select('hora_agendamento')
       .eq('medico_id', medico.id)
       .eq('data_agendamento', data_consulta)
+      .eq('cliente_id', clienteId)
       .in('status', ['agendado', 'confirmado']);
 
     const horariosOcupados = agendamentos?.map((a: any) => a.hora_agendamento) || [];
@@ -536,7 +563,7 @@ async function handleAvailability(supabase: any, body: any) {
 }
 
 // Buscar pacientes
-async function handlePatientSearch(supabase: any, body: any) {
+async function handlePatientSearch(supabase: any, body: any, clienteId: string) {
   try {
     const { busca, tipo } = body;
 
@@ -547,6 +574,7 @@ async function handlePatientSearch(supabase: any, body: any) {
     let query = supabase
       .from('pacientes')
       .select('id, nome_completo, data_nascimento, celular, telefone, convenio')
+      .eq('cliente_id', clienteId)
       .limit(10);
 
     switch (tipo) {
