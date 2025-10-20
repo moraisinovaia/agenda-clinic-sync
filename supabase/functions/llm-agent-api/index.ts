@@ -207,7 +207,8 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
     console.log(`📅 Criando agendamento para ${paciente_nome} com médico ${medico.nome}`);
     
     const { data: result, error: agendamentoError } = await supabase
-      .rpc('criar_agendamento_atomico', {
+      .rpc('criar_agendamento_atomico_externo', {
+        p_cliente_id: clienteId,
         p_nome_completo: paciente_nome.toUpperCase(),
         p_data_nascimento: data_nascimento,
         p_convenio: convenio.toUpperCase(),
@@ -219,8 +220,6 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
         p_hora_agendamento: hora_consulta,
         p_observacoes: (observacoes || 'Agendamento via LLM Agent WhatsApp').toUpperCase(),
         p_criado_por: 'LLM Agent WhatsApp',
-        p_criado_por_user_id: null,
-        p_agendamento_id_edicao: null,
         p_force_conflict: false
       });
 
