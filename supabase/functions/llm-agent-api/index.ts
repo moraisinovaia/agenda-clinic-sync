@@ -6,6 +6,105 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Regras de negócio para agendamento via LLM Agent (N8N/WhatsApp)
+// Sistema web NÃO usa essas regras - funciona sem restrições
+const BUSINESS_RULES = {
+  medicos: {
+    // Dr. Marcelo D'Carli - Cardiologista
+    '1e110923-50df-46ff-a57a-29d88e372900': {
+      nome: 'DR. MARCELO D\'CARLI',
+      servicos: {
+        'Consulta Cardiológica': {
+          permite_online: true,
+          dias_semana: [1, 2, 3, 4, 5], // seg-sex
+          periodos: {
+            manha: { inicio: '07:30', fim: '10:00', limite: 9 },
+            tarde: { inicio: '13:30', fim: '15:00', limite: 9, dias_especificos: [1, 3] } // seg e qua
+          }
+        },
+        'Teste Ergométrico': {
+          permite_online: true,
+          dias_semana: [2, 3, 4], // ter, qua, qui
+          periodos: {
+            manha: { inicio: '07:30', fim: '10:00', limite: 8, dias_especificos: [3] }, // qua
+            tarde: { inicio: '13:30', fim: '15:00', limite: 8, dias_especificos: [2, 4] } // ter e qui
+          }
+        },
+        'ECG': {
+          permite_online: false,
+          mensagem: 'O ECG de rotina não precisa de agendamento. Compareça à clínica de segunda a sexta (8h-10h) ou quarta à tarde (14h-15h), por ordem de chegada.'
+        }
+      }
+    },
+    
+    // Dra. Adriana Carla de Sena - Endocrinologista
+    '32d30887-b876-4502-bf04-e55d7fb55b50': {
+      nome: 'DRA. ADRIANA CARLA DE SENA',
+      idade_minima: 18,
+      servicos: {
+        'Consulta Endocrinológica': {
+          permite_online: true,
+          dias_semana: [1, 2, 3, 4, 5],
+          periodos: {
+            manha: { inicio: '08:00', fim: '10:00', limite: 9, atendimento_inicio: '08:45' },
+            tarde: { inicio: '13:00', fim: '15:00', limite: 9, dias_especificos: [2, 3], atendimento_inicio: '14:45' }
+          }
+        }
+      }
+    },
+    
+    // Dr. Pedro Francisco - Ultrassonografista
+    '66e9310d-34cd-4005-8937-74e87125dc03': {
+      nome: 'DR. PEDRO FRANCISCO',
+      servicos: {
+        'Consulta': {
+          permite_online: true,
+          dias_semana: [2, 4], // ter e qui apenas
+          periodos: {
+            manha: { inicio: '09:30', fim: '10:00', limite: 4, atendimento_inicio: '10:00' }
+          },
+          mensagem_extra: 'Chegue entre 9h30 e 10h. O atendimento é após os exames, por ordem de chegada.'
+        }
+      }
+    },
+    
+    // Dr. Alessandro Dias - Cardiologista (Ecocardiograma)
+    'c192e08e-e216-4c22-99bf-b5992ce05e17': {
+      nome: 'DR. ALESSANDRO DIAS',
+      servicos: {
+        'Ecocardiograma': {
+          permite_online: true,
+          dias_semana: [1], // apenas segunda
+          periodos: {
+            manha: { inicio: '08:00', fim: '09:00', limite: 9 }
+          }
+        },
+        'Consulta Cardiológica': {
+          permite_online: false,
+          mensagem: 'Para consultas e retornos com Dr. Alessandro Dias, agende por telefone: (87) 3866-4050'
+        }
+      }
+    }
+  }
+};
+
+// Função auxiliar para calcular idade
+function calcularIdade(dataNascimento: string): number {
+  const hoje = new Date();
+  const nascimento = new Date(dataNascimento);
+  let idade = hoje.getFullYear() - nascimento.getFullYear();
+  const mes = hoje.getMonth() - nascimento.getMonth();
+  if (mes < 0 || (mes === 0 && hoje.getDate() < nascimento.getDate())) {
+    idade--;
+  }
+  return idade;
+}
+
+// Função auxiliar para obter dia da semana (0=dom, 1=seg, ...)
+function getDiaSemana(data: string): number {
+  return new Date(data).getDay();
+}
+
 // Função para mapear dados flexivelmente
 function mapSchedulingData(body: any) {
   const mapped = {
@@ -168,6 +267,107 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
       medico = data;
       if (error || !medico) {
         return errorResponse(`Médico "${medico_nome}" não encontrado ou inativo`);
+      }
+    }
+
+    // ===== VALIDAÇÕES DE REGRAS DE NEGÓCIO (APENAS PARA N8N) =====
+    const regras = BUSINESS_RULES.medicos[medico.id];
+    
+    if (regras) {
+      console.log(`🔍 Aplicando regras de negócio para ${regras.nome}`);
+      
+      // 1. Validar idade mínima
+      if (regras.idade_minima) {
+        const idade = calcularIdade(data_nascimento);
+        if (idade < regras.idade_minima) {
+          return errorResponse(
+            `${regras.nome} atende apenas pacientes com ${regras.idade_minima}+ anos. Idade informada: ${idade} anos.`
+          );
+        }
+        console.log(`✅ Validação de idade OK: ${idade} anos`);
+      }
+      
+      // 2. Validar serviço específico
+      if (atendimento_nome && regras.servicos) {
+        const servicoKey = Object.keys(regras.servicos).find(s => 
+          s.toLowerCase().includes(atendimento_nome.toLowerCase()) ||
+          atendimento_nome.toLowerCase().includes(s.toLowerCase())
+        );
+        
+        if (servicoKey) {
+          const servico = regras.servicos[servicoKey];
+          console.log(`🔍 Validando serviço: ${servicoKey}`);
+          
+          // 2.1 Verificar se permite agendamento online
+          if (!servico.permite_online) {
+            console.log(`❌ Serviço ${servicoKey} não permite agendamento online`);
+            return errorResponse(servico.mensagem || 'Este serviço não pode ser agendado online.');
+          }
+          
+          // 2.2 Verificar dia da semana
+          const diaSemana = getDiaSemana(data_consulta);
+          if (servico.dias_semana && !servico.dias_semana.includes(diaSemana)) {
+            const diasNomes = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+            const diasPermitidos = servico.dias_semana.map((d: number) => diasNomes[d]).join(', ');
+            console.log(`❌ Dia da semana inválido: ${diasNomes[diaSemana]} não está em [${diasPermitidos}]`);
+            return errorResponse(
+              `${regras.nome} não atende ${servicoKey} no dia escolhido. Dias disponíveis: ${diasPermitidos}`
+            );
+          }
+          console.log(`✅ Dia da semana válido`);
+          
+          // 2.3 Verificar período e limite de vagas
+          if (servico.periodos) {
+            const hora = parseInt(hora_consulta.split(':')[0]);
+            const periodo = hora < 12 ? 'manha' : 'tarde';
+            const configPeriodo = servico.periodos[periodo];
+            
+            if (!configPeriodo) {
+              console.log(`❌ Período ${periodo} não disponível para este serviço`);
+              return errorResponse(
+                `${regras.nome} não atende ${servicoKey} no período da ${periodo === 'manha' ? 'manhã' : 'tarde'}`
+              );
+            }
+            
+            // Verificar dias específicos do período (ex: tarde só ter e qui)
+            if (configPeriodo.dias_especificos && !configPeriodo.dias_especificos.includes(diaSemana)) {
+              const diasNomes = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+              const diasPermitidos = configPeriodo.dias_especificos.map((d: number) => diasNomes[d]).join(', ');
+              console.log(`❌ Período ${periodo} não disponível neste dia da semana`);
+              return errorResponse(
+                `${regras.nome} não atende ${servicoKey} no período da ${periodo === 'manha' ? 'manhã' : 'tarde'} no dia escolhido. Dias disponíveis para este período: ${diasPermitidos}`
+              );
+            }
+            
+            // Verificar limite de vagas
+            if (configPeriodo.limite) {
+              // Contar agendamentos já existentes no período
+              const horaInicio = periodo === 'manha' ? '00:00:00' : '12:00:00';
+              const horaFim = periodo === 'manha' ? '12:00:00' : '23:59:59';
+              
+              const { data: agendamentosExistentes } = await supabase
+                .from('agendamentos')
+                .select('id')
+                .eq('medico_id', medico.id)
+                .eq('data_agendamento', data_consulta)
+                .eq('cliente_id', clienteId)
+                .gte('hora_agendamento', horaInicio)
+                .lt('hora_agendamento', horaFim)
+                .in('status', ['agendado', 'confirmado']);
+              
+              const vagasOcupadas = agendamentosExistentes?.length || 0;
+              console.log(`📊 Vagas ocupadas: ${vagasOcupadas}/${configPeriodo.limite}`);
+              
+              if (vagasOcupadas >= configPeriodo.limite) {
+                console.log(`❌ Limite de vagas atingido`);
+                return errorResponse(
+                  `Não há mais vagas disponíveis para ${regras.nome} - ${servicoKey} neste período. Limite: ${configPeriodo.limite} pacientes, Ocupado: ${vagasOcupadas}`
+                );
+              }
+              console.log(`✅ Vagas disponíveis: ${configPeriodo.limite - vagasOcupadas}`);
+            }
+          }
+        }
       }
     }
 
@@ -497,25 +697,133 @@ async function handleCancel(supabase: any, body: any, clienteId: string) {
 // Verificar disponibilidade de horários
 async function handleAvailability(supabase: any, body: any, clienteId: string) {
   try {
-    const { medico_nome, data_consulta, periodo } = body;
+    const { medico_nome, medico_id, data_consulta, periodo, atendimento_nome } = body;
 
-    if (!medico_nome || !data_consulta) {
-      return errorResponse('Campos obrigatórios: medico_nome, data_consulta');
+    if ((!medico_nome && !medico_id) || !data_consulta) {
+      return errorResponse('Campos obrigatórios: (medico_nome ou medico_id) e data_consulta');
     }
 
     // Buscar médico COM filtro de cliente
-    const { data: medico, error: medicoError } = await supabase
-      .from('medicos')
-      .select('id, nome, ativo')
-      .ilike('nome', `%${medico_nome}%`)
-      .eq('cliente_id', clienteId)
-      .eq('ativo', true)
-      .single();
-
-    if (medicoError || !medico) {
-      return errorResponse(`Médico "${medico_nome}" não encontrado ou inativo`);
+    let medico;
+    if (medico_id) {
+      const { data, error } = await supabase
+        .from('medicos')
+        .select('id, nome, ativo')
+        .eq('id', medico_id)
+        .eq('cliente_id', clienteId)
+        .eq('ativo', true)
+        .single();
+      medico = data;
+      if (error || !medico) {
+        return errorResponse(`Médico com ID "${medico_id}" não encontrado ou inativo`);
+      }
+    } else {
+      const { data, error } = await supabase
+        .from('medicos')
+        .select('id, nome, ativo')
+        .ilike('nome', `%${medico_nome}%`)
+        .eq('cliente_id', clienteId)
+        .eq('ativo', true)
+        .single();
+      medico = data;
+      if (error || !medico) {
+        return errorResponse(`Médico "${medico_nome}" não encontrado ou inativo`);
+      }
     }
 
+    // Verificar se tem regras de negócio com sistema de ordem de chegada
+    const regras = BUSINESS_RULES.medicos[medico.id];
+    
+    if (regras && atendimento_nome) {
+      // Buscar serviço nas regras
+      const servicoKey = Object.keys(regras.servicos || {}).find(s => 
+        s.toLowerCase().includes(atendimento_nome.toLowerCase()) ||
+        atendimento_nome.toLowerCase().includes(s.toLowerCase())
+      );
+      
+      if (servicoKey) {
+        const servico = regras.servicos[servicoKey];
+        
+        // Se não permite online, retornar mensagem
+        if (!servico.permite_online) {
+          console.log(`ℹ️ Serviço ${servicoKey} não permite agendamento online`);
+          return successResponse({
+            medico: medico.nome,
+            servico: servicoKey,
+            permite_agendamento_online: false,
+            mensagem: servico.mensagem
+          });
+        }
+        
+        // Verificar dia da semana
+        const diaSemana = getDiaSemana(data_consulta);
+        const diasNomes = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+        
+        // Retornar disponibilidade por ordem de chegada
+        if (servico.periodos) {
+          const periodos = [];
+          
+          for (const [periodoNome, config] of Object.entries(servico.periodos)) {
+            // Verificar se atende neste dia da semana
+            if (servico.dias_semana && !servico.dias_semana.includes(diaSemana)) {
+              continue;
+            }
+            
+            // Verificar dias específicos do período
+            if ((config as any).dias_especificos && !(config as any).dias_especificos.includes(diaSemana)) {
+              continue;
+            }
+            
+            // Contar vagas ocupadas no período
+            const horaInicio = periodoNome === 'manha' ? '00:00:00' : '12:00:00';
+            const horaFim = periodoNome === 'manha' ? '12:00:00' : '23:59:59';
+            
+            const { data: agendamentos } = await supabase
+              .from('agendamentos')
+              .select('id')
+              .eq('medico_id', medico.id)
+              .eq('data_agendamento', data_consulta)
+              .eq('cliente_id', clienteId)
+              .gte('hora_agendamento', horaInicio)
+              .lt('hora_agendamento', horaFim)
+              .in('status', ['agendado', 'confirmado']);
+            
+            const vagasOcupadas = agendamentos?.length || 0;
+            const vagasDisponiveis = (config as any).limite - vagasOcupadas;
+            
+            periodos.push({
+              periodo: periodoNome === 'manha' ? 'Manhã' : 'Tarde',
+              horario_distribuicao: `${(config as any).inicio} às ${(config as any).fim}`,
+              horario_atendimento_inicio: (config as any).atendimento_inicio || (config as any).inicio,
+              vagas_ocupadas: vagasOcupadas,
+              vagas_disponiveis: vagasDisponiveis,
+              total_vagas: (config as any).limite,
+              disponivel: vagasDisponiveis > 0,
+              mensagem_extra: servico.mensagem_extra
+            });
+          }
+          
+          if (periodos.length === 0) {
+            return errorResponse(`${regras.nome} não atende ${servicoKey} no dia ${diasNomes[diaSemana]}`);
+          }
+          
+          console.log(`✅ Retornando disponibilidade por ordem de chegada para ${servicoKey}`);
+          return successResponse({
+            medico: medico.nome,
+            servico: servicoKey,
+            data: data_consulta,
+            dia_semana: diasNomes[diaSemana],
+            tipo_agendamento: 'ordem_chegada',
+            periodos,
+            instrucao: 'Este médico atende por ORDEM DE CHEGADA. Chegue no horário indicado para distribuição de fichas. Quanto mais cedo chegar, mais cedo será atendido.'
+          });
+        }
+      }
+    }
+
+    // ===== FALLBACK: Retornar horários genéricos (comportamento original) =====
+    console.log(`ℹ️ Usando método padrão de disponibilidade (slots de 30 min)`);
+    
     // Buscar agendamentos ocupados COM filtro de cliente
     const { data: agendamentos } = await supabase
       .from('agendamentos')
