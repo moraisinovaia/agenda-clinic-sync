@@ -724,11 +724,43 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     const regras = BUSINESS_RULES.medicos[medico.id];
     
     if (regras && atendimento_nome) {
-      // Buscar serviço nas regras
-      const servicoKey = Object.keys(regras.servicos || {}).find(s => 
-        s.toLowerCase().includes(atendimento_nome.toLowerCase()) ||
-        atendimento_nome.toLowerCase().includes(s.toLowerCase())
-      );
+      // Buscar serviço nas regras com matching inteligente
+      const servicoKey = Object.keys(regras.servicos || {}).find(s => {
+        const servicoLower = s.toLowerCase();
+        const atendimentoLower = atendimento_nome.toLowerCase();
+        
+        // Match exato
+        if (servicoLower === atendimentoLower) return true;
+        
+        // Match bidirecional (contém)
+        if (servicoLower.includes(atendimentoLower) || atendimentoLower.includes(servicoLower)) {
+          return true;
+        }
+        
+        // Match por keywords específicas
+        const keywords: Record<string, string[]> = {
+          'endocrinológica': ['endocrino', 'endocrinologia', 'consulta endocrino', 'consulta'],
+          'cardiológica': ['cardio', 'cardiologia', 'consulta cardio', 'consulta'],
+          'ergométrico': ['ergo', 'ergometrico', 'teste ergo'],
+          'ecocardiograma': ['eco', 'ecocardio'],
+          'ultrassom': ['ultra', 'ultrassonografia']
+        };
+        
+        for (const [base, aliases] of Object.entries(keywords)) {
+          if (servicoLower.includes(base)) {
+            return aliases.some(alias => atendimentoLower.includes(alias));
+          }
+        }
+        
+        return false;
+      });
+      
+      // Logs de debug para matching
+      if (servicoKey) {
+        console.log(`✅ Match encontrado: "${atendimento_nome}" → "${servicoKey}"`);
+      } else {
+        console.warn(`⚠️ Serviço não encontrado: "${atendimento_nome}". Disponíveis: ${Object.keys(regras.servicos || {}).join(', ')}`);
+      }
       
       if (servicoKey) {
         const servico = regras.servicos[servicoKey];
@@ -760,6 +792,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
             
             // Verificar dias específicos do período
             if ((config as any).dias_especificos && !(config as any).dias_especificos.includes(diaSemana)) {
+              console.log(`ℹ️ ${regras.nome} não atende à ${periodoNome === 'manha' ? 'manhã' : 'tarde'} às ${diasNomes[diaSemana]}`);
               continue;
             }
             
