@@ -152,20 +152,9 @@ serve(async (req) => {
     );
 
     // 🔑 Buscar cliente_id do IPADO
-    console.log('🔍 Buscando cliente IPADO...');
-    const { data: clienteIpado, error: clienteError } = await supabase
-      .from('clientes')
-      .select('id')
-      .eq('nome', 'IPADO')
-      .single();
-
-    if (clienteError || !clienteIpado) {
-      console.error('❌ Cliente IPADO não encontrado:', clienteError);
-      return errorResponse('Cliente IPADO não configurado no sistema', 500);
-    }
-
-    const CLIENTE_ID = clienteIpado.id;
-    console.log('✅ Cliente IPADO encontrado:', CLIENTE_ID);
+  // Cliente ID fixo do IPADO (sistema single-tenant)
+  const CLIENTE_ID = '2bfb98b5-ae41-4f96-8ba7-acc797c22054';
+  console.log('🏥 Sistema configurado para cliente IPADO:', CLIENTE_ID);
 
     const url = new URL(req.url);
     const method = req.method;
