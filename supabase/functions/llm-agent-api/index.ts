@@ -700,12 +700,8 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     const { medico_nome, medico_id, data_consulta, atendimento_nome, dias_busca = 14 } = body;
 
     // Validar campos obrigatórios (data_consulta agora é opcional)
-    if ((!medico_nome && !medico_id)) {
-      return errorResponse('Campos obrigatórios: (medico_nome ou medico_id), atendimento_nome');
-    }
-
-    if (!atendimento_nome) {
-      return errorResponse('Campo obrigatório: atendimento_nome (ex: "Consulta Endocrinológica", "Consulta Cardiológica", "Teste Ergométrico", "Ecocardiograma")');
+    if ((!medico_nome && !medico_id) || !atendimento_nome) {
+      return errorResponse('Campos obrigatórios: (medico_nome ou medico_id) e atendimento_nome');
     }
 
     // Buscar médico COM filtro de cliente
@@ -798,11 +794,17 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
 
     // 🆕 SE NÃO FOI FORNECIDA DATA ESPECÍFICA, BUSCAR PRÓXIMAS DATAS DISPONÍVEIS
     if (!data_consulta) {
-      console.log('🔍 Buscando próximas datas disponíveis...');
+      console.log('🔍 Buscando próximas datas disponíveis (próximos', dias_busca, 'dias)...');
       
       const tipoAtendimento = servico.tipo || regras.tipo_agendamento || 'ordem_chegada';
       const proximasDatas = [];
       const hoje = new Date();
+      hoje.setHours(0, 0, 0, 0); // Zerar horas para comparação correta
+      
+      let datasVerificadas = 0;
+      let datasPuladasDiaSemana = 0;
+      let datasPuladasBloqueio = 0;
+      let datasSemVagas = 0;
       
       for (let i = 0; i < dias_busca; i++) {
         const dataAtual = new Date(hoje);
@@ -810,9 +812,27 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         
         const dataFormatada = dataAtual.toISOString().split('T')[0];
         const diaSemana = dataAtual.getDay();
+        datasVerificadas++;
         
         // Verificar se o médico atende neste dia
         if (servico.dias_semana && !servico.dias_semana.includes(diaSemana)) {
+          datasPuladasDiaSemana++;
+          continue;
+        }
+
+        // 🔒 Verificar se a data está bloqueada
+        const { data: bloqueios, error: bloqueioError } = await supabase
+          .from('bloqueios_agenda')
+          .select('id, motivo')
+          .eq('medico_id', medico.id)
+          .lte('data_inicio', dataFormatada)
+          .gte('data_fim', dataFormatada)
+          .eq('status', 'ativo')
+          .eq('cliente_id', CLIENTE_ID);
+
+        if (!bloqueioError && bloqueios && bloqueios.length > 0) {
+          console.log(`⛔ Data ${dataFormatada} bloqueada:`, bloqueios[0].motivo);
+          datasPuladasBloqueio++;
           continue;
         }
 
@@ -857,10 +877,21 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
             periodos: periodosDisponiveis
           });
           
+          console.log(`✅ Data disponível encontrada: ${dataFormatada} (${diasSemana[diaSemana]})`);
+          
           // Limitar a 5 datas
           if (proximasDatas.length >= 5) break;
+        } else {
+          datasSemVagas++;
         }
       }
+
+      console.log(`📊 Estatísticas da busca:
+        - Datas verificadas: ${datasVerificadas}
+        - Puladas (dia da semana): ${datasPuladasDiaSemana}
+        - Puladas (bloqueio): ${datasPuladasBloqueio}
+        - Sem vagas: ${datasSemVagas}
+        - Datas disponíveis encontradas: ${proximasDatas.length}`);
 
       if (proximasDatas.length === 0) {
         return errorResponse(`Não encontrei datas disponíveis para ${medico.nome} nos próximos ${dias_busca} dias. Por favor, entre em contato com a clínica.`);
