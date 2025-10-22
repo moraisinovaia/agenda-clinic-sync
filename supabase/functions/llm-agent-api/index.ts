@@ -697,11 +697,11 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
   try {
     console.log('📅 Verificando disponibilidade:', JSON.stringify(body, null, 2));
     
-    const { medico_nome, medico_id, data_consulta, atendimento_nome } = body;
+    const { medico_nome, medico_id, data_consulta, atendimento_nome, dias_busca = 14 } = body;
 
-    // Validar campos obrigatórios
-    if ((!medico_nome && !medico_id) || !data_consulta) {
-      return errorResponse('Campos obrigatórios: (medico_nome ou medico_id), data_consulta, atendimento_nome');
+    // Validar campos obrigatórios (data_consulta agora é opcional)
+    if ((!medico_nome && !medico_id)) {
+      return errorResponse('Campos obrigatórios: (medico_nome ou medico_id), atendimento_nome');
     }
 
     if (!atendimento_nome) {
@@ -796,6 +796,89 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       });
     }
 
+    // 🆕 SE NÃO FOI FORNECIDA DATA ESPECÍFICA, BUSCAR PRÓXIMAS DATAS DISPONÍVEIS
+    if (!data_consulta) {
+      console.log('🔍 Buscando próximas datas disponíveis...');
+      
+      const tipoAtendimento = servico.tipo || regras.tipo_agendamento || 'ordem_chegada';
+      const proximasDatas = [];
+      const hoje = new Date();
+      
+      for (let i = 0; i < dias_busca; i++) {
+        const dataAtual = new Date(hoje);
+        dataAtual.setDate(hoje.getDate() + i);
+        
+        const dataFormatada = dataAtual.toISOString().split('T')[0];
+        const diaSemana = dataAtual.getDay();
+        
+        // Verificar se o médico atende neste dia
+        if (servico.dias_semana && !servico.dias_semana.includes(diaSemana)) {
+          continue;
+        }
+
+        // Verificar disponibilidade para esta data
+        const periodosDisponiveis = [];
+        
+        for (const [periodo, config] of Object.entries(servico.periodos)) {
+          if ((config as any).dias_especificos && !(config as any).dias_especificos.includes(diaSemana)) {
+            continue;
+          }
+
+          const { count, error: countError } = await supabase
+            .from('agendamentos')
+            .select('*', { count: 'exact', head: true })
+            .eq('medico_id', medico.id)
+            .eq('data_agendamento', dataFormatada)
+            .gte('hora_agendamento', (config as any).inicio)
+            .lte('hora_agendamento', (config as any).fim)
+            .in('status', ['agendado', 'confirmado']);
+
+          if (countError) continue;
+
+          const vagasOcupadas = count || 0;
+          const vagasDisponiveis = (config as any).limite - vagasOcupadas;
+
+          if (vagasDisponiveis > 0) {
+            periodosDisponiveis.push({
+              periodo: periodo === 'manha' ? 'Manhã' : 'Tarde',
+              horario_distribuicao: (config as any).distribuicao_fichas || `${(config as any).inicio} às ${(config as any).fim}`,
+              vagas_disponiveis: vagasDisponiveis,
+              total_vagas: (config as any).limite
+            });
+          }
+        }
+
+        // Se encontrou períodos disponíveis nesta data, adicionar
+        if (periodosDisponiveis.length > 0) {
+          const diasSemana = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+          proximasDatas.push({
+            data: dataFormatada,
+            dia_semana: diasSemana[diaSemana],
+            periodos: periodosDisponiveis
+          });
+          
+          // Limitar a 5 datas
+          if (proximasDatas.length >= 5) break;
+        }
+      }
+
+      if (proximasDatas.length === 0) {
+        return errorResponse(`Não encontrei datas disponíveis para ${medico.nome} nos próximos ${dias_busca} dias. Por favor, entre em contato com a clínica.`);
+      }
+
+      return successResponse({
+        tipo_agendamento: tipoAtendimento,
+        medico: medico.nome,
+        servico: servicoKey,
+        proximas_datas: proximasDatas,
+        message: `Encontradas ${proximasDatas.length} datas disponíveis nos próximos ${dias_busca} dias`,
+        instrucao: tipoAtendimento === 'ordem_chegada' 
+          ? '⚠️ Sistema de ordem de chegada. Não existe horário marcado. O paciente deve chegar no período para pegar ficha.'
+          : 'Agendamento com hora marcada. Após escolher a data, você pode verificar os horários específicos disponíveis.'
+      });
+    }
+
+    // 🎯 COMPORTAMENTO ORIGINAL: VERIFICAR DATA ESPECÍFICA
     // Verificar dia da semana permitido
     const diaSemana = getDiaSemana(data_consulta);
     const diasNomes = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
