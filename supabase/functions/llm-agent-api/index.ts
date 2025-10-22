@@ -808,7 +808,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       
       for (let i = 0; i < dias_busca; i++) {
         const dataAtual = new Date(hoje);
-        dataAtual.setDate(hoje.getDate() + i);
+        dataAtual.setDate(dataAtual.getDate() + i);
         
         const dataFormatada = dataAtual.toISOString().split('T')[0];
         const diaSemana = dataAtual.getDay();
