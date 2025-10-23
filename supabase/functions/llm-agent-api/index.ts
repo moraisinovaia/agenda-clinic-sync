@@ -737,7 +737,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       return value;
     };
     
-    let { medico_nome, medico_id, data_consulta, atendimento_nome, dias_busca = 14 } = body;
+    let { medico_nome, medico_id, data_consulta, atendimento_nome, dias_busca = 14, mensagem_original } = body;
     
     // 🆕 DETECÇÃO DE DADOS INVERTIDOS: Verificar se medico_nome contém data ou se data_consulta contém nome
     if (data_consulta && typeof data_consulta === 'string') {
@@ -830,6 +830,42 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       atendimento_nome, 
       dias_busca 
     });
+    
+    // 💬 LOGGING: Mensagem original do paciente (se fornecida)
+    if (mensagem_original) {
+      console.log('💬 Mensagem original do paciente:', mensagem_original);
+    }
+    
+    // 🧠 ANÁLISE DE CONTEXTO: Usar mensagem original para inferir intenção
+    if (mensagem_original && !data_consulta) {
+      const mensagemLower = mensagem_original.toLowerCase();
+      
+      // Detectar se é pergunta aberta ("quando tem vaga?")
+      const isPerguntaAberta = 
+        mensagemLower.includes('quando') ||
+        mensagemLower.includes('próxima') ||
+        mensagemLower.includes('proxima') ||
+        mensagemLower.includes('disponível') ||
+        mensagemLower.includes('disponivel');
+      
+      if (isPerguntaAberta) {
+        console.log('🔍 Pergunta aberta detectada. Buscando múltiplas datas disponíveis.');
+      }
+      
+      // Detectar menção a dia da semana
+      const diasSemanaMap: Record<string, number> = {
+        'domingo': 0, 'segunda': 1, 'terça': 2, 'terca': 2,
+        'quarta': 3, 'quinta': 4, 'sexta': 5, 'sábado': 6, 'sabado': 6
+      };
+      
+      for (const [dia, num] of Object.entries(diasSemanaMap)) {
+        if (mensagemLower.includes(dia)) {
+          console.log(`📅 Dia da semana detectado na mensagem: ${dia} (${num})`);
+          // Nota: Lógica de filtro por dia da semana pode ser implementada no futuro
+          break;
+        }
+      }
+    }
 
     // ✅ Validar campos obrigatórios
     if (!atendimento_nome || atendimento_nome.trim() === '') {

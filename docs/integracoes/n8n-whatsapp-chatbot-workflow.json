@@ -75,6 +75,10 @@
             {
               "name": "data_fim",
               "value": "={{ $json.data_fim }}"
+            },
+            {
+              "name": "mensagem_original",
+              "value": "={{ $json.mensagem_original || $('Webhook WhatsApp').item.json.body.message.text }}"
             }
           ]
         },
