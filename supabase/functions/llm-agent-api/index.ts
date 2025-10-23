@@ -695,18 +695,64 @@ async function handleCancel(supabase: any, body: any, clienteId: string) {
 // Verificar disponibilidade de horários
 async function handleAvailability(supabase: any, body: any, clienteId: string) {
   try {
-    console.log('📅 Verificando disponibilidade:', JSON.stringify(body, null, 2));
+    console.log('📅 [RAW] Dados recebidos do N8N:', JSON.stringify(body, null, 2));
     
-    const { medico_nome, medico_id, data_consulta, atendimento_nome, dias_busca = 14 } = body;
-
-    // Validar campos obrigatórios (data_consulta agora é opcional)
-    if ((!medico_nome && !medico_id) || !atendimento_nome) {
-      return errorResponse('Campos obrigatórios: (medico_nome ou medico_id) e atendimento_nome');
+    // 🛡️ SANITIZAÇÃO AUTOMÁTICA: Remover "=" do início dos valores (problema comum do N8N)
+    const sanitizeValue = (value: any): any => {
+      if (typeof value === 'string' && value.startsWith('=')) {
+        const cleaned = value.substring(1);
+        console.log(`🧹 Sanitizado: "${value}" → "${cleaned}"`);
+        return cleaned;
+      }
+      return value;
+    };
+    
+    let { medico_nome, medico_id, data_consulta, atendimento_nome, dias_busca = 14 } = body;
+    
+    // Aplicar sanitização
+    medico_nome = sanitizeValue(medico_nome);
+    medico_id = sanitizeValue(medico_id);
+    atendimento_nome = sanitizeValue(atendimento_nome);
+    data_consulta = sanitizeValue(data_consulta);
+    
+    // 📅 VALIDAÇÃO E CORREÇÃO DE DATA: Corrigir ano errado (2026 → 2025)
+    if (data_consulta) {
+      const anoAtual = new Date().getFullYear();
+      const anoConsulta = parseInt(data_consulta.substring(0, 4));
+      
+      if (anoConsulta > anoAtual) {
+        const dataCorrigida = anoAtual + data_consulta.substring(4);
+        console.warn(`⚠️ Data com ano futuro detectada! Corrigindo: "${data_consulta}" → "${dataCorrigida}"`);
+        data_consulta = dataCorrigida;
+      }
+      
+      // Validar formato YYYY-MM-DD
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(data_consulta)) {
+        return errorResponse(`Formato de data inválido: "${data_consulta}". Use YYYY-MM-DD (ex: 2025-01-20)`);
+      }
     }
+    
+    console.log('✅ [SANITIZADO] Dados processados:', { 
+      medico_nome, 
+      medico_id, 
+      data_consulta, 
+      atendimento_nome, 
+      dias_busca 
+    });
 
-    // Buscar médico COM filtro de cliente
+    // ✅ Validar campos obrigatórios
+    if (!atendimento_nome || atendimento_nome.trim() === '') {
+      return errorResponse('Campo obrigatório: atendimento_nome (ex: "Consulta Cardiológica", "Colonoscopia")');
+    }
+    
+    if (!medico_nome && !medico_id) {
+      return errorResponse('É necessário informar medico_nome OU medico_id');
+    }
+    
+    // 🔍 Buscar médico COM busca inteligente (aceita nomes parciais)
     let medico;
     if (medico_id) {
+      // Busca por ID (exata)
       const { data, error } = await supabase
         .from('medicos')
         .select('id, nome, ativo')
@@ -714,22 +760,54 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         .eq('cliente_id', clienteId)
         .eq('ativo', true)
         .single();
+      
       medico = data;
       if (error || !medico) {
+        console.error(`❌ Médico ID não encontrado: ${medico_id}`, error);
         return errorResponse(`Médico com ID "${medico_id}" não encontrado ou inativo`);
       }
+      console.log(`✅ Médico encontrado por ID: ${medico.nome}`);
+      
     } else {
-      const { data, error } = await supabase
+      // Busca por NOME (flexível - aceita nomes parciais)
+      // Exemplo: "Marcelo" encontra "DR. MARCELO D'CARLI"
+      const { data: medicosEncontrados, error } = await supabase
         .from('medicos')
         .select('id, nome, ativo')
         .ilike('nome', `%${medico_nome}%`)
         .eq('cliente_id', clienteId)
-        .eq('ativo', true)
-        .single();
-      medico = data;
-      if (error || !medico) {
-        return errorResponse(`Médico "${medico_nome}" não encontrado ou inativo`);
+        .eq('ativo', true);
+      
+      if (error) {
+        console.error('❌ Erro ao buscar médico:', error);
+        return errorResponse(`Erro ao buscar médico: ${error.message}`);
       }
+      
+      if (!medicosEncontrados || medicosEncontrados.length === 0) {
+        console.error(`❌ Nenhum médico encontrado para: "${medico_nome}"`);
+        
+        // Buscar todos os médicos ativos para sugestão
+        const { data: todosMedicos } = await supabase
+          .from('medicos')
+          .select('nome')
+          .eq('cliente_id', clienteId)
+          .eq('ativo', true)
+          .limit(10);
+        
+        const sugestoes = todosMedicos?.map(m => m.nome).join(', ') || 'Nenhum médico disponível';
+        return errorResponse(
+          `Médico "${medico_nome}" não encontrado. Médicos disponíveis: ${sugestoes}`
+        );
+      }
+      
+      // Se encontrou múltiplos, pegar o primeiro (ou fazer match mais inteligente)
+      if (medicosEncontrados.length > 1) {
+        console.warn(`⚠️ Múltiplos médicos encontrados para "${medico_nome}":`, 
+          medicosEncontrados.map(m => m.nome).join(', '));
+      }
+      
+      medico = medicosEncontrados[0];
+      console.log(`✅ Médico encontrado: "${medico_nome}" → "${medico.nome}"`);
     }
 
     // Buscar regras de negócio
@@ -1040,8 +1118,17 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     }
 
   } catch (error: any) {
-    console.error('❌ Erro ao verificar disponibilidade:', error);
-    return errorResponse(`Erro ao verificar disponibilidade: ${error?.message || 'Erro desconhecido'}`);
+    console.error('❌ [ERRO CRÍTICO] Falha ao verificar disponibilidade:', {
+      error_message: error?.message,
+      error_stack: error?.stack,
+      error_code: error?.code,
+      parametros_recebidos: body
+    });
+    
+    return errorResponse(
+      `Erro ao verificar disponibilidade: ${error?.message || 'Erro desconhecido'}. ` +
+      `Verifique os logs para mais detalhes.`
+    );
   }
 }
 
