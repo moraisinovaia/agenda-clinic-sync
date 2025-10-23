@@ -745,11 +745,18 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     atendimento_nome = sanitizeValue(atendimento_nome);
     data_consulta = sanitizeValue(data_consulta);
     
+    // 🆕 CONVERTER FORMATO DE DATA: DD/MM/YYYY → YYYY-MM-DD
+    if (data_consulta && /^\d{2}\/\d{2}\/\d{4}$/.test(data_consulta)) {
+      const [dia, mes, ano] = data_consulta.split('/');
+      data_consulta = `${ano}-${mes}-${dia}`;
+      console.log(`📅 Data convertida: DD/MM/YYYY → YYYY-MM-DD: ${data_consulta}`);
+    }
+    
     // 📅 VALIDAÇÃO DE FORMATO
     if (data_consulta) {
-      // Validar formato YYYY-MM-DD
+      // Validar formato YYYY-MM-DD (após conversão)
       if (!/^\d{4}-\d{2}-\d{2}$/.test(data_consulta)) {
-        return errorResponse(`Formato de data inválido: "${data_consulta}". Use YYYY-MM-DD (ex: 2026-01-20)`);
+        return errorResponse(`Formato de data inválido: "${data_consulta}". Use YYYY-MM-DD (ex: 2026-01-20) ou DD/MM/YYYY (ex: 20/01/2026)`);
       }
     }
     
