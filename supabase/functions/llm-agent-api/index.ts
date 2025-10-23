@@ -1140,7 +1140,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       .lte('data_inicio', data_consulta)
       .gte('data_fim', data_consulta)
       .eq('status', 'ativo')
-      .eq('cliente_id', CLIENTE_ID);
+      .eq('cliente_id', clienteId);
 
     if (!bloqueioError && bloqueios && bloqueios.length > 0) {
       console.log(`⛔ Data ${data_consulta} bloqueada:`, bloqueios[0].motivo);
