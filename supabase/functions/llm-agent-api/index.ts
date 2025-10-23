@@ -810,8 +810,16 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       const hoje = new Date(dataAtual + 'T00:00:00');
       
       if (dataConsulta < hoje) {
-        data_consulta = dataAtual;
-        console.log(`⚠️ Data no passado detectada. Ajustando para data atual de São Paulo: ${data_consulta}`);
+        // Data no passado: se for horário noturno, já vai direto para AMANHÃ
+        if (horaAtual >= 18) {
+          const amanha = new Date(dataAtual + 'T00:00:00');
+          amanha.setDate(amanha.getDate() + 1);
+          data_consulta = amanha.toISOString().split('T')[0];
+          console.log(`⚠️ Data no passado detectada E horário noturno (${horaAtual}h). Ajustando para AMANHÃ: ${data_consulta}`);
+        } else {
+          data_consulta = dataAtual;
+          console.log(`⚠️ Data no passado detectada. Ajustando para HOJE: ${data_consulta} (${horaAtual}h)`);
+        }
       }
     }
     
