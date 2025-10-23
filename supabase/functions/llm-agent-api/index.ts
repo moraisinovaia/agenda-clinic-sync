@@ -1268,15 +1268,26 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     if (tipoAtendimento === 'ordem_chegada') {
       // ✅ ORDEM DE CHEGADA - NÃO retorna horários específicos
       console.log('✅ Retornando disponibilidade por ORDEM DE CHEGADA');
+      
+      const temVagas = periodosDisponiveis.some(p => p.disponivel);
+      const mensagem = temVagas
+        ? `✅ ${medico.nome} - ${servicoKey}\n📅 ${data_consulta}\n\n` +
+          periodosDisponiveis.filter(p => p.disponivel).map(p => 
+            `${p.periodo}: ${p.vagas_disponiveis} vaga(s) disponível(is) de ${p.total_vagas}\n` +
+            `Distribuição: ${p.horario_distribuicao}`
+          ).join('\n\n') +
+          '\n\n⚠️ ORDEM DE CHEGADA: Não há horário marcado. Paciente deve chegar no período para pegar ficha.'
+        : `❌ Sem vagas disponíveis para ${medico.nome} em ${data_consulta}`;
+      
       return successResponse({
+        disponivel: temVagas,
         tipo_agendamento: 'ordem_chegada',
         medico: medico.nome,
         servico: servicoKey,
         data: data_consulta,
         periodos: periodosDisponiveis,
-        instrucao: '⚠️ SISTEMA DE ORDEM DE CHEGADA',
-        detalhes: 'Não existe horário marcado específico. O paciente deve chegar no período indicado para pegar uma ficha por ordem de chegada. Quanto mais cedo chegar, mais cedo será atendido.',
-        observacao_importante: 'NÃO informe horários específicos ao paciente. Informe apenas o período de distribuição de fichas e quantidade de vagas disponíveis.'
+        mensagem_whatsapp: mensagem,
+        message: mensagem
       });
     } else {
       // ✅ HORA MARCADA - retorna slots específicos
@@ -1321,15 +1332,22 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         }
       }
 
+      const mensagem = horariosDisponiveis.length > 0
+        ? `✅ ${medico.nome} - ${servicoKey}\n📅 ${data_consulta}\n\n` +
+          `${horariosDisponiveis.length} horários disponíveis:\n` +
+          horariosDisponiveis.map(h => `• ${h.hora}`).join('\n')
+        : `❌ Sem horários disponíveis para ${medico.nome} em ${data_consulta}`;
+      
       return successResponse({
+        disponivel: horariosDisponiveis.length > 0,
         tipo_agendamento: 'hora_marcada',
         medico: medico.nome,
         servico: servicoKey,
         data: data_consulta,
-        message: `${horariosDisponiveis.length} horários disponíveis encontrados`,
         horarios_disponiveis: horariosDisponiveis,
         total: horariosDisponiveis.length,
-        instrucao: 'Agendamento com hora marcada. Escolha um dos horários disponíveis.'
+        mensagem_whatsapp: mensagem,
+        message: mensagem
       });
     }
 
