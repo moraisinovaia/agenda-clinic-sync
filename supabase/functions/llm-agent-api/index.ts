@@ -6,20 +6,34 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// 🌎 Função para obter data atual no fuso horário de São Paulo
-function getDataAtualBrasil(): string {
+// 🌎 Função para obter data E HORA atual no fuso horário de São Paulo
+function getDataHoraAtualBrasil() {
   const agora = new Date();
-  // Converter para o fuso horário de São Paulo
-  const dataFormatada = agora.toLocaleString('pt-BR', { 
+  const brasilTime = agora.toLocaleString('pt-BR', { 
     timeZone: 'America/Sao_Paulo',
     year: 'numeric',
     month: '2-digit',
-    day: '2-digit'
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
   });
   
-  // Converter de DD/MM/YYYY para YYYY-MM-DD
-  const [dia, mes, ano] = dataFormatada.split('/');
-  return `${ano}-${mes}-${dia}`;
+  const [data, hora] = brasilTime.split(', ');
+  const [dia, mes, ano] = data.split('/');
+  const [horaNum, minutoNum] = hora.split(':').map(Number);
+  
+  return {
+    data: `${ano}-${mes}-${dia}`,
+    hora: horaNum,
+    minuto: minutoNum,
+    horarioEmMinutos: horaNum * 60 + minutoNum
+  };
+}
+
+// Manter compatibilidade - retorna apenas a data
+function getDataAtualBrasil(): string {
+  return getDataHoraAtualBrasil().data;
 }
 
 // Regras de negócio para agendamento via LLM Agent (N8N/WhatsApp)
@@ -776,19 +790,28 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       }
     }
     
-    // ✅ USAR DATA ATUAL DE SÃO PAULO SE NÃO ENVIADA OU ESTIVER NO PASSADO
+    // ✅ LÓGICA INTELIGENTE: Se for noite, buscar a partir de AMANHÃ
+    const { data: dataAtual, hora: horaAtual, horarioEmMinutos: horarioAtualEmMinutos } = getDataHoraAtualBrasil();
+
     if (!data_consulta) {
-      data_consulta = getDataAtualBrasil(); // Fuso horário America/Sao_Paulo
-      console.log(`📅 Data não enviada. Usando data atual de São Paulo: ${data_consulta}`);
+      // Se for depois das 18h, começar a busca de AMANHÃ
+      if (horaAtual >= 18) {
+        const amanha = new Date(dataAtual + 'T00:00:00');
+        amanha.setDate(amanha.getDate() + 1);
+        data_consulta = amanha.toISOString().split('T')[0];
+        console.log(`🌙 Horário noturno (${horaAtual}h). Buscando a partir de AMANHÃ: ${data_consulta}`);
+      } else {
+        data_consulta = dataAtual;
+        console.log(`📅 Buscando a partir de HOJE: ${data_consulta} (${horaAtual}h)`);
+      }
     } else {
       // Verificar se está no passado (comparar com data de São Paulo)
       const dataConsulta = new Date(data_consulta + 'T00:00:00');
-      const hoje = new Date(getDataAtualBrasil() + 'T00:00:00');
+      const hoje = new Date(dataAtual + 'T00:00:00');
       
       if (dataConsulta < hoje) {
-        const novaData = getDataAtualBrasil();
-        console.log(`⚠️ Data no passado detectada: ${data_consulta}. Ajustando para data atual de São Paulo: ${novaData}`);
-        data_consulta = novaData;
+        data_consulta = dataAtual;
+        console.log(`⚠️ Data no passado detectada. Ajustando para data atual de São Paulo: ${data_consulta}`);
       }
     }
     
@@ -1112,6 +1135,20 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       // Verificar se o período é válido para este dia da semana
       if ((config as any).dias_especificos && !(config as any).dias_especificos.includes(diaSemana)) {
         continue;
+      }
+
+      // 🆕 SE A DATA FOR HOJE, VERIFICAR SE O PERÍODO JÁ PASSOU
+      const ehHoje = (data_consulta === dataAtual);
+      
+      if (ehHoje) {
+        const [horaFim, minFim] = (config as any).fim.split(':').map(Number);
+        const horarioFimEmMinutos = horaFim * 60 + minFim;
+        
+        // Se o período já acabou, pular
+        if (horarioFimEmMinutos <= horarioAtualEmMinutos) {
+          console.log(`⏭️ Pulando período ${periodo} (fim ${(config as any).fim} já passou às ${horaAtual}:${getDataHoraAtualBrasil().minuto})`);
+          continue;
+        }
       }
 
       // Contar quantos agendamentos já existem neste período
