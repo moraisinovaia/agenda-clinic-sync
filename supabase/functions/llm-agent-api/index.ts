@@ -872,12 +872,19 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
 
     // 🆕 SE NÃO FOI FORNECIDA DATA ESPECÍFICA, BUSCAR PRÓXIMAS DATAS DISPONÍVEIS
     if (!data_consulta) {
-      console.log('🔍 Buscando próximas datas disponíveis (próximos', dias_busca, 'dias)...');
-      
       const tipoAtendimento = servico.tipo || regras.tipo_agendamento || 'ordem_chegada';
       const proximasDatas = [];
-      const hoje = new Date();
-      hoje.setHours(0, 0, 0, 0); // Zerar horas para comparação correta
+      
+      // Capturar datetime atual COMPLETO (com hora e minuto)
+      const agora = new Date();
+      const horaAtual = agora.getHours();
+      const minutoAtual = agora.getMinutes();
+      
+      // Criar cópia apenas para comparação de datas
+      const hoje = new Date(agora);
+      hoje.setHours(0, 0, 0, 0);
+      
+      console.log(`🔍 Buscando próximas datas disponíveis a partir de ${agora.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (próximos ${dias_busca} dias)...`);
       
       let datasVerificadas = 0;
       let datasPuladasDiaSemana = 0;
@@ -920,6 +927,24 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         for (const [periodo, config] of Object.entries(servico.periodos)) {
           if ((config as any).dias_especificos && !(config as any).dias_especificos.includes(diaSemana)) {
             continue;
+          }
+
+          // 🆕 FILTRAR PERÍODOS QUE JÁ PASSARAM NO DIA ATUAL
+          const ehHoje = (i === 0);
+          
+          if (ehHoje) {
+            // Extrair horário de FIM do período
+            const [horaFim, minFim] = (config as any).fim.split(':').map(Number);
+            const horarioFimEmMinutos = horaFim * 60 + minFim;
+            const horarioAtualEmMinutos = horaAtual * 60 + minutoAtual;
+            
+            // Se o período já acabou completamente, pular
+            if (horarioFimEmMinutos <= horarioAtualEmMinutos) {
+              console.log(`⏭️ Pulando período ${periodo} de hoje (fim ${(config as any).fim} ≤ ${horaAtual}:${minutoAtual.toString().padStart(2, '0')})`);
+              continue;
+            }
+            
+            console.log(`✅ Período ${periodo} ainda está válido hoje (fim ${(config as any).fim} > ${horaAtual}:${minutoAtual.toString().padStart(2, '0')})`);
           }
 
           const { count, error: countError } = await supabase
@@ -979,8 +1004,9 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         tipo_agendamento: tipoAtendimento,
         medico: medico.nome,
         servico: servicoKey,
+        horario_busca: agora.toISOString(),
         proximas_datas: proximasDatas,
-        message: `Encontradas ${proximasDatas.length} datas disponíveis nos próximos ${dias_busca} dias`,
+        message: `Encontradas ${proximasDatas.length} datas disponíveis a partir de ${agora.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
         instrucao: tipoAtendimento === 'ordem_chegada' 
           ? '⚠️ Sistema de ordem de chegada. Não existe horário marcado. O paciente deve chegar no período para pegar ficha.'
           : 'Agendamento com hora marcada. Após escolher a data, você pode verificar os horários específicos disponíveis.'
