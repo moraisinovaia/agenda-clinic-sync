@@ -709,6 +709,36 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     
     let { medico_nome, medico_id, data_consulta, atendimento_nome, dias_busca = 14 } = body;
     
+    // 🆕 DETECÇÃO DE DADOS INVERTIDOS: Verificar se medico_nome contém data ou se data_consulta contém nome
+    if (data_consulta && typeof data_consulta === 'string') {
+      // Se data_consulta contém "|" ou nome de médico, está invertido
+      if (data_consulta.includes('|') || /[a-zA-Z]{3,}/.test(data_consulta)) {
+        console.warn('⚠️ DADOS INVERTIDOS DETECTADOS! Tentando corrigir...');
+        console.log('Antes:', { medico_nome, atendimento_nome, data_consulta });
+        
+        // Tentar extrair informações do campo invertido
+        const partes = data_consulta.split('|');
+        if (partes.length === 2) {
+          // Formato: "Dra Adriana|05/01/2026"
+          const possivelMedico = partes[0].trim();
+          const possivelData = partes[1].trim();
+          
+          // Realocar corretamente
+          if (!medico_nome || medico_nome === 'Consulta') {
+            medico_nome = possivelMedico;
+          }
+          
+          // Converter data DD/MM/YYYY para YYYY-MM-DD
+          if (/^\d{2}\/\d{2}\/\d{4}$/.test(possivelData)) {
+            const [dia, mes, ano] = possivelData.split('/');
+            data_consulta = `${ano}-${mes}-${dia}`;
+          }
+        }
+        
+        console.log('Depois:', { medico_nome, atendimento_nome, data_consulta });
+      }
+    }
+    
     // Aplicar sanitização
     medico_nome = sanitizeValue(medico_nome);
     medico_id = sanitizeValue(medico_id);
@@ -816,12 +846,12 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       return errorResponse(`Regras de atendimento não configuradas para ${medico.nome}`);
     }
 
-    // Buscar serviço nas regras com matching inteligente
+    // Buscar serviço nas regras com matching inteligente MELHORADO
     const servicoKey = Object.keys(regras.servicos || {}).find(s => {
-      const servicoLower = s.toLowerCase();
-      const atendimentoLower = atendimento_nome.toLowerCase();
+      const servicoLower = s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // Remove acentos
+      const atendimentoLower = atendimento_nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       
-      // Match exato
+      // Match exato (sem acentos)
       if (servicoLower === atendimentoLower) return true;
       
       // Match bidirecional (contém)
@@ -829,11 +859,11 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         return true;
       }
       
-      // Match por keywords específicas
+      // 🆕 MELHORADO: Match por keywords com variações de grafia
       const keywords: Record<string, string[]> = {
-        'endocrinológica': ['endocrino', 'endocrinologia', 'consulta endocrino', 'consulta'],
-        'cardiológica': ['cardio', 'cardiologia', 'consulta cardio', 'consulta'],
-        'ergométrico': ['ergo', 'ergometrico', 'teste ergo'],
+        'endocrinologica': ['endocrino', 'endocrinologia', 'endocrinologista', 'consulta endocrino', 'consulta endocrinologista'],
+        'cardiologica': ['cardio', 'cardiologia', 'cardiologista', 'consulta cardio', 'consulta cardiologista'],
+        'ergometrico': ['ergo', 'ergometrico', 'teste ergo'],
         'ecocardiograma': ['eco', 'ecocardio'],
         'ultrassom': ['ultra', 'ultrassonografia']
       };
