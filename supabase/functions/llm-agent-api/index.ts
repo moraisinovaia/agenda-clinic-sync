@@ -752,20 +752,11 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       console.log(`📅 Data convertida: DD/MM/YYYY → YYYY-MM-DD: ${data_consulta}`);
     }
     
-    // 📅 VALIDAÇÃO E CORREÇÃO DE DATA: Corrigir ano errado (2026 → 2025)
+    // 📅 VALIDAÇÃO DE FORMATO
     if (data_consulta) {
-      const anoAtual = new Date().getFullYear();
-      const anoConsulta = parseInt(data_consulta.substring(0, 4));
-      
-      if (anoConsulta > anoAtual) {
-        const dataCorrigida = anoAtual + data_consulta.substring(4);
-        console.warn(`⚠️ Data com ano futuro detectada! Corrigindo: "${data_consulta}" → "${dataCorrigida}"`);
-        data_consulta = dataCorrigida;
-      }
-      
       // Validar formato YYYY-MM-DD
       if (!/^\d{4}-\d{2}-\d{2}$/.test(data_consulta)) {
-        return errorResponse(`Formato de data inválido: "${data_consulta}". Use YYYY-MM-DD (ex: 2025-01-20)`);
+        return errorResponse(`Formato de data inválido: "${data_consulta}". Use YYYY-MM-DD ou DD/MM/YYYY`);
       }
     }
     
