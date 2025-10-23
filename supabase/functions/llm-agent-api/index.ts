@@ -1132,6 +1132,23 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       );
     }
 
+    // 🔒 VERIFICAR SE A DATA ESTÁ BLOQUEADA
+    const { data: bloqueios, error: bloqueioError } = await supabase
+      .from('bloqueios_agenda')
+      .select('id, motivo')
+      .eq('medico_id', medico.id)
+      .lte('data_inicio', data_consulta)
+      .gte('data_fim', data_consulta)
+      .eq('status', 'ativo')
+      .eq('cliente_id', CLIENTE_ID);
+
+    if (!bloqueioError && bloqueios && bloqueios.length > 0) {
+      console.log(`⛔ Data ${data_consulta} bloqueada:`, bloqueios[0].motivo);
+      return errorResponse(
+        `A agenda do(a) ${medico.nome} está bloqueada em ${data_consulta}. Motivo: ${bloqueios[0].motivo}. Por favor, escolha outra data.`
+      );
+    }
+
     // 🎯 DETECTAR TIPO DE ATENDIMENTO
     const tipoAtendimento = servico.tipo || regras.tipo_agendamento || 'ordem_chegada';
     console.log(`📋 Tipo de atendimento detectado: ${tipoAtendimento}`);
