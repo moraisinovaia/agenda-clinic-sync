@@ -6,6 +6,22 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// 🌎 Função para obter data atual no fuso horário de São Paulo
+function getDataAtualBrasil(): string {
+  const agora = new Date();
+  // Converter para o fuso horário de São Paulo
+  const dataFormatada = agora.toLocaleString('pt-BR', { 
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  
+  // Converter de DD/MM/YYYY para YYYY-MM-DD
+  const [dia, mes, ano] = dataFormatada.split('/');
+  return `${ano}-${mes}-${dia}`;
+}
+
 // Regras de negócio para agendamento via LLM Agent (N8N/WhatsApp)
 // Sistema web NÃO usa essas regras - funciona sem restrições
 const BUSINESS_RULES = {
@@ -760,20 +776,18 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       }
     }
     
-    // ✅ USAR DATA ATUAL SE NÃO ENVIADA OU ESTIVER NO PASSADO
+    // ✅ USAR DATA ATUAL DE SÃO PAULO SE NÃO ENVIADA OU ESTIVER NO PASSADO
     if (!data_consulta) {
-      const hoje = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-      data_consulta = hoje;
-      console.log(`📅 Data não enviada. Usando data atual: ${data_consulta}`);
+      data_consulta = getDataAtualBrasil(); // Fuso horário America/Sao_Paulo
+      console.log(`📅 Data não enviada. Usando data atual de São Paulo: ${data_consulta}`);
     } else {
-      // Verificar se está no passado
-      const dataConsulta = new Date(data_consulta);
-      const hoje = new Date();
-      hoje.setHours(0, 0, 0, 0); // Zerar horas para comparação de data
+      // Verificar se está no passado (comparar com data de São Paulo)
+      const dataConsulta = new Date(data_consulta + 'T00:00:00');
+      const hoje = new Date(getDataAtualBrasil() + 'T00:00:00');
       
       if (dataConsulta < hoje) {
-        const novaData = hoje.toISOString().split('T')[0];
-        console.log(`⚠️ Data no passado detectada: ${data_consulta}. Ajustando para: ${novaData}`);
+        const novaData = getDataAtualBrasil();
+        console.log(`⚠️ Data no passado detectada: ${data_consulta}. Ajustando para data atual de São Paulo: ${novaData}`);
         data_consulta = novaData;
       }
     }
