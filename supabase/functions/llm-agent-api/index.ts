@@ -1143,16 +1143,26 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         return errorResponse(`Não encontrei datas disponíveis para ${medico.nome} nos próximos ${dias_busca} dias. Por favor, entre em contato com a clínica.`);
       }
 
+      const mensagem = `✅ ${medico.nome} - ${servicoKey}\n\n📅 ${proximasDatas.length} datas disponíveis:\n\n` +
+        proximasDatas.map((d: any) => {
+          const periodos = d.periodos.map((p: any) => 
+            `  • ${p.periodo}: ${p.vagas_disponiveis} vaga(s) disponível(is) de ${p.total_vagas}`
+          ).join('\n');
+          return `${d.dia_semana}, ${d.data}\n${periodos}`;
+        }).join('\n\n') +
+        (tipoAtendimento === 'ordem_chegada' 
+          ? '\n\n⚠️ ORDEM DE CHEGADA: Não há horário marcado. Paciente deve chegar no período para pegar ficha.'
+          : '');
+
       return successResponse({
+        disponivel: true,
         tipo_agendamento: tipoAtendimento,
         medico: medico.nome,
         servico: servicoKey,
         horario_busca: agora.toISOString(),
         proximas_datas: proximasDatas,
-        message: `Encontradas ${proximasDatas.length} datas disponíveis a partir de ${agora.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
-        instrucao: tipoAtendimento === 'ordem_chegada' 
-          ? '⚠️ Sistema de ordem de chegada. Não existe horário marcado. O paciente deve chegar no período para pegar ficha.'
-          : 'Agendamento com hora marcada. Após escolher a data, você pode verificar os horários específicos disponíveis.'
+        mensagem_whatsapp: mensagem,
+        message: mensagem
       });
     }
 
