@@ -1144,9 +1144,15 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
 
     if (!bloqueioError && bloqueios && bloqueios.length > 0) {
       console.log(`⛔ Data ${data_consulta} bloqueada:`, bloqueios[0].motivo);
-      return errorResponse(
-        `A agenda do(a) ${medico.nome} está bloqueada em ${data_consulta}. Motivo: ${bloqueios[0].motivo}. Por favor, escolha outra data.`
-      );
+      return successResponse({
+        disponivel: false,
+        bloqueada: true,
+        medico: medico.nome,
+        servico: servicoKey,
+        data: data_consulta,
+        motivo_bloqueio: bloqueios[0].motivo,
+        message: `A agenda do(a) ${medico.nome} está bloqueada em ${data_consulta}. Motivo: ${bloqueios[0].motivo}. Por favor, escolha outra data.`
+      });
     }
 
     // 🎯 DETECTAR TIPO DE ATENDIMENTO
