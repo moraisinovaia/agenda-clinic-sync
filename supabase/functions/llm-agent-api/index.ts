@@ -760,6 +760,24 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       }
     }
     
+    // ✅ USAR DATA ATUAL SE NÃO ENVIADA OU ESTIVER NO PASSADO
+    if (!data_consulta) {
+      const hoje = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      data_consulta = hoje;
+      console.log(`📅 Data não enviada. Usando data atual: ${data_consulta}`);
+    } else {
+      // Verificar se está no passado
+      const dataConsulta = new Date(data_consulta);
+      const hoje = new Date();
+      hoje.setHours(0, 0, 0, 0); // Zerar horas para comparação de data
+      
+      if (dataConsulta < hoje) {
+        const novaData = hoje.toISOString().split('T')[0];
+        console.log(`⚠️ Data no passado detectada: ${data_consulta}. Ajustando para: ${novaData}`);
+        data_consulta = novaData;
+      }
+    }
+    
     console.log('✅ [SANITIZADO] Dados processados:', { 
       medico_nome, 
       medico_id, 
