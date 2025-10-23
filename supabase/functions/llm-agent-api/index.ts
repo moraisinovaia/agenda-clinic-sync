@@ -745,6 +745,13 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     atendimento_nome = sanitizeValue(atendimento_nome);
     data_consulta = sanitizeValue(data_consulta);
     
+    // 🆕 CONVERTER FORMATO DE DATA: DD/MM/YYYY → YYYY-MM-DD
+    if (data_consulta && /^\d{2}\/\d{2}\/\d{4}$/.test(data_consulta)) {
+      const [dia, mes, ano] = data_consulta.split('/');
+      data_consulta = `${ano}-${mes}-${dia}`;
+      console.log(`📅 Data convertida: DD/MM/YYYY → YYYY-MM-DD: ${data_consulta}`);
+    }
+    
     // 📅 VALIDAÇÃO E CORREÇÃO DE DATA: Corrigir ano errado (2026 → 2025)
     if (data_consulta) {
       const anoAtual = new Date().getFullYear();
@@ -799,38 +806,54 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       console.log(`✅ Médico encontrado por ID: ${medico.nome}`);
       
     } else {
-      // Busca por NOME (flexível - aceita nomes parciais)
-      // Exemplo: "Marcelo" encontra "DR. MARCELO D'CARLI"
-      const { data: medicosEncontrados, error } = await supabase
+      // 🔍 BUSCA SUPER INTELIGENTE POR NOME:
+      // Remove TODA pontuação e espaços extras de ambos os lados para comparação
+      // Exemplos: "Dra Adriana" → "Dra. Adriana Carla de Sena"
+      //           "Marcelo" → "DR. MARCELO D'CARLI"
+      
+      console.log(`🔍 Buscando médico: "${medico_nome}"`);
+      
+      // Buscar TODOS os médicos ativos
+      const { data: todosMedicos, error } = await supabase
         .from('medicos')
         .select('id, nome, ativo')
-        .ilike('nome', `%${medico_nome}%`)
         .eq('cliente_id', clienteId)
         .eq('ativo', true);
       
       if (error) {
-        console.error('❌ Erro ao buscar médico:', error);
-        return errorResponse(`Erro ao buscar médico: ${error.message}`);
+        console.error('❌ Erro ao buscar médicos:', error);
+        return errorResponse(`Erro ao buscar médicos: ${error.message}`);
       }
       
-      if (!medicosEncontrados || medicosEncontrados.length === 0) {
+      if (!todosMedicos || todosMedicos.length === 0) {
+        return errorResponse('Nenhum médico ativo cadastrado no sistema');
+      }
+      
+      // Função auxiliar: normalizar texto para comparação (sem pontuação, tudo minúsculo)
+      const normalizar = (texto: string) => 
+        texto.toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remove acentos
+          .replace(/[.,\-']/g, '') // Remove pontuação
+          .replace(/\s+/g, ' ') // Normaliza espaços
+          .trim();
+      
+      const nomeNormalizado = normalizar(medico_nome);
+      console.log(`🔍 Nome normalizado para busca: "${nomeNormalizado}"`);
+      
+      // Procurar médico que contenha o nome buscado
+      const medicosEncontrados = todosMedicos.filter(m => {
+        const nomeCompletoNormalizado = normalizar(m.nome);
+        return nomeCompletoNormalizado.includes(nomeNormalizado);
+      });
+      
+      if (medicosEncontrados.length === 0) {
         console.error(`❌ Nenhum médico encontrado para: "${medico_nome}"`);
-        
-        // Buscar todos os médicos ativos para sugestão
-        const { data: todosMedicos } = await supabase
-          .from('medicos')
-          .select('nome')
-          .eq('cliente_id', clienteId)
-          .eq('ativo', true)
-          .limit(10);
-        
-        const sugestoes = todosMedicos?.map(m => m.nome).join(', ') || 'Nenhum médico disponível';
+        const sugestoes = todosMedicos.map(m => m.nome).slice(0, 10).join(', ');
         return errorResponse(
           `Médico "${medico_nome}" não encontrado. Médicos disponíveis: ${sugestoes}`
         );
       }
       
-      // Se encontrou múltiplos, pegar o primeiro (ou fazer match mais inteligente)
       if (medicosEncontrados.length > 1) {
         console.warn(`⚠️ Múltiplos médicos encontrados para "${medico_nome}":`, 
           medicosEncontrados.map(m => m.nome).join(', '));
