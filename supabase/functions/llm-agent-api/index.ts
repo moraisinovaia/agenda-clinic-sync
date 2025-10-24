@@ -475,7 +475,16 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
 
     if (!result?.success) {
       console.error('❌ Função retornou erro:', result);
-      return errorResponse(`Erro ao agendar: ${result?.error || result?.message || 'Erro desconhecido'}`);
+      // Retornar como sucesso HTTP 200 mas com success: false no JSON
+      // Isso permite que o N8N processe a resposta sem erro HTTP
+      return new Response(JSON.stringify({
+        success: false,
+        error: result?.error || result?.message || 'Erro desconhecido',
+        timestamp: new Date().toISOString()
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
     }
 
     console.log('✅ Agendamento criado com sucesso:', result);
