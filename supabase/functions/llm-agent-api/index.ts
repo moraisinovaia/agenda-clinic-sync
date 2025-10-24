@@ -454,7 +454,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
         p_cliente_id: clienteId,
         p_nome_completo: paciente_nome.toUpperCase(),
         p_data_nascimento: data_nascimento,
-        p_convenio: convenio.toUpperCase(),
+        p_convenio: convenio, // Manter capitalização original para validação correta
         p_telefone: telefone || null,
         p_celular: celular,
         p_medico_id: medico.id,
