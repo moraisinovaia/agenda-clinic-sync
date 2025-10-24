@@ -236,8 +236,23 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
   try {
     console.log('📥 Dados recebidos na API:', JSON.stringify(body, null, 2));
     
+    // 🛡️ SANITIZAÇÃO AUTOMÁTICA: Remover "=" do início dos valores (problema comum do N8N)
+    const sanitizeValue = (value: any): any => {
+      if (typeof value === 'string' && value.startsWith('=')) {
+        const cleaned = value.substring(1);
+        console.log(`🧹 Sanitizado: "${value}" → "${cleaned}"`);
+        return cleaned;
+      }
+      return value;
+    };
+    
+    // Sanitizar todos os campos do body antes do mapeamento
+    const sanitizedBody = Object.fromEntries(
+      Object.entries(body).map(([key, value]) => [key, sanitizeValue(value)])
+    );
+    
     // Mapear dados flexivelmente (aceitar diferentes formatos)
-    const mappedData = mapSchedulingData(body);
+    const mappedData = mapSchedulingData(sanitizedBody);
     console.log('🔄 Dados mapeados:', JSON.stringify(mappedData, null, 2));
     
     const { 
