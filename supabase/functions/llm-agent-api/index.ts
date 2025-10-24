@@ -861,6 +861,25 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     }
     
     // 🧠 ANÁLISE DE CONTEXTO: Usar mensagem original para inferir intenção
+    let isPerguntaAberta = false;
+    if (mensagem_original) {
+      const mensagemLower = mensagem_original.toLowerCase();
+      
+      // Detectar se é pergunta aberta ("quando tem vaga?")
+      isPerguntaAberta = 
+        mensagemLower.includes('quando') ||
+        mensagemLower.includes('próxima') ||
+        mensagemLower.includes('proxima') ||
+        mensagemLower.includes('disponível') ||
+        mensagemLower.includes('disponivel');
+      
+      // Se for pergunta aberta, IGNORAR data_consulta e buscar próximas datas
+      if (isPerguntaAberta && data_consulta) {
+        console.log(`🔍 Pergunta aberta detectada ("${mensagem_original}"). Ignorando data específica para buscar próximas disponibilidades.`);
+        data_consulta = null;
+      }
+    }
+    
     if (mensagem_original && !data_consulta) {
       const mensagemLower = mensagem_original.toLowerCase();
       
@@ -978,10 +997,14 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     }
 
     // Buscar regras de negócio
+    console.log(`🔍 Buscando regras para médico ID: ${medico.id}, Nome: ${medico.nome}`);
     const regras = BUSINESS_RULES.medicos[medico.id];
     if (!regras) {
+      console.error(`❌ Regras não encontradas para médico ${medico.nome} (ID: ${medico.id})`);
+      console.error(`📋 IDs disponíveis nas BUSINESS_RULES:`, Object.keys(BUSINESS_RULES.medicos));
       return errorResponse(`Regras de atendimento não configuradas para ${medico.nome}`);
     }
+    console.log(`✅ Regras encontradas para ${regras.nome}`);
 
     // Buscar serviço nas regras com matching inteligente MELHORADO
     const servicoKey = Object.keys(regras.servicos || {}).find(s => {
@@ -1018,7 +1041,15 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     if (servicoKey) {
       console.log(`✅ Match encontrado: "${atendimento_nome}" → "${servicoKey}"`);
     } else {
-      console.warn(`⚠️ Serviço não encontrado: "${atendimento_nome}". Disponíveis: ${Object.keys(regras.servicos || {}).join(', ')}`);
+      console.error(`❌ ERRO: Serviço não encontrado: "${atendimento_nome}"`);
+      console.error(`📋 Serviços disponíveis para ${medico.nome}:`, Object.keys(regras.servicos || {}));
+      console.error(`🔍 Tentando match com:`, { 
+        atendimento_normalizado: atendimento_nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''),
+        servicos_normalizados: Object.keys(regras.servicos || {}).map(s => ({
+          original: s,
+          normalizado: s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        }))
+      });
       return errorResponse(
         `Serviço "${atendimento_nome}" não encontrado para ${medico.nome}. Serviços disponíveis: ${Object.keys(regras.servicos || {}).join(', ')}`
       );
