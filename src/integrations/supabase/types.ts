@@ -196,7 +196,7 @@ export type Database = {
           changed_fields: string[] | null
           created_at: string
           id: string
-          ip_address: unknown | null
+          ip_address: unknown
           new_values: Json | null
           old_values: Json | null
           record_id: string
@@ -211,7 +211,7 @@ export type Database = {
           changed_fields?: string[] | null
           created_at?: string
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           new_values?: Json | null
           old_values?: Json | null
           record_id: string
@@ -226,7 +226,7 @@ export type Database = {
           changed_fields?: string[] | null
           created_at?: string
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           new_values?: Json | null
           old_values?: Json | null
           record_id?: string
@@ -1366,10 +1366,6 @@ export type Database = {
         }
         Returns: Json
       }
-      binary_quantize: {
-        Args: { "": string } | { "": unknown }
-        Returns: unknown
-      }
       buscar_agendamentos_otimizado: {
         Args: {
           p_data_fim?: string
@@ -1417,7 +1413,7 @@ export type Database = {
         }[]
       }
       buscar_agendamentos_otimizado_ipado: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           atendimento_id: string
           atendimento_nome: string
@@ -1462,10 +1458,7 @@ export type Database = {
           status: string
         }[]
       }
-      bytea_to_text: {
-        Args: { data: string }
-        Returns: string
-      }
+      bytea_to_text: { Args: { data: string }; Returns: string }
       cancelar_agendamento_soft: {
         Args: {
           p_agendamento_id: string
@@ -1474,34 +1467,13 @@ export type Database = {
         }
         Returns: Json
       }
-      check_security_health: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
-      cleanup_expired_backups: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      cleanup_expired_horarios_vazios: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      cleanup_expired_slots: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      cleanup_old_backups_auto: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      cleanup_old_logs: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      cleanup_old_security_logs: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      check_security_health: { Args: never; Returns: Json }
+      cleanup_expired_backups: { Args: never; Returns: undefined }
+      cleanup_expired_horarios_vazios: { Args: never; Returns: undefined }
+      cleanup_expired_slots: { Args: never; Returns: undefined }
+      cleanup_old_backups_auto: { Args: never; Returns: undefined }
+      cleanup_old_logs: { Args: never; Returns: undefined }
+      cleanup_old_security_logs: { Args: never; Returns: undefined }
       confirmar_agendamento: {
         Args: {
           p_agendamento_id: string
@@ -1586,10 +1558,7 @@ export type Database = {
         }
         Returns: Json
       }
-      criar_cliente_ipado: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
+      criar_cliente_ipado: { Args: never; Returns: Json }
       criar_perfil_admin_orfao: {
         Args: {
           p_admin_id?: string
@@ -1599,14 +1568,8 @@ export type Database = {
         }
         Returns: Json
       }
-      criar_usuario_teste_ipado: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
-      debug_user_access: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
+      criar_usuario_teste_ipado: { Args: never; Returns: Json }
+      debug_user_access: { Args: never; Returns: Json }
       desconfirmar_agendamento: {
         Args: {
           p_agendamento_id: string
@@ -1615,14 +1578,8 @@ export type Database = {
         }
         Returns: Json
       }
-      diagnosticar_whatsapp_sistema: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
-      ensure_user_cliente_id: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      diagnosticar_whatsapp_sistema: { Args: never; Returns: Json }
+      ensure_user_cliente_id: { Args: never; Returns: undefined }
       enviar_whatsapp_fallback: {
         Args: { p_agendamento_id: string }
         Returns: Json
@@ -1657,7 +1614,7 @@ export type Database = {
         }[]
       }
       get_approved_users_safe: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           cargo: string
           created_at: string
@@ -1670,7 +1627,7 @@ export type Database = {
         }[]
       }
       get_backup_cron_status: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           active: boolean
           job_name: string
@@ -1678,7 +1635,7 @@ export type Database = {
         }[]
       }
       get_clientes_admin: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           ativo: boolean
           id: string
@@ -1686,7 +1643,7 @@ export type Database = {
         }[]
       }
       get_current_user_profile: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           ativo: boolean
           cliente_id: string
@@ -1700,12 +1657,9 @@ export type Database = {
           username: string
         }[]
       }
-      get_email_by_username: {
-        Args: { p_username: string }
-        Returns: string
-      }
+      get_email_by_username: { Args: { p_username: string }; Returns: string }
       get_pending_users: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           aprovado_por_nome: string
           created_at: string
@@ -1718,7 +1672,7 @@ export type Database = {
         }[]
       }
       get_pending_users_safe: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           cargo: string
           created_at: string
@@ -1728,34 +1682,9 @@ export type Database = {
           username: string
         }[]
       }
-      get_profile_auth_id: {
-        Args: { p_profile_id: string }
-        Returns: Json
-      }
-      get_user_cliente_id: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
-      get_user_role_safe: {
-        Args: { p_user_id: string }
-        Returns: string
-      }
-      halfvec_avg: {
-        Args: { "": number[] }
-        Returns: unknown
-      }
-      halfvec_out: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      halfvec_send: {
-        Args: { "": unknown }
-        Returns: string
-      }
-      halfvec_typmod_in: {
-        Args: { "": unknown[] }
-        Returns: number
-      }
+      get_profile_auth_id: { Args: { p_profile_id: string }; Returns: Json }
+      get_user_cliente_id: { Args: never; Returns: string }
+      get_user_role_safe: { Args: { p_user_id: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1763,46 +1692,80 @@ export type Database = {
         }
         Returns: boolean
       }
-      hnsw_bit_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      hnsw_halfvec_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      hnsw_sparsevec_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      hnswhandler: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
       http: {
         Args: { request: Database["public"]["CompositeTypes"]["http_request"] }
         Returns: Database["public"]["CompositeTypes"]["http_response"]
+        SetofOptions: {
+          from: "http_request"
+          to: "http_response"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
-      http_delete: {
-        Args:
-          | { content: string; content_type: string; uri: string }
-          | { uri: string }
-        Returns: Database["public"]["CompositeTypes"]["http_response"]
-      }
-      http_get: {
-        Args: { data: Json; uri: string } | { uri: string }
-        Returns: Database["public"]["CompositeTypes"]["http_response"]
-      }
+      http_delete:
+        | {
+            Args: { uri: string }
+            Returns: Database["public"]["CompositeTypes"]["http_response"]
+            SetofOptions: {
+              from: "*"
+              to: "http_response"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: { content: string; content_type: string; uri: string }
+            Returns: Database["public"]["CompositeTypes"]["http_response"]
+            SetofOptions: {
+              from: "*"
+              to: "http_response"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+      http_get:
+        | {
+            Args: { uri: string }
+            Returns: Database["public"]["CompositeTypes"]["http_response"]
+            SetofOptions: {
+              from: "*"
+              to: "http_response"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: { data: Json; uri: string }
+            Returns: Database["public"]["CompositeTypes"]["http_response"]
+            SetofOptions: {
+              from: "*"
+              to: "http_response"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
       http_head: {
         Args: { uri: string }
         Returns: Database["public"]["CompositeTypes"]["http_response"]
+        SetofOptions: {
+          from: "*"
+          to: "http_response"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       http_header: {
         Args: { field: string; value: string }
         Returns: Database["public"]["CompositeTypes"]["http_header"]
+        SetofOptions: {
+          from: "*"
+          to: "http_header"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       http_list_curlopt: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           curlopt: string
           value: string
@@ -1811,67 +1774,59 @@ export type Database = {
       http_patch: {
         Args: { content: string; content_type: string; uri: string }
         Returns: Database["public"]["CompositeTypes"]["http_response"]
+        SetofOptions: {
+          from: "*"
+          to: "http_response"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
-      http_post: {
-        Args:
-          | { content: string; content_type: string; uri: string }
-          | { data: Json; uri: string }
-        Returns: Database["public"]["CompositeTypes"]["http_response"]
-      }
+      http_post:
+        | {
+            Args: { content: string; content_type: string; uri: string }
+            Returns: Database["public"]["CompositeTypes"]["http_response"]
+            SetofOptions: {
+              from: "*"
+              to: "http_response"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: { data: Json; uri: string }
+            Returns: Database["public"]["CompositeTypes"]["http_response"]
+            SetofOptions: {
+              from: "*"
+              to: "http_response"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
       http_put: {
         Args: { content: string; content_type: string; uri: string }
         Returns: Database["public"]["CompositeTypes"]["http_response"]
+        SetofOptions: {
+          from: "*"
+          to: "http_response"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
-      http_reset_curlopt: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
+      http_reset_curlopt: { Args: never; Returns: boolean }
       http_set_curlopt: {
         Args: { curlopt: string; value: string }
         Returns: boolean
       }
-      is_admin_safe: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      is_admin_user: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
+      is_admin_safe: { Args: never; Returns: boolean }
+      is_admin_user: { Args: never; Returns: boolean }
       is_admin_with_user_id: {
         Args: { check_user_id: string }
         Returns: boolean
       }
-      is_current_user_admin: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      is_super_admin: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      ivfflat_bit_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      ivfflat_halfvec_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      ivfflathandler: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      l2_norm: {
-        Args: { "": unknown } | { "": unknown }
-        Returns: number
-      }
-      l2_normalize: {
-        Args: { "": string } | { "": unknown } | { "": unknown }
-        Returns: unknown
-      }
+      is_current_user_admin: { Args: never; Returns: boolean }
+      is_super_admin: { Args: never; Returns: boolean }
       listar_usuarios_orfaos: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           created_at: string
           email: string
@@ -1910,10 +1865,7 @@ export type Database = {
           similarity: number
         }[]
       }
-      prepare_production_deploy: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
+      prepare_production_deploy: { Args: never; Returns: Json }
       recuperar_usuario_orfao: {
         Args: {
           p_admin_id?: string
@@ -1928,18 +1880,6 @@ export type Database = {
         Args: { p_aprovador_user_id: string; p_user_id: string }
         Returns: Json
       }
-      sparsevec_out: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      sparsevec_send: {
-        Args: { "": unknown }
-        Returns: string
-      }
-      sparsevec_typmod_in: {
-        Args: { "": unknown[] }
-        Returns: number
-      }
       test_whatsapp_edge_function: {
         Args: {
           p_atendimento?: string
@@ -1951,26 +1891,24 @@ export type Database = {
         }
         Returns: Json
       }
-      text_to_bytea: {
-        Args: { data: string }
-        Returns: string
-      }
-      toggle_backup_cron: {
-        Args: { enable_cron: boolean }
-        Returns: boolean
-      }
-      update_client_metrics: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      urlencode: {
-        Args: { data: Json } | { string: string } | { string: string }
-        Returns: string
-      }
-      user_can_access_system: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
+      text_to_bytea: { Args: { data: string }; Returns: string }
+      toggle_backup_cron: { Args: { enable_cron: boolean }; Returns: boolean }
+      update_client_metrics: { Args: never; Returns: undefined }
+      urlencode:
+        | { Args: { data: Json }; Returns: string }
+        | {
+            Args: { string: string }
+            Returns: {
+              error: true
+            } & "Could not choose the best candidate function between: public.urlencode(string => bytea), public.urlencode(string => varchar). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
+          }
+        | {
+            Args: { string: string }
+            Returns: {
+              error: true
+            } & "Could not choose the best candidate function between: public.urlencode(string => bytea), public.urlencode(string => varchar). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
+          }
+      user_can_access_system: { Args: never; Returns: boolean }
       validar_conflito_agendamento: {
         Args: {
           p_agendamento_id_edicao?: string
@@ -1980,46 +1918,10 @@ export type Database = {
         }
         Returns: Json
       }
-      validate_production_security: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
-      validate_system_health: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
-      vector_avg: {
-        Args: { "": number[] }
-        Returns: string
-      }
-      vector_dims: {
-        Args: { "": string } | { "": unknown }
-        Returns: number
-      }
-      vector_norm: {
-        Args: { "": string }
-        Returns: number
-      }
-      vector_out: {
-        Args: { "": string }
-        Returns: unknown
-      }
-      vector_send: {
-        Args: { "": string }
-        Returns: string
-      }
-      vector_typmod_in: {
-        Args: { "": unknown[] }
-        Returns: number
-      }
-      verificar_status_email: {
-        Args: { p_email: string }
-        Returns: Json
-      }
-      verify_admin_access: {
-        Args: { p_profile_id: string }
-        Returns: Json
-      }
+      validate_production_security: { Args: never; Returns: Json }
+      validate_system_health: { Args: never; Returns: Json }
+      verificar_status_email: { Args: { p_email: string }; Returns: Json }
+      verify_admin_access: { Args: { p_profile_id: string }; Returns: Json }
     }
     Enums: {
       app_role: "admin" | "recepcionista" | "medico"
@@ -2030,7 +1932,7 @@ export type Database = {
         value: string | null
       }
       http_request: {
-        method: unknown | null
+        method: unknown
         uri: string | null
         headers: Database["public"]["CompositeTypes"]["http_header"][] | null
         content_type: string | null
