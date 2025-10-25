@@ -751,13 +751,14 @@ async function handleCancel(supabase: any, body: any, clienteId: string) {
 // Confirmar consulta
 async function handleConfirm(supabase: any, body: any, clienteId: string) {
   try {
-    const { agendamento_id, observacoes, confirmado_por } = body;
+    const { agendamento_id, observacoes } = body;
 
+    // Validação
     if (!agendamento_id) {
       return errorResponse('Campo obrigatório: agendamento_id');
     }
 
-    // Verificar se agendamento existe COM filtro de cliente
+    // Buscar agendamento
     const { data: agendamento, error: checkError } = await supabase
       .from('agendamentos')
       .select(`
@@ -766,6 +767,7 @@ async function handleConfirm(supabase: any, body: any, clienteId: string) {
         data_agendamento,
         hora_agendamento,
         observacoes,
+        medico_id,
         pacientes(nome_completo, celular),
         medicos(nome)
       `)
@@ -777,68 +779,73 @@ async function handleConfirm(supabase: any, body: any, clienteId: string) {
       return errorResponse('Agendamento não encontrado');
     }
 
-    // Validar se pode confirmar
+    // Validar status atual
     if (agendamento.status === 'cancelado') {
       return errorResponse('Não é possível confirmar consulta cancelada');
     }
 
     if (agendamento.status === 'confirmado') {
       return successResponse({
-        message: 'Consulta já estava confirmada',
+        message: 'Consulta já está confirmada',
         agendamento_id,
         paciente: agendamento.pacientes?.nome_completo,
         medico: agendamento.medicos?.nome,
         data: agendamento.data_agendamento,
         hora: agendamento.hora_agendamento,
-        ja_confirmado: true
+        already_confirmed: true
       });
     }
 
-    // Confirmar agendamento
+    if (agendamento.status === 'realizado') {
+      return errorResponse('Consulta já foi realizada');
+    }
+
+    // Validar se a data não passou
+    const dataAgendamento = new Date(agendamento.data_agendamento + 'T' + agendamento.hora_agendamento);
+    const agora = new Date();
+    
+    if (dataAgendamento < agora) {
+      return errorResponse('Não é possível confirmar consulta que já passou');
+    }
+
+    // Preparar observações
     const observacoes_confirmacao = observacoes 
-      ? `${agendamento.observacoes || ''}\n${observacoes}`.trim()
-      : agendamento.observacoes;
+      ? `${agendamento.observacoes || ''}\nConfirmado via LLM Agent: ${observacoes}`.trim()
+      : `${agendamento.observacoes || ''}\nConfirmado via LLM Agent WhatsApp`.trim();
 
-    const updateData: any = {
-      status: 'confirmado',
-      confirmado_em: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-
-    if (observacoes_confirmacao) {
-      updateData.observacoes = observacoes_confirmacao;
-    }
-
-    if (confirmado_por) {
-      updateData.confirmado_por = confirmado_por;
-    }
-
+    // Atualizar para confirmado
     const { error: updateError } = await supabase
       .from('agendamentos')
-      .update(updateData)
+      .update({
+        status: 'confirmado',
+        observacoes: observacoes_confirmacao,
+        confirmado_em: new Date().toISOString(),
+        confirmado_por: 'whatsapp_automatico',
+        updated_at: new Date().toISOString()
+      })
       .eq('id', agendamento_id);
 
     if (updateError) {
-      console.error('❌ Erro ao confirmar agendamento:', updateError);
       return errorResponse(`Erro ao confirmar: ${updateError.message}`);
     }
 
-    console.log(`✅ Agendamento confirmado: ${agendamento_id} - ${agendamento.pacientes?.nome_completo}`);
+    console.log(`✅ Agendamento ${agendamento_id} confirmado com sucesso`);
 
     return successResponse({
-      message: `Consulta confirmada com sucesso! ✅`,
+      message: 'Consulta confirmada com sucesso',
       agendamento_id,
       paciente: agendamento.pacientes?.nome_completo,
       celular: agendamento.pacientes?.celular,
       medico: agendamento.medicos?.nome,
       data: agendamento.data_agendamento,
       hora: agendamento.hora_agendamento,
-      confirmado_em: updateData.confirmado_em
+      status: 'confirmado',
+      confirmado_em: new Date().toISOString()
     });
 
-  } catch (error: any) {
-    console.error('❌ Erro ao confirmar consulta:', error);
-    return errorResponse(`Erro ao confirmar consulta: ${error?.message || 'Erro desconhecido'}`);
+  } catch (error) {
+    console.error('❌ Erro ao confirmar agendamento:', error);
+    return errorResponse(`Erro ao confirmar: ${error?.message || 'Erro desconhecido'}`);
   }
 }
 
