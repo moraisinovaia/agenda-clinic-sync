@@ -361,6 +361,69 @@ export type Database = {
           },
         ]
       }
+      confirmacoes_automaticas: {
+        Row: {
+          acao_tomada: string | null
+          agendamento_id: string
+          cliente_id: string
+          created_at: string | null
+          data_envio: string | null
+          id: string
+          mensagem_enviada: string | null
+          processado_em: string | null
+          resposta_paciente: string | null
+          resposta_recebida_em: string | null
+          tentativas: number | null
+          tipo_notificacao: string
+          updated_at: string | null
+        }
+        Insert: {
+          acao_tomada?: string | null
+          agendamento_id: string
+          cliente_id: string
+          created_at?: string | null
+          data_envio?: string | null
+          id?: string
+          mensagem_enviada?: string | null
+          processado_em?: string | null
+          resposta_paciente?: string | null
+          resposta_recebida_em?: string | null
+          tentativas?: number | null
+          tipo_notificacao: string
+          updated_at?: string | null
+        }
+        Update: {
+          acao_tomada?: string | null
+          agendamento_id?: string
+          cliente_id?: string
+          created_at?: string | null
+          data_envio?: string | null
+          id?: string
+          mensagem_enviada?: string | null
+          processado_em?: string | null
+          resposta_paciente?: string | null
+          resposta_recebida_em?: string | null
+          tentativas?: number | null
+          tipo_notificacao?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "confirmacoes_automaticas_agendamento_id_fkey"
+            columns: ["agendamento_id"]
+            isOneToOne: false
+            referencedRelation: "agendamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "confirmacoes_automaticas_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       endogastro_agendamentos: {
         Row: {
           agendamento_id_original: string
