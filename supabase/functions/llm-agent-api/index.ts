@@ -214,6 +214,8 @@ serve(async (req) => {
           return await handleReschedule(supabase, body, CLIENTE_ID);
         case 'cancel':
           return await handleCancel(supabase, body, CLIENTE_ID);
+        case 'confirm':
+          return await handleConfirm(supabase, body, CLIENTE_ID);
         case 'availability':
           return await handleAvailability(supabase, body, CLIENTE_ID);
         case 'patient-search':
@@ -743,6 +745,100 @@ async function handleCancel(supabase: any, body: any, clienteId: string) {
 
   } catch (error: any) {
     return errorResponse(`Erro ao cancelar consulta: ${error?.message || 'Erro desconhecido'}`);
+  }
+}
+
+// Confirmar consulta
+async function handleConfirm(supabase: any, body: any, clienteId: string) {
+  try {
+    const { agendamento_id, observacoes, confirmado_por } = body;
+
+    if (!agendamento_id) {
+      return errorResponse('Campo obrigatório: agendamento_id');
+    }
+
+    // Verificar se agendamento existe COM filtro de cliente
+    const { data: agendamento, error: checkError } = await supabase
+      .from('agendamentos')
+      .select(`
+        id,
+        status,
+        data_agendamento,
+        hora_agendamento,
+        observacoes,
+        pacientes(nome_completo, celular),
+        medicos(nome)
+      `)
+      .eq('id', agendamento_id)
+      .eq('cliente_id', clienteId)
+      .single();
+
+    if (checkError || !agendamento) {
+      return errorResponse('Agendamento não encontrado');
+    }
+
+    // Validar se pode confirmar
+    if (agendamento.status === 'cancelado') {
+      return errorResponse('Não é possível confirmar consulta cancelada');
+    }
+
+    if (agendamento.status === 'confirmado') {
+      return successResponse({
+        message: 'Consulta já estava confirmada',
+        agendamento_id,
+        paciente: agendamento.pacientes?.nome_completo,
+        medico: agendamento.medicos?.nome,
+        data: agendamento.data_agendamento,
+        hora: agendamento.hora_agendamento,
+        ja_confirmado: true
+      });
+    }
+
+    // Confirmar agendamento
+    const observacoes_confirmacao = observacoes 
+      ? `${agendamento.observacoes || ''}\n${observacoes}`.trim()
+      : agendamento.observacoes;
+
+    const updateData: any = {
+      status: 'confirmado',
+      confirmado_em: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    if (observacoes_confirmacao) {
+      updateData.observacoes = observacoes_confirmacao;
+    }
+
+    if (confirmado_por) {
+      updateData.confirmado_por = confirmado_por;
+    }
+
+    const { error: updateError } = await supabase
+      .from('agendamentos')
+      .update(updateData)
+      .eq('id', agendamento_id);
+
+    if (updateError) {
+      console.error('❌ Erro ao confirmar agendamento:', updateError);
+      return errorResponse(`Erro ao confirmar: ${updateError.message}`);
+    }
+
+    console.log(`✅ Agendamento confirmado: ${agendamento_id} - ${agendamento.pacientes?.nome_completo}`);
+
+    return successResponse({
+      message: `Consulta confirmada com sucesso! ✅`,
+      agendamento_id,
+      paciente: agendamento.pacientes?.nome_completo,
+      celular: agendamento.pacientes?.celular,
+      medico: agendamento.medicos?.nome,
+      data: agendamento.data_agendamento,
+      hora: agendamento.hora_agendamento,
+      confirmado_em: updateData.confirmado_em
+    });
+
+  } catch (error: any) {
+    console.error('❌ Erro ao confirmar consulta:', error);
+    return errorResponse(`Erro ao confirmar consulta: ${error?.message || 'Erro desconhecido'}`);
   }
 }
 
