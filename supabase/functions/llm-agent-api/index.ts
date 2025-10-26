@@ -36,6 +36,35 @@ function getDataAtualBrasil(): string {
   return getDataHoraAtualBrasil().data;
 }
 
+/**
+ * Classifica um horário de agendamento no período correto (manhã/tarde)
+ * considerando margem de tolerância para ordem de chegada
+ */
+function classificarPeriodoAgendamento(
+  horaAgendamento: string,
+  periodosConfig: any
+): string | null {
+  const [h, m] = horaAgendamento.split(':').map(Number);
+  const minutos = h * 60 + m;
+
+  for (const [periodo, config] of Object.entries(periodosConfig)) {
+    const [hInicio, mInicio] = (config as any).inicio.split(':').map(Number);
+    const [hFim, mFim] = (config as any).fim.split(':').map(Number);
+    const inicioMinutos = hInicio * 60 + mInicio;
+    const fimMinutos = hFim * 60 + mFim;
+
+    // Para ORDEM DE CHEGADA: considerar margem de 2h antes do início oficial
+    // Exemplo: período 07:30-10:00 aceita agendamentos desde 05:30
+    const margemMinutos = 120; // 2 horas
+    
+    if (minutos >= (inicioMinutos - margemMinutos) && minutos <= fimMinutos) {
+      return periodo;
+    }
+  }
+
+  return null;
+}
+
 // Regras de negócio para agendamento via LLM Agent (N8N/WhatsApp)
 // Sistema web NÃO usa essas regras - funciona sem restrições
 const BUSINESS_RULES = {
@@ -1248,18 +1277,33 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
             console.log(`✅ Período ${periodo} ainda está válido hoje (fim ${(config as any).fim} > ${horaAtual}:${minutoAtual.toString().padStart(2, '0')})`);
           }
 
-          const { count, error: countError } = await supabase
+          // ✅ Para ORDEM DE CHEGADA: buscar TODOS os agendamentos do dia
+          const { data: todosAgendamentos, error: countError } = await supabase
             .from('agendamentos')
-            .select('*', { count: 'exact', head: true })
+            .select('hora_agendamento')
             .eq('medico_id', medico.id)
             .eq('data_agendamento', dataFormatada)
-            .gte('hora_agendamento', (config as any).inicio)
-            .lte('hora_agendamento', (config as any).fim)
             .in('status', ['agendado', 'confirmado']);
 
-          if (countError) continue;
+          if (countError) {
+            console.error('❌ Erro ao buscar agendamentos:', countError);
+            continue;
+          }
 
-          const vagasOcupadas = count || 0;
+          // Classificar cada agendamento no período correto
+          let vagasOcupadas = 0;
+          if (todosAgendamentos && todosAgendamentos.length > 0) {
+            vagasOcupadas = todosAgendamentos.filter(ag => {
+              const periodoClassificado = classificarPeriodoAgendamento(
+                ag.hora_agendamento, 
+                { [periodo]: config }
+              );
+              return periodoClassificado === periodo;
+            }).length;
+            
+            console.log(`📊 Período ${periodo}: ${vagasOcupadas} agendamentos de ${todosAgendamentos.length} totais`);
+          }
+
           const vagasDisponiveis = (config as any).limite - vagasOcupadas;
 
           if (vagasDisponiveis > 0) {
@@ -1386,22 +1430,34 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         }
       }
 
-      // Contar quantos agendamentos já existem neste período
-      const { count, error: countError } = await supabase
+      // ✅ Para ORDEM DE CHEGADA: buscar TODOS os agendamentos do dia
+      const { data: todosAgendamentosData, error: countError } = await supabase
         .from('agendamentos')
-        .select('*', { count: 'exact', head: true })
+        .select('hora_agendamento')
         .eq('medico_id', medico.id)
         .eq('data_agendamento', data_consulta)
-        .gte('hora_agendamento', (config as any).inicio)
-        .lte('hora_agendamento', (config as any).fim)
         .in('status', ['agendado', 'confirmado']);
 
       if (countError) {
-        console.error('❌ Erro ao contar agendamentos:', countError);
+        console.error('❌ Erro ao buscar agendamentos:', countError);
         continue;
       }
 
-      const vagasOcupadas = count || 0;
+      // Classificar cada agendamento no período correto
+      let vagasOcupadas = 0;
+      if (todosAgendamentosData && todosAgendamentosData.length > 0) {
+        vagasOcupadas = todosAgendamentosData.filter(ag => {
+          const periodoClassificado = classificarPeriodoAgendamento(
+            ag.hora_agendamento,
+            { [periodo]: config }
+          );
+          return periodoClassificado === periodo;
+        }).length;
+        
+        console.log(`📊 ${data_consulta} - Período ${periodo}: ${vagasOcupadas}/${(config as any).limite} vagas ocupadas`);
+        console.log(`   Horários encontrados:`, todosAgendamentosData.map(a => a.hora_agendamento).join(', '));
+      }
+
       const vagasDisponiveis = (config as any).limite - vagasOcupadas;
 
       periodosDisponiveis.push({
