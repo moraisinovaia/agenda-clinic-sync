@@ -21,91 +21,106 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
 
   // ✅ FUNÇÃO DE QUERY DIRETA COM JOINS OTIMIZADOS
   const fetchAppointments = useCallback(async () => {
-    console.log('🔍 [FETCH] Iniciando busca com query direta...');
+    console.log('🔍 [FETCH] Iniciando busca paginada manual...');
     
     return measureApiCall(async () => {
       try {
-        // Filtrar últimos 6 meses
         const sixMonthsAgo = new Date();
         sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
         const dateFilter = sixMonthsAgo.toISOString().split('T')[0];
         
-        console.log('📅 [FILTRO] Buscando agendamentos desde:', dateFilter);
+        console.log('📅 [FILTRO] Buscando desde:', dateFilter);
         
-        // 1️⃣ QUERY DIRETA COM PAGINAÇÃO - Busca até 10k registros
-        const { data: rawData, error, count } = await supabase
-          .from('agendamentos')
-          .select(`
-            *,
-            pacientes!inner(
-              id,
-              nome_completo,
-              convenio,
-              celular,
-              telefone,
-              data_nascimento
-            ),
-            medicos!inner(
-              id,
-              nome,
-              especialidade,
-              ativo
-            ),
-            atendimentos!inner(
-              id,
-              nome,
-              tipo,
-              medico_id
-            )
-          `, { count: 'exact' })
-          .is('excluido_em', null)
-          .gte('data_agendamento', dateFilter)
-          .order('data_agendamento', { ascending: false })
-          .order('hora_agendamento', { ascending: false })
-          .limit(10000); // ✅ Limite explícito de 10k registros
-
-        console.log('📊 [QUERY] Resposta recebida:', {
-          registros_retornados: rawData?.length || 0,
-          total_disponivel: count || 0,
-          tem_erro: !!error,
-          percentual_carregado: count ? `${((rawData?.length || 0) / count * 100).toFixed(1)}%` : '0%',
-          timestamp: new Date().toISOString()
-        });
-
-        if (error) {
-          console.error('❌ [QUERY] Erro na consulta:', {
-            message: error.message,
-            details: error.details,
-            hint: error.hint,
-            code: error.code,
-            fullError: error
-          });
-          logger.error('Erro na consulta de agendamentos', error, 'APPOINTMENTS');
-          throw error;
+        // 🔥 PAGINAÇÃO MANUAL - Buscar em blocos de 1000
+        let allAppointments: any[] = [];
+        let currentPage = 0;
+        const pageSize = 1000;
+        let hasMore = true;
+        let totalCount = 0;
+        
+        while (hasMore) {
+          const start = currentPage * pageSize;
+          const end = start + pageSize - 1;
+          
+          console.log(`📦 [PÁGINA ${currentPage + 1}] Buscando registros ${start}-${end}...`);
+          
+          const { data: pageData, error, count } = await supabase
+            .from('agendamentos')
+            .select(`
+              *,
+              pacientes!inner(
+                id,
+                nome_completo,
+                convenio,
+                celular,
+                telefone,
+                data_nascimento
+              ),
+              medicos!inner(
+                id,
+                nome,
+                especialidade,
+                ativo
+              ),
+              atendimentos!inner(
+                id,
+                nome,
+                tipo,
+                medico_id
+              )
+            `, { count: 'exact' })
+            .is('excluido_em', null)
+            .gte('data_agendamento', dateFilter)
+            .order('data_agendamento', { ascending: false })
+            .order('hora_agendamento', { ascending: false })
+            .range(start, end);
+          
+          if (error) {
+            console.error(`❌ [PÁGINA ${currentPage + 1}] Erro:`, error);
+            logger.error('Erro na paginação de agendamentos', error, 'APPOINTMENTS');
+            throw error;
+          }
+          
+          if (count !== null && currentPage === 0) {
+            totalCount = count;
+            console.log(`📊 [TOTAL] ${totalCount} agendamentos disponíveis no banco`);
+          }
+          
+          if (!pageData || pageData.length === 0) {
+            console.log(`✅ [PÁGINA ${currentPage + 1}] Sem mais dados`);
+            hasMore = false;
+            break;
+          }
+          
+          allAppointments = [...allAppointments, ...pageData];
+          console.log(`✅ [PÁGINA ${currentPage + 1}] ${pageData.length} registros carregados (total acumulado: ${allAppointments.length}/${totalCount})`);
+          
+          // Se retornou menos que pageSize, é a última página
+          if (pageData.length < pageSize) {
+            console.log(`✅ [FINAL] Última página - ${pageData.length} < ${pageSize}`);
+            hasMore = false;
+          }
+          
+          currentPage++;
+          
+          // Segurança: limite de 20 páginas (20k registros)
+          if (currentPage >= 20) {
+            console.warn('⚠️ Limite de segurança: 20 páginas atingido');
+            hasMore = false;
+          }
         }
-
-        if (!rawData || rawData.length === 0) {
-          console.warn('⚠️ [QUERY] Nenhum dado retornado!');
-          return [];
-        }
-
-        // 2️⃣ TRANSFORMAR DADOS (Query direta já vem estruturada)
-        console.log('🔄 [TRANSFORM] Transformando', rawData.length, 'registros...');
-        const transformedAppointments: AppointmentWithRelations[] = rawData.map((apt: any) => ({
+        
+        console.log(`✅ [FINAL] Total carregado: ${allAppointments.length} agendamentos`);
+        
+        // Transformar dados
+        const transformedAppointments: AppointmentWithRelations[] = allAppointments.map((apt: any) => ({
           ...apt,
           pacientes: apt.pacientes || null,
           medicos: apt.medicos || null,
           atendimentos: apt.atendimentos || null,
         }));
-
-        // 3️⃣ ESTATÍSTICAS FINAIS
-        console.log('✅ [FINAL] Resumo completo:', {
-          total_disponivel: count || 0,
-          carregados: transformedAppointments.length,
-          timestamp: new Date().toISOString()
-        });
-
-        // 4️⃣ ANÁLISE POR STATUS
+        
+        // Análise por status
         const statusCount = transformedAppointments.reduce((acc, apt) => {
           acc[apt.status] = (acc[apt.status] || 0) + 1;
           return acc;
@@ -113,9 +128,10 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
 
         console.log('📊 [STATUS] Distribuição:', statusCount);
 
-        logger.info('Agendamentos carregados com sucesso', { 
+        logger.info('Agendamentos carregados com sucesso via paginação manual', { 
           count: transformedAppointments.length,
-          total: count || 0
+          total: totalCount,
+          paginas: currentPage
         }, 'APPOINTMENTS');
 
         return transformedAppointments;
