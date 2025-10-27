@@ -13,8 +13,8 @@ interface RealtimeConfig {
 export const useRealtimeUpdates = (config: RealtimeConfig) => {
   const { notifyNewAppointment, notifySystemError } = useNotifications();
   const connectionRetryRef = useRef<NodeJS.Timeout | null>(null);
-  const maxRetries = 3;
   const retryCountRef = useRef(0);
+  const channelRef = useRef<any>(null);
 
   const handleInsert = useCallback((payload: any) => {
     console.log('New insert:', payload);
@@ -41,16 +41,18 @@ export const useRealtimeUpdates = (config: RealtimeConfig) => {
   }, [config]);
 
   useEffect(() => {
-    let channel: any = null;
     let isSubscribed = false;
+    let isMounted = true;
     
     const setupRealtime = () => {
-      // Não criar novos canais se já estamos conectados
-      if (isSubscribed) return;
+      // Não criar novos canais se já estamos conectados ou se o canal já existe
+      if (isSubscribed || channelRef.current) return;
       
       try {
-        channel = supabase
-          .channel(`realtime-${config.table}`) // Nome fixo sem timestamp
+        // Usar timestamp único para evitar conflitos de múltiplos componentes
+        const channelName = `realtime-${config.table}-${Date.now()}`;
+        const channel = supabase
+          .channel(channelName)
           .on(
             'postgres_changes',
             {
@@ -79,47 +81,69 @@ export const useRealtimeUpdates = (config: RealtimeConfig) => {
             handleDelete
           )
           .subscribe((status) => {
+            if (!isMounted) return;
+            
             if (status === 'SUBSCRIBED') {
               console.log(`✅ Realtime connected for ${config.table}`);
               isSubscribed = true;
-              retryCountRef.current = 0; // Reset retry count on successful connection
+              retryCountRef.current = 0;
+              channelRef.current = channel;
             } else if (status === 'CLOSED') {
               isSubscribed = false;
+              channelRef.current = null;
               console.log(`Connection closed for ${config.table}`);
               
-              // Tentar reconectar apenas se não excedeu o limite de tentativas
-              if (retryCountRef.current < maxRetries) {
+              // Reconexão inteligente com backoff exponencial (SEM LIMITE)
+              if (isMounted) {
                 retryCountRef.current += 1;
-                console.log(`Attempting reconnection ${retryCountRef.current}/${maxRetries}`);
+                const delay = Math.min(2000 * Math.pow(1.5, retryCountRef.current), 30000); // Máximo 30s
+                console.log(`Attempting reconnection ${retryCountRef.current} in ${delay}ms`);
                 
                 connectionRetryRef.current = setTimeout(() => {
-                  if (!isSubscribed) {
+                  if (isMounted && !isSubscribed) {
                     setupRealtime();
                   }
-                }, 2000 * retryCountRef.current); // Backoff exponencial
-              } else {
-                console.log('Max retry attempts reached. Stopping reconnection attempts.');
+                }, delay);
               }
             } else if (status === 'CHANNEL_ERROR') {
               console.error(`Channel error for ${config.table}`);
               isSubscribed = false;
+              channelRef.current = null;
+              
+              // Tentar reconectar após erro
+              if (isMounted) {
+                retryCountRef.current += 1;
+                const delay = Math.min(5000 * Math.pow(1.5, retryCountRef.current), 60000);
+                connectionRetryRef.current = setTimeout(() => {
+                  if (isMounted && !isSubscribed) {
+                    setupRealtime();
+                  }
+                }, delay);
+              }
             }
           });
       } catch (error) {
         console.error('Error setting up realtime:', error);
         isSubscribed = false;
+        channelRef.current = null;
       }
     };
 
     setupRealtime();
 
     return () => {
+      isMounted = false;
       isSubscribed = false;
+      
       if (connectionRetryRef.current) {
         clearTimeout(connectionRetryRef.current);
+        connectionRetryRef.current = null;
       }
-      if (channel) {
-        supabase.removeChannel(channel);
+      
+      if (channelRef.current) {
+        console.log(`🔌 Removing channel for ${config.table}`);
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
       }
     };
   }, [config.table, handleInsert, handleUpdate, handleDelete]);
