@@ -25,6 +25,13 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     
     return measureApiCall(async () => {
       try {
+        // Filtrar últimos 6 meses
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+        const dateFilter = sixMonthsAgo.toISOString().split('T')[0];
+        
+        console.log('📅 [FILTRO] Buscando agendamentos desde:', dateFilter);
+        
         // 1️⃣ QUERY DIRETA - Mais eficiente que RPC
         const { data: rawData, error, count } = await supabase
           .from('agendamentos')
@@ -52,6 +59,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
             )
           `, { count: 'exact' })
           .is('excluido_em', null)
+          .gte('data_agendamento', dateFilter)
           .order('data_agendamento', { ascending: false })
           .order('hora_agendamento', { ascending: false })
           .range(0, 4999); // ✅ Até 5000 registros
