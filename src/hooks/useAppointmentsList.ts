@@ -32,7 +32,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         
         console.log('📅 [FILTRO] Buscando agendamentos desde:', dateFilter);
         
-        // 1️⃣ QUERY DIRETA - Mais eficiente que RPC
+        // 1️⃣ QUERY DIRETA - SEM LIMITE para buscar TODOS os registros
         const { data: rawData, error, count } = await supabase
           .from('agendamentos')
           .select(`
@@ -61,8 +61,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           .is('excluido_em', null)
           .gte('data_agendamento', dateFilter)
           .order('data_agendamento', { ascending: false })
-          .order('hora_agendamento', { ascending: false })
-          .range(0, 4999); // ✅ Até 5000 registros
+          .order('hora_agendamento', { ascending: false }); // 🔥 SEM .range() = busca TUDO
 
         console.log('📊 [QUERY] Resposta recebida:', {
           registros_retornados: rawData?.length || 0,
