@@ -6,7 +6,7 @@ import './index.css';
 import { AuthProvider } from '@/hooks/useAuth';
 import { GlobalErrorBoundary } from '@/components/error/GlobalErrorBoundary';
 
-// 🔄 CACHE CLEARED: 2025-10-27-15:11 - Zero cache para forçar reload
+// 🔄 CACHE CLEARED: 2025-10-27-15:18 - useOptimizedQuery cache também desabilitado
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
