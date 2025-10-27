@@ -1446,6 +1446,7 @@ export type Database = {
           cancelado_em: string
           cancelado_por: string
           cancelado_por_user_id: string
+          cliente_id: string
           confirmado_em: string
           confirmado_por: string
           confirmado_por_user_id: string
