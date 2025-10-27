@@ -9,8 +9,10 @@ import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 import { useDebounce } from '@/hooks/useDebounce';
 import { logger } from '@/utils/logger';
 
-// 🔄 CACHE BUSTER: Versão 2025-10-27-15:25 - RPC corrigido para LEFT JOIN
+// 🔄 CACHE BUSTER: Versão 2025-10-27-15:35 - Debug de execução
 export function useAppointmentsList(itemsPerPage: number = 20) {
+  console.log('🏁 useAppointmentsList: Hook inicializado');
+  
   const { toast } = useToast();
   const { measureApiCall } = usePerformanceMetrics();
   const errorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -229,12 +231,20 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     fetchAppointments,
     [],
     { 
-      cacheKey: 'appointments-list-v2025-10-27-15:25', // ✅ Nova chave - RPC com LEFT JOIN
+      cacheKey: 'appointments-list-v2025-10-27-15:35', // ✅ Nova chave - Debug
       cacheTime: 0, // ✅ Cache desabilitado
       staleTime: 0, // ✅ Sempre considerar stale
       refetchOnMount: true // ✅ Sempre refetch ao montar
     }
   );
+
+  // Log imediato após useOptimizedQuery
+  console.log('🔍 useAppointmentsList: Estado do useOptimizedQuery', {
+    appointmentsCount: appointments?.length || 0,
+    loading,
+    hasError: !!error,
+    errorMessage: error?.message
+  });
 
   // Log quando appointments mudar
   useEffect(() => {
