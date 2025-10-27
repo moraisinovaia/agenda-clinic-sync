@@ -75,6 +75,24 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
                 nome,
                 tipo,
                 medico_id
+              ),
+              criado_por_profile:profiles!agendamentos_criado_por_user_id_fkey(
+                id,
+                user_id,
+                nome,
+                email,
+                ativo,
+                created_at,
+                updated_at
+              ),
+              alterado_por_profile:profiles!agendamentos_alterado_por_user_id_fkey(
+                id,
+                user_id,
+                nome,
+                email,
+                ativo,
+                created_at,
+                updated_at
               )
             `, { count: 'exact' })
             .is('excluido_em', null)
@@ -146,6 +164,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           pacientes: apt.pacientes || null,
           medicos: apt.medicos || null,
           atendimentos: apt.atendimentos || null,
+          criado_por_profile: apt.criado_por_profile || null,
+          alterado_por_profile: apt.alterado_por_profile || null,
         }));
         
         // Análise por status
