@@ -22,17 +22,32 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     
     return measureApiCall(async () => {
         // Usar função RPC otimizada que já filtra cancelados e inclui relacionamentos
+        // IMPORTANTE: Configurar para retornar TODOS os registros sem limite de paginação
         const { data: appointmentsWithRelations, error } = await supabase
           .rpc('buscar_agendamentos_otimizado', {
             p_data_inicio: null,
             p_data_fim: null,
             p_medico_id: null,
             p_status: null
+          }, {
+            count: 'exact',
+            head: false
           });
 
         if (error) {
           logger.error('Erro na consulta de agendamentos otimizada', error, 'APPOINTMENTS');
           throw error;
+        }
+
+        // Log para debug: quantos agendamentos foram retornados
+        console.log('📊 Total de agendamentos retornados pela RPC:', appointmentsWithRelations?.length || 0);
+        
+        // Log das primeiras e últimas datas
+        if (appointmentsWithRelations && appointmentsWithRelations.length > 0) {
+          const datas = appointmentsWithRelations.map(a => a.data_agendamento).sort();
+          console.log('📅 Primeira data:', datas[0]);
+          console.log('📅 Última data:', datas[datas.length - 1]);
+          console.log('📅 Total de datas únicas:', new Set(datas).size);
         }
 
         // Transformar para o formato esperado
