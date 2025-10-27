@@ -151,6 +151,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         
         if (userIds.size > 0) {
           console.log(`🔍 [PROFILES] Buscando ${userIds.size} perfis de usuários...`);
+          console.log(`🔍 [PROFILES] User IDs:`, Array.from(userIds));
+          
           const { data: profiles, error: profilesError } = await supabase
             .from('profiles')
             .select('user_id, nome, email, ativo, created_at, updated_at')
@@ -159,23 +161,39 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           if (profilesError) {
             console.error('❌ [PROFILES] Erro ao buscar perfis:', profilesError);
           } else if (profiles) {
+            console.log(`✅ [PROFILES] ${profiles.length} perfis encontrados:`, profiles);
             profilesMap = profiles.reduce((acc, profile) => {
               acc[profile.user_id] = profile;
               return acc;
             }, {} as Record<string, any>);
-            console.log(`✅ [PROFILES] ${profiles.length} perfis carregados`);
+            console.log(`✅ [PROFILES] Mapa de perfis criado:`, profilesMap);
           }
         }
         
         // Transformar dados
-        const transformedAppointments: AppointmentWithRelations[] = allAppointments.map((apt: any) => ({
-          ...apt,
-          pacientes: apt.pacientes || null,
-          medicos: apt.medicos || null,
-          atendimentos: apt.atendimentos || null,
-          criado_por_profile: apt.criado_por_user_id ? profilesMap[apt.criado_por_user_id] || null : null,
-          alterado_por_profile: apt.alterado_por_user_id ? profilesMap[apt.alterado_por_user_id] || null : null,
-        }));
+        const transformedAppointments: AppointmentWithRelations[] = allAppointments.map((apt: any) => {
+          const criadoPorProfile = apt.criado_por_user_id ? profilesMap[apt.criado_por_user_id] || null : null;
+          const alteradoPorProfile = apt.alterado_por_user_id ? profilesMap[apt.alterado_por_user_id] || null : null;
+          
+          // Debug: Log dos primeiros 3 agendamentos
+          if (allAppointments.indexOf(apt) < 3) {
+            console.log(`🔍 [TRANSFORM] Agendamento ${apt.id.substring(0, 8)}:`, {
+              criado_por_user_id: apt.criado_por_user_id,
+              criado_por_profile: criadoPorProfile,
+              alterado_por_user_id: apt.alterado_por_user_id,
+              alterado_por_profile: alteradoPorProfile
+            });
+          }
+          
+          return {
+            ...apt,
+            pacientes: apt.pacientes || null,
+            medicos: apt.medicos || null,
+            atendimentos: apt.atendimentos || null,
+            criado_por_profile: criadoPorProfile,
+            alterado_por_profile: alteradoPorProfile,
+          };
+        });
         
         // Análise por status
         const statusCount = transformedAppointments.reduce((acc, apt) => {
