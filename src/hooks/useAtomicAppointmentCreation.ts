@@ -131,7 +131,7 @@ export function useAtomicAppointmentCreation() {
         p_criado_por_user_id: user?.id,
         p_agendamento_id_edicao: editingAppointmentId || null,
         p_force_conflict: forceConflict
-      });
+      } as any);
 
       if (error) {
         console.error('❌ Erro na chamada da função:', error);

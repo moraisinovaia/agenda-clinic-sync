@@ -17,8 +17,9 @@ const queryClient = new QueryClient({
         }
         return failureCount < 3;
       },
-      staleTime: 5 * 60 * 1000, // 5 minutos
-      gcTime: 10 * 60 * 1000, // 10 minutos
+      staleTime: 0, // ✅ CORREÇÃO: Desabilitar cache stale temporariamente
+      gcTime: 0, // ✅ CORREÇÃO: Forçar limpeza de cache
+      refetchOnMount: 'always', // ✅ CORREÇÃO: Sempre refetch ao montar
     },
   },
 });
