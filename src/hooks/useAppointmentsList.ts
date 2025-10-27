@@ -56,6 +56,24 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
               nome,
               tipo,
               medico_id
+            ),
+            criado_por_profile:profiles!agendamentos_criado_por_user_id_fkey(
+              id,
+              user_id,
+              nome,
+              email,
+              ativo,
+              created_at,
+              updated_at
+            ),
+            alterado_por_profile:profiles!agendamentos_alterado_por_user_id_fkey(
+              id,
+              user_id,
+              nome,
+              email,
+              ativo,
+              created_at,
+              updated_at
             )
           `, { count: 'exact' })
           .is('excluido_em', null)
@@ -90,6 +108,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           pacientes: apt.pacientes || null,
           medicos: apt.medicos || null,
           atendimentos: apt.atendimentos || null,
+          criado_por_profile: apt.criado_por_profile || null,
+          alterado_por_profile: apt.alterado_por_profile || null,
         }));
 
         // 3️⃣ ESTATÍSTICAS FINAIS
@@ -126,7 +146,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     fetchAppointments,
     [],
     { 
-      cacheKey: 'appointments-list-direct-v2025-10-27-20:00', // ✅ Nova versão com query direta
+      cacheKey: 'appointments-list-direct-v2025-10-27-21:00', // ✅ Nova versão com JOINs de profiles
       cacheTime: 5 * 60 * 1000, // ✅ Cache de 5 minutos
       staleTime: 2 * 60 * 1000 // ✅ Stale após 2 minutos
     }
