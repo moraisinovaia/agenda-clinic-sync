@@ -8,9 +8,12 @@ import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import ErrorBoundary from "./components/ErrorBoundary";
 
+// 🔑 Key única para forçar remontagem completa quando necessário
+const APP_MOUNT_KEY = 'v2025-10-27-16:10-force-reload';
+
 const App = () => (
   <ErrorBoundary>
-    <TooltipProvider>
+    <TooltipProvider key={APP_MOUNT_KEY}>
       <Toaster />
       <Sonner />
       <BrowserRouter>

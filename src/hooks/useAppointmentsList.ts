@@ -248,13 +248,21 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     }
   );
 
-  // Log imediato após useOptimizedQuery
+  // Log imediato após useOptimizedQuery com detalhes críticos
   console.log('🔍 useAppointmentsList: Estado do useOptimizedQuery', {
     appointmentsCount: appointments?.length || 0,
     loading,
     hasError: !!error,
-    errorMessage: error?.message
+    errorMessage: error?.message,
+    timestamp: new Date().toISOString(),
+    primeiros3IDs: appointments?.slice(0, 3).map(a => a.id) || [],
+    ultimos3IDs: appointments?.slice(-3).map(a => a.id) || []
   });
+  
+  // 🚨 ALERTA CRÍTICO: Se os dados não correspondem ao esperado
+  if (appointments && appointments.length !== 1184 && !loading) {
+    console.error(`❌ DADOS INCORRETOS: Esperado 1184, recebido ${appointments.length}. Diferença: ${1184 - appointments.length}`);
+  }
 
   // Log quando appointments mudar
   useEffect(() => {
