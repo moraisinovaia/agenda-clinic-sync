@@ -103,23 +103,21 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           allAppointments = [...allAppointments, ...pageData];
           console.log(`✅ [PÁGINA ${currentPage + 1}] ${pageData.length} registros carregados (total acumulado: ${allAppointments.length}/${totalCount})`);
           
+          currentPage++; // ✅ Incrementar PRIMEIRO
+          
           // 🔍 DEBUG: Verificar progresso
-          console.log(`🔍 [DEBUG] Página ${currentPage + 1}: ${pageData.length} registros`);
+          console.log(`🔍 [DEBUG] Página ${currentPage}: ${pageData.length} registros recebidos`);
           console.log(`🔍 [DEBUG] Total acumulado: ${allAppointments.length}/${totalCount}`);
           
-          // Parar se não há mais dados OU já carregamos tudo
+          // ✅ Parar APENAS quando não há dados OU já temos todos os registros
           if (pageData.length === 0) {
-            console.log(`✅ [FINAL] Sem mais dados na página ${currentPage + 1}`);
+            console.log(`✅ [FINAL] Sem mais dados na página ${currentPage}`);
             hasMore = false;
           } else if (allAppointments.length >= totalCount) {
             console.log(`✅ [FINAL] Todos os ${totalCount} registros carregados`);
             hasMore = false;
-          } else if (pageData.length < pageSize) {
-            console.log(`✅ [FINAL] Última página parcial - ${pageData.length} registros`);
-            hasMore = false;
           }
-          
-          currentPage++;
+          // ❌ REMOVIDO: else if (pageData.length < pageSize) - Causava parada prematura
           
           // Segurança: limite de 20 páginas (20k registros)
           if (currentPage >= 20) {

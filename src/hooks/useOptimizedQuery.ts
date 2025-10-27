@@ -26,6 +26,7 @@ export const useOptimizedQuery = <T>(
   const [error, setError] = useState<Error | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const hasInitializedRef = useRef(false);
 
   const {
     cacheKey,
@@ -135,10 +136,13 @@ export const useOptimizedQuery = <T>(
   }, [cacheKey, queryFn]);
 
   useEffect(() => {
-    if (refetchOnMount) {
+    if (refetchOnMount && !hasInitializedRef.current) {
+      hasInitializedRef.current = true;
+      console.log(`🚀 [INIT ÚNICA] Executando query: ${cacheKey}`);
       executeQuery();
     }
-  }, [executeQuery, refetchOnMount]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // ✅ Array vazio - executa apenas uma vez
 
   // Cleanup on unmount
   useEffect(() => {
