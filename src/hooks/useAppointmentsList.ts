@@ -22,14 +22,17 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
 
   // ✅ FUNÇÃO DE QUERY DIRETA COM JOINS OTIMIZADOS
   const fetchAppointments = useCallback(async () => {
+    const executionId = Math.random().toString(36).substring(7);
+    console.log(`🚀 [FETCH-${executionId}] ========== INÍCIO DA BUSCA DE AGENDAMENTOS ==========`);
+    
     // 🔒 Aguardar se já houver busca em andamento
     while (isFetchingRef.current) {
-      console.log('⏸️ [FETCH] Aguardando busca em andamento...');
+      console.log(`⏸️ [FETCH-${executionId}] Aguardando busca em andamento...`);
       await new Promise(resolve => setTimeout(resolve, 100));
     }
     
     isFetchingRef.current = true;
-    console.log('🔍 [FETCH] Iniciando busca paginada manual...');
+    console.log(`🔍 [FETCH-${executionId}] Iniciando busca paginada manual...`);
     
     return measureApiCall(async () => {
       try {
@@ -171,15 +174,23 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         }
         
         // Transformar dados
-        const transformedAppointments: AppointmentWithRelations[] = allAppointments.map((apt: any) => {
+        console.log(`🔄 [TRANSFORM] Transformando ${allAppointments.length} agendamentos...`);
+        console.log(`📋 [TRANSFORM] ProfilesMap disponível:`, {
+          totalProfiles: Object.keys(profilesMap).length,
+          profileIds: Object.keys(profilesMap)
+        });
+        
+        const transformedAppointments: AppointmentWithRelations[] = allAppointments.map((apt: any, index: number) => {
           const criadoPorProfile = apt.criado_por_user_id ? profilesMap[apt.criado_por_user_id] || null : null;
           const alteradoPorProfile = apt.alterado_por_user_id ? profilesMap[apt.alterado_por_user_id] || null : null;
           
-          // Debug: Log dos primeiros 3 agendamentos
-          if (allAppointments.indexOf(apt) < 3) {
-            console.log(`🔍 [TRANSFORM] Agendamento ${apt.id.substring(0, 8)}:`, {
+          // Debug: Log dos primeiros 5 agendamentos
+          if (index < 5) {
+            console.log(`🔍 [TRANSFORM-${index}] Agendamento ${apt.id.substring(0, 8)}:`, {
+              criado_por: apt.criado_por,
               criado_por_user_id: apt.criado_por_user_id,
               criado_por_profile: criadoPorProfile,
+              profile_nome: criadoPorProfile?.nome,
               alterado_por_user_id: apt.alterado_por_user_id,
               alterado_por_profile: alteradoPorProfile
             });
@@ -202,6 +213,21 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         }, {} as Record<string, number>);
 
         console.log('📊 [STATUS] Distribuição:', statusCount);
+        
+        // Log final de verificação
+        console.log(`✅ [FETCH-${executionId}] ========== BUSCA FINALIZADA ==========`);
+        console.log(`📦 [FETCH-${executionId}] Total retornado: ${transformedAppointments.length} agendamentos`);
+        console.log(`👥 [FETCH-${executionId}] Profiles carregados: ${Object.keys(profilesMap).length}`);
+        
+        // Verificar se os primeiros 3 têm profile
+        const primeiros3 = transformedAppointments.slice(0, 3);
+        console.log(`🔍 [VERIFICAÇÃO] Primeiros 3 agendamentos com profile:`, primeiros3.map(a => ({
+          id: a.id.substring(0, 8),
+          criado_por: a.criado_por,
+          criado_por_user_id: a.criado_por_user_id,
+          tem_profile: !!a.criado_por_profile,
+          profile_nome: a.criado_por_profile?.nome
+        })));
 
         logger.info('Agendamentos carregados com sucesso via paginação manual', { 
           count: transformedAppointments.length,
@@ -233,7 +259,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     fetchAppointments,
     [],
     { 
-      cacheKey: 'appointments-list-FORCE-NEW-' + Math.random(), // 🔑 Cache key completamente aleatória
+      cacheKey: 'appointments-list-DEBUG-PROFILES-' + Date.now(), // 🔑 Cache key com timestamp para forçar reload
       cacheTime: 0, // 🔥 CACHE DESABILITADO para debug
       staleTime: 0 // 🔥 STALE DESABILITADO para debug
     }
