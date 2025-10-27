@@ -73,7 +73,13 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         });
 
         if (error) {
-          console.error('❌ [QUERY] Erro na consulta:', error);
+          console.error('❌ [QUERY] Erro na consulta:', {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code,
+            fullError: error
+          });
           logger.error('Erro na consulta de agendamentos', error, 'APPOINTMENTS');
           throw error;
         }
@@ -121,14 +127,14 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     }, 'fetch_appointments', 'GET');
   }, [measureApiCall]);
 
-  // ✅ CACHE ESTRATÉGICO DE 5 MINUTOS
+  // ✅ CACHE DESABILITADO TEMPORARIAMENTE PARA DEBUG
   const { data: appointments, loading, error, refetch, invalidateCache, forceRefetch } = useOptimizedQuery<AppointmentWithRelations[]>(
     fetchAppointments,
     [],
     { 
-      cacheKey: 'appointments-list-direct-v2025-10-27-23:00', // ✅ Corrigido: removido JOINs problemáticos com profiles
-      cacheTime: 5 * 60 * 1000, // ✅ Cache de 5 minutos
-      staleTime: 2 * 60 * 1000 // ✅ Stale após 2 minutos
+      cacheKey: `appointments-list-direct-v2025-10-27-${Date.now()}`, // 🔥 Forçar cache invalidation
+      cacheTime: 0, // 🔥 Cache desabilitado para debug
+      staleTime: 0 // 🔥 Sem stale
     }
   );
 
@@ -137,6 +143,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     appointmentsCount: appointments?.length || 0,
     loading,
     hasError: !!error,
+    errorMessage: error?.message,
+    errorDetails: error,
     timestamp: new Date().toISOString()
   });
 
