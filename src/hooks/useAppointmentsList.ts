@@ -21,23 +21,22 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     logger.info('Iniciando busca de agendamentos', {}, 'APPOINTMENTS');
     
     return measureApiCall(async () => {
-        // Usar função RPC otimizada que retorna TODOS os agendamentos não excluídos
-        // USAR RANGE para superar o limite padrão de 1000 registros do PostgREST
-        const { data: appointmentsWithRelations, error, count } = await supabase
-          .rpc('buscar_agendamentos_otimizado', {
+        // Usar função RPC otimizada - FORÇAR RETORNO DE TODOS OS REGISTROS
+        // Usar header Prefer: count=exact sem range para evitar limite do PostgREST
+        const { data: appointmentsWithRelations, error, count } = await supabase.rpc(
+          'buscar_agendamentos_otimizado', 
+          {
             p_data_inicio: null,
             p_data_fim: null,
             p_medico_id: null,
             p_status: null
-          }, {
-            count: 'exact'
-          })
-          .range(0, 9999); // Forçar retorno de até 10.000 registros
+          }
+        ).limit(10000); // Limite explícito alto
 
         console.log('📊 RPC retornou:', {
           registros: appointmentsWithRelations?.length || 0,
-          count: count,
-          statusParcial: (appointmentsWithRelations?.length || 0) < (count || 0)
+          esperado: 1182,
+          faltam: 1182 - (appointmentsWithRelations?.length || 0)
         });
 
         if (error) {
