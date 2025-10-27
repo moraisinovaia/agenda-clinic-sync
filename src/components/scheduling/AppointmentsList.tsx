@@ -159,7 +159,14 @@ export function AppointmentsList({ appointments, doctors, onEditAppointment, onC
                     {paginatedAppointments.map((appointment) => (
                     <TableRow key={appointment.id} className="hover:bg-muted/30">
                       <TableCell>
-                        <Badge variant={getStatusColor(appointment.status)} className="text-xs">
+                        <Badge 
+                          variant={appointment.status === 'confirmado' ? 'outline' : getStatusColor(appointment.status)} 
+                          className={`text-xs ${
+                            appointment.status === 'confirmado' 
+                              ? 'bg-green-500 text-white border-green-600 hover:bg-green-600' 
+                              : ''
+                          }`}
+                        >
                           {getStatusLabel(appointment.status)}
                         </Badge>
                       </TableCell>
