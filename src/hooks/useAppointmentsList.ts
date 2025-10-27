@@ -163,14 +163,14 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     }, 'fetch_appointments', 'GET');
   }, [measureApiCall]);
 
-  // ✅ CACHE COM CONFIGURAÇÃO OTIMIZADA
+  // ✅ CACHE DESABILITADO TEMPORARIAMENTE PARA DEBUG
   const { data: appointments, loading, error, refetch, invalidateCache, forceRefetch } = useOptimizedQuery<AppointmentWithRelations[]>(
     fetchAppointments,
     [],
     { 
-      cacheKey: 'appointments-list-direct-v2025-10-27-stable', // 🔑 Cache key estática
-      cacheTime: 5 * 60 * 1000, // ✅ 5 minutos de cache
-      staleTime: 30 * 1000 // ✅ 30 segundos stale (refetch em background)
+      cacheKey: 'appointments-list-direct-v2025-10-27-force-reload', // 🔑 Nova cache key para forçar reload
+      cacheTime: 0, // 🔥 CACHE DESABILITADO para debug
+      staleTime: 0 // 🔥 STALE DESABILITADO para debug
     }
   );
 
