@@ -44,29 +44,11 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
               especialidade,
               ativo
             ),
-            atendimentos!inner(
+          atendimentos!inner(
               id,
               nome,
               tipo,
               medico_id
-            ),
-            criado_por_profile:profiles!criado_por_user_id(
-              id,
-              user_id,
-              nome,
-              email,
-              ativo,
-              created_at,
-              updated_at
-            ),
-            alterado_por_profile:profiles!alterado_por_user_id(
-              id,
-              user_id,
-              nome,
-              email,
-              ativo,
-              created_at,
-              updated_at
             )
           `, { count: 'exact' })
           .is('excluido_em', null)
@@ -97,8 +79,6 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         console.log('🔄 [TRANSFORM] Transformando', rawData.length, 'registros...');
         const transformedAppointments: AppointmentWithRelations[] = rawData.map((apt: any) => ({
           ...apt,
-          criado_por_profile: apt.criado_por_profile || null,
-          alterado_por_profile: apt.alterado_por_profile || null,
           pacientes: apt.pacientes || null,
           medicos: apt.medicos || null,
           atendimentos: apt.atendimentos || null,
