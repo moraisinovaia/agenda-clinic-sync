@@ -39,11 +39,22 @@ export const useOptimizedQuery = <T>(
       setLoading(true);
       setError(null);
 
-      // Check cache first
-      const cached = queryCache.get(cacheKey);
       const now = Date.now();
 
+      // ✅ NUNCA usar cache quando cacheTime === 0
+      if (cacheTime === 0) {
+        console.log(`🚫 Cache desabilitado (cacheTime=0): ${cacheKey} - Executando query direta`);
+        const result = await queryFn();
+        setData(result);
+        setLoading(false);
+        return;
+      }
+
+      // Check cache first (apenas se cacheTime > 0)
+      const cached = queryCache.get(cacheKey);
+
       if (cached && (now - cached.timestamp) < cacheTime) {
+        console.log(`✅ Usando cache: ${cacheKey}`);
         setData(cached.data);
         setLoading(false);
         
@@ -62,14 +73,17 @@ export const useOptimizedQuery = <T>(
       }
 
       // Execute fresh query
+      console.log(`🔄 Cache miss ou expirado: ${cacheKey} - Executando query`);
       const result = await queryFn();
       
-      // Cache the result
-      queryCache.set(cacheKey, {
-        data: result,
-        timestamp: now,
-        isStale: false
-      });
+      // Cache the result (apenas se cacheTime > 0)
+      if (cacheTime > 0) {
+        queryCache.set(cacheKey, {
+          data: result,
+          timestamp: now,
+          isStale: false
+        });
+      }
 
       setData(result);
     } catch (err) {
@@ -78,7 +92,7 @@ export const useOptimizedQuery = <T>(
     } finally {
       setLoading(false);
     }
-  }, [queryFn, cacheKey, cacheTime, staleTime]); // Dependências corretas
+  }, [queryFn, cacheKey, cacheTime, staleTime]);
 
   const refetch = useCallback(() => {
     // Clear cache for this key and refetch
@@ -147,7 +161,9 @@ export const useOptimizedQuery = <T>(
 
 // Utility to clear all cache
 export const clearAllCache = () => {
+  const size = queryCache.size;
   queryCache.clear();
+  console.log(`🧹 Todos os ${size} caches foram limpos`);
 };
 
 // Utility to clear cache by pattern
@@ -159,4 +175,5 @@ export const clearCacheByPattern = (pattern: string) => {
     }
   });
   keysToDelete.forEach(key => queryCache.delete(key));
+  console.log(`🧹 ${keysToDelete.length} caches com padrão "${pattern}" foram limpos`);
 };

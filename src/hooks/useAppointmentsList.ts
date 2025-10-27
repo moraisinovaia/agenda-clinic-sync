@@ -2,16 +2,22 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { AppointmentWithRelations } from '@/types/scheduling';
 import { useToast } from '@/hooks/use-toast';
-import { useOptimizedQuery } from '@/hooks/useOptimizedQuery';
+import { useOptimizedQuery, clearAllCache } from '@/hooks/useOptimizedQuery';
 import { usePagination } from '@/hooks/usePagination';
 import { usePerformanceMetrics } from '@/hooks/usePerformanceMetrics';
 import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 import { useDebounce } from '@/hooks/useDebounce';
 import { logger } from '@/utils/logger';
 
-// 🔄 CACHE BUSTER: Versão 2025-10-27-15:35 - Debug de execução
+// 🔄 CACHE BUSTER: Versão FINAL 2025-10-27-16:00 - Solução definitiva de cache
 export function useAppointmentsList(itemsPerPage: number = 20) {
   console.log('🏁 useAppointmentsList: Hook inicializado');
+  
+  // ✅ LIMPAR TODO O CACHE antes de buscar dados
+  useEffect(() => {
+    console.log('🧹 Limpando TODOS os caches antes de buscar agendamentos');
+    clearAllCache();
+  }, []);
   
   const { toast } = useToast();
   const { measureApiCall } = usePerformanceMetrics();
@@ -39,8 +45,12 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           esperado: 1184,
           faltam: 1184 - (rawData?.length || 0),
           tem_erro: !!error,
-          percentual: `${((rawData?.length || 0) / 1184 * 100).toFixed(1)}%`
+          percentual: `${((rawData?.length || 0) / 1184 * 100).toFixed(1)}%`,
+          timestamp: new Date().toISOString()
         });
+        
+        // ✅ Log crítico: mostrar que recebemos dados FRESCOS
+        console.log(`✅ DADOS FRESCOS CARREGADOS: ${rawData?.length || 0} registros recebidos AGORA`);
 
         if (error) {
           console.error('❌ [RPC] Erro na consulta:', error);
@@ -231,7 +241,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     fetchAppointments,
     [],
     { 
-      cacheKey: 'appointments-list-v2025-10-27-15:35', // ✅ Nova chave - Debug
+      cacheKey: 'appointments-list-FINAL-v2025-10-27-16:00', // ✅ Cache NUNCA será usado (cacheTime=0)
       cacheTime: 0, // ✅ Cache desabilitado
       staleTime: 0, // ✅ Sempre considerar stale
       refetchOnMount: true // ✅ Sempre refetch ao montar

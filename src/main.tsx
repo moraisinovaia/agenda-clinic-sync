@@ -5,8 +5,12 @@ import App from './App.tsx';
 import './index.css';
 import { AuthProvider } from '@/hooks/useAuth';
 import { GlobalErrorBoundary } from '@/components/error/GlobalErrorBoundary';
+import { clearAllCache } from '@/hooks/useOptimizedQuery';
 
-// 🔄 CACHE CLEARED: 2025-10-27-15:18 - useOptimizedQuery cache também desabilitado
+// 🧹 LIMPEZA TOTAL DE CACHE na inicialização da aplicação
+console.log('🚀 Aplicação iniciando - Limpando TODOS os caches');
+clearAllCache();
+console.log('✅ Todos os caches foram limpos');
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
