@@ -32,7 +32,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         
         console.log('📅 [FILTRO] Buscando agendamentos desde:', dateFilter);
         
-        // 1️⃣ QUERY DIRETA - SEM LIMITE para buscar TODOS os registros
+        // 1️⃣ QUERY DIRETA COM PAGINAÇÃO - Busca até 10k registros
         const { data: rawData, error, count } = await supabase
           .from('agendamentos')
           .select(`
@@ -51,7 +51,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
               especialidade,
               ativo
             ),
-          atendimentos!inner(
+            atendimentos!inner(
               id,
               nome,
               tipo,
@@ -61,7 +61,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           .is('excluido_em', null)
           .gte('data_agendamento', dateFilter)
           .order('data_agendamento', { ascending: false })
-          .order('hora_agendamento', { ascending: false }); // 🔥 SEM .range() = busca TUDO
+          .order('hora_agendamento', { ascending: false })
+          .limit(10000); // ✅ Limite explícito de 10k registros
 
         console.log('📊 [QUERY] Resposta recebida:', {
           registros_retornados: rawData?.length || 0,
