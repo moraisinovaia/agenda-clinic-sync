@@ -42,7 +42,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         // 🔥 PAGINAÇÃO MANUAL - Buscar em blocos de 1000
         let allAppointments: any[] = [];
         let currentPage = 0;
-        const pageSize = 2000; // ✅ Aumentado para suportar até 2000 registros
+        const pageSize = 1000; // ✅ Limite real do Supabase PostgREST
         let hasMore = true;
         let totalCount = 0;
         
@@ -103,14 +103,19 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           allAppointments = [...allAppointments, ...pageData];
           console.log(`✅ [PÁGINA ${currentPage + 1}] ${pageData.length} registros carregados (total acumulado: ${allAppointments.length}/${totalCount})`);
           
-          // 🔍 DEBUG: Verificar condição de parada
-          console.log(`🔍 [DEBUG] pageData.length=${pageData.length}, pageSize=${pageSize}, hasMore=${hasMore}`);
-          console.log(`🔍 [DEBUG] Condição parada: ${pageData.length} < ${pageSize} = ${pageData.length < pageSize}`);
-          console.log(`🔍 [DEBUG] Total acumulado vs esperado: ${allAppointments.length}/${totalCount}`);
+          // 🔍 DEBUG: Verificar progresso
+          console.log(`🔍 [DEBUG] Página ${currentPage + 1}: ${pageData.length} registros`);
+          console.log(`🔍 [DEBUG] Total acumulado: ${allAppointments.length}/${totalCount}`);
           
-          // Se retornou menos que pageSize ou vazio, é a última página
-          if (pageData.length === 0 || pageData.length < pageSize) {
-            console.log(`✅ [FINAL] Última página - ${pageData.length} registros (< ${pageSize})`);
+          // Parar se não há mais dados OU já carregamos tudo
+          if (pageData.length === 0) {
+            console.log(`✅ [FINAL] Sem mais dados na página ${currentPage + 1}`);
+            hasMore = false;
+          } else if (allAppointments.length >= totalCount) {
+            console.log(`✅ [FINAL] Todos os ${totalCount} registros carregados`);
+            hasMore = false;
+          } else if (pageData.length < pageSize) {
+            console.log(`✅ [FINAL] Última página parcial - ${pageData.length} registros`);
             hasMore = false;
           }
           
