@@ -16,240 +16,270 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   const lastErrorRef = useRef<string | null>(null);
   const isOperatingRef = useRef(false);
 
-  // ✅ ESTABILIZAR: Função de query totalmente estável
+  // ✅ FUNÇÃO DE QUERY COM LOGS DETALHADOS
   const fetchAppointments = useCallback(async () => {
-    logger.info('Iniciando busca de agendamentos', {}, 'APPOINTMENTS');
+    console.log('🔍 [FETCH] Iniciando busca de agendamentos...');
     
     return measureApiCall(async () => {
-        // Usar função RPC otimizada com RETURNS SETOF json
-        // Isso remove a limitação de 1000 registros do PostgREST
-        const { data: rawData, error } = await supabase
+      try {
+        // 1️⃣ BUSCAR DADOS DA RPC
+        const { data: rawData, error, count } = await supabase
           .rpc('buscar_agendamentos_otimizado', {
             p_data_inicio: null,
             p_data_fim: null,
             p_medico_id: null,
             p_status: null
-          })
-          .returns<any[]>();
+          });
 
-        console.log('📊 RPC buscar_agendamentos_otimizado retornou:', {
-          registros: rawData?.length || 0,
+        console.log('📊 [RPC] Resposta recebida:', {
+          registros_retornados: rawData?.length || 0,
           esperado: 1183,
           faltam: 1183 - (rawData?.length || 0),
-          percentual: `${((rawData?.length || 0) / 1183 * 100).toFixed(1)}%`
+          tem_erro: !!error,
+          count: count
         });
 
         if (error) {
+          console.error('❌ [RPC] Erro na consulta:', error);
           logger.error('Erro na consulta de agendamentos otimizada', error, 'APPOINTMENTS');
           throw error;
         }
 
-        // Validar se todos os registros foram retornados
-        if (rawData && rawData.length < 1183) {
-          console.warn('⚠️ ATENÇÃO: Nem todos os registros foram retornados!', {
-            retornados: rawData.length,
-            esperados: 1183,
-            deficit: 1183 - rawData.length
-          });
+        if (!rawData || rawData.length === 0) {
+          console.warn('⚠️ [RPC] Nenhum dado retornado!');
+          return [];
         }
 
-        // 🔍 VALIDAÇÃO DE INTEGRIDADE: Checar registros problemáticos
-        const invalidRecords = (rawData || []).filter(apt => 
-          !apt.id || !apt.paciente_id || !apt.medico_id || !apt.atendimento_id
-        );
+        // 2️⃣ VALIDAR DADOS BRUTOS
+        console.log('🔍 [VALIDAÇÃO] Verificando integridade dos dados...');
+        const invalidRecords: any[] = [];
+        const validRecords: any[] = [];
 
-        if (invalidRecords.length > 0) {
-          console.error('❌ REGISTROS INVÁLIDOS DETECTADOS:', {
-            total: invalidRecords.length,
-            registros: invalidRecords.map(r => ({
-              id: r.id,
-              paciente_id: r.paciente_id,
-              medico_id: r.medico_id,
-              atendimento_id: r.atendimento_id
-            }))
-          });
-        }
-
-        // Transformar para o formato esperado pela aplicação
-        const transformedAppointments = (rawData || [])
-          .filter(apt => {
-            // Filtrar registros inválidos
-            const isValid = apt.id && apt.paciente_id && apt.medico_id && apt.atendimento_id;
-            if (!isValid) {
-              console.warn('⚠️ Registro inválido removido:', apt.id);
-            }
-            return isValid;
-          })
-          .map(apt => ({
-          id: apt.id,
-          paciente_id: apt.paciente_id,
-          medico_id: apt.medico_id,
-          atendimento_id: apt.atendimento_id,
-          data_agendamento: apt.data_agendamento,
-          hora_agendamento: apt.hora_agendamento,
-          status: apt.status,
-          observacoes: apt.observacoes,
-          created_at: apt.created_at,
-          updated_at: apt.updated_at,
-          criado_por: apt.criado_por,
-          criado_por_user_id: apt.criado_por_user_id,
-          alterado_por_user_id: apt.alterado_por_user_id,
-          cliente_id: '00000000-0000-0000-0000-000000000000', // Usar ID padrão temporário
-          // Campos adicionais para cancelamento e confirmação
-          cancelado_em: apt.cancelado_em,
-          cancelado_por: apt.cancelado_por,
-          cancelado_por_user_id: apt.cancelado_por_user_id,
-          confirmado_em: apt.confirmado_em,
-          confirmado_por: apt.confirmado_por,
-          confirmado_por_user_id: apt.confirmado_por_user_id,
-          // Campos de exclusão
-          excluido_em: apt.excluido_em,
-          excluido_por: apt.excluido_por,
-          excluido_por_user_id: apt.excluido_por_user_id,
-          convenio: apt.paciente_convenio,
-          // Profiles retornados pela RPC otimizada
-          criado_por_profile: apt.profile_nome ? {
-            id: apt.criado_por_user_id || '',
-            user_id: apt.criado_por_user_id || '',
-            nome: apt.profile_nome,
-            email: apt.profile_email || '',
-            ativo: true,
-            created_at: apt.created_at,
-            updated_at: apt.updated_at,
-          } : null,
-          alterado_por_profile: apt.alterado_por_profile_nome ? {
-            id: apt.alterado_por_user_id || '',
-            user_id: apt.alterado_por_user_id || '',
-            nome: apt.alterado_por_profile_nome,
-            email: apt.alterado_por_profile_email || '',
-            ativo: true,
-            created_at: apt.created_at,
-            updated_at: apt.updated_at,
-          } : null,
-          pacientes: {
-            id: apt.paciente_id,
-            nome_completo: apt.paciente_nome,
-            convenio: apt.paciente_convenio,
-            celular: apt.paciente_celular,
-            telefone: apt.paciente_telefone || '',
-            data_nascimento: apt.paciente_data_nascimento || '',
-            created_at: '',
-            updated_at: '',
-            cliente_id: '00000000-0000-0000-0000-000000000000' // Usar ID padrão temporário
-          },
-          medicos: {
-            id: apt.medico_id,
-            nome: apt.medico_nome,
-            especialidade: apt.medico_especialidade,
-            ativo: true,
-            crm: '',
-            created_at: '',
-            updated_at: '',
-            convenios_aceitos: [],
-            convenios_restricoes: null,
-            horarios: null,
-            idade_maxima: null,
-            idade_minima: null,
-            observacoes: '',
-            cliente_id: '00000000-0000-0000-0000-000000000000' // Usar ID padrão temporário
-          },
-          atendimentos: {
-            id: apt.atendimento_id,
-            nome: apt.atendimento_nome,
-            tipo: apt.atendimento_tipo,
-            ativo: true,
-            medico_id: apt.medico_id,
-            medico_nome: apt.medico_nome,
-            created_at: '',
-            updated_at: '',
-            codigo: '',
-            coparticipacao_unimed_20: 0,
-            coparticipacao_unimed_40: 0,
-            forma_pagamento: 'convenio',
-            horarios: null,
-            observacoes: '',
-            valor_convenio: 0,
-            valor_particular: 0,
-            restricoes: null,
-            cliente_id: '00000000-0000-0000-0000-000000000000' // Usar ID padrão temporário
+        rawData.forEach((record: any, index) => {
+          const issues: string[] = [];
+          
+          if (!record.id) issues.push('id ausente');
+          if (!record.paciente_id) issues.push('paciente_id ausente');
+          if (!record.medico_id) issues.push('medico_id ausente');
+          if (!record.atendimento_id) issues.push('atendimento_id ausente');
+          if (!record.data_agendamento) issues.push('data_agendamento ausente');
+          
+          if (issues.length > 0) {
+            invalidRecords.push({ index, record, issues });
+            console.warn(`⚠️ [VALIDAÇÃO] Registro ${index} inválido:`, { issues, id: record.id });
+          } else {
+            validRecords.push(record);
           }
-        }));
-
-        // 🔍 LOG FINAL: Comparar rawData vs transformedAppointments
-        console.log('📊 RESULTADO FINAL DA TRANSFORMAÇÃO:', {
-          rawData: rawData?.length || 0,
-          transformed: transformedAppointments.length,
-          perdidos: (rawData?.length || 0) - transformedAppointments.length,
-          percentual: `${(transformedAppointments.length / (rawData?.length || 1) * 100).toFixed(1)}%`
         });
 
-        if ((rawData?.length || 0) !== transformedAppointments.length) {
-          console.error('❌ PERDA DE DADOS NA TRANSFORMAÇÃO!', {
-            inicio: rawData?.length || 0,
-            final: transformedAppointments.length,
-            perdidos: (rawData?.length || 0) - transformedAppointments.length
-          });
+        console.log('📊 [VALIDAÇÃO] Resultado:', {
+          total_recebido: rawData.length,
+          validos: validRecords.length,
+          invalidos: invalidRecords.length,
+          percentual_valido: ((validRecords.length / rawData.length) * 100).toFixed(2) + '%'
+        });
+
+        if (invalidRecords.length > 0) {
+          console.warn('⚠️ [VALIDAÇÃO] Registros inválidos encontrados:', invalidRecords.slice(0, 5));
         }
 
-        logger.info('Agendamentos carregados com sucesso via RPC', { count: transformedAppointments.length }, 'APPOINTMENTS');
+        // 3️⃣ TRANSFORMAR DADOS
+        console.log('🔄 [TRANSFORM] Iniciando transformação de', validRecords.length, 'registros...');
+        const transformedAppointments: AppointmentWithRelations[] = [];
+        const transformErrors: any[] = [];
+
+        validRecords.forEach((apt, index) => {
+          try {
+            const transformed: AppointmentWithRelations = {
+              id: apt.id,
+              paciente_id: apt.paciente_id,
+              medico_id: apt.medico_id,
+              atendimento_id: apt.atendimento_id,
+              data_agendamento: apt.data_agendamento,
+              hora_agendamento: apt.hora_agendamento || '00:00:00', // ✅ Fallback
+              status: apt.status || 'agendado', // ✅ Fallback
+              observacoes: apt.observacoes,
+              created_at: apt.created_at,
+              updated_at: apt.updated_at,
+              criado_por: apt.criado_por,
+              criado_por_user_id: apt.criado_por_user_id,
+              alterado_por_user_id: apt.alterado_por_user_id,
+              cliente_id: '00000000-0000-0000-0000-000000000000',
+              cancelado_em: apt.cancelado_em,
+              cancelado_por: apt.cancelado_por,
+              cancelado_por_user_id: apt.cancelado_por_user_id,
+              confirmado_em: apt.confirmado_em,
+              confirmado_por: apt.confirmado_por,
+              confirmado_por_user_id: apt.confirmado_por_user_id,
+              excluido_em: apt.excluido_em,
+              excluido_por: apt.excluido_por,
+              excluido_por_user_id: apt.excluido_por_user_id,
+              convenio: apt.paciente_convenio || apt.convenio,
+              criado_por_profile: apt.profile_nome ? {
+                id: apt.criado_por_user_id || '',
+                user_id: apt.criado_por_user_id || '',
+                nome: apt.profile_nome,
+                email: apt.profile_email || '',
+                ativo: true,
+                created_at: apt.created_at,
+                updated_at: apt.updated_at,
+              } : null,
+              alterado_por_profile: apt.alterado_por_profile_nome ? {
+                id: apt.alterado_por_user_id || '',
+                user_id: apt.alterado_por_user_id || '',
+                nome: apt.alterado_por_profile_nome,
+                email: apt.alterado_por_profile_email || '',
+                ativo: true,
+                created_at: apt.created_at,
+                updated_at: apt.updated_at,
+              } : null,
+              pacientes: {
+                id: apt.paciente_id,
+                nome_completo: apt.paciente_nome || 'Nome não disponível',
+                convenio: apt.paciente_convenio,
+                celular: apt.paciente_celular || '',
+                telefone: apt.paciente_telefone || '',
+                data_nascimento: apt.paciente_data_nascimento || '',
+                created_at: '',
+                updated_at: '',
+                cliente_id: '00000000-0000-0000-0000-000000000000'
+              },
+              medicos: {
+                id: apt.medico_id,
+                nome: apt.medico_nome || 'Médico não disponível',
+                especialidade: apt.medico_especialidade || '',
+                ativo: true,
+                created_at: '',
+                convenios_aceitos: [],
+                convenios_restricoes: null,
+                horarios: null,
+                idade_maxima: null,
+                idade_minima: null,
+                observacoes: '',
+                cliente_id: '00000000-0000-0000-0000-000000000000'
+              },
+              atendimentos: {
+                id: apt.atendimento_id,
+                nome: apt.atendimento_nome || 'Atendimento não disponível',
+                tipo: apt.atendimento_tipo || 'consulta',
+                ativo: true,
+                medico_id: apt.medico_id,
+                medico_nome: apt.medico_nome,
+                created_at: '',
+                codigo: '',
+                coparticipacao_unimed_20: 0,
+                coparticipacao_unimed_40: 0,
+                forma_pagamento: 'convenio',
+                horarios: null,
+                observacoes: '',
+                valor_particular: 0,
+                restricoes: null,
+                cliente_id: '00000000-0000-0000-0000-000000000000'
+              }
+            };
+
+            transformedAppointments.push(transformed);
+          } catch (err) {
+            transformErrors.push({ index, apt, error: err });
+            console.error(`❌ [TRANSFORM] Erro ao transformar registro ${index}:`, err, apt);
+          }
+        });
+
+        console.log('📊 [TRANSFORM] Resultado:', {
+          registros_transformados: transformedAppointments.length,
+          erros_transformacao: transformErrors.length,
+          registros_perdidos: validRecords.length - transformedAppointments.length
+        });
+
+        if (transformErrors.length > 0) {
+          console.error('❌ [TRANSFORM] Erros encontrados:', transformErrors.slice(0, 5));
+        }
+
+        // 4️⃣ ESTATÍSTICAS FINAIS
+        console.log('✅ [FINAL] Resumo completo:', {
+          esperado_total: 1183,
+          recebido_rpc: rawData.length,
+          validos_validacao: validRecords.length,
+          transformados_sucesso: transformedAppointments.length,
+          perdidos_validacao: rawData.length - validRecords.length,
+          perdidos_transformacao: validRecords.length - transformedAppointments.length,
+          perdidos_total: 1183 - transformedAppointments.length,
+          percentual_sucesso: ((transformedAppointments.length / 1183) * 100).toFixed(2) + '%'
+        });
+
+        // 5️⃣ ANÁLISE POR STATUS
+        const statusCount = transformedAppointments.reduce((acc, apt) => {
+          acc[apt.status] = (acc[apt.status] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+
+        console.log('📊 [STATUS] Distribuição:', statusCount);
+
+        logger.info('Agendamentos carregados com sucesso', { 
+          count: transformedAppointments.length,
+          esperado: 1183,
+          perdidos: 1183 - transformedAppointments.length
+        }, 'APPOINTMENTS');
+
         return transformedAppointments;
-      }, 'fetch_appointments', 'GET');
+      } catch (err) {
+        console.error('❌ [FETCH] Erro fatal:', err);
+        logger.error('Erro ao buscar agendamentos', err, 'APPOINTMENTS');
+        throw err;
+      }
+    }, 'fetch_appointments', 'GET');
   }, [measureApiCall]);
 
-  // Usar cache otimizado para buscar agendamentos
+  // Usar cache otimizado
   const { data: appointments, loading, error, refetch, invalidateCache, forceRefetch } = useOptimizedQuery<AppointmentWithRelations[]>(
     fetchAppointments,
     [],
     { 
       cacheKey: 'appointments-list',
-      cacheTime: 5 * 60 * 1000, // 5 minutos
-      staleTime: 30 * 1000 // 30 segundos
+      cacheTime: 5 * 60 * 1000,
+      staleTime: 30 * 1000
     }
   );
 
-  // ✅ REALTIME: Configurar atualizações em tempo real inteligentes
+  // Log quando appointments mudar
+  useEffect(() => {
+    if (appointments) {
+      console.log('📊 [STATE] Appointments atualizados:', {
+        total: appointments.length,
+        esperado: 1183,
+        diferenca: 1183 - appointments.length
+      });
+    }
+  }, [appointments]);
+
+  // Realtime updates
   useRealtimeUpdates({
     table: 'agendamentos',
     onInsert: (payload) => {
-      if (isOperatingRef.current) {
-        console.log('🔄 Skipping refetch - operation in progress');
-        return;
-      }
-      console.log('🔄 useAppointmentsList: New appointment inserted', payload);
-      // Delay inteligente para evitar conflitos
+      if (isOperatingRef.current) return;
+      console.log('🔄 [REALTIME] Novo agendamento inserido');
       setTimeout(() => {
         if (!isOperatingRef.current) {
           refetch();
           toast({
             title: "Novo agendamento",
-            description: "Um novo agendamento foi criado e o calendário foi atualizado!",
+            description: "Um novo agendamento foi criado!",
           });
         }
       }, 500);
     },
     onUpdate: (payload) => {
-      if (isOperatingRef.current) {
-        console.log('🔄 Skipping refetch - operation in progress');
-        return;
-      }
-      console.log('🔄 useAppointmentsList: Appointment updated', payload);
-      // Delay para evitar conflitos com operações locais
+      if (isOperatingRef.current) return;
+      console.log('🔄 [REALTIME] Agendamento atualizado');
       setTimeout(() => {
-        if (!isOperatingRef.current) {
-          refetch();
-        }
+        if (!isOperatingRef.current) refetch();
       }, 300);
     },
     onDelete: (payload) => {
-      if (isOperatingRef.current) {
-        console.log('🔄 Skipping refetch - operation in progress');
-        return;
-      }
-      console.log('🔄 useAppointmentsList: Appointment deleted', payload);
+      if (isOperatingRef.current) return;
+      console.log('🔄 [REALTIME] Agendamento deletado');
       setTimeout(() => {
-        if (!isOperatingRef.current) {
-          refetch();
-        }
+        if (!isOperatingRef.current) refetch();
       }, 300);
     }
   });
@@ -257,45 +287,30 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   // Paginação
   const pagination = usePagination(appointments || [], { itemsPerPage });
 
-  // ✅ TRATAMENTO INTELIGENTE DE ERROS com debounce
-  const debouncedError = useDebounce(error, 1000); // Aguarda 1 segundo antes de processar erro
+  // Tratamento de erros
+  const debouncedError = useDebounce(error, 1000);
   
   useEffect(() => {
     if (!debouncedError || isOperatingRef.current) return;
     
     const errorMessage = debouncedError.message || 'Erro desconhecido';
     
-    // Evitar toasts duplicados para o mesmo erro
-    if (lastErrorRef.current === errorMessage) {
-      console.log('🔄 Erro duplicado ignorado:', errorMessage);
-      return;
-    }
-    
+    if (lastErrorRef.current === errorMessage) return;
     lastErrorRef.current = errorMessage;
     
-    // Filtrar erros temporários/esperados
     const isTemporaryError = errorMessage.includes('network') || 
                            errorMessage.includes('timeout') ||
-                           errorMessage.includes('aborted') ||
-                           errorMessage.includes('cancelled');
+                           errorMessage.includes('aborted');
     
-    if (isTemporaryError) {
-      console.log('🔄 Erro temporário ignorado:', errorMessage);
-      return;
-    }
+    if (isTemporaryError) return;
     
-    // Limpar timeout anterior se existir
-    if (errorTimeoutRef.current) {
-      clearTimeout(errorTimeoutRef.current);
-    }
+    if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
     
-    // Só mostrar toast após delay para erros persistentes
     errorTimeoutRef.current = setTimeout(() => {
-      if (debouncedError === error) { // Verificar se erro ainda é o mesmo
-        console.log('❌ Mostrando toast de erro:', errorMessage);
+      if (debouncedError === error) {
         toast({
           title: 'Erro ao carregar agendamentos',
-          description: 'Houve um problema ao carregar os dados. Tente novamente.',
+          description: 'Houve um problema ao carregar os dados.',
           variant: 'destructive',
         });
       }
@@ -303,13 +318,10 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     }, 2000);
     
     return () => {
-      if (errorTimeoutRef.current) {
-        clearTimeout(errorTimeoutRef.current);
-      }
+      if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
     };
   }, [debouncedError, error, toast]);
 
-  // Buscar agendamentos por médico e data
   const getAppointmentsByDoctorAndDate = (doctorId: string, date: string) => {
     return (appointments || []).filter(
       appointment => 
@@ -318,54 +330,33 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     );
   };
 
-  // Cancelar agendamento com optimistic update
   const cancelAppointment = async (appointmentId: string) => {
     isOperatingRef.current = true;
     try {
-      logger.info('Cancelando agendamento', { appointmentId }, 'APPOINTMENTS');
-
       await measureApiCall(async () => {
-        // Buscar perfil do usuário atual
         const { data: profile } = await supabase
           .from('profiles')
           .select('nome, user_id')
           .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
           .single();
 
-        // Usar função de cancelamento com auditoria
         const { data, error } = await supabase.rpc('cancelar_agendamento_soft', {
           p_agendamento_id: appointmentId,
           p_cancelado_por: profile?.nome || 'Usuário',
           p_cancelado_por_user_id: profile?.user_id || null
         });
 
-        if (error) {
-          logger.error('Erro ao cancelar agendamento', error, 'APPOINTMENTS');
-          throw error;
-        }
-
-        if (!(data as any)?.success) {
-          const errorMessage = (data as any)?.error || 'Erro ao cancelar agendamento';
-          logger.error('Erro no cancelamento', { error: errorMessage }, 'APPOINTMENTS');
-          throw new Error(errorMessage);
-        }
-
+        if (error) throw error;
+        if (!(data as any)?.success) throw new Error((data as any)?.error || 'Erro ao cancelar');
         return data;
       }, 'cancel_appointment', 'PUT');
 
-      toast({
-        title: 'Agendamento cancelado',
-        description: 'O agendamento foi cancelado com sucesso',
-      });
-
-      // Refetch otimizado sem invalidação agressiva
+      toast({ title: 'Agendamento cancelado', description: 'O agendamento foi cancelado com sucesso' });
       await refetch();
-      logger.info('Agendamento cancelado com sucesso', { appointmentId }, 'APPOINTMENTS');
     } catch (error) {
-      logger.error('Erro ao cancelar agendamento', error, 'APPOINTMENTS');
       toast({
         title: 'Erro',
-        description: error instanceof Error ? error.message : 'Não foi possível cancelar o agendamento',
+        description: error instanceof Error ? error.message : 'Não foi possível cancelar',
         variant: 'destructive',
       });
       throw error;
@@ -374,57 +365,33 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     }
   };
 
-  // Confirmar agendamento com estratégia otimizada
   const confirmAppointment = async (appointmentId: string) => {
     isOperatingRef.current = true;
     try {
-      logger.info('Confirmando agendamento', { appointmentId }, 'APPOINTMENTS');
-
       await measureApiCall(async () => {
-        // Buscar perfil do usuário atual
         const { data: profile } = await supabase
           .from('profiles')
           .select('nome, user_id')
           .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
           .single();
 
-        // Usar função de confirmação com auditoria
         const { data, error } = await supabase.rpc('confirmar_agendamento', {
           p_agendamento_id: appointmentId,
           p_confirmado_por: profile?.nome || 'Usuário',
           p_confirmado_por_user_id: profile?.user_id || null
         });
 
-        if (error) {
-          logger.error('Erro ao confirmar agendamento', error, 'APPOINTMENTS');
-          throw error;
-        }
-
-        if (!(data as any)?.success) {
-          const errorMessage = (data as any)?.error || 'Erro ao confirmar agendamento';
-          logger.error('Erro na confirmação', { error: errorMessage }, 'APPOINTMENTS');
-          throw new Error(errorMessage);
-        }
-
+        if (error) throw error;
+        if (!(data as any)?.success) throw new Error((data as any)?.error || 'Erro ao confirmar');
         return data;
       }, 'confirm_appointment', 'PUT');
 
-      // ✅ ESTRATÉGIA OTIMIZADA: Single refetch sem invalidação agressiva
-      console.log('🔄 Atualizando dados após confirmação...');
       await refetch();
-      console.log('✅ Dados atualizados após confirmação');
-
-      toast({
-        title: 'Agendamento confirmado',
-        description: 'O agendamento foi confirmado com sucesso',
-      });
-
-      logger.info('Agendamento confirmado com sucesso', { appointmentId }, 'APPOINTMENTS');
+      toast({ title: 'Agendamento confirmado', description: 'O agendamento foi confirmado com sucesso' });
     } catch (error) {
-      logger.error('Erro ao confirmar agendamento', error, 'APPOINTMENTS');
       toast({
         title: 'Erro',
-        description: error instanceof Error ? error.message : 'Não foi possível confirmar o agendamento',
+        description: error instanceof Error ? error.message : 'Não foi possível confirmar',
         variant: 'destructive',
       });
       throw error;
@@ -433,63 +400,36 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     }
   };
 
-  // Desconfirmar agendamento com estratégia otimizada
   const unconfirmAppointment = async (appointmentId: string) => {
     isOperatingRef.current = true;
     try {
-      logger.info('Desconfirmando agendamento', { appointmentId }, 'APPOINTMENTS');
-
-      const result = await measureApiCall(async () => {
-        // Buscar perfil do usuário atual
+      await measureApiCall(async () => {
         const { data: profile } = await supabase
           .from('profiles')
           .select('nome, user_id')
           .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
           .single();
 
-        // Usar função de desconfirmação com auditoria
         const { data, error } = await supabase.rpc('desconfirmar_agendamento', {
           p_agendamento_id: appointmentId,
           p_desconfirmado_por: profile?.nome || 'Usuário',
           p_desconfirmado_por_user_id: profile?.user_id || null
         });
 
-        // 🐛 DEBUG: Log da resposta completa para debug
-        console.log('🔍 Resposta completa da desconfirmação:', { data, error });
-
-        if (error) {
-          logger.error('Erro RPC ao desconfirmar agendamento', error, 'APPOINTMENTS');
-          throw error;
-        }
-
-        // ✅ CORREÇÃO: Melhorar validação da resposta
-        const response = data as { success?: boolean; error?: string; message?: string };
-        
+        if (error) throw error;
+        const response = data as { success?: boolean; error?: string };
         if (!response || response.success === false) {
-          const errorMessage = response?.error || response?.message || 'Erro ao desconfirmar agendamento';
-          logger.error('Erro na validação da desconfirmação', { response, errorMessage }, 'APPOINTMENTS');
-          throw new Error(errorMessage);
+          throw new Error(response?.error || 'Erro ao desconfirmar');
         }
-
         return data;
       }, 'unconfirm_appointment', 'PUT');
 
-      // ✅ ESTRATÉGIA OTIMIZADA: Single refetch sem invalidação agressiva
-      console.log('🔄 Atualizando dados após desconfirmação...');
       await refetch();
-      console.log('✅ Dados atualizados após desconfirmação');
-
-      toast({
-        title: 'Agendamento desconfirmado',
-        description: 'O agendamento foi desconfirmado com sucesso',
-      });
-
-      logger.info('Agendamento desconfirmado com sucesso', { appointmentId }, 'APPOINTMENTS');
+      toast({ title: 'Agendamento desconfirmado', description: 'O agendamento foi desconfirmado com sucesso' });
     } catch (error) {
-      logger.error('Erro ao desconfirmar agendamento', error, 'APPOINTMENTS');
       toast({
         title: 'Erro',
-        description: error instanceof Error ? error.message : 'Não foi possível desconfirmar o agendamento',
+        description: error instanceof Error ? error.message : 'Não foi possível desconfirmar',
         variant: 'destructive',
       });
       throw error;
@@ -501,50 +441,30 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   const deleteAppointment = async (appointmentId: string) => {
     isOperatingRef.current = true;
     try {
-      logger.info('Excluindo agendamento', { appointmentId }, 'APPOINTMENTS');
-
       await measureApiCall(async () => {
-        // Buscar perfil do usuário atual
         const { data: profile } = await supabase
           .from('profiles')
           .select('nome, user_id')
           .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
           .single();
 
-        // Usar função de exclusão com auditoria
         const { data, error } = await supabase.rpc('excluir_agendamento_soft', {
           p_agendamento_id: appointmentId,
           p_excluido_por: profile?.nome || 'Usuário',
           p_excluido_por_user_id: profile?.user_id || null
         });
 
-        if (error) {
-          logger.error('Erro ao excluir agendamento', error, 'APPOINTMENTS');
-          throw error;
-        }
-
-        if (!(data as any)?.success) {
-          const errorMessage = (data as any)?.error || 'Erro ao excluir agendamento';
-          logger.error('Erro na exclusão', { error: errorMessage }, 'APPOINTMENTS');
-          throw new Error(errorMessage);
-        }
-
+        if (error) throw error;
+        if (!(data as any)?.success) throw new Error((data as any)?.error || 'Erro ao excluir');
         return data;
       }, 'delete_appointment', 'PUT');
 
-      toast({
-        title: 'Agendamento excluído',
-        description: 'O agendamento foi excluído com sucesso',
-      });
-
-      // Refetch otimizado sem invalidação agressiva
+      toast({ title: 'Agendamento excluído', description: 'O agendamento foi excluído com sucesso' });
       await refetch();
-      logger.info('Agendamento excluído com sucesso', { appointmentId }, 'APPOINTMENTS');
     } catch (error) {
-      logger.error('Erro ao excluir agendamento', error, 'APPOINTMENTS');
       toast({
         title: 'Erro',
-        description: error instanceof Error ? error.message : 'Não foi possível excluir o agendamento',
+        description: error instanceof Error ? error.message : 'Não foi possível excluir',
         variant: 'destructive',
       });
       throw error;
