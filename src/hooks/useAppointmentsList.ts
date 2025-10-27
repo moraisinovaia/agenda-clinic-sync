@@ -22,10 +22,10 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
 
   // ✅ FUNÇÃO DE QUERY DIRETA COM JOINS OTIMIZADOS
   const fetchAppointments = useCallback(async () => {
-    // 🔒 Prevenir múltiplas execuções simultâneas
-    if (isFetchingRef.current) {
-      console.log('⏸️ [FETCH] Já há uma busca em andamento, aguardando...');
-      return [];
+    // 🔒 Aguardar se já houver busca em andamento
+    while (isFetchingRef.current) {
+      console.log('⏸️ [FETCH] Aguardando busca em andamento...');
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
     
     isFetchingRef.current = true;
@@ -155,14 +155,14 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     }, 'fetch_appointments', 'GET');
   }, [measureApiCall]);
 
-  // ✅ CACHE DESABILITADO TEMPORARIAMENTE PARA DEBUG
+  // ✅ CACHE COM CONFIGURAÇÃO OTIMIZADA
   const { data: appointments, loading, error, refetch, invalidateCache, forceRefetch } = useOptimizedQuery<AppointmentWithRelations[]>(
     fetchAppointments,
     [],
     { 
-      cacheKey: `appointments-list-direct-v2025-10-27-${Date.now()}`, // 🔥 Forçar cache invalidation
-      cacheTime: 0, // 🔥 Cache desabilitado para debug
-      staleTime: 0 // 🔥 Sem stale
+      cacheKey: 'appointments-list-direct-v2025-10-27-stable', // 🔑 Cache key estática
+      cacheTime: 5 * 60 * 1000, // ✅ 5 minutos de cache
+      staleTime: 30 * 1000 // ✅ 30 segundos stale (refetch em background)
     }
   );
 
