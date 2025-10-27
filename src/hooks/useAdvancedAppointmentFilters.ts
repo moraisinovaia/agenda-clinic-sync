@@ -70,16 +70,13 @@ export const useAdvancedAppointmentFilters = (
       searchTerm
     });
 
-    // Separar agendamentos cancelados e excluídos por padrão, exceto quando explicitamente permitido
-    const baseFilter = allowCanceled || statusFilter === 'cancelado' || statusFilter === 'cancelado_bloqueio' || statusFilter === 'excluido'
-      ? appointments 
-      : appointments.filter(appointment => 
-          appointment.status !== 'cancelado' && 
-          appointment.status !== 'cancelado_bloqueio' &&
-          appointment.status !== 'excluido'
-        );
+    // ✅ CORREÇÃO: Mostrar TODOS os agendamentos por padrão (incluindo cancelados)
+    // Apenas remover excluídos (soft delete)
+    const baseFilter = appointments.filter(appointment => 
+      appointment.status !== 'excluido'
+    );
     
-    console.log('🔍 FILTROS: Após filtro de cancelados', {
+    console.log('🔍 FILTROS: Após filtro de excluídos', {
       antes: appointments.length,
       depois: baseFilter.length,
       removidos: appointments.length - baseFilter.length

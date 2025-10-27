@@ -9,7 +9,7 @@ import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 import { useDebounce } from '@/hooks/useDebounce';
 import { logger } from '@/utils/logger';
 
-// 🔄 CACHE BUSTER: Versão 2025-10-27-15:18 - Cache completamente desabilitado
+// 🔄 CACHE BUSTER: Versão 2025-10-27-15:25 - RPC corrigido para LEFT JOIN
 export function useAppointmentsList(itemsPerPage: number = 20) {
   const { toast } = useToast();
   const { measureApiCall } = usePerformanceMetrics();
@@ -229,7 +229,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     fetchAppointments,
     [],
     { 
-      cacheKey: 'appointments-list-v2025-10-27-15:18', // ✅ Nova chave para invalidar cache antigo
+      cacheKey: 'appointments-list-v2025-10-27-15:25', // ✅ Nova chave - RPC com LEFT JOIN
       cacheTime: 0, // ✅ Cache desabilitado
       staleTime: 0, // ✅ Sempre considerar stale
       refetchOnMount: true // ✅ Sempre refetch ao montar
