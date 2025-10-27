@@ -9,15 +9,9 @@ import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 import { useDebounce } from '@/hooks/useDebounce';
 import { logger } from '@/utils/logger';
 
-// 🔄 CACHE BUSTER: Versão FINAL 2025-10-27-16:25 - Solução PostgREST limit
+// 🔄 QUERY DIRETA: Versão Otimizada 2025-10-27-17:00 - Solução definitiva com índices
 export function useAppointmentsList(itemsPerPage: number = 20) {
-  console.log('🏁 useAppointmentsList: Hook inicializado');
-  
-  // ✅ LIMPAR TODO O CACHE antes de buscar dados
-  useEffect(() => {
-    console.log('🧹 Limpando TODOS os caches antes de buscar agendamentos');
-    clearAllCache();
-  }, []);
+  console.log('🏁 useAppointmentsList: Hook inicializado (Query Direta)');
   
   const { toast } = useToast();
   const { measureApiCall } = usePerformanceMetrics();
@@ -25,196 +19,99 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   const lastErrorRef = useRef<string | null>(null);
   const isOperatingRef = useRef(false);
 
-  // ✅ FUNÇÃO DE QUERY COM LOGS DETALHADOS
+  // ✅ FUNÇÃO DE QUERY DIRETA COM JOINS OTIMIZADOS
   const fetchAppointments = useCallback(async () => {
-    console.log('🔍 [FETCH] Iniciando busca de agendamentos...');
+    console.log('🔍 [FETCH] Iniciando busca com query direta...');
     
     return measureApiCall(async () => {
       try {
-        // 1️⃣ BUSCAR DADOS DA RPC (com .limit(5000) para forçar retorno completo)
-        const { data: rawData, error } = await supabase
-          .rpc('buscar_agendamentos_otimizado', {
-            p_data_inicio: null,
-            p_data_fim: null,
-            p_medico_id: null,
-            p_status: null
-          })
-          .limit(5000); // ✅ Forçar PostgREST a retornar até 5000 registros
+        // 1️⃣ QUERY DIRETA - Mais eficiente que RPC
+        const { data: rawData, error, count } = await supabase
+          .from('agendamentos')
+          .select(`
+            *,
+            pacientes!inner(
+              id,
+              nome_completo,
+              convenio,
+              celular,
+              telefone,
+              data_nascimento
+            ),
+            medicos!inner(
+              id,
+              nome,
+              especialidade,
+              ativo
+            ),
+            atendimentos!inner(
+              id,
+              nome,
+              tipo,
+              medico_id
+            ),
+            criado_por_profile:profiles!criado_por_user_id(
+              id,
+              user_id,
+              nome,
+              email,
+              ativo,
+              created_at,
+              updated_at
+            ),
+            alterado_por_profile:profiles!alterado_por_user_id(
+              id,
+              user_id,
+              nome,
+              email,
+              ativo,
+              created_at,
+              updated_at
+            )
+          `, { count: 'exact' })
+          .is('excluido_em', null)
+          .order('data_agendamento', { ascending: false })
+          .order('hora_agendamento', { ascending: false })
+          .range(0, 4999); // ✅ Até 5000 registros
 
-        console.log('📊 [RPC] Resposta recebida:', {
+        console.log('📊 [QUERY] Resposta recebida:', {
           registros_retornados: rawData?.length || 0,
-          esperado: 1184,
-          faltam: 1184 - (rawData?.length || 0),
+          total_disponivel: count || 0,
           tem_erro: !!error,
-          percentual: `${((rawData?.length || 0) / 1184 * 100).toFixed(1)}%`,
+          percentual_carregado: count ? `${((rawData?.length || 0) / count * 100).toFixed(1)}%` : '0%',
           timestamp: new Date().toISOString()
         });
-        
-        // ✅ Log crítico: mostrar que recebemos dados FRESCOS
-        console.log(`✅ DADOS FRESCOS CARREGADOS: ${rawData?.length || 0} registros recebidos AGORA`);
 
         if (error) {
-          console.error('❌ [RPC] Erro na consulta:', error);
-          logger.error('Erro na consulta de agendamentos otimizada', error, 'APPOINTMENTS');
+          console.error('❌ [QUERY] Erro na consulta:', error);
+          logger.error('Erro na consulta de agendamentos', error, 'APPOINTMENTS');
           throw error;
         }
 
         if (!rawData || rawData.length === 0) {
-          console.warn('⚠️ [RPC] Nenhum dado retornado!');
+          console.warn('⚠️ [QUERY] Nenhum dado retornado!');
           return [];
         }
 
-        // 2️⃣ VALIDAÇÃO MÍNIMA: Apenas ID obrigatório (outros campos podem ser NULL)
-        console.log('🔍 [VALIDAÇÃO] Verificando integridade dos dados...');
-        const invalidRecords: any[] = [];
-        const validRecords: any[] = [];
+        // 2️⃣ TRANSFORMAR DADOS (Query direta já vem estruturada)
+        console.log('🔄 [TRANSFORM] Transformando', rawData.length, 'registros...');
+        const transformedAppointments: AppointmentWithRelations[] = rawData.map((apt: any) => ({
+          ...apt,
+          criado_por_profile: apt.criado_por_profile || null,
+          alterado_por_profile: apt.alterado_por_profile || null,
+          pacientes: apt.pacientes || null,
+          medicos: apt.medicos || null,
+          atendimentos: apt.atendimentos || null,
+        }));
 
-        rawData.forEach((record: any, index) => {
-          // ✅ CORREÇÃO: Validar APENAS id (campos relacionados podem ser NULL por LEFT JOIN)
-          if (!record.id) {
-            invalidRecords.push({ index, record, motivo: 'ID ausente' });
-            console.warn(`⚠️ [VALIDAÇÃO] Registro ${index} SEM ID`);
-          } else {
-            validRecords.push(record);
-          }
-        });
-
-        console.log('📊 [VALIDAÇÃO] Resultado:', {
-          total_recebido: rawData.length,
-          validos: validRecords.length,
-          invalidos: invalidRecords.length,
-          percentual_valido: ((validRecords.length / rawData.length) * 100).toFixed(2) + '%'
-        });
-
-        if (invalidRecords.length > 0) {
-          console.warn('⚠️ [VALIDAÇÃO] Registros inválidos encontrados:', invalidRecords.slice(0, 5));
-        }
-
-        // 3️⃣ TRANSFORMAR DADOS
-        console.log('🔄 [TRANSFORM] Iniciando transformação de', validRecords.length, 'registros...');
-        const transformedAppointments: AppointmentWithRelations[] = [];
-        const transformErrors: any[] = [];
-
-        validRecords.forEach((apt, index) => {
-          try {
-            const transformed: AppointmentWithRelations = {
-              id: apt.id,
-              paciente_id: apt.paciente_id,
-              medico_id: apt.medico_id,
-              atendimento_id: apt.atendimento_id,
-              data_agendamento: apt.data_agendamento,
-              hora_agendamento: apt.hora_agendamento || '00:00:00', // ✅ Fallback
-              status: apt.status || 'agendado', // ✅ Fallback
-              observacoes: apt.observacoes,
-              created_at: apt.created_at,
-              updated_at: apt.updated_at,
-              criado_por: apt.criado_por,
-              criado_por_user_id: apt.criado_por_user_id,
-              alterado_por_user_id: apt.alterado_por_user_id,
-              cliente_id: '00000000-0000-0000-0000-000000000000',
-              cancelado_em: apt.cancelado_em,
-              cancelado_por: apt.cancelado_por,
-              cancelado_por_user_id: apt.cancelado_por_user_id,
-              confirmado_em: apt.confirmado_em,
-              confirmado_por: apt.confirmado_por,
-              confirmado_por_user_id: apt.confirmado_por_user_id,
-              excluido_em: apt.excluido_em,
-              excluido_por: apt.excluido_por,
-              excluido_por_user_id: apt.excluido_por_user_id,
-              convenio: apt.paciente_convenio || apt.convenio,
-              criado_por_profile: apt.profile_nome ? {
-                id: apt.criado_por_user_id || '',
-                user_id: apt.criado_por_user_id || '',
-                nome: apt.profile_nome,
-                email: apt.profile_email || '',
-                ativo: true,
-                created_at: apt.created_at,
-                updated_at: apt.updated_at,
-              } : null,
-              alterado_por_profile: apt.alterado_por_profile_nome ? {
-                id: apt.alterado_por_user_id || '',
-                user_id: apt.alterado_por_user_id || '',
-                nome: apt.alterado_por_profile_nome,
-                email: apt.alterado_por_profile_email || '',
-                ativo: true,
-                created_at: apt.created_at,
-                updated_at: apt.updated_at,
-              } : null,
-              pacientes: {
-                id: apt.paciente_id,
-                nome_completo: apt.paciente_nome || 'Nome não disponível',
-                convenio: apt.paciente_convenio,
-                celular: apt.paciente_celular || '',
-                telefone: apt.paciente_telefone || '',
-                data_nascimento: apt.paciente_data_nascimento || '',
-                created_at: '',
-                updated_at: '',
-                cliente_id: '00000000-0000-0000-0000-000000000000'
-              },
-              medicos: {
-                id: apt.medico_id,
-                nome: apt.medico_nome || 'Médico não disponível',
-                especialidade: apt.medico_especialidade || '',
-                ativo: true,
-                created_at: '',
-                convenios_aceitos: [],
-                convenios_restricoes: null,
-                horarios: null,
-                idade_maxima: null,
-                idade_minima: null,
-                observacoes: '',
-                cliente_id: '00000000-0000-0000-0000-000000000000'
-              },
-              atendimentos: {
-                id: apt.atendimento_id,
-                nome: apt.atendimento_nome || 'Atendimento não disponível',
-                tipo: apt.atendimento_tipo || 'consulta',
-                ativo: true,
-                medico_id: apt.medico_id,
-                medico_nome: apt.medico_nome,
-                created_at: '',
-                codigo: '',
-                coparticipacao_unimed_20: 0,
-                coparticipacao_unimed_40: 0,
-                forma_pagamento: 'convenio',
-                horarios: null,
-                observacoes: '',
-                valor_particular: 0,
-                restricoes: null,
-                cliente_id: '00000000-0000-0000-0000-000000000000'
-              }
-            };
-
-            transformedAppointments.push(transformed);
-          } catch (err) {
-            transformErrors.push({ index, apt, error: err });
-            console.error(`❌ [TRANSFORM] Erro ao transformar registro ${index}:`, err, apt);
-          }
-        });
-
-        console.log('📊 [TRANSFORM] Resultado:', {
-          registros_transformados: transformedAppointments.length,
-          erros_transformacao: transformErrors.length,
-          registros_perdidos: validRecords.length - transformedAppointments.length
-        });
-
-        if (transformErrors.length > 0) {
-          console.error('❌ [TRANSFORM] Erros encontrados:', transformErrors.slice(0, 5));
-        }
-
-        // 4️⃣ ESTATÍSTICAS FINAIS
+        // 3️⃣ ESTATÍSTICAS FINAIS
         console.log('✅ [FINAL] Resumo completo:', {
-          esperado_total: 1184,
-          recebido_rpc: rawData.length,
-          validos_validacao: validRecords.length,
-          transformados_sucesso: transformedAppointments.length,
-          perdidos_validacao: rawData.length - validRecords.length,
-          perdidos_transformacao: validRecords.length - transformedAppointments.length,
-          perdidos_total: 1184 - transformedAppointments.length,
-          percentual_sucesso: ((transformedAppointments.length / 1184) * 100).toFixed(2) + '%'
+          total_disponivel: count || 0,
+          carregados: transformedAppointments.length,
+          timestamp: new Date().toISOString()
         });
 
-        // 5️⃣ ANÁLISE POR STATUS
+        // 4️⃣ ANÁLISE POR STATUS
         const statusCount = transformedAppointments.reduce((acc, apt) => {
           acc[apt.status] = (acc[apt.status] || 0) + 1;
           return acc;
@@ -224,8 +121,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
 
         logger.info('Agendamentos carregados com sucesso', { 
           count: transformedAppointments.length,
-          esperado: 1184,
-          perdidos: 1184 - transformedAppointments.length
+          total: count || 0
         }, 'APPOINTMENTS');
 
         return transformedAppointments;
@@ -237,44 +133,37 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     }, 'fetch_appointments', 'GET');
   }, [measureApiCall]);
 
-  // ✅ DESABILITAR CACHE COMPLETAMENTE
+  // ✅ CACHE ESTRATÉGICO DE 5 MINUTOS
   const { data: appointments, loading, error, refetch, invalidateCache, forceRefetch } = useOptimizedQuery<AppointmentWithRelations[]>(
     fetchAppointments,
     [],
     { 
-      cacheKey: 'appointments-list-FINAL-v2025-10-27-16:25', // ✅ Cache NUNCA será usado (cacheTime=0)
-      cacheTime: 0, // ✅ Cache desabilitado
-      staleTime: 0, // ✅ Sempre considerar stale
-      refetchOnMount: true // ✅ Sempre refetch ao montar
+      cacheKey: 'appointments-list-direct-v2025-10-27-17:00', // ✅ Nova versão com query direta
+      cacheTime: 5 * 60 * 1000, // ✅ Cache de 5 minutos
+      staleTime: 2 * 60 * 1000 // ✅ Stale após 2 minutos
     }
   );
 
-  // Log imediato após useOptimizedQuery com detalhes críticos
-  console.log('🔍 useAppointmentsList: Estado do useOptimizedQuery', {
+  // Log imediato após useOptimizedQuery
+  console.log('🔍 useAppointmentsList: Estado atual', {
     appointmentsCount: appointments?.length || 0,
     loading,
     hasError: !!error,
-    errorMessage: error?.message,
-    timestamp: new Date().toISOString(),
-    primeiros3IDs: appointments?.slice(0, 3).map(a => a.id) || [],
-    ultimos3IDs: appointments?.slice(-3).map(a => a.id) || []
+    timestamp: new Date().toISOString()
   });
-  
-  // 🚨 ALERTA CRÍTICO: Se os dados não correspondem ao esperado
-  if (appointments && appointments.length !== 1184 && !loading) {
-    console.error(`❌ DADOS INCORRETOS: Esperado 1184, recebido ${appointments.length}. Diferença: ${1184 - appointments.length}`);
-  }
 
   // Log quando appointments mudar
   useEffect(() => {
-    if (appointments) {
-      console.log('📊 [STATE] Appointments atualizados:', {
+    if (appointments && !loading) {
+      console.log('📊 [STATE] Appointments carregados:', {
         total: appointments.length,
-        esperado: 1184,
-        diferenca: 1184 - appointments.length
+        status_distribution: appointments.reduce((acc, apt) => {
+          acc[apt.status] = (acc[apt.status] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>)
       });
     }
-  }, [appointments]);
+  }, [appointments, loading]);
 
   // Realtime updates
   useRealtimeUpdates({
