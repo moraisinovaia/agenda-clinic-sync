@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatInTimeZone } from 'date-fns-tz';
@@ -34,6 +34,22 @@ interface AppointmentsListProps {
 export function AppointmentsList({ appointments, doctors, onEditAppointment, onCancelAppointment, onDeleteAppointment, onConfirmAppointment, onUnconfirmAppointment, onNavigateToAppointment, allowCanceled = false }: AppointmentsListProps) {
   const [selectedAuditId, setSelectedAuditId] = useState<string | null>(null);
   const [selectedPatientName, setSelectedPatientName] = useState<string>("");
+  
+  // 🔍 Log de debug para verificar dados recebidos
+  useEffect(() => {
+    if (appointments.length > 0) {
+      console.log('🎨 [COMPONENT] Recebeu appointments:', {
+        total: appointments.length,
+        primeiro: {
+          id: appointments[0].id.substring(0, 8),
+          criado_por: appointments[0].criado_por,
+          tem_profile: !!appointments[0].criado_por_profile,
+          profile_nome: appointments[0].criado_por_profile?.nome
+        }
+      });
+    }
+  }, [appointments]);
+  
   const {
     searchTerm,
     statusFilter,

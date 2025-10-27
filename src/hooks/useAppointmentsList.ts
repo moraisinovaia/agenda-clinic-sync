@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { AppointmentWithRelations } from '@/types/scheduling';
 import { useToast } from '@/hooks/use-toast';
-import { useOptimizedQuery, clearAllCache } from '@/hooks/useOptimizedQuery';
 import { usePagination } from '@/hooks/usePagination';
 import { usePerformanceMetrics } from '@/hooks/usePerformanceMetrics';
 import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
@@ -19,6 +18,11 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   const lastErrorRef = useRef<string | null>(null);
   const isOperatingRef = useRef(false);
   const isFetchingRef = useRef(false); // 🔒 Lock para prevenir múltiplas execuções simultâneas
+  
+  // 🔥 Estado local para appointments
+  const [appointments, setAppointments] = useState<AppointmentWithRelations[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
   // ✅ FUNÇÃO DE QUERY DIRETA COM JOINS OTIMIZADOS
   const fetchAppointments = useCallback(async () => {
@@ -248,35 +252,63 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     }, 'fetch_appointments', 'GET');
   }, [measureApiCall]);
 
-  // 🔥 Limpar TODO o cache ao montar o componente
+  // 🔥 BUSCAR DADOS DIRETAMENTE SEM CACHE
   useEffect(() => {
-    console.log('🧹 [CACHE] Limpando TODO o cache ao montar componente');
-    clearAllCache();
-  }, []);
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        const data = await fetchAppointments();
+        console.log('📦 [HOOK-FINAL] Dados carregados:', {
+          total: data.length,
+          primeiro_tem_profile: !!data[0]?.criado_por_profile,
+          primeiro_profile_nome: data[0]?.criado_por_profile?.nome,
+          primeiro_criado_por: data[0]?.criado_por
+        });
+        setAppointments(data);
+        setError(null);
+      } catch (err) {
+        console.error('❌ [HOOK-FINAL] Erro ao carregar:', err);
+        setError(err as Error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [fetchAppointments]);
 
-  // ✅ CACHE DESABILITADO TEMPORARIAMENTE PARA DEBUG
-  const { data: appointments, loading, error, refetch, invalidateCache, forceRefetch } = useOptimizedQuery<AppointmentWithRelations[]>(
-    fetchAppointments,
-    [],
-    { 
-      cacheKey: 'appointments-list-DEBUG-PROFILES-' + Date.now(), // 🔑 Cache key com timestamp para forçar reload
-      cacheTime: 0, // 🔥 CACHE DESABILITADO para debug
-      staleTime: 0 // 🔥 STALE DESABILITADO para debug
+  // 🔥 Funções de refetch
+  const refetch = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await fetchAppointments();
+      setAppointments(data);
+      setError(null);
+    } catch (err) {
+      setError(err as Error);
+    } finally {
+      setLoading(false);
     }
-  );
+  }, [fetchAppointments]);
 
-  // Log imediato após useOptimizedQuery
-  console.log('🔍 useAppointmentsList: Estado atual', {
-    appointmentsCount: appointments?.length || 0,
-    loading,
-    hasError: !!error,
-    errorMessage: error?.message,
-    errorDetails: error,
-    timestamp: new Date().toISOString()
-  });
+  const invalidateCache = useCallback(() => {
+    refetch();
+  }, [refetch]);
+
+  const forceRefetch = useCallback(() => {
+    refetch();
+  }, [refetch]);
 
   // Log quando appointments mudar
   useEffect(() => {
+    console.log('🔍 useAppointmentsList: Estado atual', {
+      appointmentsCount: appointments?.length || 0,
+      loading,
+      hasError: !!error,
+      errorMessage: error?.message,
+      errorDetails: error,
+      timestamp: new Date().toISOString()
+    });
+    
     if (appointments && !loading) {
       console.log('📊 [STATE] Appointments carregados:', {
         total: appointments.length,
@@ -286,7 +318,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         }, {} as Record<string, number>)
       });
     }
-  }, [appointments, loading]);
+  }, [appointments, loading, error]);
 
   // Realtime updates
   useRealtimeUpdates({
