@@ -6,20 +6,21 @@ import './index.css';
 import { AuthProvider } from '@/hooks/useAuth';
 import { GlobalErrorBoundary } from '@/components/error/GlobalErrorBoundary';
 
+// 🔄 CACHE CLEARED: 2025-10-27-15:11 - Zero cache para forçar reload
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: (failureCount, error) => {
-        // Não retry para erros 4xx
         if (error && typeof error === 'object' && 'status' in error) {
           const status = error.status as number;
           if (status >= 400 && status < 500) return false;
         }
         return failureCount < 3;
       },
-      staleTime: 0, // ✅ CORREÇÃO: Desabilitar cache stale temporariamente
-      gcTime: 0, // ✅ CORREÇÃO: Forçar limpeza de cache
-      refetchOnMount: 'always', // ✅ CORREÇÃO: Sempre refetch ao montar
+      staleTime: 0,
+      gcTime: 0,
+      refetchOnMount: 'always',
+      refetchOnWindowFocus: true,
     },
   },
 });

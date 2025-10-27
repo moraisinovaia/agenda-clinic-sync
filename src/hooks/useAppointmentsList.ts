@@ -9,6 +9,7 @@ import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 import { useDebounce } from '@/hooks/useDebounce';
 import { logger } from '@/utils/logger';
 
+// 🔄 CACHE BUSTER: Versão 2025-10-27-15:11 - Validação corrigida
 export function useAppointmentsList(itemsPerPage: number = 20) {
   const { toast } = useToast();
   const { measureApiCall } = usePerformanceMetrics();
@@ -50,23 +51,16 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           return [];
         }
 
-        // 2️⃣ VALIDAR DADOS BRUTOS
+        // 2️⃣ VALIDAÇÃO MÍNIMA: Apenas ID obrigatório (outros campos podem ser NULL)
         console.log('🔍 [VALIDAÇÃO] Verificando integridade dos dados...');
         const invalidRecords: any[] = [];
         const validRecords: any[] = [];
 
         rawData.forEach((record: any, index) => {
-          const issues: string[] = [];
-          
-          if (!record.id) issues.push('id ausente');
-          if (!record.paciente_id) issues.push('paciente_id ausente');
-          if (!record.medico_id) issues.push('medico_id ausente');
-          if (!record.atendimento_id) issues.push('atendimento_id ausente');
-          if (!record.data_agendamento) issues.push('data_agendamento ausente');
-          
-          if (issues.length > 0) {
-            invalidRecords.push({ index, record, issues });
-            console.warn(`⚠️ [VALIDAÇÃO] Registro ${index} inválido:`, { issues, id: record.id });
+          // ✅ CORREÇÃO: Validar APENAS id (campos relacionados podem ser NULL por LEFT JOIN)
+          if (!record.id) {
+            invalidRecords.push({ index, record, motivo: 'ID ausente' });
+            console.warn(`⚠️ [VALIDAÇÃO] Registro ${index} SEM ID`);
           } else {
             validRecords.push(record);
           }
