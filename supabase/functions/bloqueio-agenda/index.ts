@@ -127,20 +127,20 @@ serve(async (req) => {
 
       console.log('🗑️ Removendo bloqueio:', bloqueioId);
       
-      const { data: bloqueio, error: removeError } = await supabase
+      // Buscar dados do bloqueio antes de remover
+      const { data: bloqueio, error: fetchError } = await supabase
         .from('bloqueios_agenda')
-        .update({ status: 'inativo' })
+        .select('*')
         .eq('id', bloqueioId)
         .eq('status', 'ativo')
-        .select()
-        .single();
+        .maybeSingle();
 
-      if (removeError) {
-        console.log('❌ Erro ao remover bloqueio:', removeError);
+      if (fetchError) {
+        console.log('❌ Erro ao buscar bloqueio:', fetchError);
         return new Response(
           JSON.stringify({ 
             success: false, 
-            error: 'Erro ao remover bloqueio' 
+            error: 'Erro ao buscar bloqueio' 
           }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
@@ -157,13 +157,67 @@ serve(async (req) => {
         );
       }
 
+      // 🔥 RESTAURAR agendamentos que foram cancelados por este bloqueio
+      console.log('🔄 Restaurando agendamentos cancelados pelo bloqueio...');
+      
+      const { data: agendamentosCancelados, error: agendamentosError } = await supabase
+        .from('agendamentos')
+        .select('id, data_agendamento, hora_agendamento')
+        .eq('medico_id', bloqueio.medico_id)
+        .gte('data_agendamento', bloqueio.data_inicio)
+        .lte('data_agendamento', bloqueio.data_fim)
+        .eq('status', 'cancelado_bloqueio');
+
+      console.log(`📋 Encontrados ${agendamentosCancelados?.length || 0} agendamentos para restaurar`);
+
+      // Restaurar agendamentos
+      if (agendamentosCancelados && agendamentosCancelados.length > 0) {
+        const { error: restoreError } = await supabase
+          .from('agendamentos')
+          .update({ 
+            status: 'agendado',
+            cancelado_por: null,
+            cancelado_por_user_id: null,
+            cancelado_em: null
+          })
+          .in('id', agendamentosCancelados.map(a => a.id));
+
+        if (restoreError) {
+          console.log('⚠️ Erro ao restaurar agendamentos:', restoreError);
+        } else {
+          console.log(`✅ ${agendamentosCancelados.length} agendamentos restaurados`);
+        }
+      }
+
+      // Atualizar status do bloqueio para inativo
+      const { data: bloqueioAtualizado, error: removeError } = await supabase
+        .from('bloqueios_agenda')
+        .update({ status: 'inativo' })
+        .eq('id', bloqueioId)
+        .select()
+        .single();
+
+      if (removeError) {
+        console.log('❌ Erro ao atualizar status do bloqueio:', removeError);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Erro ao atualizar bloqueio' 
+          }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       console.log('✅ Bloqueio removido com sucesso');
       
       return new Response(
         JSON.stringify({ 
           success: true,
-          message: 'Bloqueio removido com sucesso',
-          data: bloqueio
+          message: 'Bloqueio removido e agendamentos restaurados com sucesso',
+          data: {
+            bloqueio: bloqueioAtualizado,
+            agendamentos_restaurados: agendamentosCancelados?.length || 0
+          }
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -249,10 +303,10 @@ serve(async (req) => {
 
     console.log('✅ Bloqueio criado:', bloqueio.id);
 
-    // Buscar agendamentos afetados
-    console.log('🔍 Buscando agendamentos afetados...');
+    // 🔥 CANCELAR agendamentos afetados com status cancelado_bloqueio
+    console.log('🔍 Buscando e cancelando agendamentos afetados...');
     
-    const { data: agendamentos } = await supabase
+    const { data: agendamentos, error: agendamentosError } = await supabase
       .from('agendamentos')
       .select('id, data_agendamento, hora_agendamento')
       .eq('medico_id', medicoId)
@@ -261,6 +315,24 @@ serve(async (req) => {
       .eq('status', 'agendado');
 
     console.log(`📋 Encontrados ${agendamentos?.length || 0} agendamentos para cancelar`);
+
+    // Cancelar agendamentos encontrados
+    if (agendamentos && agendamentos.length > 0) {
+      const { error: cancelError } = await supabase
+        .from('agendamentos')
+        .update({ 
+          status: 'cancelado_bloqueio',
+          cancelado_por: 'Sistema (Bloqueio de Agenda)',
+          cancelado_em: new Date().toISOString()
+        })
+        .in('id', agendamentos.map(a => a.id));
+
+      if (cancelError) {
+        console.log('⚠️ Erro ao cancelar agendamentos:', cancelError);
+      } else {
+        console.log(`✅ ${agendamentos.length} agendamentos cancelados por bloqueio`);
+      }
+    }
 
     // Retornar sucesso
     return new Response(

@@ -169,7 +169,9 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
 
         toast({
           title: 'Agenda Bloqueada com Sucesso!',
-          description: `${data.data.agendamentos_afetados} agendamento(s) serão cancelados.`,
+          description: data.data.agendamentos_afetados > 0
+            ? `${data.data.agendamentos_afetados} agendamento(s) foram cancelados pelo bloqueio. Eles serão restaurados se você abrir a agenda novamente.`
+            : 'Bloqueio criado com sucesso.',
         });
       }
 
@@ -275,7 +277,9 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
 
       toast({
         title: "Sucesso",
-        description: "Bloqueio removido com sucesso!",
+        description: data.data.agendamentos_restaurados 
+          ? `Bloqueio removido! ${data.data.agendamentos_restaurados} agendamento(s) restaurado(s).`
+          : "Bloqueio removido com sucesso!",
       });
       
       // Recarregar lista de bloqueios
@@ -480,7 +484,8 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
                           )}
                         </li>
                         <li>• Período: <strong>{formatDateForDisplay(dataInicio)}</strong> até <strong>{formatDateForDisplay(dataFim)}</strong></li>
-                        <li>• Todos os agendamentos neste período serão <strong>cancelados automaticamente</strong></li>
+                        <li>• Todos os agendamentos neste período serão <strong>cancelados temporariamente</strong></li>
+                        <li>• Os agendamentos serão <strong>restaurados automaticamente</strong> se você abrir a agenda novamente</li>
                         <li>• Pacientes serão <strong>notificados via WhatsApp</strong> sobre o cancelamento</li>
                       </ul>
                     </div>
@@ -636,12 +641,13 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
             <CardContent className="space-y-4">
               <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
                 <p className="text-sm text-destructive font-medium mb-2">
-                  ⚠️ Esta ação NÃO pode ser desfeita!
+                  ⚠️ Atenção: Os agendamentos serão cancelados temporariamente
                 </p>
                 <ul className="text-sm space-y-1">
                   <li>• Médico: <strong>{medicoId === 'ALL' ? 'Todos os médicos' : medicoSelecionado?.nome}</strong></li>
                   <li>• Período: <strong>{formatDateForDisplay(dataInicio)}</strong> até <strong>{formatDateForDisplay(dataFim)}</strong></li>
-                  <li>• Todos os agendamentos serão cancelados</li>
+                  <li>• Agendamentos serão <strong>cancelados temporariamente</strong></li>
+                  <li>• Você pode <strong>restaurá-los</strong> abrindo a agenda novamente</li>
                   <li>• Pacientes serão notificados via WhatsApp</li>
                 </ul>
               </div>
@@ -688,8 +694,8 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
-                <p className="text-sm text-destructive font-medium mb-2">
-                  ⚠️ Ao remover este bloqueio, a agenda ficará disponível novamente para agendamentos.
+                <p className="text-sm text-primary font-medium mb-2">
+                  ✅ Ao remover este bloqueio, os agendamentos cancelados pelo bloqueio serão automaticamente restaurados.
                 </p>
                 <ul className="text-sm space-y-1">
                   <li>• Período: <strong>{formatDateForDisplay(bloqueioParaRemover.data_inicio)}</strong> até <strong>{formatDateForDisplay(bloqueioParaRemover.data_fim)}</strong></li>
