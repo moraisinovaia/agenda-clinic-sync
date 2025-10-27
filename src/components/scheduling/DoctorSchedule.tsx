@@ -173,12 +173,24 @@ export function DoctorSchedule({
       const normalizedDate = startOfDay(date);
       const dateStr = format(normalizedDate, 'yyyy-MM-dd');
       
-      return appointments.filter(
+      // Debug: Mostrar informações sobre os agendamentos carregados
+      const totalAppointments = appointments.length;
+      const doctorAppointments = appointments.filter(apt => apt.medico_id === doctor.id);
+      const filteredAppointments = appointments.filter(
         appointment => 
           appointment.medico_id === doctor.id && 
           appointment.data_agendamento === dateStr &&
           appointment.status !== 'excluido'
       );
+      
+      console.log(`📅 Buscando agendamentos para ${dateStr}:`, {
+        totalCarregados: totalAppointments,
+        doMedico: doctorAppointments.length,
+        nessaData: filteredAppointments.length,
+        datas: [...new Set(appointments.map(a => a.data_agendamento))].sort()
+      });
+      
+      return filteredAppointments;
     } catch (error) {
       console.error('❌ Erro ao buscar agendamentos:', error);
       return [];
