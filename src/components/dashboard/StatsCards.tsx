@@ -12,8 +12,15 @@ interface StatsCardsProps {
 }
 
 export const StatsCards = ({ doctors, appointments }: StatsCardsProps) => {
-  const today = new Date().toISOString().split('T')[0];
-  const tomorrow = addDays(new Date(), 1).toISOString().split('T')[0];
+  const today = format(new Date(), 'yyyy-MM-dd');
+  const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd');
+  
+  // Debug: verificar datas calculadas
+  console.log('📅 StatsCards - Datas calculadas:', {
+    today,
+    tomorrow,
+    totalAppointments: appointments.length
+  });
   
   // Filtrar apenas agendamentos válidos (não cancelados nem excluídos) para estatísticas
   const validAppointments = appointments.filter(apt => 
