@@ -52,49 +52,31 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           
           console.log(`📦 [PÁGINA ${currentPage + 1}] Buscando registros ${start}-${end}...`);
           
-          const { data: pageData, error, count } = await supabase
-            .from('agendamentos')
-            .select(`
-              *,
-              pacientes!inner(
-                id,
-                nome_completo,
-                convenio,
-                celular,
-                telefone,
-                data_nascimento
-              ),
-              medicos!inner(
-                id,
-                nome,
-                especialidade,
-                ativo
-              ),
-              atendimentos!inner(
-                id,
-                nome,
-                tipo,
-                medico_id
-              ),
-              criado_por_profile:profiles!agendamentos_criado_por_user_id_fkey(
-                id,
-                user_id,
-                nome,
-                email,
-                ativo,
-                created_at,
-                updated_at
-              ),
-              alterado_por_profile:profiles!agendamentos_alterado_por_user_id_fkey(
-                id,
-                user_id,
-                nome,
-                email,
-                ativo,
-                created_at,
-                updated_at
-              )
-            `, { count: 'exact' })
+            const { data: pageData, error, count } = await supabase
+              .from('agendamentos')
+              .select(`
+                *,
+                pacientes!inner(
+                  id,
+                  nome_completo,
+                  convenio,
+                  celular,
+                  telefone,
+                  data_nascimento
+                ),
+                medicos!inner(
+                  id,
+                  nome,
+                  especialidade,
+                  ativo
+                ),
+                atendimentos!inner(
+                  id,
+                  nome,
+                  tipo,
+                  medico_id
+                )
+              `, { count: 'exact' })
             .is('excluido_em', null)
             .gte('data_agendamento', dateFilter)
             .order('data_agendamento', { ascending: false })
@@ -158,14 +140,41 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         
         console.log(`✅ [FINAL] Total carregado: ${allAppointments.length} agendamentos`);
         
+        // Buscar profiles dos usuários que criaram/alteraram
+        const userIds = new Set<string>();
+        allAppointments.forEach((apt: any) => {
+          if (apt.criado_por_user_id) userIds.add(apt.criado_por_user_id);
+          if (apt.alterado_por_user_id) userIds.add(apt.alterado_por_user_id);
+        });
+
+        let profilesMap: Record<string, any> = {};
+        
+        if (userIds.size > 0) {
+          console.log(`🔍 [PROFILES] Buscando ${userIds.size} perfis de usuários...`);
+          const { data: profiles, error: profilesError } = await supabase
+            .from('profiles')
+            .select('user_id, nome, email, ativo, created_at, updated_at')
+            .in('user_id', Array.from(userIds));
+          
+          if (profilesError) {
+            console.error('❌ [PROFILES] Erro ao buscar perfis:', profilesError);
+          } else if (profiles) {
+            profilesMap = profiles.reduce((acc, profile) => {
+              acc[profile.user_id] = profile;
+              return acc;
+            }, {} as Record<string, any>);
+            console.log(`✅ [PROFILES] ${profiles.length} perfis carregados`);
+          }
+        }
+        
         // Transformar dados
         const transformedAppointments: AppointmentWithRelations[] = allAppointments.map((apt: any) => ({
           ...apt,
           pacientes: apt.pacientes || null,
           medicos: apt.medicos || null,
           atendimentos: apt.atendimentos || null,
-          criado_por_profile: apt.criado_por_profile || null,
-          alterado_por_profile: apt.alterado_por_profile || null,
+          criado_por_profile: apt.criado_por_user_id ? profilesMap[apt.criado_por_user_id] || null : null,
+          alterado_por_profile: apt.alterado_por_user_id ? profilesMap[apt.alterado_por_user_id] || null : null,
         }));
         
         // Análise por status
