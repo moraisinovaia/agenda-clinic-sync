@@ -21,22 +21,22 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     logger.info('Iniciando busca de agendamentos', {}, 'APPOINTMENTS');
     
     return measureApiCall(async () => {
-        // Usar função RPC otimizada - FORÇAR RETORNO DE TODOS OS REGISTROS
-        // Usar header Prefer: count=exact sem range para evitar limite do PostgREST
-        const { data: appointmentsWithRelations, error, count } = await supabase.rpc(
-          'buscar_agendamentos_otimizado', 
-          {
+        // Usar função RPC otimizada com RETURNS SETOF json
+        // Isso remove a limitação de 1000 registros do PostgREST
+        const { data: rawData, error } = await supabase
+          .rpc('buscar_agendamentos_otimizado', {
             p_data_inicio: null,
             p_data_fim: null,
             p_medico_id: null,
             p_status: null
-          }
-        ).limit(10000); // Limite explícito alto
+          })
+          .returns<any[]>();
 
-        console.log('📊 RPC retornou:', {
-          registros: appointmentsWithRelations?.length || 0,
-          esperado: 1182,
-          faltam: 1182 - (appointmentsWithRelations?.length || 0)
+        console.log('📊 RPC buscar_agendamentos_otimizado retornou:', {
+          registros: rawData?.length || 0,
+          esperado: 1183,
+          faltam: 1183 - (rawData?.length || 0),
+          percentual: `${((rawData?.length || 0) / 1183 * 100).toFixed(1)}%`
         });
 
         if (error) {
@@ -44,8 +44,17 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           throw error;
         }
 
-        // Transformar para o formato esperado
-        const transformedAppointments = (appointmentsWithRelations || []).map(apt => ({
+        // Validar se todos os registros foram retornados
+        if (rawData && rawData.length < 1183) {
+          console.warn('⚠️ ATENÇÃO: Nem todos os registros foram retornados!', {
+            retornados: rawData.length,
+            esperados: 1183,
+            deficit: 1183 - rawData.length
+          });
+        }
+
+        // Transformar para o formato esperado pela aplicação
+        const transformedAppointments = (rawData || []).map(apt => ({
           id: apt.id,
           paciente_id: apt.paciente_id,
           medico_id: apt.medico_id,
