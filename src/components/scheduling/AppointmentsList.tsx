@@ -71,14 +71,13 @@ export function AppointmentsList({ appointments, doctors, onEditAppointment, onC
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'agendado':
+      case 'cancelado_bloqueio':
         return 'default';
       case 'confirmado':
         return 'secondary';
       case 'realizado':
         return 'outline';
       case 'cancelado':
-        return 'destructive';
-      case 'cancelado_bloqueio':
         return 'destructive';
       default:
         return 'outline';
@@ -89,14 +88,14 @@ export function AppointmentsList({ appointments, doctors, onEditAppointment, onC
     switch (status) {
       case 'agendado':
         return 'Agendado';
+      case 'cancelado_bloqueio':
+        return 'Agendado';
       case 'confirmado':
         return 'Confirmado';
       case 'realizado':
         return 'Realizado';
       case 'cancelado':
         return 'Cancelado';
-      case 'cancelado_bloqueio':
-        return 'Cancelado (Bloqueio)';
       default:
         return status;
     }
@@ -259,7 +258,7 @@ export function AppointmentsList({ appointments, doctors, onEditAppointment, onC
                           >
                             <Edit className="h-3 w-3" />
                           </Button>
-                          {appointment.status === 'agendado' && (
+                          {(appointment.status === 'agendado' || appointment.status === 'cancelado_bloqueio') && (
                             <>
                               <Button 
                                 variant="ghost" 

@@ -228,6 +228,7 @@ export function DoctorSchedule({
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'agendado':
+      case 'cancelado_bloqueio':
         return 'bg-blue-500 text-white hover:bg-blue-600';
       case 'confirmado':
         return 'bg-green-500 text-white hover:bg-green-600';
@@ -244,6 +245,8 @@ export function DoctorSchedule({
     switch (status) {
       case 'agendado':
         return 'Agendado';
+      case 'cancelado_bloqueio':
+        return 'Agendado';
       case 'confirmado':
         return 'Confirmado';
       case 'realizado':
@@ -257,7 +260,7 @@ export function DoctorSchedule({
 
   const selectedDateAppointments = getAppointmentsForDate(selectedDate);
   const activeAppointments = selectedDateAppointments.filter(
-    apt => apt.status === 'agendado' || apt.status === 'confirmado'
+    apt => apt.status === 'agendado' || apt.status === 'confirmado' || apt.status === 'cancelado_bloqueio'
   );
 
   const emptyTimeSlots = useMemo(() => {
