@@ -22,8 +22,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     
     return measureApiCall(async () => {
       try {
-        // 1️⃣ BUSCAR DADOS DA RPC
-        const { data: rawData, error, count } = await supabase
+        // 1️⃣ BUSCAR DADOS DA RPC (SETOF json - sem limite PostgREST)
+        const { data: rawData, error } = await supabase
           .rpc('buscar_agendamentos_otimizado', {
             p_data_inicio: null,
             p_data_fim: null,
@@ -33,10 +33,10 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
 
         console.log('📊 [RPC] Resposta recebida:', {
           registros_retornados: rawData?.length || 0,
-          esperado: 1183,
-          faltam: 1183 - (rawData?.length || 0),
+          esperado: 1184,
+          faltam: 1184 - (rawData?.length || 0),
           tem_erro: !!error,
-          count: count
+          percentual: `${((rawData?.length || 0) / 1184 * 100).toFixed(1)}%`
         });
 
         if (error) {
@@ -197,14 +197,14 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
 
         // 4️⃣ ESTATÍSTICAS FINAIS
         console.log('✅ [FINAL] Resumo completo:', {
-          esperado_total: 1183,
+          esperado_total: 1184,
           recebido_rpc: rawData.length,
           validos_validacao: validRecords.length,
           transformados_sucesso: transformedAppointments.length,
           perdidos_validacao: rawData.length - validRecords.length,
           perdidos_transformacao: validRecords.length - transformedAppointments.length,
-          perdidos_total: 1183 - transformedAppointments.length,
-          percentual_sucesso: ((transformedAppointments.length / 1183) * 100).toFixed(2) + '%'
+          perdidos_total: 1184 - transformedAppointments.length,
+          percentual_sucesso: ((transformedAppointments.length / 1184) * 100).toFixed(2) + '%'
         });
 
         // 5️⃣ ANÁLISE POR STATUS
@@ -217,8 +217,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
 
         logger.info('Agendamentos carregados com sucesso', { 
           count: transformedAppointments.length,
-          esperado: 1183,
-          perdidos: 1183 - transformedAppointments.length
+          esperado: 1184,
+          perdidos: 1184 - transformedAppointments.length
         }, 'APPOINTMENTS');
 
         return transformedAppointments;
@@ -246,8 +246,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     if (appointments) {
       console.log('📊 [STATE] Appointments atualizados:', {
         total: appointments.length,
-        esperado: 1183,
-        diferenca: 1183 - appointments.length
+        esperado: 1184,
+        diferenca: 1184 - appointments.length
       });
     }
   }, [appointments]);
