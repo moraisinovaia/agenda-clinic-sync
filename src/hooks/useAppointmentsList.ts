@@ -78,8 +78,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           `, { count: 'exact' })
           .is('excluido_em', null)
           .gte('data_agendamento', dateFilter)
-          .order('data_agendamento', { ascending: true })
-          .order('hora_agendamento', { ascending: true })
+          .order('data_agendamento', { ascending: false })
+          .order('hora_agendamento', { ascending: false })
           .range(0, 4999); // ✅ Até 5000 registros
 
         console.log('📊 [QUERY] Resposta recebida:', {
@@ -146,7 +146,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     fetchAppointments,
     [],
     { 
-      cacheKey: 'appointments-list-direct-v2025-10-27-21:00', // ✅ Nova versão com JOINs de profiles
+      cacheKey: 'appointments-list-direct-v2025-10-27-22:00', // ✅ Versão definitiva: descending para mostrar recentes primeiro
       cacheTime: 5 * 60 * 1000, // ✅ Cache de 5 minutos
       staleTime: 2 * 60 * 1000 // ✅ Stale após 2 minutos
     }
