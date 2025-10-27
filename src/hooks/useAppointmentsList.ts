@@ -22,25 +22,28 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     
     return measureApiCall(async () => {
         // Usar função RPC otimizada que retorna TODOS os agendamentos não excluídos
-        // IMPORTANTE: Headers para garantir retorno de TODOS os registros
-        const { data: appointmentsWithRelations, error } = await supabase
+        // REMOVER LIMITE: Permitir retorno ilimitado de registros
+        const { data: appointmentsWithRelations, error, count } = await supabase
           .rpc('buscar_agendamentos_otimizado', {
             p_data_inicio: null,
             p_data_fim: null,
             p_medico_id: null,
             p_status: null
           }, {
-            head: false,
             count: 'exact'
-          })
-          .limit(10000); // Limite explícito alto para garantir todos os registros
+          });
+
+        console.log('📊 RPC retornou:', {
+          registros: appointmentsWithRelations?.length || 0,
+          count: count,
+          temDados: !!appointmentsWithRelations,
+          ehArray: Array.isArray(appointmentsWithRelations)
+        });
 
         if (error) {
           logger.error('Erro na consulta de agendamentos otimizada', error, 'APPOINTMENTS');
           throw error;
         }
-        
-        console.log('📊 Total de agendamentos carregados:', appointmentsWithRelations?.length || 0);
 
         // Transformar para o formato esperado
         const transformedAppointments = (appointmentsWithRelations || []).map(apt => ({
