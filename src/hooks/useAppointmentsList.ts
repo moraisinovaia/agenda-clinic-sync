@@ -9,7 +9,7 @@ import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 import { useDebounce } from '@/hooks/useDebounce';
 import { logger } from '@/utils/logger';
 
-// 🔄 CACHE BUSTER: Versão FINAL 2025-10-27-16:00 - Solução definitiva de cache
+// 🔄 CACHE BUSTER: Versão FINAL 2025-10-27-16:25 - Solução PostgREST limit
 export function useAppointmentsList(itemsPerPage: number = 20) {
   console.log('🏁 useAppointmentsList: Hook inicializado');
   
@@ -31,14 +31,15 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     
     return measureApiCall(async () => {
       try {
-        // 1️⃣ BUSCAR DADOS DA RPC (SETOF json - sem limite PostgREST)
+        // 1️⃣ BUSCAR DADOS DA RPC (com .limit(5000) para forçar retorno completo)
         const { data: rawData, error } = await supabase
           .rpc('buscar_agendamentos_otimizado', {
             p_data_inicio: null,
             p_data_fim: null,
             p_medico_id: null,
             p_status: null
-          });
+          })
+          .limit(5000); // ✅ Forçar PostgREST a retornar até 5000 registros
 
         console.log('📊 [RPC] Resposta recebida:', {
           registros_retornados: rawData?.length || 0,
@@ -241,7 +242,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     fetchAppointments,
     [],
     { 
-      cacheKey: 'appointments-list-FINAL-v2025-10-27-16:00', // ✅ Cache NUNCA será usado (cacheTime=0)
+      cacheKey: 'appointments-list-FINAL-v2025-10-27-16:25', // ✅ Cache NUNCA será usado (cacheTime=0)
       cacheTime: 0, // ✅ Cache desabilitado
       staleTime: 0, // ✅ Sempre considerar stale
       refetchOnMount: true // ✅ Sempre refetch ao montar
