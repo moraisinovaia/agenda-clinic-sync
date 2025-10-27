@@ -11,16 +11,24 @@ import { logger } from '@/utils/logger';
 
 // 🔄 QUERY DIRETA: Versão Otimizada 2025-10-27-17:00 - Solução definitiva com índices
 export function useAppointmentsList(itemsPerPage: number = 20) {
-  console.log('🏁 useAppointmentsList: Hook inicializado (Query Direta)');
+  console.log('🏁 useAppointmentsList: Hook inicializado (Paginação Manual)');
   
   const { toast } = useToast();
   const { measureApiCall } = usePerformanceMetrics();
   const errorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastErrorRef = useRef<string | null>(null);
   const isOperatingRef = useRef(false);
+  const isFetchingRef = useRef(false); // 🔒 Lock para prevenir múltiplas execuções simultâneas
 
   // ✅ FUNÇÃO DE QUERY DIRETA COM JOINS OTIMIZADOS
   const fetchAppointments = useCallback(async () => {
+    // 🔒 Prevenir múltiplas execuções simultâneas
+    if (isFetchingRef.current) {
+      console.log('⏸️ [FETCH] Já há uma busca em andamento, aguardando...');
+      return [];
+    }
+    
+    isFetchingRef.current = true;
     console.log('🔍 [FETCH] Iniciando busca paginada manual...');
     
     return measureApiCall(async () => {
@@ -139,6 +147,10 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         console.error('❌ [FETCH] Erro fatal:', err);
         logger.error('Erro ao buscar agendamentos', err, 'APPOINTMENTS');
         throw err;
+      } finally {
+        // 🔓 Liberar o lock
+        isFetchingRef.current = false;
+        console.log('🔓 [FETCH] Lock liberado');
       }
     }, 'fetch_appointments', 'GET');
   }, [measureApiCall]);
