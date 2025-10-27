@@ -92,6 +92,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           if (count !== null && currentPage === 0) {
             totalCount = count;
             console.log(`📊 [TOTAL] ${totalCount} agendamentos disponíveis no banco`);
+            console.log(`🔍 [PRIMEIRA PÁGINA] Recebidos ${pageData?.length || 0} registros`);
           }
           
           if (!pageData || pageData.length === 0) {
@@ -102,6 +103,17 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           
           allAppointments = [...allAppointments, ...pageData];
           console.log(`✅ [PÁGINA ${currentPage + 1}] ${pageData.length} registros carregados (total acumulado: ${allAppointments.length}/${totalCount})`);
+          
+          // 📊 LOG: Status dos últimos 5 registros da página
+          if (pageData && pageData.length > 0) {
+            console.log(`📊 [STATUS] Últimos 5 registros da página ${currentPage + 1}:`, 
+              pageData.slice(-5).map(a => ({ 
+                id: a.id, 
+                status: a.status, 
+                data: a.data_agendamento 
+              }))
+            );
+          }
           
           currentPage++; // ✅ Incrementar PRIMEIRO
           
@@ -168,7 +180,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     fetchAppointments,
     [],
     { 
-      cacheKey: 'appointments-list-direct-v2025-10-27-force-reload', // 🔑 Nova cache key para forçar reload
+      cacheKey: 'appointments-list-direct-v2025-10-27-CLEAR-ALL-' + Date.now(), // 🔑 Cache key única para forçar reload total
       cacheTime: 0, // 🔥 CACHE DESABILITADO para debug
       staleTime: 0 // 🔥 STALE DESABILITADO para debug
     }
