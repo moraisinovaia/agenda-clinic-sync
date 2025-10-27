@@ -678,6 +678,7 @@ const Index = () => {
             <AppointmentsList 
               appointments={appointments}
               doctors={doctors}
+              allowCanceled={true}
               onEditAppointment={handleEditAppointment}
               onNavigateToAppointment={handleNavigateToAppointment}
               onCancelAppointment={cancelAppointment}

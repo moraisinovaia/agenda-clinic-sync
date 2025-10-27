@@ -53,8 +53,34 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           });
         }
 
+        // 🔍 VALIDAÇÃO DE INTEGRIDADE: Checar registros problemáticos
+        const invalidRecords = (rawData || []).filter(apt => 
+          !apt.id || !apt.paciente_id || !apt.medico_id || !apt.atendimento_id
+        );
+
+        if (invalidRecords.length > 0) {
+          console.error('❌ REGISTROS INVÁLIDOS DETECTADOS:', {
+            total: invalidRecords.length,
+            registros: invalidRecords.map(r => ({
+              id: r.id,
+              paciente_id: r.paciente_id,
+              medico_id: r.medico_id,
+              atendimento_id: r.atendimento_id
+            }))
+          });
+        }
+
         // Transformar para o formato esperado pela aplicação
-        const transformedAppointments = (rawData || []).map(apt => ({
+        const transformedAppointments = (rawData || [])
+          .filter(apt => {
+            // Filtrar registros inválidos
+            const isValid = apt.id && apt.paciente_id && apt.medico_id && apt.atendimento_id;
+            if (!isValid) {
+              console.warn('⚠️ Registro inválido removido:', apt.id);
+            }
+            return isValid;
+          })
+          .map(apt => ({
           id: apt.id,
           paciente_id: apt.paciente_id,
           medico_id: apt.medico_id,
@@ -148,6 +174,22 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
             cliente_id: '00000000-0000-0000-0000-000000000000' // Usar ID padrão temporário
           }
         }));
+
+        // 🔍 LOG FINAL: Comparar rawData vs transformedAppointments
+        console.log('📊 RESULTADO FINAL DA TRANSFORMAÇÃO:', {
+          rawData: rawData?.length || 0,
+          transformed: transformedAppointments.length,
+          perdidos: (rawData?.length || 0) - transformedAppointments.length,
+          percentual: `${(transformedAppointments.length / (rawData?.length || 1) * 100).toFixed(1)}%`
+        });
+
+        if ((rawData?.length || 0) !== transformedAppointments.length) {
+          console.error('❌ PERDA DE DADOS NA TRANSFORMAÇÃO!', {
+            inicio: rawData?.length || 0,
+            final: transformedAppointments.length,
+            perdidos: (rawData?.length || 0) - transformedAppointments.length
+          });
+        }
 
         logger.info('Agendamentos carregados com sucesso via RPC', { count: transformedAppointments.length }, 'APPOINTMENTS');
         return transformedAppointments;

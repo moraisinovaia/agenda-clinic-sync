@@ -59,6 +59,17 @@ export const useAdvancedAppointmentFilters = (
   const [convenioFilter, setConvenioFilter] = useState('all');
 
   const filteredAppointments = useMemo(() => {
+    // 🔍 LOG: Estado inicial
+    console.log('🔍 FILTROS: Iniciando filtragem', {
+      total: appointments.length,
+      allowCanceled,
+      statusFilter,
+      dateFilter,
+      doctorFilter,
+      convenioFilter,
+      searchTerm
+    });
+
     // Separar agendamentos cancelados e excluídos por padrão, exceto quando explicitamente permitido
     const baseFilter = allowCanceled || statusFilter === 'cancelado' || statusFilter === 'cancelado_bloqueio' || statusFilter === 'excluido'
       ? appointments 
@@ -68,7 +79,13 @@ export const useAdvancedAppointmentFilters = (
           appointment.status !== 'excluido'
         );
     
-    return baseFilter.filter(appointment => {
+    console.log('🔍 FILTROS: Após filtro de cancelados', {
+      antes: appointments.length,
+      depois: baseFilter.length,
+      removidos: appointments.length - baseFilter.length
+    });
+    
+    const filtered = baseFilter.filter(appointment => {
       // Search filter
       const matchesSearch = !searchTerm || 
         appointment.pacientes?.nome_completo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -115,17 +132,49 @@ export const useAdvancedAppointmentFilters = (
       const matchesConvenio = convenioFilter === 'all' || 
         appointment.pacientes?.convenio === convenioFilter;
 
-      return matchesSearch && matchesStatus && matchesDate && matchesDoctor && matchesConvenio;
+      const matches = matchesSearch && matchesStatus && matchesDate && matchesDoctor && matchesConvenio;
+      
+      // 🔍 LOG: Debug para registros que não passam
+      if (!matches) {
+        console.log('🔍 FILTROS: Registro removido', {
+          id: appointment.id,
+          paciente: appointment.pacientes?.nome_completo,
+          matchesSearch,
+          matchesStatus,
+          matchesDate,
+          matchesDoctor,
+          matchesConvenio
+        });
+      }
+      
+      return matches;
     });
+
+    console.log('🔍 FILTROS: Resultado final', {
+      inicio: baseFilter.length,
+      final: filtered.length,
+      removidos: baseFilter.length - filtered.length
+    });
+
+    return filtered;
   }, [appointments, searchTerm, statusFilter, dateFilter, doctorFilter, convenioFilter, allowCanceled]);
 
   const sortedAppointments = useMemo(() => {
     return filteredAppointments.sort((a, b) => {
-      const dateA = new Date(`${a.data_agendamento}T${a.hora_agendamento}`);
-      const dateB = new Date(`${b.data_agendamento}T${b.hora_agendamento}`);
+      // 🐛 CORREÇÃO: Adicionar fallback para hora_agendamento NULL
+      const timeA = a.hora_agendamento || '00:00:00';
+      const timeB = b.hora_agendamento || '00:00:00';
       
-      // Sort by date/time ascending (nearest first)
-      return dateA.getTime() - dateB.getTime();
+      try {
+        const dateA = new Date(`${a.data_agendamento}T${timeA}`);
+        const dateB = new Date(`${b.data_agendamento}T${timeB}`);
+        
+        // Sort by date/time ascending (nearest first)
+        return dateA.getTime() - dateB.getTime();
+      } catch (error) {
+        console.error('❌ Erro ao ordenar agendamentos:', { a, b, error });
+        return 0;
+      }
     });
   }, [filteredAppointments]);
 
