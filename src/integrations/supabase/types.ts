@@ -95,11 +95,46 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "agendamentos_alterado_por_user_id_fkey"
+            columns: ["alterado_por_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
             foreignKeyName: "agendamentos_atendimento_id_fkey"
             columns: ["atendimento_id"]
             isOneToOne: false
             referencedRelation: "atendimentos"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agendamentos_cancelado_por_user_id_fkey"
+            columns: ["cancelado_por_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "agendamentos_confirmado_por_user_id_fkey"
+            columns: ["confirmado_por_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "agendamentos_criado_por_user_id_fkey"
+            columns: ["criado_por_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "agendamentos_excluido_por_user_id_fkey"
+            columns: ["excluido_por_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
           {
             foreignKeyName: "agendamentos_medico_id_fkey"
