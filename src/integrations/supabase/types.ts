@@ -357,7 +357,7 @@ export type Database = {
           ativo: boolean | null
           categoria: string
           chave: string
-          cliente_id: string | null
+          cliente_id: string
           created_at: string | null
           dados_extras: Json | null
           id: string
@@ -368,7 +368,7 @@ export type Database = {
           ativo?: boolean | null
           categoria: string
           chave: string
-          cliente_id?: string | null
+          cliente_id: string
           created_at?: string | null
           dados_extras?: Json | null
           id?: string
@@ -379,7 +379,7 @@ export type Database = {
           ativo?: boolean | null
           categoria?: string
           chave?: string
-          cliente_id?: string | null
+          cliente_id?: string
           created_at?: string | null
           dados_extras?: Json | null
           id?: string

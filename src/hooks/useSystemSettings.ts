@@ -33,10 +33,32 @@ export const useSystemSettings = () => {
   const loadSettings = async () => {
     try {
       setLoading(true);
+      
+      // Buscar cliente_id do usuário atual
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.error('Usuário não autenticado');
+        setLoading(false);
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('cliente_id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!profile?.cliente_id) {
+        console.error('Cliente não encontrado para o usuário');
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase
-        .from('system_settings')
-        .select('key, value, type')
-        .in('key', [
+        .from('configuracoes_clinica')
+        .select('chave, valor')
+        .eq('cliente_id', profile.cliente_id)
+        .in('chave', [
           'session_timeout',
           'enable_notifications', 
           'auto_backup_enabled',
@@ -53,13 +75,13 @@ export const useSystemSettings = () => {
       if (data) {
         const newSettings = { ...settings };
         data.forEach(setting => {
-          const key = setting.key;
-          let value: any = setting.value;
+          const key = setting.chave;
+          let value: any = setting.valor;
           
-          // Converter tipos
-          if (setting.type === 'boolean') {
+          // Converter tipos baseado no valor
+          if (value === 'true' || value === 'false') {
             value = value === 'true';
-          } else if (setting.type === 'number') {
+          } else if (!isNaN(Number(value))) {
             value = parseInt(value);
           }
 
@@ -112,28 +134,45 @@ export const useSystemSettings = () => {
     try {
       setLoading(true);
       
+      // Buscar cliente_id do usuário atual
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('cliente_id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!profile?.cliente_id) {
+        throw new Error('Cliente não encontrado para o usuário');
+      }
+      
       const updates = [
-        { key: 'session_timeout', value: settings.sessionTimeout.toString(), type: 'number' },
-        { key: 'enable_notifications', value: settings.enableNotifications.toString(), type: 'boolean' },
-        { key: 'auto_backup_enabled', value: settings.autoBackup.toString(), type: 'boolean' },
-        { key: 'auto_backup_interval', value: settings.backupInterval.toString(), type: 'number' },
-        { key: 'max_appointments_per_day', value: settings.maxAppointmentsPerDay.toString(), type: 'number' },
-        { key: 'reminder_time', value: settings.reminderTime.toString(), type: 'number' },
-        { key: 'auto_backup_max_count', value: settings.autoBackupMaxCount.toString(), type: 'number' },
-        { key: 'auto_backup_include_data', value: settings.autoBackupIncludeData.toString(), type: 'boolean' },
-        { key: 'auto_backup_include_schema', value: settings.autoBackupIncludeSchema.toString(), type: 'boolean' },
+        { chave: 'session_timeout', valor: settings.sessionTimeout.toString() },
+        { chave: 'enable_notifications', valor: settings.enableNotifications.toString() },
+        { chave: 'auto_backup_enabled', valor: settings.autoBackup.toString() },
+        { chave: 'auto_backup_interval', valor: settings.backupInterval.toString() },
+        { chave: 'max_appointments_per_day', valor: settings.maxAppointmentsPerDay.toString() },
+        { chave: 'reminder_time', valor: settings.reminderTime.toString() },
+        { chave: 'auto_backup_max_count', valor: settings.autoBackupMaxCount.toString() },
+        { chave: 'auto_backup_include_data', valor: settings.autoBackupIncludeData.toString() },
+        { chave: 'auto_backup_include_schema', valor: settings.autoBackupIncludeSchema.toString() },
       ];
 
       for (const update of updates) {
         const { error } = await supabase
-          .from('system_settings')
+          .from('configuracoes_clinica')
           .upsert({ 
-            key: update.key, 
-            value: update.value,
-            type: update.type,
-            category: getCategoryForKey(update.key)
+            chave: update.chave, 
+            valor: update.valor,
+            categoria: getCategoryForKey(update.chave),
+            cliente_id: profile.cliente_id,
+            ativo: true
           }, { 
-            onConflict: 'key' 
+            onConflict: 'chave,cliente_id' 
           });
 
         if (error) throw error;

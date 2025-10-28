@@ -92,12 +92,29 @@ export const AlertSystem = () => {
     try {
       setIsLoading(true);
       
+      // Buscar cliente_id do usuário atual
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('cliente_id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!profile?.cliente_id) {
+        throw new Error('Cliente não encontrado');
+      }
+      
       const configData = {
         categoria: 'alertas',
         chave: `alert_${config.type}`,
         valor: config.email,
         ativo: config.enabled,
-        dados_extras: config.conditions
+        dados_extras: config.conditions,
+        cliente_id: profile.cliente_id
       };
 
       if (config.id) {

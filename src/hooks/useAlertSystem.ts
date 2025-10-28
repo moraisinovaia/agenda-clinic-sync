@@ -33,11 +33,32 @@ export const useAlertSystem = () => {
     try {
       console.log('🔧 Carregando configurações de alertas...');
       
+      // Buscar cliente_id do usuário atual
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.log('⚠️ Usuário não autenticado - desabilitando alertas');
+        setAlertConfigs([]);
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('cliente_id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!profile?.cliente_id) {
+        console.log('⚠️ Cliente não encontrado - desabilitando alertas');
+        setAlertConfigs([]);
+        return;
+      }
+      
       const { data, error } = await supabase
         .from('configuracoes_clinica')
         .select('*')
         .eq('categoria', 'alertas')
-        .eq('ativo', true);
+        .eq('ativo', true)
+        .eq('cliente_id', profile.cliente_id);
 
       if (error) {
         // Se for erro de permissão, usar configurações padrão sem alertas
