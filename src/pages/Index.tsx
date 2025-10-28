@@ -385,9 +385,10 @@ const Index = () => {
 
   // Handler para formulário simples - NORMAL
   const handleSimpleAppointmentSubmit = async (formData: SchedulingFormData) => {
-    console.log('🎯 Index.tsx: handleSimpleAppointmentSubmit chamado');
+    console.log('🎯🎯🎯 Index.tsx: handleSimpleAppointmentSubmit INICIADO!', { formData, editingId: editingAppointment?.id });
     
     try {
+      console.log('📲 Index.tsx: Chamando createAppointment...');
       // Tentar criar o agendamento NORMAL (sem forçar conflito)
       await createAppointment(formData, editingAppointment?.id);
       

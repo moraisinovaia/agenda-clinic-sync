@@ -52,6 +52,8 @@ export function useSchedulingForm(props?: UseSchedulingFormProps) {
     e: React.FormEvent,
     onSubmit: (data: SchedulingFormData) => Promise<void>
   ) => {
+    console.log('🔥🔥🔥 useSchedulingForm.handleSubmit INICIADO!', { formData, isSubmitting: isSubmitting.current });
+    
     // Prevenir múltiplas execuções simultâneas
     if (isSubmitting.current) {
       console.log('⏸️ useSchedulingForm: Já existe uma submissão em andamento, ignorando...');
@@ -67,7 +69,7 @@ export function useSchedulingForm(props?: UseSchedulingFormProps) {
     setLoading(true);
     setError(null);
     
-    console.log('🎯 useSchedulingForm: Iniciando handleSubmit com dados:', formData);
+    console.log('🎯 useSchedulingForm: Chamando onSubmit (callback do Index)...');
     
     try {
       await onSubmit(formData);
