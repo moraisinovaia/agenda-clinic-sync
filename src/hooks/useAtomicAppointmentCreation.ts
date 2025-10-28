@@ -101,6 +101,9 @@ export function useAtomicAppointmentCreation() {
 
   // ✅ DEFINITIVO: Criar agendamento com função atômica com locks
   const createAppointment = useCallback(async (formData: SchedulingFormData, editingAppointmentId?: string, forceConflict = false): Promise<any> => {
+    console.log('🚀🚀🚀 INÍCIO ABSOLUTO - createAppointment CHAMADO!', new Date().toISOString());
+    console.log('📦 Dados recebidos:', { formData, editingAppointmentId, forceConflict, userId: user?.id });
+    
     try {
       setLoading(true);
       console.log('🎯 useAtomicAppointmentCreation: Criando agendamento com função atômica definitiva');
