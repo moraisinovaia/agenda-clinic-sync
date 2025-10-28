@@ -7,6 +7,8 @@ import { usePerformanceMetrics } from '@/hooks/usePerformanceMetrics';
 import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 import { useDebounce } from '@/hooks/useDebounce';
 import { logger } from '@/utils/logger';
+import { deduplicateRequest, invalidateCache as invalidateRequestCache } from '@/utils/requestDeduplicator';
+import { format } from 'date-fns';
 
 // 🔄 QUERY DIRETA: Versão Otimizada 2025-10-27-17:00 - Solução definitiva com índices
 export function useAppointmentsList(itemsPerPage: number = 20) {
@@ -24,226 +26,132 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  // ✅ FUNÇÃO DE QUERY DIRETA COM JOINS OTIMIZADOS
+  // ✅ FUNÇÃO DE QUERY DIRETA COM JOINS OTIMIZADOS + PAGINAÇÃO REAL
   const fetchAppointments = useCallback(async () => {
-    const executionId = Math.random().toString(36).substring(7);
-    console.log(`🚀 [FETCH-${executionId}] ========== INÍCIO DA BUSCA DE AGENDAMENTOS ==========`);
-    
-    // 🔒 Aguardar se já houver busca em andamento
-    while (isFetchingRef.current) {
-      console.log(`⏸️ [FETCH-${executionId}] Aguardando busca em andamento...`);
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-    
-    isFetchingRef.current = true;
-    console.log(`🔍 [FETCH-${executionId}] Iniciando busca paginada manual...`);
-    
-    return measureApiCall(async () => {
-      try {
-        const sixMonthsAgo = new Date();
-        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-        const dateFilter = sixMonthsAgo.toISOString().split('T')[0];
-        
-        console.log('📅 [FILTRO] Buscando desde:', dateFilter);
-        
-        // 🔥 PAGINAÇÃO MANUAL - Buscar em blocos de 1000
-        let allAppointments: any[] = [];
-        let currentPage = 0;
-        const pageSize = 1000; // ✅ Limite real do Supabase PostgREST
-        let hasMore = true;
-        let totalCount = 0;
-        
-        while (hasMore) {
-          const start = currentPage * pageSize;
-          const end = start + pageSize - 1;
+    return deduplicateRequest('appointments-list', async () => {
+      const executionId = Math.random().toString(36).substring(7);
+      console.log(`🚀 [FETCH-${executionId}] ========== INÍCIO DA BUSCA DE AGENDAMENTOS ==========`);
+      
+      isFetchingRef.current = true;
+      console.log(`🔍 [FETCH-${executionId}] Iniciando busca otimizada (apenas futuros + limit 50)...`);
+      
+      return measureApiCall(async () => {
+        try {
+          const hoje = format(new Date(), 'yyyy-MM-dd');
+          console.log('📅 [FILTRO] Buscando agendamentos desde hoje:', hoje);
           
-          console.log(`📦 [PÁGINA ${currentPage + 1}] Buscando registros ${start}-${end}...`);
-          
-            const { data: pageData, error, count } = await supabase
-              .from('agendamentos')
-              .select(`
-                *,
-                pacientes!inner(
-                  id,
-                  nome_completo,
-                  convenio,
-                  celular,
-                  telefone,
-                  data_nascimento
-                ),
-                medicos!inner(
-                  id,
-                  nome,
-                  especialidade,
-                  ativo
-                ),
-                atendimentos!inner(
-                  id,
-                  nome,
-                  tipo,
-                  medico_id
-                )
-              `, { count: 'exact' })
+          // 🚀 OTIMIZAÇÃO: Buscar apenas agendamentos futuros + limit 50
+          const { data: allAppointments, error, count } = await supabase
+            .from('agendamentos')
+            .select(`
+              *,
+              pacientes!inner(
+                id,
+                nome_completo,
+                convenio,
+                celular,
+                telefone,
+                data_nascimento
+              ),
+              medicos!inner(
+                id,
+                nome,
+                especialidade,
+                ativo
+              ),
+              atendimentos!inner(
+                id,
+                nome,
+                tipo,
+                medico_id
+              )
+            `, { count: 'exact' })
             .is('excluido_em', null)
-            .gte('data_agendamento', dateFilter)
-            .order('data_agendamento', { ascending: false })
-            .order('hora_agendamento', { ascending: false })
-            .range(start, end);
+            .gte('data_agendamento', hoje)
+            .order('data_agendamento', { ascending: true })
+            .order('hora_agendamento', { ascending: true })
+            .limit(50);
           
           if (error) {
-            console.error(`❌ [PÁGINA ${currentPage + 1}] Erro:`, error);
-            logger.error('Erro na paginação de agendamentos', error, 'APPOINTMENTS');
+            console.error(`❌ [FETCH] Erro:`, error);
+            logger.error('Erro ao buscar agendamentos', error, 'APPOINTMENTS');
             throw error;
           }
           
-          if (count !== null && currentPage === 0) {
-            totalCount = count;
-            console.log(`📊 [TOTAL] ${totalCount} agendamentos disponíveis no banco`);
-            console.log(`🔍 [PRIMEIRA PÁGINA] Recebidos ${pageData?.length || 0} registros`);
+          const totalCount = count || 0;
+          console.log(`📊 [RESULTADO] ${allAppointments?.length || 0} agendamentos carregados de ${totalCount} disponíveis`);
+          
+          if (!allAppointments || allAppointments.length === 0) {
+            console.log(`ℹ️ [VAZIO] Nenhum agendamento futuro encontrado`);
+            return [];
           }
-          
-          if (!pageData || pageData.length === 0) {
-            console.log(`✅ [PÁGINA ${currentPage + 1}] Sem mais dados`);
-            hasMore = false;
-            break;
-          }
-          
-          allAppointments = [...allAppointments, ...pageData];
-          console.log(`✅ [PÁGINA ${currentPage + 1}] ${pageData.length} registros carregados (total acumulado: ${allAppointments.length}/${totalCount})`);
-          
-          // 📊 LOG: Status dos últimos 5 registros da página
-          if (pageData && pageData.length > 0) {
-            console.log(`📊 [STATUS] Últimos 5 registros da página ${currentPage + 1}:`, 
-              pageData.slice(-5).map(a => ({ 
-                id: a.id, 
-                status: a.status, 
-                data: a.data_agendamento 
-              }))
-            );
-          }
-          
-          currentPage++; // ✅ Incrementar PRIMEIRO
-          
-          // 🔍 DEBUG: Verificar progresso
-          console.log(`🔍 [DEBUG] Página ${currentPage}: ${pageData.length} registros recebidos`);
-          console.log(`🔍 [DEBUG] Total acumulado: ${allAppointments.length}/${totalCount}`);
-          
-          // ✅ Parar APENAS quando não há dados OU já temos todos os registros
-          if (pageData.length === 0) {
-            console.log(`✅ [FINAL] Sem mais dados na página ${currentPage}`);
-            hasMore = false;
-          } else if (allAppointments.length >= totalCount) {
-            console.log(`✅ [FINAL] Todos os ${totalCount} registros carregados`);
-            hasMore = false;
-          }
-          // ❌ REMOVIDO: else if (pageData.length < pageSize) - Causava parada prematura
-          
-          // Segurança: limite de 20 páginas (20k registros)
-          if (currentPage >= 20) {
-            console.warn('⚠️ Limite de segurança: 20 páginas atingido');
-            hasMore = false;
-          }
-        }
         
-        console.log(`✅ [FINAL] Total carregado: ${allAppointments.length} agendamentos`);
-        
-        // Buscar profiles dos usuários em uma query separada (mais confiável)
-        console.log(`🔍 [PROFILES-START] Coletando user_ids...`);
-        const userIds = new Set<string>();
-        allAppointments.forEach((apt: any) => {
-          if (apt.criado_por_user_id) userIds.add(apt.criado_por_user_id);
-          if (apt.alterado_por_user_id) userIds.add(apt.alterado_por_user_id);
-        });
+          // Buscar profiles dos usuários em uma query separada
+          console.log(`🔍 [PROFILES-START] Coletando user_ids...`);
+          const userIds = new Set<string>();
+          allAppointments.forEach((apt: any) => {
+            if (apt.criado_por_user_id) userIds.add(apt.criado_por_user_id);
+            if (apt.alterado_por_user_id) userIds.add(apt.alterado_por_user_id);
+          });
 
-        let profilesMap: Record<string, any> = {};
-        
-        if (userIds.size > 0) {
-          console.log(`🔍 [PROFILES-QUERY] Buscando ${userIds.size} perfis via RPC...`);
-          try {
-            const { data: profiles, error: profilesError } = await supabase
-              .rpc('get_user_profiles', { user_ids: Array.from(userIds) });
-            
-            if (profilesError) {
-              console.warn('⚠️ [PROFILES-ERROR] Erro ao buscar perfis via RPC, continuando sem nomes:', profilesError.message);
-            } else if (profiles && profiles.length > 0) {
-              console.log(`✅ [PROFILES-SUCCESS] ${profiles.length} perfis carregados via SECURITY DEFINER`);
-              profilesMap = profiles.reduce((acc, profile) => {
-                acc[profile.user_id] = profile;
-                return acc;
-              }, {} as Record<string, any>);
-            } else {
-              console.log('ℹ️ [PROFILES-EMPTY] Nenhum perfil retornado pela função RPC');
+          let profilesMap: Record<string, any> = {};
+          
+          if (userIds.size > 0) {
+            console.log(`🔍 [PROFILES-QUERY] Buscando ${userIds.size} perfis via RPC...`);
+            try {
+              const { data: profiles, error: profilesError } = await supabase
+                .rpc('get_user_profiles', { user_ids: Array.from(userIds) });
+              
+              if (profilesError) {
+                console.warn('⚠️ [PROFILES-ERROR] Erro ao buscar perfis via RPC:', profilesError.message);
+              } else if (profiles && profiles.length > 0) {
+                console.log(`✅ [PROFILES-SUCCESS] ${profiles.length} perfis carregados`);
+                profilesMap = profiles.reduce((acc, profile) => {
+                  acc[profile.user_id] = profile;
+                  return acc;
+                }, {} as Record<string, any>);
+              }
+            } catch (err) {
+              console.warn('⚠️ [PROFILES-CATCH] Falha ao buscar perfis via RPC:', err);
             }
-          } catch (err) {
-            console.warn('⚠️ [PROFILES-CATCH] Falha ao buscar perfis via RPC, continuando sem nomes:', err);
           }
+          
+          // Transformar dados
+          console.log(`🔄 [TRANSFORM] Transformando ${allAppointments.length} agendamentos...`);
+          
+          const transformedAppointments: AppointmentWithRelations[] = allAppointments.map((apt: any) => {
+            const criadoPorProfile = apt.criado_por_user_id ? profilesMap[apt.criado_por_user_id] || null : null;
+            const alteradoPorProfile = apt.alterado_por_user_id ? profilesMap[apt.alterado_por_user_id] || null : null;
+            
+            return {
+              ...apt,
+              pacientes: apt.pacientes || null,
+              medicos: apt.medicos || null,
+              atendimentos: apt.atendimentos || null,
+              criado_por_profile: criadoPorProfile,
+              alterado_por_profile: alteradoPorProfile,
+            };
+          });
+          
+          console.log(`✅ [FETCH-${executionId}] ========== BUSCA FINALIZADA ==========`);
+          console.log(`📦 [FETCH-${executionId}] Total retornado: ${transformedAppointments.length} agendamentos`);
+
+          logger.info('Agendamentos carregados com sucesso (otimizado)', { 
+            count: transformedAppointments.length,
+            total: totalCount
+          }, 'APPOINTMENTS');
+
+          return transformedAppointments;
+        } catch (err) {
+          console.error('❌ [FETCH] Erro fatal:', err);
+          logger.error('Erro ao buscar agendamentos', err, 'APPOINTMENTS');
+          throw err;
+        } finally {
+          isFetchingRef.current = false;
+          console.log('🔓 [FETCH] Lock liberado');
         }
-        
-        // Transformar dados
-        console.log(`🔄 [TRANSFORM] Transformando ${allAppointments.length} agendamentos...`);
-        
-        const transformedAppointments: AppointmentWithRelations[] = allAppointments.map((apt: any, index: number) => {
-          const criadoPorProfile = apt.criado_por_user_id ? profilesMap[apt.criado_por_user_id] || null : null;
-          const alteradoPorProfile = apt.alterado_por_user_id ? profilesMap[apt.alterado_por_user_id] || null : null;
-          
-          // Debug: Log dos primeiros 3 agendamentos
-          if (index < 3) {
-            console.log(`🔍 [TRANSFORM-${index}] Agendamento ${apt.id.substring(0, 8)}:`, {
-              criado_por: apt.criado_por,
-              criado_por_user_id: apt.criado_por_user_id,
-              profile_nome: criadoPorProfile?.nome || 'sem profile'
-            });
-          }
-          
-          return {
-            ...apt,
-            pacientes: apt.pacientes || null,
-            medicos: apt.medicos || null,
-            atendimentos: apt.atendimentos || null,
-            criado_por_profile: criadoPorProfile,
-            alterado_por_profile: alteradoPorProfile,
-          };
-        });
-        
-        // Análise por status
-        const statusCount = transformedAppointments.reduce((acc, apt) => {
-          acc[apt.status] = (acc[apt.status] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>);
-
-        console.log('📊 [STATUS] Distribuição:', statusCount);
-        
-        // Log final de verificação
-        console.log(`✅ [FETCH-${executionId}] ========== BUSCA FINALIZADA ==========`);
-        console.log(`📦 [FETCH-${executionId}] Total retornado: ${transformedAppointments.length} agendamentos`);
-        
-        // Verificar se os primeiros 3 têm profile
-        const primeiros3 = transformedAppointments.slice(0, 3);
-        console.log(`🔍 [VERIFICAÇÃO] Primeiros 3 agendamentos com profile:`, primeiros3.map(a => ({
-          id: a.id.substring(0, 8),
-          criado_por: a.criado_por,
-          criado_por_user_id: a.criado_por_user_id,
-          tem_profile: !!a.criado_por_profile,
-          profile_nome: a.criado_por_profile?.nome
-        })));
-
-        logger.info('Agendamentos carregados com sucesso via paginação manual', { 
-          count: transformedAppointments.length,
-          total: totalCount,
-          paginas: currentPage
-        }, 'APPOINTMENTS');
-
-        return transformedAppointments;
-      } catch (err) {
-        console.error('❌ [FETCH] Erro fatal:', err);
-        logger.error('Erro ao buscar agendamentos', err, 'APPOINTMENTS');
-        throw err;
-      } finally {
-        // 🔓 Liberar o lock
-        isFetchingRef.current = false;
-        console.log('🔓 [FETCH] Lock liberado');
-      }
-    }, 'fetch_appointments', 'GET');
+      }, 'fetch_appointments', 'GET');
+    }, 3000); // 3 segundos de cache
   }, [measureApiCall]);
 
   // 🔥 BUSCAR DADOS DIRETAMENTE SEM CACHE
@@ -285,10 +193,12 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   }, [fetchAppointments]);
 
   const invalidateCache = useCallback(() => {
+    invalidateRequestCache('appointments-list');
     refetch();
   }, [refetch]);
 
   const forceRefetch = useCallback(() => {
+    invalidateRequestCache('appointments-list');
     refetch();
   }, [refetch]);
 
