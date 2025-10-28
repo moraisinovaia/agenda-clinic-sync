@@ -108,12 +108,39 @@ export function useAtomicAppointmentCreation() {
       // Validações no frontend
       validateFormData(formData);
 
-      // Buscar nome do usuário logado
-      const { data: profile } = await supabase
+      // Validar autenticação
+      if (!user?.id) {
+        throw new Error('Usuário não está autenticado');
+      }
+
+      console.log('🔑 Buscando profile do usuário:', user.id);
+
+      // Buscar nome do usuário logado com tratamento de erro
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('nome')
-        .eq('user_id', user?.id)
+        .select('nome, email, status')
+        .eq('user_id', user.id)
         .single();
+
+      if (profileError) {
+        console.error('❌ Erro ao buscar profile:', profileError);
+      }
+
+      console.log('👤 Profile encontrado:', profile);
+
+      // Validar que temos o nome
+      const criadorNome = profile?.nome || 'Recepcionista';
+
+      if (!profile?.nome) {
+        console.warn('⚠️ Nome do usuário não encontrado no profile, usando fallback');
+        toast({
+          title: 'Aviso',
+          description: 'Não foi possível identificar seu nome. Usando "Recepcionista" como padrão.',
+          variant: 'default',
+        });
+      }
+
+      console.log('📝 Criando agendamento com criado_por:', criadorNome);
 
       // Chamar função SQL atômica COM LOCKS (uma única tentativa)
       const { data, error } = await supabase.rpc('criar_agendamento_atomico', {
@@ -127,8 +154,8 @@ export function useAtomicAppointmentCreation() {
         p_data_agendamento: formData.dataAgendamento,
         p_hora_agendamento: formData.horaAgendamento,
         p_observacoes: formData.observacoes || null,
-        p_criado_por: profile?.nome || 'Recepcionista',
-        p_criado_por_user_id: user?.id,
+        p_criado_por: criadorNome,
+        p_criado_por_user_id: user.id,
         p_agendamento_id_edicao: editingAppointmentId || null,
         p_force_conflict: forceConflict
       } as any);
