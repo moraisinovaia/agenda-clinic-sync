@@ -467,11 +467,25 @@ const Index = () => {
   };
 
   const handleNavigateToAppointment = (appointment: AppointmentWithRelations) => {
-    // Navegar calendário para a data do agendamento
-    setSelectedAppointmentDate(appointment.data_agendamento);
+    // Encontrar o médico do agendamento
+    const doctor = doctors.find(d => d.id === appointment.medico_id);
     
-    // Abrir formulário de edição
-    handleEditAppointment(appointment);
+    if (doctor) {
+      // Setar o médico selecionado
+      setSelectedDoctor(doctor);
+      
+      // Setar a data do agendamento para o calendário posicionar automaticamente
+      setLastAppointmentDate(appointment.data_agendamento);
+      setSelectedAppointmentDate(appointment.data_agendamento);
+      
+      // Navegar para a agenda do médico
+      setViewMode('schedule');
+      
+      console.log('📍 Navegando para agenda do médico:', {
+        medico: doctor.nome,
+        data: appointment.data_agendamento
+      });
+    }
   };
 
   const handleNewAppointmentWithTime = (date: string, time: string) => {
