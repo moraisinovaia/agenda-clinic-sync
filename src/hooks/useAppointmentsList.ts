@@ -37,10 +37,13 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       
       return measureApiCall(async () => {
         try {
-          const hoje = format(new Date(), 'yyyy-MM-dd');
-          console.log('📅 [FILTRO] Buscando agendamentos desde hoje:', hoje);
+          // Buscar últimos 3 meses (incluindo passados recentes)
+          const threeMonthsAgo = new Date();
+          threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+          const dateFilter = threeMonthsAgo.toISOString().split('T')[0];
+          console.log('📅 [FILTRO] Buscando agendamentos desde:', dateFilter);
           
-          // 🚀 OTIMIZAÇÃO: Buscar apenas agendamentos futuros + limit 50
+          // 🚀 OTIMIZAÇÃO: Últimos 3 meses + limit 100
           const { data: allAppointments, error, count } = await supabase
             .from('agendamentos')
             .select(`
@@ -67,10 +70,10 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
               )
             `, { count: 'exact' })
             .is('excluido_em', null)
-            .gte('data_agendamento', hoje)
-            .order('data_agendamento', { ascending: true })
-            .order('hora_agendamento', { ascending: true })
-            .limit(50);
+            .gte('data_agendamento', dateFilter)
+            .order('data_agendamento', { ascending: false })
+            .order('hora_agendamento', { ascending: false })
+            .limit(100);
           
           if (error) {
             console.error(`❌ [FETCH] Erro:`, error);
@@ -79,7 +82,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           }
           
           const totalCount = count || 0;
-          console.log(`📊 [RESULTADO] ${allAppointments?.length || 0} agendamentos carregados de ${totalCount} disponíveis`);
+          console.log(`📊 [RESULTADO] ${allAppointments?.length || 0} agendamentos carregados de ${totalCount} disponíveis (últimos 3 meses)`);
           
           if (!allAppointments || allAppointments.length === 0) {
             console.log(`ℹ️ [VAZIO] Nenhum agendamento futuro encontrado`);
