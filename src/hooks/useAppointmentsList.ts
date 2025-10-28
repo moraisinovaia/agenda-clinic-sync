@@ -82,24 +82,6 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
                   nome,
                   tipo,
                   medico_id
-                ),
-                criado_por_profile:profiles!agendamentos_criado_por_user_id_fkey(
-                  id,
-                  user_id,
-                  nome,
-                  email,
-                  ativo,
-                  created_at,
-                  updated_at
-                ),
-                alterado_por_profile:profiles!agendamentos_alterado_por_user_id_fkey(
-                  id,
-                  user_id,
-                  nome,
-                  email,
-                  ativo,
-                  created_at,
-                  updated_at
                 )
               `, { count: 'exact' })
             .is('excluido_em', null)
@@ -164,21 +146,52 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         }
         
         console.log(`✅ [FINAL] Total carregado: ${allAppointments.length} agendamentos`);
-        console.log(`✅ [PROFILES] Os profiles já estão incluídos nos dados via JOIN`);
         
-        // Transformar dados - profiles já vêm do JOIN
+        // Buscar profiles dos usuários em uma query separada (mais confiável)
+        console.log(`🔍 [PROFILES-START] Coletando user_ids...`);
+        const userIds = new Set<string>();
+        allAppointments.forEach((apt: any) => {
+          if (apt.criado_por_user_id) userIds.add(apt.criado_por_user_id);
+          if (apt.alterado_por_user_id) userIds.add(apt.alterado_por_user_id);
+        });
+
+        let profilesMap: Record<string, any> = {};
+        
+        if (userIds.size > 0) {
+          console.log(`🔍 [PROFILES-QUERY] Buscando ${userIds.size} perfis...`);
+          try {
+            const { data: profiles, error: profilesError } = await supabase
+              .from('profiles')
+              .select('user_id, nome, email, ativo')
+              .in('user_id', Array.from(userIds));
+            
+            if (profilesError) {
+              console.warn('⚠️ [PROFILES-ERROR] Erro ao buscar perfis, continuando sem nomes:', profilesError.message);
+            } else if (profiles && profiles.length > 0) {
+              console.log(`✅ [PROFILES-SUCCESS] ${profiles.length} perfis carregados`);
+              profilesMap = profiles.reduce((acc, profile) => {
+                acc[profile.user_id] = profile;
+                return acc;
+              }, {} as Record<string, any>);
+            }
+          } catch (err) {
+            console.warn('⚠️ [PROFILES-CATCH] Falha ao buscar perfis, continuando sem nomes:', err);
+          }
+        }
+        
+        // Transformar dados
         console.log(`🔄 [TRANSFORM] Transformando ${allAppointments.length} agendamentos...`);
         
         const transformedAppointments: AppointmentWithRelations[] = allAppointments.map((apt: any, index: number) => {
-          // Debug: Log dos primeiros 5 agendamentos
-          if (index < 5) {
+          const criadoPorProfile = apt.criado_por_user_id ? profilesMap[apt.criado_por_user_id] || null : null;
+          const alteradoPorProfile = apt.alterado_por_user_id ? profilesMap[apt.alterado_por_user_id] || null : null;
+          
+          // Debug: Log dos primeiros 3 agendamentos
+          if (index < 3) {
             console.log(`🔍 [TRANSFORM-${index}] Agendamento ${apt.id.substring(0, 8)}:`, {
               criado_por: apt.criado_por,
               criado_por_user_id: apt.criado_por_user_id,
-              criado_por_profile: apt.criado_por_profile,
-              profile_nome: apt.criado_por_profile?.nome,
-              alterado_por_user_id: apt.alterado_por_user_id,
-              alterado_por_profile: apt.alterado_por_profile
+              profile_nome: criadoPorProfile?.nome || 'sem profile'
             });
           }
           
@@ -187,8 +200,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
             pacientes: apt.pacientes || null,
             medicos: apt.medicos || null,
             atendimentos: apt.atendimentos || null,
-            criado_por_profile: apt.criado_por_profile || null,
-            alterado_por_profile: apt.alterado_por_profile || null,
+            criado_por_profile: criadoPorProfile,
+            alterado_por_profile: alteradoPorProfile,
           };
         });
         
