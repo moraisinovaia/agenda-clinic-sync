@@ -82,6 +82,24 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
                   nome,
                   tipo,
                   medico_id
+                ),
+                criado_por_profile:profiles!agendamentos_criado_por_user_id_fkey(
+                  id,
+                  user_id,
+                  nome,
+                  email,
+                  ativo,
+                  created_at,
+                  updated_at
+                ),
+                alterado_por_profile:profiles!agendamentos_alterado_por_user_id_fkey(
+                  id,
+                  user_id,
+                  nome,
+                  email,
+                  ativo,
+                  created_at,
+                  updated_at
                 )
               `, { count: 'exact' })
             .is('excluido_em', null)
@@ -146,78 +164,21 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         }
         
         console.log(`✅ [FINAL] Total carregado: ${allAppointments.length} agendamentos`);
+        console.log(`✅ [PROFILES] Os profiles já estão incluídos nos dados via JOIN`);
         
-        // Buscar profiles dos usuários que criaram/alteraram
-        console.log(`🔍 [PROFILES-START] Iniciando coleta de user_ids...`);
-        const userIds = new Set<string>();
-        allAppointments.forEach((apt: any) => {
-          if (apt.criado_por_user_id) userIds.add(apt.criado_por_user_id);
-          if (apt.alterado_por_user_id) userIds.add(apt.alterado_por_user_id);
-        });
-
-        console.log(`📋 [PROFILES-COLLECTED] ${userIds.size} user_ids únicos coletados:`, Array.from(userIds));
-
-        let profilesMap: Record<string, any> = {};
-        
-        if (userIds.size > 0) {
-          console.log(`🔍 [PROFILES-QUERY] Buscando ${userIds.size} perfis de usuários...`);
-          console.log(`🔍 [PROFILES-IDS] User IDs:`, Array.from(userIds));
-          
-          // Adicionar status na query para debug
-          const { data: profiles, error: profilesError } = await supabase
-            .from('profiles')
-            .select('user_id, nome, email, ativo, status, created_at, updated_at')
-            .in('user_id', Array.from(userIds));
-          
-          if (profilesError) {
-            console.error('❌ [PROFILES-ERROR] Erro ao buscar perfis:', profilesError);
-            console.error('❌ [PROFILES-ERROR-DETAILS]:', {
-              message: profilesError.message,
-              details: profilesError.details,
-              hint: profilesError.hint,
-              code: profilesError.code
-            });
-          } else if (profiles) {
-            console.log(`✅ [PROFILES-SUCCESS] ${profiles.length} perfis retornados pela query`);
-            console.log(`✅ [PROFILES-DATA] Dados dos perfis:`, profiles);
-            
-            if (profiles.length === 0) {
-              console.warn('⚠️ [PROFILES-EMPTY] Query não retornou nenhum profile!');
-              console.warn('⚠️ [PROFILES-RLS-CHECK] Possível problema de RLS. Verificar políticas.');
-            }
-            
-            profilesMap = profiles.reduce((acc, profile) => {
-              acc[profile.user_id] = profile;
-              return acc;
-            }, {} as Record<string, any>);
-            console.log(`✅ [PROFILES-MAP] Mapa de perfis criado com ${Object.keys(profilesMap).length} entradas`);
-          } else {
-            console.warn('⚠️ [PROFILES-NULL] Query retornou null em vez de array');
-          }
-        } else {
-          console.warn('⚠️ [PROFILES-NO-IDS] Nenhum user_id coletado dos agendamentos');
-        }
-        
-        // Transformar dados
+        // Transformar dados - profiles já vêm do JOIN
         console.log(`🔄 [TRANSFORM] Transformando ${allAppointments.length} agendamentos...`);
-        console.log(`📋 [TRANSFORM] ProfilesMap disponível:`, {
-          totalProfiles: Object.keys(profilesMap).length,
-          profileIds: Object.keys(profilesMap)
-        });
         
         const transformedAppointments: AppointmentWithRelations[] = allAppointments.map((apt: any, index: number) => {
-          const criadoPorProfile = apt.criado_por_user_id ? profilesMap[apt.criado_por_user_id] || null : null;
-          const alteradoPorProfile = apt.alterado_por_user_id ? profilesMap[apt.alterado_por_user_id] || null : null;
-          
           // Debug: Log dos primeiros 5 agendamentos
           if (index < 5) {
             console.log(`🔍 [TRANSFORM-${index}] Agendamento ${apt.id.substring(0, 8)}:`, {
               criado_por: apt.criado_por,
               criado_por_user_id: apt.criado_por_user_id,
-              criado_por_profile: criadoPorProfile,
-              profile_nome: criadoPorProfile?.nome,
+              criado_por_profile: apt.criado_por_profile,
+              profile_nome: apt.criado_por_profile?.nome,
               alterado_por_user_id: apt.alterado_por_user_id,
-              alterado_por_profile: alteradoPorProfile
+              alterado_por_profile: apt.alterado_por_profile
             });
           }
           
@@ -226,8 +187,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
             pacientes: apt.pacientes || null,
             medicos: apt.medicos || null,
             atendimentos: apt.atendimentos || null,
-            criado_por_profile: criadoPorProfile,
-            alterado_por_profile: alteradoPorProfile,
+            criado_por_profile: apt.criado_por_profile || null,
+            alterado_por_profile: apt.alterado_por_profile || null,
           };
         });
         
@@ -242,7 +203,6 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         // Log final de verificação
         console.log(`✅ [FETCH-${executionId}] ========== BUSCA FINALIZADA ==========`);
         console.log(`📦 [FETCH-${executionId}] Total retornado: ${transformedAppointments.length} agendamentos`);
-        console.log(`👥 [FETCH-${executionId}] Profiles carregados: ${Object.keys(profilesMap).length}`);
         
         // Verificar se os primeiros 3 têm profile
         const primeiros3 = transformedAppointments.slice(0, 3);
