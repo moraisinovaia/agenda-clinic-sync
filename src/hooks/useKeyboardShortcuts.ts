@@ -13,6 +13,15 @@ export const useKeyboardShortcuts = (shortcuts: ShortcutConfig[]) => {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       try {
+        // Log de debug para detecção de teclas
+        console.log('🔍 Tecla pressionada:', {
+          key: event.key,
+          code: event.code,
+          ctrlKey: event.ctrlKey,
+          altKey: event.altKey,
+          shiftKey: event.shiftKey
+        });
+
         // Verificar elemento focado
         const activeElement = document.activeElement;
         const isInputFocused = activeElement && (
@@ -26,8 +35,14 @@ export const useKeyboardShortcuts = (shortcuts: ShortcutConfig[]) => {
           // Verificar se event.key e shortcut.key existem antes de usar toLowerCase
           if (!event.key || !shortcut.key) return false;
           
+          // Para teclas de função (F1-F12), comparar direto sem toLowerCase
+          const isFunctionKey = /^F\d+$/i.test(shortcut.key);
+          
           return (
-            event.key.toLowerCase() === shortcut.key.toLowerCase() &&
+            (isFunctionKey 
+              ? event.key === shortcut.key 
+              : event.key.toLowerCase() === shortcut.key.toLowerCase()
+            ) &&
             !!event.ctrlKey === !!shortcut.ctrlKey &&
             !!event.altKey === !!shortcut.altKey &&
             !!event.shiftKey === !!shortcut.shiftKey
@@ -52,8 +67,10 @@ export const useKeyboardShortcuts = (shortcuts: ShortcutConfig[]) => {
             return;
           }
           
-          // Prevent default IMEDIATAMENTE para atalhos com Ctrl (especialmente Ctrl + N)
-          const needsPreventDefault = matchedShortcut.ctrlKey || matchedShortcut.key === 'F12' || matchedShortcut.key === 'Escape';
+          // Prevent default IMEDIATAMENTE para atalhos com Ctrl e teclas de função
+          const needsPreventDefault = matchedShortcut.ctrlKey || 
+                                     /^F\d+$/i.test(matchedShortcut.key) || 
+                                     matchedShortcut.key === 'Escape';
           if (needsPreventDefault) {
             event.preventDefault();
             event.stopPropagation();
