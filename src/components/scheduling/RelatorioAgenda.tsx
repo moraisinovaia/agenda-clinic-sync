@@ -96,9 +96,31 @@ export function RelatorioAgenda({ doctors, appointments, onBack, preSelectedDoct
     }
   };
 
+  const formatDateWithWeekday = (dateString: string) => {
+    try {
+      const date = new Date(dateString + 'T00:00:00');
+      return format(date, "dd/MM/yyyy - EEEE", { locale: ptBR });
+    } catch {
+      return dateString;
+    }
+  };
+
   const formatTime = (timeString: string) => {
     return timeString.substring(0, 5); // Remove segundos se houver
   };
+
+  // Agrupar appointments por data
+  const groupedAppointments = filteredAppointments.reduce((acc, appointment) => {
+    const date = appointment.data_agendamento;
+    if (!acc[date]) {
+      acc[date] = [];
+    }
+    acc[date].push(appointment);
+    return acc;
+  }, {} as Record<string, AppointmentWithRelations[]>);
+
+  // Ordenar as datas
+  const sortedDates = Object.keys(groupedAppointments).sort();
 
   return (
     <div className="space-y-6">
@@ -210,6 +232,17 @@ export function RelatorioAgenda({ doctors, appointments, onBack, preSelectedDoct
         /* Ocultar hover effects */
         .hover\\:bg-muted\\/50:hover {
           background-color: transparent !important;
+        }
+
+        /* Estilo para separadores de data */
+        .date-separator-row {
+          background-color: #f3f4f6 !important;
+          border-top: 2px solid #9ca3af !important;
+          page-break-after: avoid !important;
+        }
+
+        .date-separator-row + tr {
+          page-break-before: avoid !important;
         }
       `}</style>
       
@@ -381,45 +414,59 @@ export function RelatorioAgenda({ doctors, appointments, onBack, preSelectedDoct
                           <TableHead className="print:py-0.5 print:px-0.5 print:text-[9px] w-24">Telefone</TableHead>
                           <TableHead className="print:py-0.5 print:px-0.5 print:text-[9px] w-32">Convênio / Procedimento</TableHead>
                           <TableHead className="print:py-0.5 print:px-0.5 print:text-[9px] w-16">Status</TableHead>
-                          {dataInicio !== dataFim && (
-                            <TableHead className="print:py-0.5 print:px-0.5 print:text-[9px] w-20">Data</TableHead>
-                          )}
                         </TableRow>
                       </TableHeader>
                       <TableBody className="print:text-[9px] print:line-height-tight">
-                        {filteredAppointments.map((appointment, index) => (
-                          <TableRow key={appointment.id} className="print:border-gray-400 hover:bg-muted/50">
-                            <TableCell className="print:py-0 print:px-0.5 print:text-[10px] font-medium">
-                              {formatTime(appointment.hora_agendamento)}
-                            </TableCell>
-                            <TableCell className="print:py-0 print:px-0.5 print:text-[9px]">
-                              <div className="font-medium print:text-[9px]">{appointment.pacientes?.nome_completo}</div>
-                              {appointment.observacoes && (
-                                <div className="text-xs print:text-[7px] text-muted-foreground mt-0.5 print:mt-0 print:line-height-tight">
-                                  {appointment.observacoes}
-                                </div>
-                              )}
-                            </TableCell>
-                            <TableCell className="print:py-0 print:px-0.5 print:text-[9px]">
-                              {appointment.pacientes?.celular || appointment.pacientes?.telefone || '-'}
-                            </TableCell>
-                            <TableCell className="print:py-0 print:px-0.5 print:text-[9px]">
-                              <div className="print:text-[9px]">{appointment.pacientes?.convenio}</div>
-                              <div className="text-xs print:text-[7px] text-muted-foreground print:line-height-tight">
-                                {appointment.atendimentos?.nome}
-                              </div>
-                            </TableCell>
-                            <TableCell className="print:py-0 print:px-0.5 print:text-[9px]">
-                              <span className="text-xs print:text-[7px]">
-                                {appointment.status === 'confirmado' ? 'Conf.' : 'Agend.'}
-                              </span>
-                            </TableCell>
-                            {dataInicio !== dataFim && (
-                              <TableCell className="print:py-0 print:px-0.5 print:text-[9px]">
-                                {formatDate(appointment.data_agendamento)}
-                              </TableCell>
+                        {sortedDates.map((date) => (
+                          <>
+                            {/* Separador de Data - Apenas se houver múltiplas datas */}
+                            {(dataInicio !== dataFim || sortedDates.length > 1) && (
+                              <TableRow 
+                                key={`date-separator-${date}`}
+                                className="date-separator-row bg-primary/5 print:bg-gray-100 border-t-2 border-primary/20 print:border-gray-400"
+                              >
+                                <TableCell 
+                                  colSpan={5}
+                                  className="font-semibold text-center py-2 print:py-0.5 print:text-[10px] text-primary"
+                                >
+                                  📅 {formatDateWithWeekday(date)}
+                                </TableCell>
+                              </TableRow>
                             )}
-                          </TableRow>
+                            
+                            {/* Agendamentos do dia */}
+                            {groupedAppointments[date].map((appointment) => (
+                              <TableRow key={appointment.id} className="print:border-gray-400 hover:bg-muted/50">
+                                <TableCell className="print:py-0 print:px-0.5 print:text-[10px] font-medium">
+                                  {formatTime(appointment.hora_agendamento)}
+                                </TableCell>
+                                <TableCell className="print:py-0 print:px-0.5 print:text-[9px]">
+                                  <div className="font-medium print:text-[9px]">{appointment.pacientes?.nome_completo}</div>
+                                  {appointment.observacoes && (
+                                    <div className="text-xs print:text-[7px] text-muted-foreground mt-0.5 print:mt-0 print:line-height-tight">
+                                      {appointment.observacoes}
+                                    </div>
+                                  )}
+                                </TableCell>
+                                <TableCell className="print:py-0 print:px-0.5 print:text-[9px]">
+                                  {appointment.pacientes?.celular || appointment.pacientes?.telefone || '-'}
+                                </TableCell>
+                                <TableCell className="print:py-0 print:px-0.5 print:text-[9px]">
+                                  <div className="print:text-[9px]">{appointment.pacientes?.convenio}</div>
+                                  {appointment.atendimentos && (
+                                    <div className="text-xs print:text-[7px] text-muted-foreground print:mt-0">
+                                      {appointment.atendimentos.nome}
+                                    </div>
+                                  )}
+                                </TableCell>
+                                <TableCell className="print:py-0 print:px-0.5 print:text-[9px]">
+                                  <Badge className={`${getStatusColor(appointment.status)} print:text-[7px] print:px-0.5 print:py-0`}>
+                                    {appointment.status === 'agendado' ? 'Agendado' : 'Confirmado'}
+                                  </Badge>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </>
                         ))}
                       </TableBody>
                     </Table>
