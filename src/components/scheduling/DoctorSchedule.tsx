@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { format, addDays, startOfWeek, isSameDay, parse, startOfDay, differenceInYears, isValid, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatInTimeZone } from 'date-fns-tz';
@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User, Trash2, Plus, Edit, CheckCircle, Phone, RotateCcw, Printer, Settings } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User, Trash2, Plus, Edit, CheckCircle, Phone, RotateCcw, Printer, Settings, AlertTriangle } from 'lucide-react';
 import { 
   AlertDialog, 
   AlertDialogAction, 
@@ -79,6 +79,13 @@ const safeFormatDate = (dateValue: any, formatStr: string = 'dd/MM/yy HH:mm'): s
     console.error('❌ Erro ao formatar data:', error, dateValue);
     return 'N/A';
   }
+};
+
+// Função para formatar data sem conversão de timezone
+const formatDateForDisplay = (dateString: string): string => {
+  if (!dateString) return '';
+  const [year, month, day] = dateString.split('-');
+  return `${day}/${month}/${year}`;
 };
 
 // Função para calcular idade com segurança
@@ -167,6 +174,7 @@ export function DoctorSchedule({
   const [viewMode, setViewMode] = useState<'schedule' | 'report'>('schedule');
   const [scheduleGenOpen, setScheduleGenOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [activeBloqueio, setActiveBloqueio] = useState<{motivo: string, data_inicio: string, data_fim: string} | null>(null);
   
   const getAppointmentsForDate = (date: Date) => {
     try {
@@ -228,8 +236,9 @@ export function DoctorSchedule({
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'agendado':
-      case 'cancelado_bloqueio':
         return 'bg-blue-500 text-white hover:bg-blue-600';
+      case 'cancelado_bloqueio':
+        return 'bg-orange-500 text-white hover:bg-orange-600';
       case 'confirmado':
         return 'bg-green-500 text-white hover:bg-green-600';
       case 'realizado':
@@ -246,7 +255,7 @@ export function DoctorSchedule({
       case 'agendado':
         return 'Agendado';
       case 'cancelado_bloqueio':
-        return 'Agendado';
+        return 'Bloqueado';
       case 'confirmado':
         return 'Confirmado';
       case 'realizado':
@@ -257,6 +266,26 @@ export function DoctorSchedule({
         return status;
     }
   };
+
+  // Buscar bloqueios ativos para a data selecionada
+  useEffect(() => {
+    const checkBloqueio = async () => {
+      try {
+        const dateStr = format(selectedDate, 'yyyy-MM-dd');
+        const bloqueio = blockedDates.find(blocked => 
+          blocked.medico_id === doctor.id &&
+          blocked.status === 'ativo' &&
+          dateStr >= blocked.data_inicio &&
+          dateStr <= blocked.data_fim
+        );
+        setActiveBloqueio(bloqueio || null);
+      } catch (error) {
+        console.error('❌ Erro ao verificar bloqueio:', error);
+        setActiveBloqueio(null);
+      }
+    };
+    checkBloqueio();
+  }, [selectedDate, doctor.id, blockedDates]);
 
   const selectedDateAppointments = getAppointmentsForDate(selectedDate);
   const activeAppointments = selectedDateAppointments.filter(
@@ -450,6 +479,29 @@ export function DoctorSchedule({
                   </div>
                 )}
               </div>
+              
+              {/* Banner de Bloqueio Ativo */}
+              {activeBloqueio && (
+                <div className="mx-3 mt-3 mb-0 p-4 bg-orange-50 border-l-4 border-l-orange-500 rounded">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="h-5 w-5 text-orange-600 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-sm text-orange-900 mb-1">
+                        🚫 Agenda Bloqueada
+                      </h4>
+                      <p className="text-sm text-orange-800 mb-2">
+                        <strong>Motivo:</strong> {activeBloqueio.motivo}
+                      </p>
+                      <p className="text-xs text-orange-700">
+                        Período bloqueado: {formatDateForDisplay(activeBloqueio.data_inicio)} até {formatDateForDisplay(activeBloqueio.data_fim)}
+                      </p>
+                      <p className="text-xs text-orange-600 mt-1">
+                        Os agendamentos abaixo foram cancelados automaticamente pelo sistema e serão restaurados quando a agenda for reaberta.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
               
               <div className="flex-1 w-full">
                 {allSlots.length > 0 ? (
