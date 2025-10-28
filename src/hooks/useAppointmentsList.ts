@@ -158,24 +158,24 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         let profilesMap: Record<string, any> = {};
         
         if (userIds.size > 0) {
-          console.log(`🔍 [PROFILES-QUERY] Buscando ${userIds.size} perfis...`);
+          console.log(`🔍 [PROFILES-QUERY] Buscando ${userIds.size} perfis via RPC...`);
           try {
             const { data: profiles, error: profilesError } = await supabase
-              .from('profiles')
-              .select('user_id, nome, email, ativo')
-              .in('user_id', Array.from(userIds));
+              .rpc('get_user_profiles', { user_ids: Array.from(userIds) });
             
             if (profilesError) {
-              console.warn('⚠️ [PROFILES-ERROR] Erro ao buscar perfis, continuando sem nomes:', profilesError.message);
+              console.warn('⚠️ [PROFILES-ERROR] Erro ao buscar perfis via RPC, continuando sem nomes:', profilesError.message);
             } else if (profiles && profiles.length > 0) {
-              console.log(`✅ [PROFILES-SUCCESS] ${profiles.length} perfis carregados`);
+              console.log(`✅ [PROFILES-SUCCESS] ${profiles.length} perfis carregados via SECURITY DEFINER`);
               profilesMap = profiles.reduce((acc, profile) => {
                 acc[profile.user_id] = profile;
                 return acc;
               }, {} as Record<string, any>);
+            } else {
+              console.log('ℹ️ [PROFILES-EMPTY] Nenhum perfil retornado pela função RPC');
             }
           } catch (err) {
-            console.warn('⚠️ [PROFILES-CATCH] Falha ao buscar perfis, continuando sem nomes:', err);
+            console.warn('⚠️ [PROFILES-CATCH] Falha ao buscar perfis via RPC, continuando sem nomes:', err);
           }
         }
         

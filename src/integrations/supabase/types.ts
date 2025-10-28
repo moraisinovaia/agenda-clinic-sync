@@ -1745,6 +1745,15 @@ export type Database = {
       }
       get_profile_auth_id: { Args: { p_profile_id: string }; Returns: Json }
       get_user_cliente_id: { Args: never; Returns: string }
+      get_user_profiles: {
+        Args: { user_ids: string[] }
+        Returns: {
+          ativo: boolean
+          email: string
+          nome: string
+          user_id: string
+        }[]
+      }
       get_user_role_safe: { Args: { p_user_id: string }; Returns: string }
       has_role: {
         Args: {
