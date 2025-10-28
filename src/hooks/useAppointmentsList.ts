@@ -148,33 +148,54 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         console.log(`✅ [FINAL] Total carregado: ${allAppointments.length} agendamentos`);
         
         // Buscar profiles dos usuários que criaram/alteraram
+        console.log(`🔍 [PROFILES-START] Iniciando coleta de user_ids...`);
         const userIds = new Set<string>();
         allAppointments.forEach((apt: any) => {
           if (apt.criado_por_user_id) userIds.add(apt.criado_por_user_id);
           if (apt.alterado_por_user_id) userIds.add(apt.alterado_por_user_id);
         });
 
+        console.log(`📋 [PROFILES-COLLECTED] ${userIds.size} user_ids únicos coletados:`, Array.from(userIds));
+
         let profilesMap: Record<string, any> = {};
         
         if (userIds.size > 0) {
-          console.log(`🔍 [PROFILES] Buscando ${userIds.size} perfis de usuários...`);
-          console.log(`🔍 [PROFILES] User IDs:`, Array.from(userIds));
+          console.log(`🔍 [PROFILES-QUERY] Buscando ${userIds.size} perfis de usuários...`);
+          console.log(`🔍 [PROFILES-IDS] User IDs:`, Array.from(userIds));
           
+          // Adicionar status na query para debug
           const { data: profiles, error: profilesError } = await supabase
             .from('profiles')
-            .select('user_id, nome, email, ativo, created_at, updated_at')
+            .select('user_id, nome, email, ativo, status, created_at, updated_at')
             .in('user_id', Array.from(userIds));
           
           if (profilesError) {
-            console.error('❌ [PROFILES] Erro ao buscar perfis:', profilesError);
+            console.error('❌ [PROFILES-ERROR] Erro ao buscar perfis:', profilesError);
+            console.error('❌ [PROFILES-ERROR-DETAILS]:', {
+              message: profilesError.message,
+              details: profilesError.details,
+              hint: profilesError.hint,
+              code: profilesError.code
+            });
           } else if (profiles) {
-            console.log(`✅ [PROFILES] ${profiles.length} perfis encontrados:`, profiles);
+            console.log(`✅ [PROFILES-SUCCESS] ${profiles.length} perfis retornados pela query`);
+            console.log(`✅ [PROFILES-DATA] Dados dos perfis:`, profiles);
+            
+            if (profiles.length === 0) {
+              console.warn('⚠️ [PROFILES-EMPTY] Query não retornou nenhum profile!');
+              console.warn('⚠️ [PROFILES-RLS-CHECK] Possível problema de RLS. Verificar políticas.');
+            }
+            
             profilesMap = profiles.reduce((acc, profile) => {
               acc[profile.user_id] = profile;
               return acc;
             }, {} as Record<string, any>);
-            console.log(`✅ [PROFILES] Mapa de perfis criado:`, profilesMap);
+            console.log(`✅ [PROFILES-MAP] Mapa de perfis criado com ${Object.keys(profilesMap).length} entradas`);
+          } else {
+            console.warn('⚠️ [PROFILES-NULL] Query retornou null em vez de array');
           }
+        } else {
+          console.warn('⚠️ [PROFILES-NO-IDS] Nenhum user_id coletado dos agendamentos');
         }
         
         // Transformar dados
