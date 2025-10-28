@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Doctor, Atendimento } from '@/types/scheduling';
-import { deduplicateRequest } from '@/utils/requestDeduplicator';
 
 const MAX_RETRIES = 3;
 
@@ -14,79 +13,75 @@ export function useSchedulingData() {
   const retryCount = useRef(0);
 
   const fetchDoctors = useCallback(async (): Promise<void> => {
-    return deduplicateRequest('scheduling-doctors', async () => {
-      try {
-        const { data, error } = await supabase
-          .from('medicos')
-          .select('*')
-          .eq('ativo', true)
-          .order('nome');
+    try {
+      const { data, error } = await supabase
+        .from('medicos')
+        .select('*')
+        .eq('ativo', true)
+        .order('nome');
 
-        if (error) {
-          // Se é erro de RLS (permissão), tentar uma abordagem diferente
-          if (error.code === 'PGRST301' || error.message.includes('RLS')) {
-            try {
-              // Tentar sem filtros restritivos primeiro
-              const { data: fallbackData, error: fallbackError } = await supabase
-                .from('medicos')
-                .select('*')
-                .limit(50); // Limite para não sobrecarregar
-              
-              if (!fallbackError && fallbackData) {
-                setDoctors(fallbackData);
-                setError(null);
-                return;
-              }
-            } catch (fallbackError) {
-              // Continue para o erro principal
+      if (error) {
+        // Se é erro de RLS (permissão), tentar uma abordagem diferente
+        if (error.code === 'PGRST301' || error.message.includes('RLS')) {
+          try {
+            // Tentar sem filtros restritivos primeiro
+            const { data: fallbackData, error: fallbackError } = await supabase
+              .from('medicos')
+              .select('*')
+              .limit(50); // Limite para não sobrecarregar
+            
+            if (!fallbackError && fallbackData) {
+              setDoctors(fallbackData);
+              setError(null);
+              return;
             }
+          } catch (fallbackError) {
+            // Continue para o erro principal
           }
-          
-          // Implementar retry simples
-          retryCount.current++;
-          if (retryCount.current < MAX_RETRIES) {
-            const delay = Math.min(1000 * retryCount.current, 5000);
-            setTimeout(() => {
-              if (retryCount.current < MAX_RETRIES) {
-                fetchDoctors();
-              }
-            }, delay);
-            return;
-          }
-          
-          throw error;
         }
-
-        setDoctors(data || []);
-        setError(null);
-        retryCount.current = 0; // Reset contador em caso de sucesso
         
-      } catch (error: any) {
-        // Só definir erro se esgotar tentativas
-        if (retryCount.current >= MAX_RETRIES) {
-          setError(`Erro ao carregar médicos: ${error.message}`);
-          setDoctors([]); // Garantir que não temos dados inconsistentes
+        // Implementar retry simples
+        retryCount.current++;
+        if (retryCount.current < MAX_RETRIES) {
+          const delay = Math.min(1000 * retryCount.current, 5000);
+          setTimeout(() => {
+            if (retryCount.current < MAX_RETRIES) {
+              fetchDoctors();
+            }
+          }, delay);
+          return;
         }
+        
+        throw error;
       }
-    }, 2000); // 2 segundos de cache
+
+      setDoctors(data || []);
+      setError(null);
+      retryCount.current = 0; // Reset contador em caso de sucesso
+      
+    } catch (error: any) {
+      // Só definir erro se esgotar tentativas
+      if (retryCount.current >= MAX_RETRIES) {
+        setError(`Erro ao carregar médicos: ${error.message}`);
+        setDoctors([]); // Garantir que não temos dados inconsistentes
+      }
+    }
   }, []);
 
   // Buscar atendimentos ativos
   const fetchAtendimentos = useCallback(async (): Promise<void> => {
-    return deduplicateRequest('scheduling-atendimentos', async () => {
-      try {
-        const { data, error } = await supabase
-          .from('atendimentos')
-          .select('*')
-          .eq('ativo', true)
-          .order('nome');
+    try {
+      const { data, error } = await supabase
+        .from('atendimentos')
+        .select('*')
+        .eq('ativo', true)
+        .order('nome');
 
-        if (error) throw error;
-        setAtendimentos(data || []);
-      } catch (error) {
-        setAtendimentos([]);
-      }
-    }, 2000);
+      if (error) throw error;
+      setAtendimentos(data || []);
+    } catch (error) {
+      setAtendimentos([]);
+    }
   }, []);
 
   // Buscar bloqueios de agenda
