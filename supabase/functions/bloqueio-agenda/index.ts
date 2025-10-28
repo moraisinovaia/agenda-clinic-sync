@@ -332,6 +332,27 @@ serve(async (req) => {
       } else {
         console.log(`✅ ${agendamentos.length} agendamentos cancelados por bloqueio`);
       }
+      
+      // 🔥 DISPARAR NOTIFICAÇÕES AUTOMÁTICAS
+      console.log('📤 Disparando notificações automáticas em background...');
+      
+      // Chamar edge function de notificação de forma assíncrona
+      supabase.functions.invoke('notificar-bloqueio', {
+        body: {
+          medico_id: medicoId,
+          medico_nome: medico.nome,
+          data_inicio: dataInicio,
+          data_fim: dataFim,
+          motivo: motivo,
+          agendamentos_afetados: agendamentos.length
+        }
+      }).then(result => {
+        console.log('✅ Notificações disparadas com sucesso:', result);
+      }).catch(error => {
+        console.error('⚠️ Erro ao disparar notificações (não crítico):', error);
+      });
+      
+      console.log('✅ Processo de notificação iniciado em background');
     }
 
     // Retornar sucesso

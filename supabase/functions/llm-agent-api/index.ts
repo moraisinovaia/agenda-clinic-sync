@@ -893,7 +893,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       return value;
     };
     
-    let { medico_nome, medico_id, data_consulta, atendimento_nome, dias_busca = 14, mensagem_original } = body;
+    let { medico_nome, medico_id, data_consulta, atendimento_nome, dias_busca = 14, mensagem_original, buscar_proximas = false, quantidade_dias = 7 } = body;
     
     // 🆕 DETECÇÃO DE DADOS INVERTIDOS: Verificar se medico_nome contém data ou se data_consulta contém nome
     if (data_consulta && typeof data_consulta === 'string') {
@@ -1010,6 +1010,75 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         console.log(`🔍 Pergunta aberta detectada ("${mensagem_original}"). Ignorando data específica para buscar próximas disponibilidades.`);
         data_consulta = null;
       }
+    }
+    
+    // 🆕 BUSCAR PRÓXIMAS DATAS DISPONÍVEIS (quando buscar_proximas = true ou sem data específica)
+    if (buscar_proximas || (!data_consulta && mensagem_original)) {
+      console.log(`🔍 Buscando próximas ${quantidade_dias} datas disponíveis...`);
+      
+      const proximasDatas: Array<{
+        data: string;
+        dia_semana: string;
+        horarios: string[];
+      }> = [];
+      
+      const { data: dataInicial } = getDataHoraAtualBrasil();
+      
+      for (let diasAdiantados = 1; diasAdiantados <= quantidade_dias; diasAdiantados++) {
+        const dataCheck = new Date(dataInicial + 'T00:00:00');
+        dataCheck.setDate(dataCheck.getDate() + diasAdiantados);
+        const dataCheckStr = dataCheck.toISOString().split('T')[0];
+        const diaSemanaNum = dataCheck.getDay();
+        
+        // Pular finais de semana
+        if (diaSemanaNum === 0 || diaSemanaNum === 6) continue;
+        
+        // Buscar horários disponíveis para esta data
+        const { data: horariosDisponiveis } = await supabase
+          .from('agendamentos')
+          .select('hora_agendamento')
+          .eq('medico_id', medico.id)
+          .eq('data_agendamento', dataCheckStr)
+          .eq('status', 'agendado');
+        
+        // Horários ocupados
+        const horariosOcupados = new Set(
+          horariosDisponiveis?.map((h: any) => h.hora_agendamento.substring(0, 5)) || []
+        );
+        
+        // Horários disponíveis (simplificado - ajustar conforme regras de negócio)
+        const todosHorarios = [
+          '07:30', '08:00', '08:30', '09:00', '09:30', '10:00',
+          '13:30', '14:00', '14:30', '15:00', '15:30', '16:00'
+        ];
+        
+        const horariosLivres = todosHorarios.filter(h => !horariosOcupados.has(h));
+        
+        if (horariosLivres.length > 0) {
+          const diasSemana = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+          proximasDatas.push({
+            data: dataCheckStr,
+            dia_semana: diasSemana[diaSemanaNum],
+            horarios: horariosLivres
+          });
+        }
+        
+        // Encontrar 3 datas é suficiente
+        if (proximasDatas.length >= 3) break;
+      }
+      
+      if (proximasDatas.length === 0) {
+        return successResponse({
+          message: `Não há datas disponíveis nos próximos ${quantidade_dias} dias para ${medico.nome}`,
+          proximas_datas: []
+        });
+      }
+      
+      return successResponse({
+        message: `${proximasDatas.length} datas disponíveis encontradas`,
+        medico: medico.nome,
+        proximas_datas: proximasDatas
+      });
     }
     
     if (mensagem_original && !data_consulta) {

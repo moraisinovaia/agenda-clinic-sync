@@ -1066,6 +1066,73 @@ export type Database = {
           },
         ]
       }
+      notificacoes_enviadas: {
+        Row: {
+          agendamento_id: string | null
+          celular: string | null
+          cliente_id: string | null
+          created_at: string | null
+          enviado_em: string | null
+          erro: string | null
+          id: string
+          mensagem: string
+          paciente_id: string | null
+          status: string | null
+          tentativas: number | null
+          tipo: string
+        }
+        Insert: {
+          agendamento_id?: string | null
+          celular?: string | null
+          cliente_id?: string | null
+          created_at?: string | null
+          enviado_em?: string | null
+          erro?: string | null
+          id?: string
+          mensagem: string
+          paciente_id?: string | null
+          status?: string | null
+          tentativas?: number | null
+          tipo: string
+        }
+        Update: {
+          agendamento_id?: string | null
+          celular?: string | null
+          cliente_id?: string | null
+          created_at?: string | null
+          enviado_em?: string | null
+          erro?: string | null
+          id?: string
+          mensagem?: string
+          paciente_id?: string | null
+          status?: string | null
+          tentativas?: number | null
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notificacoes_enviadas_agendamento_id_fkey"
+            columns: ["agendamento_id"]
+            isOneToOne: false
+            referencedRelation: "agendamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notificacoes_enviadas_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notificacoes_enviadas_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notification_logs: {
         Row: {
           agendamento_id: string

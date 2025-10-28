@@ -85,3 +85,6 @@ verify_jwt = false
 
 [functions.n8n-api]
 verify_jwt = false
+
+[functions.notificar-bloqueio]
+verify_jwt = false
