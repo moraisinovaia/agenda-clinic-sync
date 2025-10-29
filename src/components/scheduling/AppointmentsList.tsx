@@ -175,7 +175,7 @@ export function AppointmentsList({ appointments, doctors, onEditAppointment, onC
                     {paginatedAppointments.map((appointment) => (
                     <TableRow key={appointment.id} className="hover:bg-muted/30">
                       <TableCell>
-                        <Badge 
+                        <Badge
                           variant={appointment.status === 'confirmado' ? 'outline' : getStatusColor(appointment.status)} 
                           className={`text-xs ${
                             appointment.status === 'confirmado' 

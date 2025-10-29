@@ -17,28 +17,40 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   const errorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastErrorRef = useRef<string | null>(null);
   const isOperatingRef = useRef(false);
-  const isFetchingRef = useRef(false); // 🔒 Lock para prevenir múltiplas execuções simultâneas
+  const refetchDebounceRef = useRef<NodeJS.Timeout | null>(null);
   
   // 🔥 Estado local para appointments
   const [appointments, setAppointments] = useState<AppointmentWithRelations[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
+// 🌍 SINGLETON GLOBAL: Uma única promise compartilhada entre TODOS os hooks
+let globalFetchPromise: Promise<AppointmentWithRelations[]> | null = null;
+let globalFetchTimestamp = 0;
+const CACHE_DURATION = 30000; // 30 segundos
+
   // ✅ FUNÇÃO DE QUERY DIRETA COM JOINS OTIMIZADOS
   const fetchAppointments = useCallback(async () => {
     const executionId = Math.random().toString(36).substring(7);
-    console.log(`🚀 [FETCH-${executionId}] ========== INÍCIO DA BUSCA DE AGENDAMENTOS ==========`);
+    const now = Date.now();
     
-    // 🔒 Aguardar se já houver busca em andamento
-    while (isFetchingRef.current) {
-      console.log(`⏸️ [FETCH-${executionId}] Aguardando busca em andamento...`);
-      await new Promise(resolve => setTimeout(resolve, 100));
+    // ✅ Se já existe fetch recente (< 30s), reutilizar
+    if (globalFetchPromise && (now - globalFetchTimestamp) < CACHE_DURATION) {
+      console.log('♻️ [SINGLETON] Reutilizando busca global existente');
+      return globalFetchPromise;
     }
     
-    isFetchingRef.current = true;
-    console.log(`🔍 [FETCH-${executionId}] Iniciando busca paginada manual...`);
+    // ✅ Se já tem fetch em andamento, aguardar
+    if (globalFetchPromise) {
+      console.log('⏸️ [SINGLETON] Aguardando fetch global em andamento...');
+      return globalFetchPromise;
+    }
     
-    return measureApiCall(async () => {
+    // 🆕 Criar novo fetch
+    console.log(`🚀 [FETCH-${executionId}] ========== INÍCIO DA BUSCA DE AGENDAMENTOS ==========`);
+    globalFetchTimestamp = now;
+    
+    globalFetchPromise = measureApiCall(async () => {
       try {
         const sixMonthsAgo = new Date();
         sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
@@ -238,12 +250,16 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         console.error('❌ [FETCH] Erro fatal:', err);
         logger.error('Erro ao buscar agendamentos', err, 'APPOINTMENTS');
         throw err;
-      } finally {
-        // 🔓 Liberar o lock
-        isFetchingRef.current = false;
-        console.log('🔓 [FETCH] Lock liberado');
       }
-    }, 'fetch_appointments', 'GET');
+    }, 'fetch_appointments', 'GET').finally(() => {
+      // Limpar após 30s
+      setTimeout(() => {
+        globalFetchPromise = null;
+        console.log('🧹 [SINGLETON] Cache global limpo');
+      }, CACHE_DURATION);
+    });
+    
+    return globalFetchPromise;
   }, [measureApiCall]);
 
   // 🔥 BUSCAR DADOS DIRETAMENTE SEM CACHE
@@ -314,35 +330,39 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     }
   }, [appointments, loading, error]);
 
-  // Realtime updates
+  // 🔄 Debounced refetch para Realtime
+  const debouncedRefetch = useCallback(() => {
+    if (refetchDebounceRef.current) {
+      clearTimeout(refetchDebounceRef.current);
+    }
+    
+    refetchDebounceRef.current = setTimeout(() => {
+      console.log('🔄 [REALTIME-DEBOUNCED] Refetching após 3s...');
+      refetch();
+    }, 3000);
+  }, [refetch]);
+
+  // Realtime updates com debounce
   useRealtimeUpdates({
     table: 'agendamentos',
     onInsert: (payload) => {
       if (isOperatingRef.current) return;
-      console.log('🔄 [REALTIME] Novo agendamento inserido');
-      setTimeout(() => {
-        if (!isOperatingRef.current) {
-          refetch();
-          toast({
-            title: "Novo agendamento",
-            description: "Um novo agendamento foi criado!",
-          });
-        }
-      }, 500);
+      console.log('🔄 [REALTIME] Novo agendamento inserido - aguardando 3s');
+      debouncedRefetch();
+      toast({
+        title: "Novo agendamento",
+        description: "Um novo agendamento foi criado!",
+      });
     },
     onUpdate: (payload) => {
       if (isOperatingRef.current) return;
-      console.log('🔄 [REALTIME] Agendamento atualizado');
-      setTimeout(() => {
-        if (!isOperatingRef.current) refetch();
-      }, 300);
+      console.log('🔄 [REALTIME] Agendamento atualizado - aguardando 3s');
+      debouncedRefetch();
     },
     onDelete: (payload) => {
       if (isOperatingRef.current) return;
-      console.log('🔄 [REALTIME] Agendamento deletado');
-      setTimeout(() => {
-        if (!isOperatingRef.current) refetch();
-      }, 300);
+      console.log('🔄 [REALTIME] Agendamento deletado - aguardando 3s');
+      debouncedRefetch();
     }
   });
 

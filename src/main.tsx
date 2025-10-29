@@ -5,33 +5,8 @@ import App from './App.tsx';
 import './index.css';
 import { AuthProvider } from '@/hooks/useAuth';
 import { GlobalErrorBoundary } from '@/components/error/GlobalErrorBoundary';
-import { clearAllCache } from '@/hooks/useOptimizedQuery';
 
-// 🧹 LIMPEZA TOTAL DE CACHE na inicialização da aplicação
-console.log('🚀 Aplicação iniciando - Limpando TODOS os caches');
-clearAllCache();
-
-// 🔄 DESATIVAR Service Worker para evitar cache persistente
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(registrations => {
-    registrations.forEach(registration => {
-      registration.unregister();
-      console.log('🗑️ Service Worker desregistrado');
-    });
-  });
-}
-
-// 🔄 Limpar TODOS os caches do navegador (Cache API)
-if ('caches' in window) {
-  caches.keys().then(names => {
-    names.forEach(name => {
-      caches.delete(name);
-      console.log(`🗑️ Cache do navegador "${name}" deletado`);
-    });
-  });
-}
-
-console.log('✅ Todos os caches foram limpos');
+// Query Client Configuration com cache estável
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -42,10 +17,10 @@ const queryClient = new QueryClient({
         }
         return failureCount < 3;
       },
-      staleTime: 0,
-      gcTime: 0,
-      refetchOnMount: 'always',
-      refetchOnWindowFocus: true,
+      staleTime: 5 * 60 * 1000, // 5 minutos
+      gcTime: 10 * 60 * 1000, // 10 minutos
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
     },
   },
 });
