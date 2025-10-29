@@ -1076,6 +1076,8 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     
     // 🧠 ANÁLISE DE CONTEXTO: Usar mensagem original para inferir intenção
     let isPerguntaAberta = false;
+    let periodoPreferido: 'manha' | 'tarde' | null = null;
+    
     if (mensagem_original) {
       const mensagemLower = mensagem_original.toLowerCase();
       
@@ -1086,6 +1088,15 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         mensagemLower.includes('proxima') ||
         mensagemLower.includes('disponível') ||
         mensagemLower.includes('disponivel');
+      
+      // 🆕 DETECTAR PERÍODO PREFERIDO
+      if (mensagemLower.includes('tarde') || mensagemLower.includes('tade')) {
+        periodoPreferido = 'tarde';
+        console.log('🌙 Paciente solicitou especificamente período da TARDE');
+      } else if (mensagemLower.includes('manhã') || mensagemLower.includes('manha')) {
+        periodoPreferido = 'manha';
+        console.log('☀️ Paciente solicitou especificamente período da MANHÃ');
+      }
       
       // Se for pergunta aberta, IGNORAR data_consulta e buscar próximas datas
       if (isPerguntaAberta && data_consulta) {
@@ -1138,8 +1149,8 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         
         const periodosDisponiveis = [];
         
-        // ☀️ VERIFICAR MANHÃ
-        if (servico?.periodos?.manha) {
+      // ☀️ VERIFICAR MANHÃ (pular se paciente quer apenas tarde)
+      if (servico?.periodos?.manha && periodoPreferido !== 'tarde') {
           const manha = servico.periodos.manha;
           const diaPermitido = !manha.dias_especificos || manha.dias_especificos.includes(diaSemanaNum);
           
@@ -1168,8 +1179,8 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
           }
         }
         
-        // 🌙 VERIFICAR TARDE
-        if (servico?.periodos?.tarde) {
+      // 🌙 VERIFICAR TARDE (pular se paciente quer apenas manhã)
+      if (servico?.periodos?.tarde && periodoPreferido !== 'manha') {
           const tarde = servico.periodos.tarde;
           const diaPermitido = !tarde.dias_especificos || tarde.dias_especificos.includes(diaSemanaNum);
           
@@ -1213,8 +1224,19 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       }
       
       if (proximasDatas.length === 0) {
+        let mensagemContextual = `Não há datas disponíveis nos próximos ${quantidade_dias} dias para ${medico.nome}`;
+        
+        // 🆕 MENSAGEM ESPECÍFICA POR PERÍODO
+        if (periodoPreferido === 'tarde') {
+          mensagemContextual += ' à tarde. Gostaria de verificar disponibilidade pela manhã?';
+        } else if (periodoPreferido === 'manha') {
+          mensagemContextual += ' pela manhã. Gostaria de verificar disponibilidade à tarde?';
+        } else {
+          mensagemContextual += ` no serviço ${atendimento_nome}`;
+        }
+        
         return successResponse({
-          message: `Não há datas disponíveis nos próximos ${quantidade_dias} dias para ${medico.nome}`,
+          message: mensagemContextual,
           medico: medico.nome,
           medico_id: medico.id,
           tipo_atendimento: 'ordem_chegada',
@@ -1222,7 +1244,8 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
           contexto: {
             medico_id: medico.id,
             medico_nome: medico.nome,
-            servico: atendimento_nome
+            servico: atendimento_nome,
+            periodo_solicitado: periodoPreferido
           }
         });
       }
