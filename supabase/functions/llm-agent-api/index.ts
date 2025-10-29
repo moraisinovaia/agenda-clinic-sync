@@ -117,17 +117,17 @@ const BUSINESS_RULES = {
       }
     },
     
-    // Dr. Pedro Francisco - Ultrassonografista - HORA MARCADA
+    // Dr. Pedro Francisco - Ultrassonografista - ORDEM DE CHEGADA
     '66e9310d-34cd-4005-8937-74e87125dc03': {
       nome: 'DR. PEDRO FRANCISCO',
-      tipo_agendamento: 'hora_marcada',
+      tipo_agendamento: 'ordem_chegada',
       servicos: {
         'Consulta': {
           permite_online: true,
-          tipo: 'hora_marcada',
+          tipo: 'ordem_chegada',
           dias_semana: [2, 4], // ter e qui apenas
           periodos: {
-            manha: { inicio: '09:30', fim: '10:00', limite: 4, atendimento_inicio: '10:00', intervalo_minutos: 30 }
+            manha: { inicio: '09:30', fim: '10:00', limite: 4, distribuicao_fichas: '09:30 às 10:00' }
           },
           mensagem_extra: 'Chegue entre 9h30 e 10h. O atendimento é após os exames, por ordem de chegada.'
         }
@@ -1098,13 +1098,29 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     if (buscar_proximas || (!data_consulta && mensagem_original)) {
       console.log(`🔍 Buscando próximas ${quantidade_dias} datas disponíveis...`);
       
+      // Buscar regras de negócio e configuração do serviço
+      const regras = BUSINESS_RULES.medicos[medico.id];
+      const servico = regras?.servicos?.[atendimento_nome];
+      const tipoAtendimento = servico?.tipo || regras?.tipo_agendamento || 'ordem_chegada';
+      
+      console.log(`📋 [${medico.nome}] Tipo: ${tipoAtendimento} | Serviço: ${atendimento_nome}`);
+      
       const proximasDatas: Array<{
         data: string;
         dia_semana: string;
-        horarios: string[];
+        periodos: Array<{
+          periodo: string;
+          horario_distribuicao: string;
+          vagas_disponiveis: number;
+          limite_total: number;
+          tipo: string;
+        }>;
       }> = [];
       
       const { data: dataInicial } = getDataHoraAtualBrasil();
+      
+      // 🎫 LÓGICA PARA ORDEM DE CHEGADA (todos os médicos)
+      console.log('🎫 Buscando períodos disponíveis (ordem de chegada)...');
       
       for (let diasAdiantados = 1; diasAdiantados <= quantidade_dias; diasAdiantados++) {
         const dataCheck = new Date(dataInicial + 'T00:00:00');
@@ -1115,33 +1131,80 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         // Pular finais de semana
         if (diaSemanaNum === 0 || diaSemanaNum === 6) continue;
         
-        // Buscar horários disponíveis para esta data
-        const { data: horariosDisponiveis } = await supabase
-          .from('agendamentos')
-          .select('hora_agendamento')
-          .eq('medico_id', medico.id)
-          .eq('data_agendamento', dataCheckStr)
-          .eq('status', 'agendado');
+        // Verificar se dia permitido pelo serviço
+        if (servico?.dias_semana && !servico.dias_semana.includes(diaSemanaNum)) {
+          continue;
+        }
         
-        // Horários ocupados
-        const horariosOcupados = new Set(
-          horariosDisponiveis?.map((h: any) => h.hora_agendamento.substring(0, 5)) || []
-        );
+        const periodosDisponiveis = [];
         
-        // Horários disponíveis (simplificado - ajustar conforme regras de negócio)
-        const todosHorarios = [
-          '07:30', '08:00', '08:30', '09:00', '09:30', '10:00',
-          '13:30', '14:00', '14:30', '15:00', '15:30', '16:00'
-        ];
+        // ☀️ VERIFICAR MANHÃ
+        if (servico?.periodos?.manha) {
+          const manha = servico.periodos.manha;
+          const diaPermitido = !manha.dias_especificos || manha.dias_especificos.includes(diaSemanaNum);
+          
+          if (diaPermitido) {
+            const { data: agendados } = await supabase
+              .from('agendamentos')
+              .select('id')
+              .eq('medico_id', medico.id)
+              .eq('data_agendamento', dataCheckStr)
+              .gte('hora_agendamento', manha.inicio)
+              .lte('hora_agendamento', manha.fim)
+              .in('status', ['agendado', 'confirmado']);
+            
+            const ocupadas = agendados?.length || 0;
+            const disponiveis = manha.limite - ocupadas;
+            
+            if (disponiveis > 0) {
+              periodosDisponiveis.push({
+                periodo: 'Manhã',
+                horario_distribuicao: manha.distribuicao_fichas || `${manha.inicio} às ${manha.fim}`,
+                vagas_disponiveis: disponiveis,
+                limite_total: manha.limite,
+                tipo: 'ordem_chegada'
+              });
+            }
+          }
+        }
         
-        const horariosLivres = todosHorarios.filter(h => !horariosOcupados.has(h));
+        // 🌙 VERIFICAR TARDE
+        if (servico?.periodos?.tarde) {
+          const tarde = servico.periodos.tarde;
+          const diaPermitido = !tarde.dias_especificos || tarde.dias_especificos.includes(diaSemanaNum);
+          
+          if (diaPermitido) {
+            const { data: agendados } = await supabase
+              .from('agendamentos')
+              .select('id')
+              .eq('medico_id', medico.id)
+              .eq('data_agendamento', dataCheckStr)
+              .gte('hora_agendamento', tarde.inicio)
+              .lte('hora_agendamento', tarde.fim)
+              .in('status', ['agendado', 'confirmado']);
+            
+            const ocupadas = agendados?.length || 0;
+            const disponiveis = tarde.limite - ocupadas;
+            
+            if (disponiveis > 0) {
+              periodosDisponiveis.push({
+                periodo: 'Tarde',
+                horario_distribuicao: tarde.distribuicao_fichas || `${tarde.inicio} às ${tarde.fim}`,
+                vagas_disponiveis: disponiveis,
+                limite_total: tarde.limite,
+                tipo: 'ordem_chegada'
+              });
+            }
+          }
+        }
         
-        if (horariosLivres.length > 0) {
+        // Adicionar data se tiver períodos disponíveis
+        if (periodosDisponiveis.length > 0) {
           const diasSemana = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
           proximasDatas.push({
             data: dataCheckStr,
             dia_semana: diasSemana[diaSemanaNum],
-            horarios: horariosLivres
+            periodos: periodosDisponiveis
           });
         }
         
@@ -1152,14 +1215,30 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       if (proximasDatas.length === 0) {
         return successResponse({
           message: `Não há datas disponíveis nos próximos ${quantidade_dias} dias para ${medico.nome}`,
-          proximas_datas: []
+          medico: medico.nome,
+          medico_id: medico.id,
+          tipo_atendimento: 'ordem_chegada',
+          proximas_datas: [],
+          contexto: {
+            medico_id: medico.id,
+            medico_nome: medico.nome,
+            servico: atendimento_nome
+          }
         });
       }
       
       return successResponse({
         message: `${proximasDatas.length} datas disponíveis encontradas`,
         medico: medico.nome,
-        proximas_datas: proximasDatas
+        medico_id: medico.id,
+        tipo_atendimento: 'ordem_chegada',
+        proximas_datas: proximasDatas,
+        contexto: {
+          medico_id: medico.id,
+          medico_nome: medico.nome,
+          servico: atendimento_nome,
+          ultima_data_sugerida: proximasDatas[proximasDatas.length - 1]?.data
+        }
       });
     }
     
