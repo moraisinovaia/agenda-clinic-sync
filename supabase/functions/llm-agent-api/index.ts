@@ -1167,6 +1167,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
               .select('id')
               .eq('medico_id', medico.id)
               .eq('data_agendamento', dataCheckStr)
+              .eq('cliente_id', clienteId)
               .gte('hora_agendamento', manha.inicio)
               .lte('hora_agendamento', manha.fim)
               .in('status', ['agendado', 'confirmado']);
@@ -1197,6 +1198,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
               .select('id')
               .eq('medico_id', medico.id)
               .eq('data_agendamento', dataCheckStr)
+              .eq('cliente_id', clienteId)
               .gte('hora_agendamento', tarde.inicio)
               .lte('hora_agendamento', tarde.fim)
               .in('status', ['agendado', 'confirmado']);
@@ -1480,6 +1482,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
             .select('hora_agendamento')
             .eq('medico_id', medico.id)
             .eq('data_agendamento', dataFormatada)
+            .eq('cliente_id', clienteId)
             .in('status', ['agendado', 'confirmado']);
 
           if (countError) {
@@ -1643,6 +1646,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         .select('hora_agendamento')
         .eq('medico_id', medico.id)
         .eq('data_agendamento', data_consulta)
+        .eq('cliente_id', clienteId)
         .in('status', ['agendado', 'confirmado']);
 
       if (countError) {
@@ -1739,6 +1743,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
             .eq('medico_id', medico.id)
             .eq('data_agendamento', data_consulta)
             .eq('hora_agendamento', horarioFormatado)
+            .eq('cliente_id', clienteId)
             .in('status', ['agendado', 'confirmado']);
           
           if (count === 0) {
