@@ -1098,9 +1098,10 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         console.log('☀️ Paciente solicitou especificamente período da MANHÃ');
       }
       
-      // Se for pergunta aberta, IGNORAR data_consulta e buscar próximas datas
-      if (isPerguntaAberta && data_consulta) {
-        console.log(`🔍 Pergunta aberta detectada ("${mensagem_original}"). Ignorando data específica para buscar próximas disponibilidades.`);
+      // Se for pergunta aberta OU houver período específico, IGNORAR data_consulta e buscar próximas datas
+      if ((isPerguntaAberta || periodoPreferido) && data_consulta) {
+        const motivo = periodoPreferido ? `período específico (${periodoPreferido})` : 'pergunta aberta';
+        console.log(`🔍 ${motivo} detectado. Ignorando data específica "${data_consulta}" para buscar próximas disponibilidades.`);
         data_consulta = null;
       }
     }
@@ -1607,6 +1608,16 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     const periodosDisponiveis = [];
     
     for (const [periodo, config] of Object.entries(servico.periodos)) {
+      // 🆕 FILTRAR POR PERÍODO PREFERIDO
+      if (periodoPreferido === 'tarde' && periodo === 'manha') {
+        console.log('⏭️ [FLUXO 3] Pulando manhã (paciente quer tarde)');
+        continue;
+      }
+      if (periodoPreferido === 'manha' && periodo === 'tarde') {
+        console.log('⏭️ [FLUXO 3] Pulando tarde (paciente quer manhã)');
+        continue;
+      }
+      
       // Verificar se o período é válido para este dia da semana
       if ((config as any).dias_especificos && !(config as any).dias_especificos.includes(diaSemana)) {
         continue;
