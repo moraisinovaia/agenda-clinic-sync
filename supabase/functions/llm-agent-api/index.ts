@@ -1441,6 +1441,16 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         const periodosDisponiveis = [];
         
         for (const [periodo, config] of Object.entries(servico.periodos)) {
+          // 🆕 FILTRAR POR PERÍODO PREFERIDO
+          if (periodoPreferido === 'tarde' && periodo === 'manha') {
+            console.log('⏭️ Pulando manhã (paciente quer tarde)');
+            continue;
+          }
+          if (periodoPreferido === 'manha' && periodo === 'tarde') {
+            console.log('⏭️ Pulando tarde (paciente quer manhã)');
+            continue;
+          }
+          
           if ((config as any).dias_especificos && !(config as any).dias_especificos.includes(diaSemana)) {
             continue;
           }
