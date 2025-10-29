@@ -1105,6 +1105,12 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       }
     }
     
+    // 🆕 AJUSTAR QUANTIDADE DE DIAS quando houver período específico
+    if (periodoPreferido && quantidade_dias < 14) {
+      quantidade_dias = 14; // Buscar mais dias para encontrar o período correto
+      console.log(`🔍 Ampliando busca para ${quantidade_dias} dias devido ao período específico: ${periodoPreferido}`);
+    }
+    
     // 🆕 BUSCAR PRÓXIMAS DATAS DISPONÍVEIS (quando buscar_proximas = true ou sem data específica)
     if (buscar_proximas || (!data_consulta && mensagem_original)) {
       console.log(`🔍 Buscando próximas ${quantidade_dias} datas disponíveis...`);
@@ -1219,16 +1225,29 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
           });
         }
         
-        // Encontrar 3 datas é suficiente
-        if (proximasDatas.length >= 3) break;
+        // Encontrar datas suficientes (mais quando há período específico)
+        const datasNecessarias = periodoPreferido ? 5 : 3;
+        if (proximasDatas.length >= datasNecessarias) break;
       }
       
       if (proximasDatas.length === 0) {
         let mensagemContextual = `Não há datas disponíveis nos próximos ${quantidade_dias} dias para ${medico.nome}`;
         
-        // 🆕 MENSAGEM ESPECÍFICA POR PERÍODO
+        // 🆕 MENSAGEM ESPECÍFICA POR PERÍODO COM DIAS ESPECÍFICOS
         if (periodoPreferido === 'tarde') {
-          mensagemContextual += ' à tarde. Gostaria de verificar disponibilidade pela manhã?';
+          // Verificar se há restrição de dias específicos
+          const servico = BUSINESS_RULES.medicos[medico.id]?.servicos?.[atendimento_nome];
+          const diasEspecificos = servico?.periodos?.tarde?.dias_especificos;
+          
+          if (diasEspecificos && diasEspecificos.length > 0) {
+            const diasNomes = diasEspecificos.map(d => {
+              const nomes = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
+              return nomes[d];
+            }).join(' e ');
+            mensagemContextual = `${medico.nome} atende à tarde apenas em **${diasNomes}**. Não há vagas disponíveis à tarde nos próximos ${quantidade_dias} dias. Gostaria de verificar disponibilidade pela manhã ou em outra data?`;
+          } else {
+            mensagemContextual += ' à tarde. Gostaria de verificar disponibilidade pela manhã?';
+          }
         } else if (periodoPreferido === 'manha') {
           mensagemContextual += ' pela manhã. Gostaria de verificar disponibilidade à tarde?';
         } else {
