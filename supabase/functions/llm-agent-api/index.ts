@@ -992,6 +992,88 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       console.log('💬 Mensagem original do paciente:', mensagem_original);
     }
     
+    // ✅ Validar campos obrigatórios
+    if (!atendimento_nome || atendimento_nome.trim() === '') {
+      return errorResponse('Campo obrigatório: atendimento_nome (ex: "Consulta Cardiológica", "Colonoscopia")');
+    }
+    
+    if (!medico_nome && !medico_id) {
+      return errorResponse('É necessário informar medico_nome OU medico_id');
+    }
+    
+    // 🔍 Buscar médico COM busca inteligente (aceita nomes parciais) - MOVIDO PARA ANTES DE USAR
+    let medico;
+    if (medico_id) {
+      // Busca por ID (exata)
+      const { data, error } = await supabase
+        .from('medicos')
+        .select('id, nome, ativo')
+        .eq('id', medico_id)
+        .eq('cliente_id', clienteId)
+        .eq('ativo', true)
+        .single();
+      
+      medico = data;
+      if (error || !medico) {
+        console.error(`❌ Médico ID não encontrado: ${medico_id}`, error);
+        return errorResponse(`Médico com ID "${medico_id}" não encontrado ou inativo`);
+      }
+      console.log(`✅ Médico encontrado por ID: ${medico.nome}`);
+      
+    } else {
+      // 🔍 BUSCA SUPER INTELIGENTE POR NOME:
+      console.log(`🔍 Buscando médico: "${medico_nome}"`);
+      
+      // Buscar TODOS os médicos ativos
+      const { data: todosMedicos, error } = await supabase
+        .from('medicos')
+        .select('id, nome, ativo')
+        .eq('cliente_id', clienteId)
+        .eq('ativo', true);
+      
+      if (error) {
+        console.error('❌ Erro ao buscar médicos:', error);
+        return errorResponse(`Erro ao buscar médicos: ${error.message}`);
+      }
+      
+      if (!todosMedicos || todosMedicos.length === 0) {
+        return errorResponse('Nenhum médico ativo cadastrado no sistema');
+      }
+      
+      // Função auxiliar: normalizar texto para comparação (sem pontuação, tudo minúsculo)
+      const normalizar = (texto: string) => 
+        texto.toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remove acentos
+          .replace(/[.,\-']/g, '') // Remove pontuação
+          .replace(/\s+/g, ' ') // Normaliza espaços
+          .trim();
+      
+      const nomeNormalizado = normalizar(medico_nome);
+      console.log(`🔍 Nome normalizado para busca: "${nomeNormalizado}"`);
+      
+      // Procurar médico que contenha o nome buscado
+      const medicosEncontrados = todosMedicos.filter(m => {
+        const nomeCompletoNormalizado = normalizar(m.nome);
+        return nomeCompletoNormalizado.includes(nomeNormalizado);
+      });
+      
+      if (medicosEncontrados.length === 0) {
+        console.error(`❌ Nenhum médico encontrado para: "${medico_nome}"`);
+        const sugestoes = todosMedicos.map(m => m.nome).slice(0, 10).join(', ');
+        return errorResponse(
+          `Médico "${medico_nome}" não encontrado. Médicos disponíveis: ${sugestoes}`
+        );
+      }
+      
+      if (medicosEncontrados.length > 1) {
+        console.warn(`⚠️ Múltiplos médicos encontrados para "${medico_nome}":`, 
+          medicosEncontrados.map(m => m.nome).join(', '));
+      }
+      
+      medico = medicosEncontrados[0];
+      console.log(`✅ Médico encontrado: "${medico_nome}" → "${medico.nome}"`);
+    }
+    
     // 🧠 ANÁLISE DE CONTEXTO: Usar mensagem original para inferir intenção
     let isPerguntaAberta = false;
     if (mensagem_original) {
@@ -1109,92 +1191,6 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
           break;
         }
       }
-    }
-
-    // ✅ Validar campos obrigatórios
-    if (!atendimento_nome || atendimento_nome.trim() === '') {
-      return errorResponse('Campo obrigatório: atendimento_nome (ex: "Consulta Cardiológica", "Colonoscopia")');
-    }
-    
-    if (!medico_nome && !medico_id) {
-      return errorResponse('É necessário informar medico_nome OU medico_id');
-    }
-    
-    // 🔍 Buscar médico COM busca inteligente (aceita nomes parciais)
-    let medico;
-    if (medico_id) {
-      // Busca por ID (exata)
-      const { data, error } = await supabase
-        .from('medicos')
-        .select('id, nome, ativo')
-        .eq('id', medico_id)
-        .eq('cliente_id', clienteId)
-        .eq('ativo', true)
-        .single();
-      
-      medico = data;
-      if (error || !medico) {
-        console.error(`❌ Médico ID não encontrado: ${medico_id}`, error);
-        return errorResponse(`Médico com ID "${medico_id}" não encontrado ou inativo`);
-      }
-      console.log(`✅ Médico encontrado por ID: ${medico.nome}`);
-      
-    } else {
-      // 🔍 BUSCA SUPER INTELIGENTE POR NOME:
-      // Remove TODA pontuação e espaços extras de ambos os lados para comparação
-      // Exemplos: "Dra Adriana" → "Dra. Adriana Carla de Sena"
-      //           "Marcelo" → "DR. MARCELO D'CARLI"
-      
-      console.log(`🔍 Buscando médico: "${medico_nome}"`);
-      
-      // Buscar TODOS os médicos ativos
-      const { data: todosMedicos, error } = await supabase
-        .from('medicos')
-        .select('id, nome, ativo')
-        .eq('cliente_id', clienteId)
-        .eq('ativo', true);
-      
-      if (error) {
-        console.error('❌ Erro ao buscar médicos:', error);
-        return errorResponse(`Erro ao buscar médicos: ${error.message}`);
-      }
-      
-      if (!todosMedicos || todosMedicos.length === 0) {
-        return errorResponse('Nenhum médico ativo cadastrado no sistema');
-      }
-      
-      // Função auxiliar: normalizar texto para comparação (sem pontuação, tudo minúsculo)
-      const normalizar = (texto: string) => 
-        texto.toLowerCase()
-          .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remove acentos
-          .replace(/[.,\-']/g, '') // Remove pontuação
-          .replace(/\s+/g, ' ') // Normaliza espaços
-          .trim();
-      
-      const nomeNormalizado = normalizar(medico_nome);
-      console.log(`🔍 Nome normalizado para busca: "${nomeNormalizado}"`);
-      
-      // Procurar médico que contenha o nome buscado
-      const medicosEncontrados = todosMedicos.filter(m => {
-        const nomeCompletoNormalizado = normalizar(m.nome);
-        return nomeCompletoNormalizado.includes(nomeNormalizado);
-      });
-      
-      if (medicosEncontrados.length === 0) {
-        console.error(`❌ Nenhum médico encontrado para: "${medico_nome}"`);
-        const sugestoes = todosMedicos.map(m => m.nome).slice(0, 10).join(', ');
-        return errorResponse(
-          `Médico "${medico_nome}" não encontrado. Médicos disponíveis: ${sugestoes}`
-        );
-      }
-      
-      if (medicosEncontrados.length > 1) {
-        console.warn(`⚠️ Múltiplos médicos encontrados para "${medico_nome}":`, 
-          medicosEncontrados.map(m => m.nome).join(', '));
-      }
-      
-      medico = medicosEncontrados[0];
-      console.log(`✅ Médico encontrado: "${medico_nome}" → "${medico.nome}"`);
     }
 
     // Buscar regras de negócio
