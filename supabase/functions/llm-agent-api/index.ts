@@ -690,13 +690,30 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string) {
 // Remarcar consulta
 async function handleReschedule(supabase: any, body: any, clienteId: string) {
   try {
+    console.log('🔄 Iniciando remarcação de consulta');
+    console.log('📥 Dados recebidos:', JSON.stringify(body, null, 2));
+    console.log('🏥 Cliente ID:', clienteId);
+    
     const { agendamento_id, nova_data, nova_hora, observacoes } = body;
 
-    if (!agendamento_id || !nova_data || !nova_hora) {
-      return errorResponse('Campos obrigatórios: agendamento_id, nova_data, nova_hora');
+    // Validação detalhada
+    const camposFaltando = [];
+    if (!agendamento_id) camposFaltando.push('agendamento_id');
+    if (!nova_data) camposFaltando.push('nova_data');
+    if (!nova_hora) camposFaltando.push('nova_hora');
+    
+    if (camposFaltando.length > 0) {
+      const erro = `Campos obrigatórios faltando: ${camposFaltando.join(', ')}`;
+      console.error('❌ Validação falhou:', erro);
+      console.error('📦 Body recebido:', body);
+      return errorResponse(erro);
     }
+    
+    console.log('✅ Validação inicial OK');
+    console.log(`📝 Remarcando agendamento ${agendamento_id} para ${nova_data} às ${nova_hora}`);
 
     // Verificar se agendamento existe COM filtro de cliente
+    console.log(`🔍 Buscando agendamento ${agendamento_id}...`);
     const { data: agendamento, error: checkError } = await supabase
       .from('agendamentos')
       .select(`
@@ -712,18 +729,34 @@ async function handleReschedule(supabase: any, body: any, clienteId: string) {
       .eq('cliente_id', clienteId)
       .single();
 
-    if (checkError || !agendamento) {
+    if (checkError) {
+      console.error('❌ Erro ao buscar agendamento:', checkError);
+      return errorResponse(`Erro ao buscar agendamento: ${checkError.message}`);
+    }
+    
+    if (!agendamento) {
+      console.error('❌ Agendamento não encontrado');
       return errorResponse('Agendamento não encontrado');
     }
 
+    console.log('✅ Agendamento encontrado:', {
+      paciente: agendamento.pacientes?.nome_completo,
+      medico: agendamento.medicos?.nome,
+      data_atual: agendamento.data_agendamento,
+      hora_atual: agendamento.hora_agendamento,
+      status: agendamento.status
+    });
+
     if (agendamento.status === 'cancelado') {
+      console.error('❌ Tentativa de remarcar consulta cancelada');
       return errorResponse('Não é possível remarcar consulta cancelada');
     }
 
     // Verificar disponibilidade do novo horário COM filtro de cliente
-    const { data: conflitos } = await supabase
+    console.log(`🔍 Verificando disponibilidade em ${nova_data} às ${nova_hora}...`);
+    const { data: conflitos, error: conflitosError } = await supabase
       .from('agendamentos')
-      .select('id')
+      .select('id, pacientes(nome_completo)')
       .eq('medico_id', agendamento.medico_id)
       .eq('data_agendamento', nova_data)
       .eq('hora_agendamento', nova_hora)
@@ -731,9 +764,16 @@ async function handleReschedule(supabase: any, body: any, clienteId: string) {
       .in('status', ['agendado', 'confirmado'])
       .neq('id', agendamento_id);
 
-    if (conflitos && conflitos.length > 0) {
-      return errorResponse('Horário já ocupado para este médico');
+    if (conflitosError) {
+      console.error('❌ Erro ao verificar conflitos:', conflitosError);
     }
+
+    if (conflitos && conflitos.length > 0) {
+      console.error('❌ Horário já ocupado:', conflitos[0]);
+      return errorResponse(`Horário já ocupado para este médico (${conflitos[0].pacientes?.nome_completo})`);
+    }
+
+    console.log('✅ Horário disponível');
 
     // Atualizar agendamento
     const updateData: any = {
@@ -746,14 +786,19 @@ async function handleReschedule(supabase: any, body: any, clienteId: string) {
       updateData.observacoes = observacoes;
     }
 
+    console.log('💾 Atualizando agendamento:', updateData);
+
     const { error: updateError } = await supabase
       .from('agendamentos')
       .update(updateData)
       .eq('id', agendamento_id);
 
     if (updateError) {
+      console.error('❌ Erro ao atualizar:', updateError);
       return errorResponse(`Erro ao remarcar: ${updateError.message}`);
     }
+
+    console.log('✅ Agendamento remarcado com sucesso!');
 
     return successResponse({
       message: `Consulta remarcada com sucesso`,
@@ -767,6 +812,8 @@ async function handleReschedule(supabase: any, body: any, clienteId: string) {
     });
 
   } catch (error: any) {
+    console.error('💥 Erro inesperado ao remarcar:', error);
+    console.error('Stack:', error?.stack);
     return errorResponse(`Erro ao remarcar consulta: ${error?.message || 'Erro desconhecido'}`);
   }
 }
