@@ -502,8 +502,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
 
         const { data, error } = await supabase.rpc('desconfirmar_agendamento', {
           p_agendamento_id: appointmentId,
-          p_alterado_por: profile?.nome || 'Usuário',
-          p_alterado_por_user_id: profile?.user_id || null
+          p_desconfirmado_por: profile?.nome || 'Usuário',
+          p_desconfirmado_por_user_id: profile?.user_id || null
         });
 
         if (error) throw error;

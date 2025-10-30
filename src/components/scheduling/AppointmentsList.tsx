@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { FixedSizeList as List } from 'react-window';
+// @ts-ignore - react-window types issue
+import { FixedSizeList } from 'react-window';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatInTimeZone } from 'date-fns-tz';
@@ -174,7 +175,7 @@ export const AppointmentsList = React.memo(({ appointments, doctors, onEditAppoi
               </div>
 
               {/* Lista virtualizada - renderiza apenas ~15 itens visíveis */}
-              <List
+              <FixedSizeList
                 height={600}
                 itemCount={paginatedAppointments.length}
                 itemSize={80}
@@ -384,7 +385,7 @@ export const AppointmentsList = React.memo(({ appointments, doctors, onEditAppoi
                     </div>
                   );
                 }}
-              </List>
+              </FixedSizeList>
               
               {/* Pagination Controls */}
               {totalPages > 1 && (
@@ -433,4 +434,11 @@ export const AppointmentsList = React.memo(({ appointments, doctors, onEditAppoi
       />
     </div>
   );
-}
+}, (prevProps, nextProps) => {
+  // 🚨 OTIMIZAÇÃO FASE 2: Comparação customizada para evitar re-renders desnecessários
+  return (
+    prevProps.appointments.length === nextProps.appointments.length &&
+    prevProps.doctors.length === nextProps.doctors.length &&
+    prevProps.allowCanceled === nextProps.allowCanceled
+  );
+});
