@@ -173,11 +173,12 @@ export function useAtomicAppointmentCreation() {
       // Verificar se a função retornou sucesso
       const result = data as unknown as AtomicAppointmentResult;
       if (!result?.success) {
-        const errorMessage = result?.error || result?.message || 'Erro desconhecido na criação do agendamento';
+        // Priorizar 'message' que agora contém o nome do paciente em conflitos
+        const errorMessage = result?.message || result?.error || 'Erro desconhecido na criação do agendamento';
         console.log('❌ Função SQL retornou erro:', errorMessage);
         
-        // ✅ DETECÇÃO DE CONFLITO: Verificar se é conflito específico
-        if (result?.conflict_detected) {
+        // ✅ DETECÇÃO DE CONFLITO: Verificar se é conflito específico (incluindo CONFLICT direto)
+        if (result?.conflict_detected || result?.error === 'CONFLICT') {
           console.log('⚠️ Conflito detectado - criando erro especial para modal');
           const conflictError = new Error(errorMessage) as any;
           conflictError.isConflict = true;
