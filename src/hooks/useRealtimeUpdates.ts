@@ -15,6 +15,7 @@ export const useRealtimeUpdates = (config: RealtimeConfig) => {
   const connectionRetryRef = useRef<NodeJS.Timeout | null>(null);
   const retryCountRef = useRef(0);
   const channelRef = useRef<any>(null);
+  const MAX_RETRY_ATTEMPTS = 10; // 🚨 LIMITE: Máximo 10 tentativas de reconexão
 
   const handleInsert = useCallback((payload: any) => {
     console.log('New insert:', payload);
@@ -93,32 +94,39 @@ export const useRealtimeUpdates = (config: RealtimeConfig) => {
               channelRef.current = null;
               console.log(`Connection closed for ${config.table}`);
               
-              // Reconexão inteligente com backoff exponencial (SEM LIMITE)
-              if (isMounted) {
+              // 🚨 Reconexão com limite máximo de 10 tentativas
+              if (isMounted && retryCountRef.current < MAX_RETRY_ATTEMPTS) {
                 retryCountRef.current += 1;
                 const delay = Math.min(2000 * Math.pow(1.5, retryCountRef.current), 30000); // Máximo 30s
-                console.log(`Attempting reconnection ${retryCountRef.current} in ${delay}ms`);
+                console.log(`⏳ Attempting reconnection ${retryCountRef.current}/${MAX_RETRY_ATTEMPTS} in ${delay}ms`);
                 
                 connectionRetryRef.current = setTimeout(() => {
                   if (isMounted && !isSubscribed) {
                     setupRealtime();
                   }
                 }, delay);
+              } else if (retryCountRef.current >= MAX_RETRY_ATTEMPTS) {
+                console.error(`❌ Limite de reconexões atingido (${MAX_RETRY_ATTEMPTS}). Parando tentativas.`);
+                notifySystemError('Conexão realtime desconectada após múltiplas tentativas');
               }
             } else if (status === 'CHANNEL_ERROR') {
-              console.error(`Channel error for ${config.table}`);
+              console.error(`❌ Channel error for ${config.table}`);
               isSubscribed = false;
               channelRef.current = null;
               
-              // Tentar reconectar após erro
-              if (isMounted) {
+              // 🚨 Tentar reconectar após erro (com limite)
+              if (isMounted && retryCountRef.current < MAX_RETRY_ATTEMPTS) {
                 retryCountRef.current += 1;
                 const delay = Math.min(5000 * Math.pow(1.5, retryCountRef.current), 60000);
+                console.log(`⏳ Reconnecting after error ${retryCountRef.current}/${MAX_RETRY_ATTEMPTS} in ${delay}ms`);
                 connectionRetryRef.current = setTimeout(() => {
                   if (isMounted && !isSubscribed) {
                     setupRealtime();
                   }
                 }, delay);
+              } else if (retryCountRef.current >= MAX_RETRY_ATTEMPTS) {
+                console.error(`❌ Limite de reconexões atingido (${MAX_RETRY_ATTEMPTS}). Parando tentativas.`);
+                notifySystemError('Erro permanente na conexão realtime');
               }
             }
           });

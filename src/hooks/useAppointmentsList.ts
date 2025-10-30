@@ -52,9 +52,10 @@ const CACHE_DURATION = 30000; // 30 segundos
     
     globalFetchPromise = measureApiCall(async () => {
       try {
-        const sixMonthsAgo = new Date();
-        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-        const dateFilter = sixMonthsAgo.toISOString().split('T')[0];
+        // 🚨 OTIMIZAÇÃO: Reduzir de 6 para 3 meses
+        const threeMonthsAgo = new Date();
+        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+        const dateFilter = threeMonthsAgo.toISOString().split('T')[0];
         
         console.log('📅 [FILTRO] Buscando desde:', dateFilter);
         
@@ -150,9 +151,9 @@ const CACHE_DURATION = 30000; // 30 segundos
           }
           // ❌ REMOVIDO: else if (pageData.length < pageSize) - Causava parada prematura
           
-          // Segurança: limite de 20 páginas (20k registros)
-          if (currentPage >= 20) {
-            console.warn('⚠️ Limite de segurança: 20 páginas atingido');
+          // 🚨 OTIMIZAÇÃO: Reduzir de 20 para 5 páginas (5k registros)
+          if (currentPage >= 5) {
+            console.warn('⚠️ Limite de segurança: 5 páginas atingido (reduzido de 20 para economizar memória)');
             hasMore = false;
           }
         }
