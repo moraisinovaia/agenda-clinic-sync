@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 // @ts-ignore - react-window types issue
-import { FixedSizeList } from 'react-window';
+import * as ReactWindow from 'react-window';
+const FixedSizeList = (ReactWindow as any).FixedSizeList;
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatInTimeZone } from 'date-fns-tz';
