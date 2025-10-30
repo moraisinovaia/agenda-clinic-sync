@@ -8,9 +8,13 @@ import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 import { useDebounce } from '@/hooks/useDebounce';
 import { logger } from '@/utils/logger';
 
+// 🚨 OTIMIZAÇÃO FASE 2: Cache movido para dentro do hook (local por instância)
+// Removido singleton global para evitar memory leaks e data duplication
+const CACHE_DURATION = 30000; // 30 segundos
+
 // 🔄 QUERY DIRETA: Versão Otimizada 2025-10-27-17:00 - Solução definitiva com índices
 export function useAppointmentsList(itemsPerPage: number = 20) {
-  console.log('🏁 useAppointmentsList: Hook inicializado (Paginação Manual)');
+  console.log('🏁 useAppointmentsList: Hook inicializado (Paginação Manual + Cache Local)');
   
   const { toast } = useToast();
   const { measureApiCall } = usePerformanceMetrics();
@@ -19,38 +23,37 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   const isOperatingRef = useRef(false);
   const refetchDebounceRef = useRef<NodeJS.Timeout | null>(null);
   
+  // 🚨 OTIMIZAÇÃO FASE 2: Cache local por instância usando refs
+  const fetchPromiseRef = useRef<Promise<AppointmentWithRelations[]> | null>(null);
+  const fetchTimestampRef = useRef<number>(0);
+  
   // 🔥 Estado local para appointments
   const [appointments, setAppointments] = useState<AppointmentWithRelations[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-
-// 🌍 SINGLETON GLOBAL: Uma única promise compartilhada entre TODOS os hooks
-let globalFetchPromise: Promise<AppointmentWithRelations[]> | null = null;
-let globalFetchTimestamp = 0;
-const CACHE_DURATION = 30000; // 30 segundos
 
   // ✅ FUNÇÃO DE QUERY DIRETA COM JOINS OTIMIZADOS
   const fetchAppointments = useCallback(async () => {
     const executionId = Math.random().toString(36).substring(7);
     const now = Date.now();
     
-    // ✅ Se já existe fetch recente (< 30s), reutilizar
-    if (globalFetchPromise && (now - globalFetchTimestamp) < CACHE_DURATION) {
-      console.log('♻️ [SINGLETON] Reutilizando busca global existente');
-      return globalFetchPromise;
+    // 🔍 Verificar cache local antes de fazer nova chamada
+    if (fetchPromiseRef.current && (now - fetchTimestampRef.current) < CACHE_DURATION) {
+      console.log('♻️ [CACHE HIT] Reutilizando chamada local existente');
+      return fetchPromiseRef.current;
     }
     
     // ✅ Se já tem fetch em andamento, aguardar
-    if (globalFetchPromise) {
-      console.log('⏸️ [SINGLETON] Aguardando fetch global em andamento...');
-      return globalFetchPromise;
+    if (fetchPromiseRef.current) {
+      console.log('⏸️ [CACHE] Aguardando fetch em andamento...');
+      return fetchPromiseRef.current;
     }
     
     // 🆕 Criar novo fetch
     console.log(`🚀 [FETCH-${executionId}] ========== INÍCIO DA BUSCA DE AGENDAMENTOS ==========`);
-    globalFetchTimestamp = now;
+    fetchTimestampRef.current = now;
     
-    globalFetchPromise = measureApiCall(async () => {
+    fetchPromiseRef.current = measureApiCall(async () => {
       try {
         // 🚨 OTIMIZAÇÃO: Reduzir de 6 para 3 meses
         const threeMonthsAgo = new Date();
@@ -255,12 +258,12 @@ const CACHE_DURATION = 30000; // 30 segundos
     }, 'fetch_appointments', 'GET').finally(() => {
       // Limpar após 30s
       setTimeout(() => {
-        globalFetchPromise = null;
-        console.log('🧹 [SINGLETON] Cache global limpo');
+        fetchPromiseRef.current = null;
+        console.log('🧹 [CACHE] Cache local limpo');
       }, CACHE_DURATION);
     });
     
-    return globalFetchPromise;
+    return fetchPromiseRef.current;
   }, [measureApiCall]);
 
   // 🔥 BUSCAR DADOS DIRETAMENTE SEM CACHE
@@ -301,13 +304,17 @@ const CACHE_DURATION = 30000; // 30 segundos
     }
   }, [fetchAppointments]);
 
+  // 🔄 Invalidar cache local quando necessário
   const invalidateCache = useCallback(() => {
-    refetch();
-  }, [refetch]);
+    console.log('🗑️ Invalidando cache local');
+    fetchPromiseRef.current = null;
+    fetchTimestampRef.current = 0;
+  }, []);
 
   const forceRefetch = useCallback(() => {
+    invalidateCache();
     refetch();
-  }, [refetch]);
+  }, [invalidateCache, refetch]);
 
   // Log quando appointments mudar
   useEffect(() => {
@@ -469,8 +476,8 @@ const CACHE_DURATION = 30000; // 30 segundos
         return data;
       }, 'confirm_appointment', 'PUT');
 
-      await refetch();
       toast({ title: 'Agendamento confirmado', description: 'O agendamento foi confirmado com sucesso' });
+      await refetch();
     } catch (error) {
       toast({
         title: 'Erro',
@@ -495,20 +502,17 @@ const CACHE_DURATION = 30000; // 30 segundos
 
         const { data, error } = await supabase.rpc('desconfirmar_agendamento', {
           p_agendamento_id: appointmentId,
-          p_desconfirmado_por: profile?.nome || 'Usuário',
-          p_desconfirmado_por_user_id: profile?.user_id || null
+          p_alterado_por: profile?.nome || 'Usuário',
+          p_alterado_por_user_id: profile?.user_id || null
         });
 
         if (error) throw error;
-        const response = data as { success?: boolean; error?: string };
-        if (!response || response.success === false) {
-          throw new Error(response?.error || 'Erro ao desconfirmar');
-        }
+        if (!(data as any)?.success) throw new Error((data as any)?.error || 'Erro ao desconfirmar');
         return data;
       }, 'unconfirm_appointment', 'PUT');
 
+      toast({ title: 'Confirmação removida', description: 'A confirmação do agendamento foi removida' });
       await refetch();
-      toast({ title: 'Agendamento desconfirmado', description: 'O agendamento foi desconfirmado com sucesso' });
     } catch (error) {
       toast({
         title: 'Erro',
@@ -540,7 +544,7 @@ const CACHE_DURATION = 30000; // 30 segundos
         if (error) throw error;
         if (!(data as any)?.success) throw new Error((data as any)?.error || 'Erro ao excluir');
         return data;
-      }, 'delete_appointment', 'PUT');
+      }, 'delete_appointment', 'DELETE');
 
       toast({ title: 'Agendamento excluído', description: 'O agendamento foi excluído com sucesso' });
       await refetch();
@@ -557,17 +561,17 @@ const CACHE_DURATION = 30000; // 30 segundos
   };
 
   return {
-    appointments: appointments || [],
+    appointments,
     loading,
-    getAppointmentsByDoctorAndDate,
     cancelAppointment,
-    deleteAppointment,
     confirmAppointment,
     unconfirmAppointment,
+    deleteAppointment,
+    getAppointmentsByDoctorAndDate,
     refetch,
     invalidateCache,
     forceRefetch,
     pagination,
-    error
+    error,
   };
 }

@@ -176,9 +176,27 @@ const Index = () => {
     
     fetchEmptySlots();
     
-    // Refresh a cada 30 segundos
-    const interval = setInterval(fetchEmptySlots, 30000);
-    return () => clearInterval(interval);
+    // 🚨 OTIMIZAÇÃO FASE 2: Aumentar para 60s e verificar visibilidade da página
+    const interval = setInterval(() => {
+      // Só buscar se a página está visível (economiza recursos quando aba está inativa)
+      if (document.visibilityState === 'visible') {
+        fetchEmptySlots();
+      }
+    }, 60000); // 60 segundos (antes: 30s)
+
+    // Listener para atualizar quando usuário voltar para a aba
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchEmptySlots(); // Atualizar imediatamente ao voltar
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [userClienteId]);
 
   const {
