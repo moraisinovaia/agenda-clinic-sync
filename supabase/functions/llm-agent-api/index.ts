@@ -580,8 +580,33 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
 
     console.log('✅ Agendamento criado com sucesso:', result);
 
+    // Mensagem personalizada para Dra. Adriana
+    let mensagem = `Consulta agendada com sucesso para ${paciente_nome}`;
+
+    const isDraAdriana = medico.id === '32d30887-b876-4502-bf04-e55d7fb55b50';
+
+    if (isDraAdriana) {
+      // Detectar período baseado no horário
+      const [hora] = hora_consulta.split(':').map(Number);
+      
+      let mensagemPeriodo = '';
+      if (hora >= 8 && hora < 12) {
+        // Manhã
+        mensagemPeriodo = 'Das 08:00 às 10:00 para fazer a ficha. A Dra. começa a atender às 08:45';
+      } else if (hora >= 13 && hora < 18) {
+        // Tarde
+        mensagemPeriodo = 'Das 13:00 às 15:00 para fazer a ficha. A Dra. começa a atender às 14:45';
+      } else {
+        // Fallback (não deveria acontecer, mas por segurança)
+        mensagemPeriodo = 'Compareça no horário agendado. A Dra. atende por ordem de chegada';
+      }
+      
+      mensagem = `Agendada! ${mensagemPeriodo}, por ordem de chegada. Caso o plano Unimed seja coparticipação ou particular, recebemos apenas em espécie. Posso ajudar em algo mais?`;
+      console.log(`💬 Mensagem personalizada Dra. Adriana (período: ${hora >= 8 && hora < 12 ? 'manhã' : 'tarde'})`);
+    }
+
     return successResponse({
-      message: `Consulta agendada com sucesso para ${paciente_nome}`,
+      message: mensagem,
       agendamento_id: result.agendamento_id,
       paciente_id: result.paciente_id,
       medico: medico.nome,
@@ -800,8 +825,33 @@ async function handleReschedule(supabase: any, body: any, clienteId: string) {
 
     console.log('✅ Agendamento remarcado com sucesso!');
 
+    // Mensagem personalizada para Dra. Adriana
+    let mensagem = `Consulta remarcada com sucesso`;
+
+    const isDraAdriana = agendamento.medico_id === '32d30887-b876-4502-bf04-e55d7fb55b50';
+
+    if (isDraAdriana) {
+      // Detectar período baseado no NOVO horário
+      const [hora] = nova_hora.split(':').map(Number);
+      
+      let mensagemPeriodo = '';
+      if (hora >= 8 && hora < 12) {
+        // Manhã
+        mensagemPeriodo = 'Das 08:00 às 10:00 para fazer a ficha. A Dra. começa a atender às 08:45';
+      } else if (hora >= 13 && hora < 18) {
+        // Tarde
+        mensagemPeriodo = 'Das 13:00 às 15:00 para fazer a ficha. A Dra. começa a atender às 14:45';
+      } else {
+        // Fallback
+        mensagemPeriodo = 'Compareça no horário agendado. A Dra. atende por ordem de chegada';
+      }
+      
+      mensagem = `Remarcada! ${mensagemPeriodo}, por ordem de chegada. Caso o plano Unimed seja coparticipação ou particular, recebemos apenas em espécie. Posso ajudar em algo mais?`;
+      console.log(`💬 Mensagem personalizada Dra. Adriana (período: ${hora >= 8 && hora < 12 ? 'manhã' : 'tarde'})`);
+    }
+
     return successResponse({
-      message: `Consulta remarcada com sucesso`,
+      message: mensagem,
       agendamento_id,
       paciente: agendamento.pacientes?.nome_completo,
       medico: agendamento.medicos?.nome,
