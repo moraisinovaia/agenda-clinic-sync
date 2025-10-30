@@ -448,24 +448,83 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
     // Buscar atendimento por nome (se especificado) COM filtro de cliente
     let atendimento_id = null;
     if (atendimento_nome) {
-      const { data: atendimento, error: atendimentoError } = await supabase
+      console.log(`🔍 Buscando atendimento: "${atendimento_nome}" para médico ${medico.nome}`);
+      
+      // Tentativa 1: Busca pelo nome fornecido
+      let { data: atendimento, error: atendimentoError } = await supabase
         .from('atendimentos')
-        .select('id, nome')
+        .select('id, nome, tipo')
         .ilike('nome', `%${atendimento_nome}%`)
         .eq('medico_id', medico.id)
         .eq('cliente_id', clienteId)
         .eq('ativo', true)
         .single();
 
+      // Tentativa 2: Fallback inteligente por tipo
       if (atendimentoError || !atendimento) {
-        return errorResponse(`Atendimento "${atendimento_nome}" não encontrado para o médico ${medico.nome}`);
+        console.log(`⚠️ Não encontrado com nome exato, tentando busca por tipo...`);
+        
+        const nomeLower = atendimento_nome.toLowerCase();
+        let tipoAtendimento = null;
+        
+        // Detectar tipo baseado em palavras-chave
+        if (nomeLower.includes('consult')) {
+          tipoAtendimento = 'consulta';
+        } else if (nomeLower.includes('retorn')) {
+          tipoAtendimento = 'retorno';
+        } else if (nomeLower.includes('exam')) {
+          tipoAtendimento = 'exame';
+        }
+        
+        if (tipoAtendimento) {
+          console.log(`🎯 Detectado tipo: ${tipoAtendimento}, buscando...`);
+          
+          const { data: atendimentosPorTipo } = await supabase
+            .from('atendimentos')
+            .select('id, nome, tipo')
+            .eq('tipo', tipoAtendimento)
+            .eq('medico_id', medico.id)
+            .eq('cliente_id', clienteId)
+            .eq('ativo', true)
+            .limit(1);
+          
+          if (atendimentosPorTipo && atendimentosPorTipo.length > 0) {
+            atendimento = atendimentosPorTipo[0];
+            console.log(`✅ Encontrado por tipo: ${atendimento.nome}`);
+          }
+        }
       }
+
+      // Se ainda não encontrou, listar opções disponíveis
+      if (!atendimento) {
+        const { data: atendimentosDisponiveis } = await supabase
+          .from('atendimentos')
+          .select('nome, tipo')
+          .eq('medico_id', medico.id)
+          .eq('cliente_id', clienteId)
+          .eq('ativo', true);
+        
+        const listaAtendimentos = atendimentosDisponiveis
+          ?.map(a => `"${a.nome}" (${a.tipo})`)
+          .join(', ') || 'nenhum';
+        
+        console.error(`❌ Atendimento "${atendimento_nome}" não encontrado. Disponíveis: ${listaAtendimentos}`);
+        
+        return errorResponse(
+          `Atendimento "${atendimento_nome}" não encontrado para ${medico.nome}. ` +
+          `Atendimentos disponíveis: ${listaAtendimentos}`
+        );
+      }
+      
       atendimento_id = atendimento.id;
+      console.log(`✅ Atendimento selecionado: ${atendimento.nome} (ID: ${atendimento_id})`);
+      
     } else {
       // Buscar primeiro atendimento disponível do médico COM filtro de cliente
+      console.log(`🔍 Nenhum atendimento especificado, buscando primeiro disponível...`);
       const { data: atendimentos } = await supabase
         .from('atendimentos')
-        .select('id')
+        .select('id, nome')
         .eq('medico_id', medico.id)
         .eq('cliente_id', clienteId)
         .eq('ativo', true)
@@ -475,6 +534,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
         return errorResponse(`Nenhum atendimento disponível para o médico ${medico.nome}`);
       }
       atendimento_id = atendimentos[0].id;
+      console.log(`✅ Primeiro atendimento disponível selecionado: ${atendimentos[0].nome}`);
     }
 
     // Criar agendamento usando a função atômica
