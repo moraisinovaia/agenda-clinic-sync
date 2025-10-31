@@ -361,11 +361,6 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       setAppointments(prev => [newAppointment, ...prev]);
       console.log('⚡ [REALTIME-INSTANT] Novo agendamento inserido localmente');
       
-      toast({
-        title: "Novo agendamento",
-        description: "Agendamento criado com sucesso!",
-      });
-      
       // Refetch completo em background após 5s para garantir dados corretos
       setTimeout(() => {
         console.log('🔄 [BACKGROUND] Refetch completo após insert...');
