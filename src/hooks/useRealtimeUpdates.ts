@@ -1,7 +1,5 @@
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useNotifications } from '@/hooks/useNotifications';
-import { useDebounce } from '@/hooks/useDebounce';
 
 interface RealtimeConfig {
   table: string;
@@ -10,149 +8,135 @@ interface RealtimeConfig {
   onDelete?: (payload: any) => void;
 }
 
-export const useRealtimeUpdates = (config: RealtimeConfig) => {
-  const { notifyNewAppointment, notifySystemError } = useNotifications();
-  const connectionRetryRef = useRef<NodeJS.Timeout | null>(null);
-  const retryCountRef = useRef(0);
-  const channelRef = useRef<any>(null);
-  const MAX_RETRY_ATTEMPTS = 10; // 🚨 LIMITE: Máximo 10 tentativas de reconexão
+// 🎯 SINGLETON GLOBAL: Gerenciador único de conexões realtime
+class RealtimeManager {
+  private channels = new Map<string, any>();
+  private subscribers = new Map<string, Map<symbol, RealtimeConfig>>();
+  private retryCount = new Map<string, number>();
+  private readonly MAX_RETRY_ATTEMPTS = 50;
+  private readonly RETRY_COOLDOWN = 5 * 60 * 1000; // 5 minutos
 
-  const handleInsert = useCallback((payload: any) => {
-    console.log('New insert:', payload);
-    config.onInsert?.(payload);
+  subscribe(table: string, config: RealtimeConfig): () => void {
+    const subscriberId = Symbol('subscriber');
     
-    // Auto-notify for new appointments
-    if (config.table === 'agendamentos') {
-      notifyNewAppointment(
-        'Novo paciente',
-        'Médico',
-        new Date().toLocaleTimeString('pt-BR')
-      );
+    // Adicionar subscriber
+    if (!this.subscribers.has(table)) {
+      this.subscribers.set(table, new Map());
     }
-  }, [config, notifyNewAppointment]);
+    this.subscribers.get(table)!.set(subscriberId, config);
 
-  const handleUpdate = useCallback((payload: any) => {
-    console.log('Update:', payload);
-    config.onUpdate?.(payload);
-  }, [config]);
+    // Criar canal se não existe
+    if (!this.channels.has(table)) {
+      this.createChannel(table);
+    }
 
-  const handleDelete = useCallback((payload: any) => {
-    console.log('Delete:', payload);
-    config.onDelete?.(payload);
-  }, [config]);
-
-  useEffect(() => {
-    let isSubscribed = false;
-    let isMounted = true;
-    
-    const setupRealtime = () => {
-      // Não criar novos canais se já estamos conectados ou se o canal já existe
-      if (isSubscribed || channelRef.current) return;
-      
-      try {
-        // Usar timestamp único para evitar conflitos de múltiplos componentes
-        const channelName = `realtime-${config.table}-${Date.now()}`;
-        const channel = supabase
-          .channel(channelName)
-          .on(
-            'postgres_changes',
-            {
-              event: 'INSERT',
-              schema: 'public',
-              table: config.table,
-            },
-            handleInsert
-          )
-          .on(
-            'postgres_changes',
-            {
-              event: 'UPDATE',
-              schema: 'public',
-              table: config.table,
-            },
-            handleUpdate
-          )
-          .on(
-            'postgres_changes',
-            {
-              event: 'DELETE',
-              schema: 'public',
-              table: config.table,
-            },
-            handleDelete
-          )
-          .subscribe((status) => {
-            if (!isMounted) return;
-            
-            if (status === 'SUBSCRIBED') {
-              console.log(`✅ Realtime connected for ${config.table}`);
-              isSubscribed = true;
-              retryCountRef.current = 0;
-              channelRef.current = channel;
-            } else if (status === 'CLOSED') {
-              isSubscribed = false;
-              channelRef.current = null;
-              console.log(`Connection closed for ${config.table}`);
-              
-              // 🚨 Reconexão com limite máximo de 10 tentativas
-              if (isMounted && retryCountRef.current < MAX_RETRY_ATTEMPTS) {
-                retryCountRef.current += 1;
-                const delay = Math.min(2000 * Math.pow(1.5, retryCountRef.current), 30000); // Máximo 30s
-                console.log(`⏳ Attempting reconnection ${retryCountRef.current}/${MAX_RETRY_ATTEMPTS} in ${delay}ms`);
-                
-                connectionRetryRef.current = setTimeout(() => {
-                  if (isMounted && !isSubscribed) {
-                    setupRealtime();
-                  }
-                }, delay);
-              } else if (retryCountRef.current >= MAX_RETRY_ATTEMPTS) {
-                console.error(`❌ Limite de reconexões atingido (${MAX_RETRY_ATTEMPTS}). Parando tentativas.`);
-                notifySystemError('Conexão realtime desconectada após múltiplas tentativas');
-              }
-            } else if (status === 'CHANNEL_ERROR') {
-              console.error(`❌ Channel error for ${config.table}`);
-              isSubscribed = false;
-              channelRef.current = null;
-              
-              // 🚨 Tentar reconectar após erro (com limite)
-              if (isMounted && retryCountRef.current < MAX_RETRY_ATTEMPTS) {
-                retryCountRef.current += 1;
-                const delay = Math.min(5000 * Math.pow(1.5, retryCountRef.current), 60000);
-                console.log(`⏳ Reconnecting after error ${retryCountRef.current}/${MAX_RETRY_ATTEMPTS} in ${delay}ms`);
-                connectionRetryRef.current = setTimeout(() => {
-                  if (isMounted && !isSubscribed) {
-                    setupRealtime();
-                  }
-                }, delay);
-              } else if (retryCountRef.current >= MAX_RETRY_ATTEMPTS) {
-                console.error(`❌ Limite de reconexões atingido (${MAX_RETRY_ATTEMPTS}). Parando tentativas.`);
-                notifySystemError('Erro permanente na conexão realtime');
-              }
-            }
-          });
-      } catch (error) {
-        console.error('Error setting up realtime:', error);
-        isSubscribed = false;
-        channelRef.current = null;
-      }
-    };
-
-    setupRealtime();
-
+    // Retornar função de cleanup
     return () => {
-      isMounted = false;
-      isSubscribed = false;
-      
-      if (connectionRetryRef.current) {
-        clearTimeout(connectionRetryRef.current);
-        connectionRetryRef.current = null;
-      }
-      
-      if (channelRef.current) {
-        console.log(`🔌 Removing channel for ${config.table}`);
-        supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
+      const tableSubscribers = this.subscribers.get(table);
+      if (tableSubscribers) {
+        tableSubscribers.delete(subscriberId);
+        
+        // Se não há mais subscribers, fechar canal
+        if (tableSubscribers.size === 0) {
+          this.removeChannel(table);
+        }
       }
     };
-  }, [config.table, handleInsert, handleUpdate, handleDelete]);
+  }
+
+  private createChannel(table: string) {
+    console.log(`🔌 [SINGLETON] Criando canal único para ${table}`);
+    
+    const channel = supabase
+      .channel(`realtime-${table}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table },
+        (payload) => this.notifySubscribers(table, 'onInsert', payload)
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table },
+        (payload) => this.notifySubscribers(table, 'onUpdate', payload)
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table },
+        (payload) => this.notifySubscribers(table, 'onDelete', payload)
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log(`✅ [SINGLETON] Realtime conectado para ${table}`);
+          this.retryCount.set(table, 0);
+        } else if (status === 'CLOSED') {
+          console.log(`⚠️ [SINGLETON] Conexão fechada para ${table}`);
+          this.handleReconnect(table);
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error(`❌ [SINGLETON] Erro no canal ${table}`);
+          this.handleReconnect(table);
+        }
+      });
+
+    this.channels.set(table, channel);
+  }
+
+  private handleReconnect(table: string) {
+    const currentRetries = this.retryCount.get(table) || 0;
+    
+    if (currentRetries < this.MAX_RETRY_ATTEMPTS) {
+      this.retryCount.set(table, currentRetries + 1);
+      const delay = Math.min(2000 * Math.pow(1.5, currentRetries), 30000);
+      
+      console.log(`⏳ [SINGLETON] Reconectando ${table} (${currentRetries + 1}/${this.MAX_RETRY_ATTEMPTS}) em ${delay}ms`);
+      
+      setTimeout(() => {
+        this.removeChannel(table);
+        this.createChannel(table);
+      }, delay);
+    } else {
+      console.warn(`⚠️ [SINGLETON] Limite de tentativas atingido para ${table}. Aguardando cooldown de 5min.`);
+      
+      // Reset após cooldown
+      setTimeout(() => {
+        console.log(`🔄 [SINGLETON] Reset de tentativas para ${table}`);
+        this.retryCount.set(table, 0);
+      }, this.RETRY_COOLDOWN);
+    }
+  }
+
+  private removeChannel(table: string) {
+    const channel = this.channels.get(table);
+    if (channel) {
+      console.log(`🔌 [SINGLETON] Removendo canal ${table}`);
+      supabase.removeChannel(channel);
+      this.channels.delete(table);
+      this.subscribers.delete(table);
+    }
+  }
+
+  private notifySubscribers(table: string, event: keyof RealtimeConfig, payload: any) {
+    const tableSubscribers = this.subscribers.get(table);
+    if (!tableSubscribers) return;
+
+    tableSubscribers.forEach((config) => {
+      try {
+        const callback = config[event];
+        if (typeof callback === 'function') {
+          callback(payload);
+        }
+      } catch (error) {
+        console.error(`❌ [SINGLETON] Erro ao notificar subscriber de ${table}:`, error);
+      }
+    });
+  }
+}
+
+// 🎯 Instância global única
+const realtimeManager = new RealtimeManager();
+
+export const useRealtimeUpdates = (config: RealtimeConfig) => {
+  useEffect(() => {
+    const unsubscribe = realtimeManager.subscribe(config.table, config);
+    return unsubscribe;
+  }, [config.table, config.onInsert, config.onUpdate, config.onDelete]);
 };
