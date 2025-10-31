@@ -10,7 +10,7 @@ import { logger } from '@/utils/logger';
 
 // 🚨 OTIMIZAÇÃO FASE 2: Cache movido para dentro do hook (local por instância)
 // Removido singleton global para evitar memory leaks e data duplication
-const CACHE_DURATION = 30000; // 30 segundos
+const CACHE_DURATION = 120000; // ⚡ FASE 4: 2 minutos (era 30s)
 
 // 🔄 QUERY DIRETA: Versão Otimizada 2025-10-27-17:00 - Solução definitiva com índices
 export function useAppointmentsList(itemsPerPage: number = 20) {
@@ -55,9 +55,9 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     
     fetchPromiseRef.current = measureApiCall(async () => {
       try {
-        // 🚨 OTIMIZAÇÃO: Reduzir de 6 para 3 meses
+        // ⚡ FASE 1.1: Reduzir de 3 para 1 mês (era -3)
         const threeMonthsAgo = new Date();
-        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 1);
         const dateFilter = threeMonthsAgo.toISOString().split('T')[0];
         
         console.log('📅 [FILTRO] Buscando desde:', dateFilter);
@@ -154,9 +154,9 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           }
           // ❌ REMOVIDO: else if (pageData.length < pageSize) - Causava parada prematura
           
-          // 🚨 OTIMIZAÇÃO: Reduzir de 20 para 5 páginas (5k registros)
-          if (currentPage >= 5) {
-            console.warn('⚠️ Limite de segurança: 5 páginas atingido (reduzido de 20 para economizar memória)');
+          // ⚡ FASE 1.2: Reduzir limite de 5 para 2 páginas (era 5)
+          if (currentPage >= 2) {
+            console.warn('⚠️ Limite: 2 páginas (2000 registros)');
             hasMore = false;
           }
         }
@@ -345,9 +345,9 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     }
     
     refetchDebounceRef.current = setTimeout(() => {
-      console.log('🔄 [REALTIME-DEBOUNCED] Refetching após 3s...');
+      console.log('🔄 [REALTIME-DEBOUNCED] Refetching após 500ms...');
       refetch();
-    }, 3000);
+    }, 500); // ⚡ FASE 2: Reduzido de 3000ms para 500ms
   }, [refetch]);
 
   // Realtime updates com debounce
@@ -355,12 +355,22 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     table: 'agendamentos',
     onInsert: (payload) => {
       if (isOperatingRef.current) return;
-      console.log('🔄 [REALTIME] Novo agendamento inserido - aguardando 3s');
-      debouncedRefetch();
+      
+      // ⚡ FASE 3: Update Local Otimista (aparece instantaneamente)
+      const newAppointment = payload.new as AppointmentWithRelations;
+      setAppointments(prev => [newAppointment, ...prev]);
+      console.log('⚡ [REALTIME-INSTANT] Novo agendamento inserido localmente');
+      
       toast({
         title: "Novo agendamento",
-        description: "Um novo agendamento foi criado!",
+        description: "Agendamento criado com sucesso!",
       });
+      
+      // Refetch completo em background após 5s para garantir dados corretos
+      setTimeout(() => {
+        console.log('🔄 [BACKGROUND] Refetch completo após insert...');
+        refetch();
+      }, 5000);
     },
     onUpdate: (payload) => {
       if (isOperatingRef.current) return;
