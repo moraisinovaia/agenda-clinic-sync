@@ -8,8 +8,9 @@ import { AppointmentWithRelations } from '@/types/scheduling';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Calendar, CheckCircle, Edit, X, RotateCcw, History, Phone } from 'lucide-react';
+import { Calendar, CheckCircle, Edit, X, RotateCcw, History, Phone, Loader2 } from 'lucide-react';
 import { Trash2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { AppointmentFilters } from '@/components/filters/AppointmentFilters';
 import { useAdvancedAppointmentFilters } from '@/hooks/useAdvancedAppointmentFilters';
@@ -34,6 +35,8 @@ interface AppointmentsListProps {
 export const AppointmentsList = React.memo(({ appointments, doctors, onEditAppointment, onCancelAppointment, onDeleteAppointment, onConfirmAppointment, onUnconfirmAppointment, onNavigateToAppointment, allowCanceled = false }: AppointmentsListProps) => {
   const [selectedAuditId, setSelectedAuditId] = useState<string | null>(null);
   const [selectedPatientName, setSelectedPatientName] = useState<string>("");
+  // ✅ FASE 5: Estado para rastrear operações em andamento
+  const [operatingIds, setOperatingIds] = useState<Set<string>>(new Set());
   
   // 🔍 Log de debug para verificar dados recebidos
   useEffect(() => {
@@ -114,6 +117,64 @@ export const AppointmentsList = React.memo(({ appointments, doctors, onEditAppoi
         return 'Cancelado';
       default:
         return status;
+    }
+  };
+
+  // ✅ FASE 5: Handlers com debounce
+  const handleConfirm = async (appointmentId: string) => {
+    if (operatingIds.has(appointmentId)) {
+      console.log('⚠️ Operação já em andamento para este agendamento');
+      return;
+    }
+    
+    setOperatingIds(prev => new Set(prev).add(appointmentId));
+    
+    try {
+      await onConfirmAppointment?.(appointmentId);
+    } finally {
+      setOperatingIds(prev => {
+        const next = new Set(prev);
+        next.delete(appointmentId);
+        return next;
+      });
+    }
+  };
+
+  const handleUnconfirm = async (appointmentId: string) => {
+    if (operatingIds.has(appointmentId)) {
+      console.log('⚠️ Operação já em andamento para este agendamento');
+      return;
+    }
+    
+    setOperatingIds(prev => new Set(prev).add(appointmentId));
+    
+    try {
+      await onUnconfirmAppointment?.(appointmentId);
+    } finally {
+      setOperatingIds(prev => {
+        const next = new Set(prev);
+        next.delete(appointmentId);
+        return next;
+      });
+    }
+  };
+
+  const handleCancel = async (appointmentId: string) => {
+    if (operatingIds.has(appointmentId)) {
+      console.log('⚠️ Operação já em andamento para este agendamento');
+      return;
+    }
+    
+    setOperatingIds(prev => new Set(prev).add(appointmentId));
+    
+    try {
+      await onCancelAppointment?.(appointmentId);
+    } finally {
+      setOperatingIds(prev => {
+        const next = new Set(prev);
+        next.delete(appointmentId);
+        return next;
+      });
     }
   };
 
@@ -300,20 +361,38 @@ export const AppointmentsList = React.memo(({ appointments, doctors, onEditAppoi
                           <Button 
                             variant="ghost" 
                             size="sm"
-                            onClick={() => onConfirmAppointment?.(appointment.id)}
-                            className="h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
-                            title="Confirmar"
+                            onClick={() => handleConfirm(appointment.id)}
+                            disabled={operatingIds.has(appointment.id)}
+                            className={cn(
+                              "h-8 w-8 p-0",
+                              operatingIds.has(appointment.id)
+                                ? "opacity-50 cursor-not-allowed"
+                                : "text-green-600 hover:text-green-700 hover:bg-green-50"
+                            )}
+                            title={operatingIds.has(appointment.id) ? "Processando..." : "Confirmar"}
                           >
-                            <CheckCircle className="h-3 w-3" />
+                            {operatingIds.has(appointment.id) 
+                              ? <Loader2 className="h-3 w-3 animate-spin" />
+                              : <CheckCircle className="h-3 w-3" />
+                            }
                           </Button>
                           <Button 
                             variant="ghost" 
                             size="sm"
-                            onClick={() => onCancelAppointment?.(appointment.id)}
-                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                            title="Cancelar"
+                            onClick={() => handleCancel(appointment.id)}
+                            disabled={operatingIds.has(appointment.id)}
+                            className={cn(
+                              "h-8 w-8 p-0",
+                              operatingIds.has(appointment.id)
+                                ? "opacity-50 cursor-not-allowed"
+                                : "text-red-600 hover:text-red-700 hover:bg-red-50"
+                            )}
+                            title={operatingIds.has(appointment.id) ? "Processando..." : "Cancelar"}
                           >
-                            <X className="h-3 w-3" />
+                            {operatingIds.has(appointment.id)
+                              ? <Loader2 className="h-3 w-3 animate-spin" />
+                              : <X className="h-3 w-3" />
+                            }
                           </Button>
                         </>
                       )}
@@ -322,20 +401,38 @@ export const AppointmentsList = React.memo(({ appointments, doctors, onEditAppoi
                           <Button 
                             variant="ghost" 
                             size="sm"
-                            onClick={() => onUnconfirmAppointment?.(appointment.id)}
-                            className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                            title="Desconfirmar"
+                            onClick={() => handleUnconfirm(appointment.id)}
+                            disabled={operatingIds.has(appointment.id)}
+                            className={cn(
+                              "h-8 w-8 p-0",
+                              operatingIds.has(appointment.id)
+                                ? "opacity-50 cursor-not-allowed"
+                                : "text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            )}
+                            title={operatingIds.has(appointment.id) ? "Processando..." : "Desconfirmar"}
                           >
-                            <RotateCcw className="h-3 w-3" />
+                            {operatingIds.has(appointment.id)
+                              ? <Loader2 className="h-3 w-3 animate-spin" />
+                              : <RotateCcw className="h-3 w-3" />
+                            }
                           </Button>
                           <Button 
                             variant="ghost" 
                             size="sm"
-                            onClick={() => onCancelAppointment?.(appointment.id)}
-                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                            title="Cancelar"
+                            onClick={() => handleCancel(appointment.id)}
+                            disabled={operatingIds.has(appointment.id)}
+                            className={cn(
+                              "h-8 w-8 p-0",
+                              operatingIds.has(appointment.id)
+                                ? "opacity-50 cursor-not-allowed"
+                                : "text-red-600 hover:text-red-700 hover:bg-red-50"
+                            )}
+                            title={operatingIds.has(appointment.id) ? "Processando..." : "Cancelar"}
                           >
-                            <X className="h-3 w-3" />
+                            {operatingIds.has(appointment.id)
+                              ? <Loader2 className="h-3 w-3 animate-spin" />
+                              : <X className="h-3 w-3" />
+                            }
                           </Button>
                         </>
                       )}

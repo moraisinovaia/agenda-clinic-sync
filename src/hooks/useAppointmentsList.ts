@@ -22,6 +22,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   const lastErrorRef = useRef<string | null>(null);
   const isOperatingRef = useRef(false);
   const refetchDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const isPausedRef = useRef(false); // ✅ FASE 2: Flag para pausar polling
   
   // 🚨 OTIMIZAÇÃO FASE 2: Cache local por instância usando refs
   const fetchPromiseRef = useRef<Promise<AppointmentWithRelations[]> | null>(null);
@@ -354,7 +355,10 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   useRealtimeUpdates({
     table: 'agendamentos',
     onInsert: (payload) => {
-      if (isOperatingRef.current) return;
+      if (isOperatingRef.current || isPausedRef.current) {
+        console.log('⏸️ [REALTIME] Insert ignorado - operação em andamento');
+        return;
+      }
       
       // ⚡ FASE 3: Update Local Otimista (aparece instantaneamente)
       const newAppointment = payload.new as AppointmentWithRelations;
@@ -368,12 +372,18 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       }, 5000);
     },
     onUpdate: (payload) => {
-      if (isOperatingRef.current) return;
+      if (isOperatingRef.current || isPausedRef.current) {
+        console.log('⏸️ [REALTIME] Update ignorado - operação em andamento');
+        return;
+      }
       console.log('🔄 [REALTIME] Agendamento atualizado - aguardando 3s');
       debouncedRefetch();
     },
     onDelete: (payload) => {
-      if (isOperatingRef.current) return;
+      if (isOperatingRef.current || isPausedRef.current) {
+        console.log('⏸️ [REALTIME] Delete ignorado - operação em andamento');
+        return;
+      }
       console.log('🔄 [REALTIME] Agendamento deletado - aguardando 3s');
       debouncedRefetch();
     }
@@ -497,9 +507,48 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   };
 
   const confirmAppointment = async (appointmentId: string) => {
+    // ✅ FASE 1: Logs detalhados
+    console.log('🎯 [CONFIRM] Iniciando confirmação:', {
+      appointmentId,
+      timestamp: new Date().toISOString(),
+      isOperating: isOperatingRef.current,
+      isPaused: isPausedRef.current
+    });
+    
+    // ✅ FASE 2: Pausar polling
+    isPausedRef.current = true;
     isOperatingRef.current = true;
+    
     try {
-      // ✅ FASE 2: Aplicar retry automático
+      // ✅ FASE 1: Verificar se o agendamento existe na lista atual
+      const appointment = appointments.find(apt => apt.id === appointmentId);
+      console.log('📋 [CONFIRM] Agendamento encontrado na lista:', {
+        found: !!appointment,
+        status: appointment?.status,
+        paciente: appointment?.pacientes?.nome_completo
+      });
+      
+      // ✅ FASE 3: Validar status ANTES de enviar RPC
+      console.log('🔍 [CONFIRM] Buscando agendamento atualizado no banco...');
+      const { data: currentAppointment, error: fetchError } = await supabase
+        .from('agendamentos')
+        .select('id, status, pacientes(nome_completo)')
+        .eq('id', appointmentId)
+        .single();
+      
+      if (fetchError || !currentAppointment) {
+        console.error('❌ [CONFIRM] Agendamento não encontrado no banco:', fetchError);
+        throw new Error('Agendamento não encontrado no banco de dados');
+      }
+      
+      if (currentAppointment.status !== 'agendado' && currentAppointment.status !== 'cancelado_bloqueio') {
+        console.error('❌ [CONFIRM] Status inválido:', currentAppointment.status);
+        throw new Error(`Agendamento está com status "${currentAppointment.status}" e não pode ser confirmado`);
+      }
+      
+      console.log('✅ [CONFIRM] Agendamento validado:', currentAppointment);
+      
+      // ✅ FASE 2: Aplicar retry automático após validação
       await retryOperation(async () => {
         await measureApiCall(async () => {
           const { data: profile } = await supabase
@@ -522,20 +571,43 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         description: 'O agendamento foi confirmado com sucesso' 
       });
       
-      // ✅ FASE 2: Aguardar 500ms antes de refetch para evitar race condition
+      // Aguardar antes de refetch
       await new Promise(resolve => setTimeout(resolve, 500));
       await refetch();
+      
     } catch (error) {
-      console.error('❌ [CONFIRM] Erro após todas as tentativas:', error);
+      console.error('❌ [CONFIRM] Erro após validações:', error);
+      
+      // ✅ FASE 4: Feedback específico baseado no erro
+      let errorMessage = 'Erro ao confirmar agendamento';
+      let errorDescription = 'Tente novamente';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('não encontrado')) {
+          errorDescription = 'O agendamento não foi encontrado. A lista será atualizada.';
+          // Forçar refetch imediato
+          await refetch();
+        } else if (error.message.includes('status')) {
+          errorDescription = error.message;
+        } else {
+          errorDescription = error.message;
+        }
+      }
+      
       toast({
-        title: 'Erro ao confirmar',
-        description: error instanceof Error ? error.message : 'Não foi possível confirmar',
+        title: errorMessage,
+        description: errorDescription,
         variant: 'destructive',
       });
       throw error;
+      
     } finally {
-      // ✅ FASE 2: GARANTIR que flag seja resetada
       isOperatingRef.current = false;
+      // ✅ FASE 2: Retomar polling após 2s
+      setTimeout(() => {
+        isPausedRef.current = false;
+        console.log('▶️ [CONFIRM] Polling retomado');
+      }, 2000);
     }
   };
 
