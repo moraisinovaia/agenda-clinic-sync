@@ -425,34 +425,73 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     );
   };
 
+  // ✅ FASE 2: Helper para retry com backoff exponencial
+  const retryOperation = async <T>(
+    operation: () => Promise<T>,
+    maxRetries = 3,
+    delayMs = 1000
+  ): Promise<T> => {
+    let lastError: Error | null = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`🔄 [RETRY] Tentativa ${attempt}/${maxRetries}`);
+        return await operation();
+      } catch (error) {
+        lastError = error as Error;
+        console.warn(`⚠️ [RETRY] Tentativa ${attempt}/${maxRetries} falhou:`, error);
+        
+        if (attempt < maxRetries) {
+          const waitTime = delayMs * attempt; // Backoff exponencial simples
+          console.log(`⏳ [RETRY] Aguardando ${waitTime}ms antes da próxima tentativa...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+      }
+    }
+    
+    console.error(`❌ [RETRY] Todas as ${maxRetries} tentativas falhararam`);
+    throw lastError;
+  };
+
   const cancelAppointment = async (appointmentId: string) => {
     isOperatingRef.current = true;
     try {
-      await measureApiCall(async () => {
-        const { data: profile } = await supabase
-          .rpc('get_current_user_profile');
+      // ✅ FASE 2: Aplicar retry automático
+      await retryOperation(async () => {
+        await measureApiCall(async () => {
+          const { data: profile } = await supabase
+            .rpc('get_current_user_profile');
 
-        const { data, error } = await supabase.rpc('cancelar_agendamento_soft', {
-          p_agendamento_id: appointmentId,
-          p_cancelado_por: profile?.[0]?.nome || 'Usuário',
-          p_cancelado_por_user_id: profile?.[0]?.user_id || null
-        });
+          const { data, error } = await supabase.rpc('cancelar_agendamento_soft', {
+            p_agendamento_id: appointmentId,
+            p_cancelado_por: profile?.[0]?.nome || 'Usuário',
+            p_cancelado_por_user_id: profile?.[0]?.user_id || null
+          });
 
-        if (error) throw error;
-        if (!(data as any)?.success) throw new Error((data as any)?.error || 'Erro ao cancelar');
-        return data;
-      }, 'cancel_appointment', 'PUT');
+          if (error) throw error;
+          if (!(data as any)?.success) throw new Error((data as any)?.error || 'Erro ao cancelar');
+          return data;
+        }, 'cancel_appointment', 'PUT');
+      });
 
-      toast({ title: 'Agendamento cancelado', description: 'O agendamento foi cancelado com sucesso' });
+      toast({ 
+        title: 'Agendamento cancelado', 
+        description: 'O agendamento foi cancelado com sucesso' 
+      });
+      
+      // ✅ FASE 2: Aguardar 500ms antes de refetch para evitar race condition
+      await new Promise(resolve => setTimeout(resolve, 500));
       await refetch();
     } catch (error) {
+      console.error('❌ [CANCEL] Erro após todas as tentativas:', error);
       toast({
-        title: 'Erro',
+        title: 'Erro ao cancelar',
         description: error instanceof Error ? error.message : 'Não foi possível cancelar',
         variant: 'destructive',
       });
       throw error;
     } finally {
+      // ✅ FASE 2: GARANTIR que flag seja resetada
       isOperatingRef.current = false;
     }
   };
@@ -460,31 +499,42 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   const confirmAppointment = async (appointmentId: string) => {
     isOperatingRef.current = true;
     try {
-      await measureApiCall(async () => {
-        const { data: profile } = await supabase
-          .rpc('get_current_user_profile');
+      // ✅ FASE 2: Aplicar retry automático
+      await retryOperation(async () => {
+        await measureApiCall(async () => {
+          const { data: profile } = await supabase
+            .rpc('get_current_user_profile');
 
-        const { data, error } = await supabase.rpc('confirmar_agendamento', {
-          p_agendamento_id: appointmentId,
-          p_confirmado_por: profile?.[0]?.nome || 'Usuário',
-          p_confirmado_por_user_id: profile?.[0]?.user_id || null
-        });
+          const { data, error } = await supabase.rpc('confirmar_agendamento', {
+            p_agendamento_id: appointmentId,
+            p_confirmado_por: profile?.[0]?.nome || 'Usuário',
+            p_confirmado_por_user_id: profile?.[0]?.user_id || null
+          });
 
-        if (error) throw error;
-        if (!(data as any)?.success) throw new Error((data as any)?.error || 'Erro ao confirmar');
-        return data;
-      }, 'confirm_appointment', 'PUT');
+          if (error) throw error;
+          if (!(data as any)?.success) throw new Error((data as any)?.error || 'Erro ao confirmar');
+          return data;
+        }, 'confirm_appointment', 'PUT');
+      });
 
-      toast({ title: 'Agendamento confirmado', description: 'O agendamento foi confirmado com sucesso' });
+      toast({ 
+        title: 'Agendamento confirmado', 
+        description: 'O agendamento foi confirmado com sucesso' 
+      });
+      
+      // ✅ FASE 2: Aguardar 500ms antes de refetch para evitar race condition
+      await new Promise(resolve => setTimeout(resolve, 500));
       await refetch();
     } catch (error) {
+      console.error('❌ [CONFIRM] Erro após todas as tentativas:', error);
       toast({
-        title: 'Erro',
+        title: 'Erro ao confirmar',
         description: error instanceof Error ? error.message : 'Não foi possível confirmar',
         variant: 'destructive',
       });
       throw error;
     } finally {
+      // ✅ FASE 2: GARANTIR que flag seja resetada
       isOperatingRef.current = false;
     }
   };
@@ -492,31 +542,42 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   const unconfirmAppointment = async (appointmentId: string) => {
     isOperatingRef.current = true;
     try {
-      await measureApiCall(async () => {
-        const { data: profile } = await supabase
-          .rpc('get_current_user_profile');
+      // ✅ FASE 2: Aplicar retry automático
+      await retryOperation(async () => {
+        await measureApiCall(async () => {
+          const { data: profile } = await supabase
+            .rpc('get_current_user_profile');
 
-        const { data, error } = await supabase.rpc('desconfirmar_agendamento', {
-          p_agendamento_id: appointmentId,
-          p_desconfirmado_por: profile?.[0]?.nome || 'Usuário',
-          p_desconfirmado_por_user_id: profile?.[0]?.user_id || null
-        });
+          const { data, error } = await supabase.rpc('desconfirmar_agendamento', {
+            p_agendamento_id: appointmentId,
+            p_desconfirmado_por: profile?.[0]?.nome || 'Usuário',
+            p_desconfirmado_por_user_id: profile?.[0]?.user_id || null
+          });
 
-        if (error) throw error;
-        if (!(data as any)?.success) throw new Error((data as any)?.error || 'Erro ao desconfirmar');
-        return data;
-      }, 'unconfirm_appointment', 'PUT');
+          if (error) throw error;
+          if (!(data as any)?.success) throw new Error((data as any)?.error || 'Erro ao desconfirmar');
+          return data;
+        }, 'unconfirm_appointment', 'PUT');
+      });
 
-      toast({ title: 'Confirmação removida', description: 'A confirmação do agendamento foi removida' });
+      toast({ 
+        title: 'Confirmação removida', 
+        description: 'A confirmação do agendamento foi removida' 
+      });
+      
+      // ✅ FASE 2: Aguardar 500ms antes de refetch para evitar race condition
+      await new Promise(resolve => setTimeout(resolve, 500));
       await refetch();
     } catch (error) {
+      console.error('❌ [UNCONFIRM] Erro após todas as tentativas:', error);
       toast({
-        title: 'Erro',
+        title: 'Erro ao desconfirmar',
         description: error instanceof Error ? error.message : 'Não foi possível desconfirmar',
         variant: 'destructive',
       });
       throw error;
     } finally {
+      // ✅ FASE 2: GARANTIR que flag seja resetada
       isOperatingRef.current = false;
     }
   };
@@ -524,31 +585,42 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   const deleteAppointment = async (appointmentId: string) => {
     isOperatingRef.current = true;
     try {
-      await measureApiCall(async () => {
-        const { data: profile } = await supabase
-          .rpc('get_current_user_profile');
+      // ✅ FASE 2: Aplicar retry automático
+      await retryOperation(async () => {
+        await measureApiCall(async () => {
+          const { data: profile } = await supabase
+            .rpc('get_current_user_profile');
 
-        const { data, error } = await supabase.rpc('excluir_agendamento_soft', {
-          p_agendamento_id: appointmentId,
-          p_excluido_por: profile?.[0]?.nome || 'Usuário',
-          p_excluido_por_user_id: profile?.[0]?.user_id || null
-        });
+          const { data, error } = await supabase.rpc('excluir_agendamento_soft', {
+            p_agendamento_id: appointmentId,
+            p_excluido_por: profile?.[0]?.nome || 'Usuário',
+            p_excluido_por_user_id: profile?.[0]?.user_id || null
+          });
 
-        if (error) throw error;
-        if (!(data as any)?.success) throw new Error((data as any)?.error || 'Erro ao excluir');
-        return data;
-      }, 'delete_appointment', 'DELETE');
+          if (error) throw error;
+          if (!(data as any)?.success) throw new Error((data as any)?.error || 'Erro ao excluir');
+          return data;
+        }, 'delete_appointment', 'DELETE');
+      });
 
-      toast({ title: 'Agendamento excluído', description: 'O agendamento foi excluído com sucesso' });
+      toast({ 
+        title: 'Agendamento excluído', 
+        description: 'O agendamento foi excluído com sucesso' 
+      });
+      
+      // ✅ FASE 2: Aguardar 500ms antes de refetch para evitar race condition
+      await new Promise(resolve => setTimeout(resolve, 500));
       await refetch();
     } catch (error) {
+      console.error('❌ [DELETE] Erro após todas as tentativas:', error);
       toast({
-        title: 'Erro',
+        title: 'Erro ao excluir',
         description: error instanceof Error ? error.message : 'Não foi possível excluir',
         variant: 'destructive',
       });
       throw error;
     } finally {
+      // ✅ FASE 2: GARANTIR que flag seja resetada
       isOperatingRef.current = false;
     }
   };
