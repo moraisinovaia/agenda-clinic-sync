@@ -555,6 +555,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         description: 'O agendamento foi cancelado com sucesso' 
       });
       
+      // ✅ Invalidar cache antes de refetch para forçar busca atualizada
+      invalidateCache();
       await new Promise(resolve => setTimeout(resolve, 500));
       await refetch();
     } catch (error) {
@@ -712,6 +714,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         description: 'O agendamento foi confirmado com sucesso' 
       });
       
+      // ✅ Invalidar cache antes de refetch para forçar busca atualizada
+      invalidateCache();
       // Aguardar antes de refetch
       await new Promise(resolve => setTimeout(resolve, 500));
       await refetch();
@@ -856,6 +860,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         description: 'A confirmação do agendamento foi removida' 
       });
       
+      // ✅ Invalidar cache antes de refetch para forçar busca atualizada
+      invalidateCache();
       await new Promise(resolve => setTimeout(resolve, 500));
       await refetch();
     } catch (error) {
