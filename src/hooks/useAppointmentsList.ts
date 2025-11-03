@@ -639,9 +639,10 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       let errorDescription = 'Tente novamente';
       
       if (error instanceof Error) {
-        // Se já mostramos um toast específico, não mostrar novamente
+        // Se já mostramos um toast específico, apenas fazer refetch e sair
         if (error.message === 'STATUS_INVALID' || error.message === 'Agendamento já confirmado') {
-          return; // Apenas sair, toast já foi exibido
+          await refetch(); // ✅ GARANTIR que lista atualiza
+          return; // Agora pode sair, refetch já foi feito
         }
         
         if (error.message.includes('não encontrado')) {
@@ -649,17 +650,23 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           await refetch();
         } else if (error.message.includes('RPC')) {
           errorDescription = 'Erro ao processar a confirmação. Tente novamente.';
+          await refetch(); // ✅ Sempre fazer refetch em erros
         } else {
           errorDescription = 'Erro inesperado. A lista será atualizada.';
           await refetch();
         }
       }
       
-      toast({
-        title: errorMessage,
-        description: errorDescription,
-        variant: 'destructive',
-      });
+      // Apenas mostrar toast de erro genérico se não retornamos antes
+      if (error instanceof Error && 
+          error.message !== 'STATUS_INVALID' && 
+          error.message !== 'Agendamento já confirmado') {
+        toast({
+          title: errorMessage,
+          description: errorDescription,
+          variant: 'destructive',
+        });
+      }
       throw error;
       
     } finally {
