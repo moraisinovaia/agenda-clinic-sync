@@ -17,13 +17,13 @@ class RealtimeManager {
   private connectionTime = new Map<string, number>(); // ✅ FASE 1: Timestamp da última conexão
   private isRealtimeDisabled = new Map<string, boolean>(); // ✅ FASE 3: Flag para fallback polling
   private pollingIntervals = new Map<string, NodeJS.Timeout>(); // ✅ FASE 3: Intervalos de polling
-  private readonly VERSION = '2.0.0'; // ✅ Versão para forçar atualização
-  private readonly MAX_RETRY_ATTEMPTS = 10; // ✅ FASE 1: Reduzido de 50 para 10
+  private readonly VERSION = '3.0.0'; // ✅ Versão 3.0 com polling fallback
+  private readonly MAX_RETRY_ATTEMPTS = 5; // ✅ REDUZIDO para 5 tentativas antes do fallback
   private readonly RETRY_COOLDOWN = 5 * 60 * 1000; // 5 minutos
   private readonly MIN_CONNECTION_TIME = 5000; // ✅ FASE 1: Conexão < 5s é considerada instável
 
   constructor() {
-    console.log(`🎯 [SINGLETON v${this.VERSION}] RealtimeManager inicializado com MAX_RETRY=${this.MAX_RETRY_ATTEMPTS}`);
+    console.log(`🎯 [SINGLETON v${this.VERSION}] RealtimeManager inicializado com MAX_RETRY=${this.MAX_RETRY_ATTEMPTS} antes de fallback para polling`);
   }
 
   subscribe(table: string, config: RealtimeConfig): () => void {
@@ -37,12 +37,13 @@ class RealtimeManager {
 
     // ✅ FASE 3: Se Realtime desabilitado, usar polling
     if (this.isRealtimeDisabled.get(table)) {
-      console.warn(`⚠️ [SINGLETON] Realtime desabilitado para ${table}, usando polling`);
+      console.warn(`⚠️ [SINGLETON v${this.VERSION}] Realtime desabilitado para ${table}, usando POLLING ATIVO`);
       
       // Criar apenas um polling por tabela
       if (!this.pollingIntervals.has(table)) {
+        console.log(`🔄 [POLLING v${this.VERSION}] Iniciando polling para ${table} (refetch a cada 15s)`);
         const interval = setInterval(() => {
-          console.log(`🔄 [POLLING] Refetch manual para ${table}`);
+          console.log(`🔄 [POLLING v${this.VERSION}] Refetch automático para ${table}`);
           this.notifySubscribers(table, 'onUpdate', { table });
         }, 15000); // Polling a cada 15s
         
@@ -147,13 +148,14 @@ class RealtimeManager {
     
     // ✅ FASE 3: Se atingiu limite, desabilitar Realtime e usar polling
     if (currentRetries >= this.MAX_RETRY_ATTEMPTS) {
-      console.error(`❌ [SINGLETON] Realtime instável para ${table}. Desabilitando e usando polling.`);
+      console.error(`❌ [SINGLETON v${this.VERSION}] Limite de ${this.MAX_RETRY_ATTEMPTS} tentativas atingido para ${table}.`);
+      console.warn(`⚠️ [SINGLETON v${this.VERSION}] DESABILITANDO REALTIME e ATIVANDO POLLING (refetch a cada 15s)`);
       this.isRealtimeDisabled.set(table, true);
       this.removeChannel(table);
       
       // Notificar subscribers para ativar polling
       this.notifySubscribers(table, 'onUpdate', { 
-        message: 'Realtime desabilitado, usando polling'
+        message: 'Realtime desabilitado, usando polling automático'
       });
       return;
     }
@@ -162,7 +164,7 @@ class RealtimeManager {
     this.retryCount.set(table, currentRetries + 1);
     
     const delay = Math.min(2000 * Math.pow(1.5, currentRetries), 30000);
-    console.log(`⏳ [SINGLETON] Reconectando ${table} (${currentRetries + 1}/${this.MAX_RETRY_ATTEMPTS}) em ${delay}ms`);
+    console.log(`⏳ [SINGLETON v${this.VERSION}] Reconectando ${table} (${currentRetries + 1}/${this.MAX_RETRY_ATTEMPTS}) em ${delay}ms`);
     
     setTimeout(() => {
       this.removeChannel(table);
