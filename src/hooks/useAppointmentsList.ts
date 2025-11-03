@@ -580,8 +580,26 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       }
       
       if (currentAppointment.status !== 'agendado' && currentAppointment.status !== 'cancelado_bloqueio') {
-        console.error('❌ [CONFIRM] Status inválido:', currentAppointment.status);
-        throw new Error(`Agendamento está com status "${currentAppointment.status}" e não pode ser confirmado`);
+        console.error('❌ [CONFIRM] Status inválido no banco:', currentAppointment.status);
+        
+        // Mensagem específica para cada status
+        let userMessage = '';
+        if (currentAppointment.status === 'confirmado') {
+          userMessage = 'Este agendamento já foi confirmado por outro usuário.';
+        } else if (currentAppointment.status === 'cancelado') {
+          userMessage = 'Este agendamento foi cancelado e não pode ser confirmado.';
+        } else {
+          userMessage = `Agendamentos com status "${currentAppointment.status}" não podem ser confirmados.`;
+        }
+        
+        toast({
+          title: 'Ação não permitida',
+          description: userMessage,
+          variant: 'default',
+        });
+        
+        await refetch(); // Sincronizar UI
+        throw new Error('STATUS_INVALID'); // Código de erro interno
       }
       
       console.log('✅ [CONFIRM] Agendamento validado:', currentAppointment);
@@ -621,14 +639,19 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       let errorDescription = 'Tente novamente';
       
       if (error instanceof Error) {
+        // Se já mostramos um toast específico, não mostrar novamente
+        if (error.message === 'STATUS_INVALID' || error.message === 'Agendamento já confirmado') {
+          return; // Apenas sair, toast já foi exibido
+        }
+        
         if (error.message.includes('não encontrado')) {
           errorDescription = 'O agendamento não foi encontrado. A lista será atualizada.';
-          // Forçar refetch imediato
           await refetch();
-        } else if (error.message.includes('status')) {
-          errorDescription = error.message;
+        } else if (error.message.includes('RPC')) {
+          errorDescription = 'Erro ao processar a confirmação. Tente novamente.';
         } else {
-          errorDescription = error.message;
+          errorDescription = 'Erro inesperado. A lista será atualizada.';
+          await refetch();
         }
       }
       
