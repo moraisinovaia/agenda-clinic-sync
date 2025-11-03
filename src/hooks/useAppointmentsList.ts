@@ -520,13 +520,51 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     isOperatingRef.current = true;
     
     try {
-      // ✅ FASE 1: Verificar se o agendamento existe na lista atual
+      // ✅ FASE 0: DOUBLE-CHECK DE STATUS LOCAL (previne race condition)
       const appointment = appointments.find(apt => apt.id === appointmentId);
-      console.log('📋 [CONFIRM] Agendamento encontrado na lista:', {
-        found: !!appointment,
-        status: appointment?.status,
-        paciente: appointment?.pacientes?.nome_completo
+      
+      if (!appointment) {
+        console.error('❌ [DOUBLE-CHECK] Agendamento não encontrado na lista local');
+        toast({
+          title: 'Agendamento não encontrado',
+          description: 'O agendamento pode ter sido excluído. Atualizando lista...',
+          variant: 'destructive',
+        });
+        await refetch();
+        throw new Error('Agendamento não encontrado na lista local');
+      }
+      
+      console.log('🔍 [DOUBLE-CHECK] Status local verificado:', {
+        id: appointmentId.substring(0, 8),
+        status: appointment.status,
+        paciente: appointment.pacientes?.nome_completo
       });
+      
+      // Verificar se já está confirmado
+      if (appointment.status === 'confirmado') {
+        console.warn('⚠️ [DOUBLE-CHECK] Agendamento já confirmado localmente');
+        toast({
+          title: 'Agendamento já confirmado',
+          description: 'Este agendamento já foi confirmado anteriormente.',
+          variant: 'default',
+        });
+        await refetch(); // Sincronizar UI
+        throw new Error('Agendamento já confirmado');
+      }
+      
+      // Verificar se o status permite confirmação
+      if (appointment.status !== 'agendado' && appointment.status !== 'cancelado_bloqueio') {
+        console.error('❌ [DOUBLE-CHECK] Status local não permite confirmação:', appointment.status);
+        toast({
+          title: 'Ação não permitida',
+          description: `Agendamentos com status "${appointment.status}" não podem ser confirmados.`,
+          variant: 'destructive',
+        });
+        await refetch(); // Sincronizar UI
+        throw new Error(`Status "${appointment.status}" não permite confirmação`);
+      }
+      
+      console.log('✅ [DOUBLE-CHECK] Validação local passou - prosseguindo com confirmação');
       
       // ✅ FASE 3: Validar status ANTES de enviar RPC
       console.log('🔍 [CONFIRM] Buscando agendamento atualizado no banco...');
