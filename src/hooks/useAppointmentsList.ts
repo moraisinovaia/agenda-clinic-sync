@@ -430,15 +430,12 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     try {
       await measureApiCall(async () => {
         const { data: profile } = await supabase
-          .from('profiles')
-          .select('nome, user_id')
-          .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
-          .single();
+          .rpc('get_current_user_profile');
 
         const { data, error } = await supabase.rpc('cancelar_agendamento_soft', {
           p_agendamento_id: appointmentId,
-          p_cancelado_por: profile?.nome || 'Usuário',
-          p_cancelado_por_user_id: profile?.user_id || null
+          p_cancelado_por: profile?.[0]?.nome || 'Usuário',
+          p_cancelado_por_user_id: profile?.[0]?.user_id || null
         });
 
         if (error) throw error;
@@ -465,15 +462,12 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     try {
       await measureApiCall(async () => {
         const { data: profile } = await supabase
-          .from('profiles')
-          .select('nome, user_id')
-          .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
-          .single();
+          .rpc('get_current_user_profile');
 
         const { data, error } = await supabase.rpc('confirmar_agendamento', {
           p_agendamento_id: appointmentId,
-          p_confirmado_por: profile?.nome || 'Usuário',
-          p_confirmado_por_user_id: profile?.user_id || null
+          p_confirmado_por: profile?.[0]?.nome || 'Usuário',
+          p_confirmado_por_user_id: profile?.[0]?.user_id || null
         });
 
         if (error) throw error;
@@ -500,15 +494,12 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     try {
       await measureApiCall(async () => {
         const { data: profile } = await supabase
-          .from('profiles')
-          .select('nome, user_id')
-          .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
-          .single();
+          .rpc('get_current_user_profile');
 
         const { data, error } = await supabase.rpc('desconfirmar_agendamento', {
           p_agendamento_id: appointmentId,
-          p_desconfirmado_por: profile?.nome || 'Usuário',
-          p_desconfirmado_por_user_id: profile?.user_id || null
+          p_desconfirmado_por: profile?.[0]?.nome || 'Usuário',
+          p_desconfirmado_por_user_id: profile?.[0]?.user_id || null
         });
 
         if (error) throw error;
@@ -535,15 +526,12 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     try {
       await measureApiCall(async () => {
         const { data: profile } = await supabase
-          .from('profiles')
-          .select('nome, user_id')
-          .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
-          .single();
+          .rpc('get_current_user_profile');
 
         const { data, error } = await supabase.rpc('excluir_agendamento_soft', {
           p_agendamento_id: appointmentId,
-          p_excluido_por: profile?.nome || 'Usuário',
-          p_excluido_por_user_id: profile?.user_id || null
+          p_excluido_por: profile?.[0]?.nome || 'Usuário',
+          p_excluido_por_user_id: profile?.[0]?.user_id || null
         });
 
         if (error) throw error;
