@@ -8,7 +8,7 @@ interface RealtimeConfig {
   onDelete?: (payload: any) => void;
 }
 
-// 🎯 SINGLETON GLOBAL: Gerenciador único de conexões realtime
+// 🎯 SINGLETON GLOBAL: Gerenciador único de conexões realtime v2.0
 class RealtimeManager {
   private channels = new Map<string, any>();
   private subscribers = new Map<string, Map<symbol, RealtimeConfig>>();
@@ -17,9 +17,14 @@ class RealtimeManager {
   private connectionTime = new Map<string, number>(); // ✅ FASE 1: Timestamp da última conexão
   private isRealtimeDisabled = new Map<string, boolean>(); // ✅ FASE 3: Flag para fallback polling
   private pollingIntervals = new Map<string, NodeJS.Timeout>(); // ✅ FASE 3: Intervalos de polling
+  private readonly VERSION = '2.0.0'; // ✅ Versão para forçar atualização
   private readonly MAX_RETRY_ATTEMPTS = 10; // ✅ FASE 1: Reduzido de 50 para 10
   private readonly RETRY_COOLDOWN = 5 * 60 * 1000; // 5 minutos
   private readonly MIN_CONNECTION_TIME = 5000; // ✅ FASE 1: Conexão < 5s é considerada instável
+
+  constructor() {
+    console.log(`🎯 [SINGLETON v${this.VERSION}] RealtimeManager inicializado com MAX_RETRY=${this.MAX_RETRY_ATTEMPTS}`);
+  }
 
   subscribe(table: string, config: RealtimeConfig): () => void {
     const subscriberId = Symbol('subscriber');
@@ -192,8 +197,9 @@ class RealtimeManager {
   }
 }
 
-// 🎯 Instância global única
+// 🎯 Instância global única v2.0 - Forçar recriação
 const realtimeManager = new RealtimeManager();
+console.log('🔄 [SINGLETON] Nova instância do RealtimeManager criada');
 
 export const useRealtimeUpdates = (config: RealtimeConfig) => {
   useEffect(() => {
