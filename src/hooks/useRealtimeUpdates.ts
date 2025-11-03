@@ -110,8 +110,8 @@ class RealtimeManager {
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           console.log(`✅ [SINGLETON] Realtime conectado para ${table}`);
-          this.retryCount.set(table, 0);
-          this.isReconnecting.set(table, false); // ✅ FASE 1: Resetar flag de reconexão
+          // ✅ NÃO resetar retry count aqui - só resetar se conexão for estável (>5s)
+          this.isReconnecting.set(table, false);
         } else if (status === 'CLOSED') {
           console.log(`⚠️ [SINGLETON] Conexão fechada para ${table}`);
           this.handleReconnect(table);
@@ -136,7 +136,8 @@ class RealtimeManager {
     const duration = Date.now() - connTime;
     
     if (duration > this.MIN_CONNECTION_TIME) {
-      console.log(`✅ [SINGLETON] Conexão ${table} durou ${duration}ms - não é instabilidade`);
+      console.log(`✅ [SINGLETON] Conexão ${table} durou ${duration}ms - conexão estável, resetando contador`);
+      this.retryCount.set(table, 0); // ✅ SÓ resetar se conexão foi estável
       return; // Conexão foi longa o suficiente, não reconectar
     }
 
