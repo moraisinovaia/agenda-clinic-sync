@@ -560,38 +560,31 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     } catch (error) {
       console.error('❌ [CANCEL] Erro:', error);
       
-      let errorMessage = 'Erro ao cancelar';
-      let errorDescription = 'Tente novamente';
-      
       if (error instanceof Error) {
         // Se já mostramos um toast específico, apenas fazer refetch e sair
         if (error.message === 'STATUS_INVALID' || error.message === 'Agendamento já cancelado') {
           await refetch();
-          return;
+          return; // ✅ Sair sem lançar erro
         }
         
+        // Para outros erros, mostrar feedback e refetch
+        let errorDescription = 'Tente novamente';
         if (error.message.includes('não encontrado')) {
           errorDescription = 'O agendamento não foi encontrado. A lista será atualizada.';
-          await refetch();
         } else if (error.message.includes('RPC')) {
           errorDescription = 'Erro ao processar o cancelamento. Tente novamente.';
-          await refetch();
         } else {
           errorDescription = 'Erro inesperado. A lista será atualizada.';
-          await refetch();
         }
-      }
-      
-      if (error instanceof Error && 
-          error.message !== 'STATUS_INVALID' && 
-          error.message !== 'Agendamento já cancelado') {
+        
+        await refetch();
         toast({
-          title: errorMessage,
+          title: 'Erro ao cancelar',
           description: errorDescription,
           variant: 'destructive',
         });
       }
-      throw error;
+      // ✅ REMOVIDO: throw error - agora o finally sempre executa
     } finally {
       isPausedRef.current = false;
       isOperatingRef.current = false;
@@ -726,40 +719,31 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     } catch (error) {
       console.error('❌ [CONFIRM] Erro após validações:', error);
       
-      // ✅ FASE 4: Feedback específico baseado no erro
-      let errorMessage = 'Erro ao confirmar agendamento';
-      let errorDescription = 'Tente novamente';
-      
       if (error instanceof Error) {
-        // Se já mostramos um toast específico, apenas fazer refetch e sair
+        // Se já mostramos toast específico, apenas refetch e sair
         if (error.message === 'STATUS_INVALID' || error.message === 'Agendamento já confirmado') {
-          await refetch(); // ✅ GARANTIR que lista atualiza
-          return; // Agora pode sair, refetch já foi feito
+          await refetch();
+          return; // ✅ Sair sem lançar erro
         }
         
+        // Para outros erros, refetch e mostrar feedback
+        let errorDescription = 'Tente novamente';
         if (error.message.includes('não encontrado')) {
           errorDescription = 'O agendamento não foi encontrado. A lista será atualizada.';
-          await refetch();
         } else if (error.message.includes('RPC')) {
           errorDescription = 'Erro ao processar a confirmação. Tente novamente.';
-          await refetch(); // ✅ Sempre fazer refetch em erros
         } else {
           errorDescription = 'Erro inesperado. A lista será atualizada.';
-          await refetch();
         }
-      }
-      
-      // Apenas mostrar toast de erro genérico se não retornamos antes
-      if (error instanceof Error && 
-          error.message !== 'STATUS_INVALID' && 
-          error.message !== 'Agendamento já confirmado') {
+        
+        await refetch();
         toast({
-          title: errorMessage,
+          title: 'Erro ao confirmar agendamento',
           description: errorDescription,
           variant: 'destructive',
         });
       }
-      throw error;
+      // ✅ REMOVIDO: throw error
       
     } finally {
       isOperatingRef.current = false;
@@ -877,38 +861,31 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     } catch (error) {
       console.error('❌ [UNCONFIRM] Erro:', error);
       
-      let errorMessage = 'Erro ao desconfirmar';
-      let errorDescription = 'Tente novamente';
-      
       if (error instanceof Error) {
-        // Se já mostramos um toast específico, apenas fazer refetch e sair
+        // Se já mostramos toast específico, apenas refetch e sair
         if (error.message === 'STATUS_INVALID' || error.message === 'Agendamento já sem confirmação') {
           await refetch();
-          return;
+          return; // ✅ Sair sem lançar erro
         }
         
+        // Para outros erros, refetch e mostrar feedback
+        let errorDescription = 'Tente novamente';
         if (error.message.includes('não encontrado')) {
           errorDescription = 'O agendamento não foi encontrado. A lista será atualizada.';
-          await refetch();
         } else if (error.message.includes('RPC')) {
           errorDescription = 'Erro ao processar a desconfirmação. Tente novamente.';
-          await refetch();
         } else {
           errorDescription = 'Erro inesperado. A lista será atualizada.';
-          await refetch();
         }
-      }
-      
-      if (error instanceof Error && 
-          error.message !== 'STATUS_INVALID' && 
-          error.message !== 'Agendamento já sem confirmação') {
+        
+        await refetch();
         toast({
-          title: errorMessage,
+          title: 'Erro ao desconfirmar',
           description: errorDescription,
           variant: 'destructive',
         });
       }
-      throw error;
+      // ✅ REMOVIDO: throw error
     } finally {
       isPausedRef.current = false;
       isOperatingRef.current = false;
