@@ -28,6 +28,9 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   const fetchPromiseRef = useRef<Promise<AppointmentWithRelations[]> | null>(null);
   const fetchTimestampRef = useRef<number>(0);
   
+  // ⚡ OTIMIZAÇÃO: Cache de perfil de usuário para evitar RPC repetidos
+  const userProfileRef = useRef<{ nome: string; user_id: string } | null>(null);
+  
   // 🔥 Estado local para appointments
   const [appointments, setAppointments] = useState<AppointmentWithRelations[]>([]);
   const [loading, setLoading] = useState(true);
@@ -317,6 +320,31 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     refetch();
   }, [invalidateCache, refetch]);
 
+  // ⚡ OTIMIZAÇÃO: Buscar perfil uma única vez e cachear
+  const getUserProfile = useCallback(async () => {
+    if (userProfileRef.current) {
+      console.log('♻️ [PROFILE-CACHE] Usando perfil cacheado:', userProfileRef.current);
+      return userProfileRef.current;
+    }
+    
+    console.log('🔍 [PROFILE] Buscando perfil do usuário...');
+    const { data: profile } = await supabase.rpc('get_current_user_profile');
+    userProfileRef.current = {
+      nome: profile?.[0]?.nome || 'Usuário',
+      user_id: profile?.[0]?.user_id || null
+    };
+    console.log('✅ [PROFILE] Perfil cacheado:', userProfileRef.current);
+    return userProfileRef.current;
+  }, []);
+
+  // ⚡ OTIMIZAÇÃO: Atualização local otimista para feedback instantâneo
+  const updateLocalAppointment = useCallback((appointmentId: string, updates: Partial<AppointmentWithRelations>) => {
+    console.log('⚡ [LOCAL-UPDATE] Atualizando localmente:', { appointmentId: appointmentId.substring(0, 8), updates });
+    setAppointments(prev => prev.map(apt => 
+      apt.id === appointmentId ? { ...apt, ...updates } : apt
+    ));
+  }, []);
+
   // Log quando appointments mudar
   useEffect(() => {
     console.log('🔍 useAppointmentsList: Estado atual', {
@@ -532,16 +560,16 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       
       console.log('✅ [CANCEL] Agendamento validado:', currentAppointment);
 
+      // ⚡ OTIMIZAÇÃO: Buscar perfil cacheado
+      const profile = await getUserProfile();
+
       // ✅ Executar cancelamento
       await retryOperation(async () => {
         await measureApiCall(async () => {
-          const { data: profile } = await supabase
-            .rpc('get_current_user_profile');
-
           const { data, error } = await supabase.rpc('cancelar_agendamento_soft', {
             p_agendamento_id: appointmentId,
-            p_cancelado_por: profile?.[0]?.nome || 'Usuário',
-            p_cancelado_por_user_id: profile?.[0]?.user_id || null
+            p_cancelado_por: profile.nome,
+            p_cancelado_por_user_id: profile.user_id
           });
 
           if (error) throw error;
@@ -555,10 +583,19 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         description: 'O agendamento foi cancelado com sucesso' 
       });
       
-      // ✅ Invalidar cache antes de refetch para forçar busca atualizada
-      invalidateCache();
-      await new Promise(resolve => setTimeout(resolve, 500));
-      await refetch();
+      // ⚡ OTIMIZAÇÃO: Atualização local otimista + validação em background
+      updateLocalAppointment(appointmentId, { 
+        status: 'cancelado',
+        cancelado_em: new Date().toISOString(),
+        cancelado_por: profile.nome,
+        cancelado_por_user_id: profile.user_id
+      });
+      
+      // Validar no background sem bloquear UI
+      setTimeout(() => {
+        invalidateCache();
+        refetch();
+      }, 100);
     } catch (error) {
       console.error('❌ [CANCEL] Erro:', error);
       
@@ -691,16 +728,16 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       
       console.log('✅ [CONFIRM] Agendamento validado:', currentAppointment);
       
+      // ⚡ OTIMIZAÇÃO: Buscar perfil cacheado
+      const profile = await getUserProfile();
+
       // ✅ FASE 2: Aplicar retry automático após validação
       await retryOperation(async () => {
         await measureApiCall(async () => {
-          const { data: profile } = await supabase
-            .rpc('get_current_user_profile');
-
           const { data, error } = await supabase.rpc('confirmar_agendamento', {
             p_agendamento_id: appointmentId,
-            p_confirmado_por: profile?.[0]?.nome || 'Usuário',
-            p_confirmado_por_user_id: profile?.[0]?.user_id || null
+            p_confirmado_por: profile.nome,
+            p_confirmado_por_user_id: profile.user_id
           });
 
           if (error) throw error;
@@ -714,11 +751,19 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         description: 'O agendamento foi confirmado com sucesso' 
       });
       
-      // ✅ Invalidar cache antes de refetch para forçar busca atualizada
-      invalidateCache();
-      // Aguardar antes de refetch
-      await new Promise(resolve => setTimeout(resolve, 500));
-      await refetch();
+      // ⚡ OTIMIZAÇÃO: Atualização local otimista + validação em background
+      updateLocalAppointment(appointmentId, { 
+        status: 'confirmado',
+        confirmado_em: new Date().toISOString(),
+        confirmado_por: profile.nome,
+        confirmado_por_user_id: profile.user_id
+      });
+      
+      // Validar no background sem bloquear UI
+      setTimeout(() => {
+        invalidateCache();
+        refetch();
+      }, 100);
       
     } catch (error) {
       console.error('❌ [CONFIRM] Erro após validações:', error);
@@ -837,16 +882,16 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       
       console.log('✅ [UNCONFIRM] Agendamento validado:', currentAppointment);
 
+      // ⚡ OTIMIZAÇÃO: Buscar perfil cacheado
+      const profile = await getUserProfile();
+
       // ✅ Executar desconfirmação
       await retryOperation(async () => {
         await measureApiCall(async () => {
-          const { data: profile } = await supabase
-            .rpc('get_current_user_profile');
-
           const { data, error } = await supabase.rpc('desconfirmar_agendamento', {
             p_agendamento_id: appointmentId,
-            p_desconfirmado_por: profile?.[0]?.nome || 'Usuário',
-            p_desconfirmado_por_user_id: profile?.[0]?.user_id || null
+            p_desconfirmado_por: profile.nome,
+            p_desconfirmado_por_user_id: profile.user_id
           });
 
           if (error) throw error;
@@ -860,10 +905,19 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         description: 'A confirmação do agendamento foi removida' 
       });
       
-      // ✅ Invalidar cache antes de refetch para forçar busca atualizada
-      invalidateCache();
-      await new Promise(resolve => setTimeout(resolve, 500));
-      await refetch();
+      // ⚡ OTIMIZAÇÃO: Atualização local otimista + validação em background
+      updateLocalAppointment(appointmentId, { 
+        status: 'agendado',
+        confirmado_em: null,
+        confirmado_por: null,
+        confirmado_por_user_id: null
+      });
+      
+      // Validar no background sem bloquear UI
+      setTimeout(() => {
+        invalidateCache();
+        refetch();
+      }, 100);
     } catch (error) {
       console.error('❌ [UNCONFIRM] Erro:', error);
       
