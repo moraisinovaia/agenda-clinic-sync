@@ -958,13 +958,13 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       // ✅ FASE 2: Aplicar retry automático
       await retryOperation(async () => {
         await measureApiCall(async () => {
-          const { data: profile } = await supabase
-            .rpc('get_current_user_profile');
+          // ✅ Usar cache de perfil (sem nova chamada RPC)
+          const profile = await getUserProfile();
 
           const { data, error } = await supabase.rpc('excluir_agendamento_soft', {
             p_agendamento_id: appointmentId,
-            p_excluido_por: profile?.[0]?.nome || 'Usuário',
-            p_excluido_por_user_id: profile?.[0]?.user_id || null
+            p_excluido_por: profile.nome,
+            p_excluido_por_user_id: profile.user_id
           });
 
           if (error) throw error;
@@ -977,10 +977,15 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         title: 'Agendamento excluído', 
         description: 'O agendamento foi excluído com sucesso' 
       });
-      
-      // ✅ FASE 2: Aguardar 500ms antes de refetch para evitar race condition
-      await new Promise(resolve => setTimeout(resolve, 500));
-      await refetch();
+
+      // ✅ Remoção instantânea da lista (atualização otimista)
+      setAppointments(prev => prev.filter(apt => apt.id !== appointmentId));
+
+      // ✅ Validar no background (sem bloquear UI)
+      setTimeout(() => {
+        invalidateCache();
+        refetch();
+      }, 100);
     } catch (error) {
       console.error('❌ [DELETE] Erro após todas as tentativas:', error);
       toast({
