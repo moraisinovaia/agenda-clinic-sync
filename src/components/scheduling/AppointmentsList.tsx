@@ -36,7 +36,7 @@ export const AppointmentsList = React.memo(({ appointments, doctors, onEditAppoi
   const [selectedAuditId, setSelectedAuditId] = useState<string | null>(null);
   const [selectedPatientName, setSelectedPatientName] = useState<string>("");
   // ✅ FASE 5: Estado para rastrear operações em andamento
-  const [operatingIds, setOperatingIds] = useState<Set<string>>(new Set());
+  const [operatingIds, setOperatingIds] = useState<Set<string>>(() => new Set());
   
   // 🔍 Log de debug para verificar dados recebidos
   useEffect(() => {
