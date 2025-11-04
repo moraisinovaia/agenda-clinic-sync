@@ -23,6 +23,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   const isOperatingRef = useRef(false);
   const refetchDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const isPausedRef = useRef(false); // ✅ FASE 2: Flag para pausar polling
+  const skipBackgroundRefetchRef = useRef(false); // ✅ OTIMIZAÇÃO: Flag para evitar refetch duplicado em erros
   
   // 🚨 OTIMIZAÇÃO FASE 2: Cache local por instância usando refs
   const fetchPromiseRef = useRef<Promise<AppointmentWithRelations[]> | null>(null);
@@ -631,107 +632,61 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   };
 
   const confirmAppointment = async (appointmentId: string) => {
-    // ✅ FASE 1: Logs detalhados
     console.log('🎯 [CONFIRM] Iniciando confirmação:', {
       appointmentId,
-      timestamp: new Date().toISOString(),
-      isOperating: isOperatingRef.current,
-      isPaused: isPausedRef.current
+      timestamp: new Date().toISOString()
     });
     
-    // ✅ FASE 2: Pausar polling
     isPausedRef.current = true;
     isOperatingRef.current = true;
+    skipBackgroundRefetchRef.current = false; // ✅ Reset da flag
     
     try {
-      // ✅ FASE 0: DOUBLE-CHECK DE STATUS LOCAL (previne race condition)
+      // ✅ VERIFICAÇÃO LOCAL (previne race condition)
       const appointment = appointments.find(apt => apt.id === appointmentId);
       
       if (!appointment) {
-        console.error('❌ [DOUBLE-CHECK] Agendamento não encontrado na lista local');
+        console.error('❌ [CONFIRM] Agendamento não encontrado');
+        skipBackgroundRefetchRef.current = true;
         toast({
           title: 'Agendamento não encontrado',
           description: 'O agendamento pode ter sido excluído. Atualizando lista...',
           variant: 'destructive',
         });
         await refetch();
-        throw new Error('Agendamento não encontrado na lista local');
+        return;
       }
       
-      console.log('🔍 [DOUBLE-CHECK] Status local verificado:', {
-        id: appointmentId.substring(0, 8),
-        status: appointment.status,
-        paciente: appointment.pacientes?.nome_completo
-      });
-      
-      // Verificar se já está confirmado
       if (appointment.status === 'confirmado') {
-        console.warn('⚠️ [DOUBLE-CHECK] Agendamento já confirmado localmente');
+        console.warn('⚠️ [CONFIRM] Já confirmado');
+        skipBackgroundRefetchRef.current = true;
         toast({
           title: 'Agendamento já confirmado',
           description: 'Este agendamento já foi confirmado anteriormente.',
           variant: 'default',
         });
-        await refetch(); // Sincronizar UI
-        throw new Error('Agendamento já confirmado');
+        await refetch();
+        return;
       }
       
-      // Verificar se o status permite confirmação
       if (appointment.status !== 'agendado' && appointment.status !== 'cancelado_bloqueio') {
-        console.error('❌ [DOUBLE-CHECK] Status local não permite confirmação:', appointment.status);
+        console.error('❌ [CONFIRM] Status não permite confirmação:', appointment.status);
+        skipBackgroundRefetchRef.current = true;
         toast({
           title: 'Ação não permitida',
           description: `Agendamentos com status "${appointment.status}" não podem ser confirmados.`,
           variant: 'destructive',
         });
-        await refetch(); // Sincronizar UI
-        throw new Error(`Status "${appointment.status}" não permite confirmação`);
+        await refetch();
+        return;
       }
       
-      console.log('✅ [DOUBLE-CHECK] Validação local passou - prosseguindo com confirmação');
+      console.log('✅ [CONFIRM] Validação local passou');
       
-      // ✅ FASE 3: Validar status ANTES de enviar RPC
-      console.log('🔍 [CONFIRM] Buscando agendamento atualizado no banco...');
-      const { data: currentAppointment, error: fetchError } = await supabase
-        .from('agendamentos')
-        .select('id, status, pacientes(nome_completo)')
-        .eq('id', appointmentId)
-        .single();
-      
-      if (fetchError || !currentAppointment) {
-        console.error('❌ [CONFIRM] Agendamento não encontrado no banco:', fetchError);
-        throw new Error('Agendamento não encontrado no banco de dados');
-      }
-      
-      if (currentAppointment.status !== 'agendado' && currentAppointment.status !== 'cancelado_bloqueio') {
-        console.error('❌ [CONFIRM] Status inválido no banco:', currentAppointment.status);
-        
-        // Mensagem específica para cada status
-        let userMessage = '';
-        if (currentAppointment.status === 'confirmado') {
-          userMessage = 'Este agendamento já foi confirmado por outro usuário.';
-        } else if (currentAppointment.status === 'cancelado') {
-          userMessage = 'Este agendamento foi cancelado e não pode ser confirmado.';
-        } else {
-          userMessage = `Agendamentos com status "${currentAppointment.status}" não podem ser confirmados.`;
-        }
-        
-        toast({
-          title: 'Ação não permitida',
-          description: userMessage,
-          variant: 'default',
-        });
-        
-        await refetch(); // Sincronizar UI
-        throw new Error('STATUS_INVALID'); // Código de erro interno
-      }
-      
-      console.log('✅ [CONFIRM] Agendamento validado:', currentAppointment);
-      
-      // ⚡ OTIMIZAÇÃO: Buscar perfil cacheado
+      // ✅ Buscar perfil cacheado
       const profile = await getUserProfile();
 
-      // ✅ FASE 2: Aplicar retry automático após validação
+      // ✅ Executar RPC (que já valida no backend)
       await retryOperation(async () => {
         await measureApiCall(async () => {
           const { data, error } = await supabase.rpc('confirmar_agendamento', {
@@ -751,7 +706,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         description: 'O agendamento foi confirmado com sucesso' 
       });
       
-      // ⚡ OTIMIZAÇÃO: Atualização local otimista + validação em background
+      // ✅ Atualização otimista
       updateLocalAppointment(appointmentId, { 
         status: 'confirmado',
         confirmado_em: new Date().toISOString(),
@@ -759,48 +714,32 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         confirmado_por_user_id: profile.user_id
       });
       
-      // Validar no background sem bloquear UI
-      setTimeout(() => {
-        invalidateCache();
-        refetch();
-      }, 100);
-      
     } catch (error) {
-      console.error('❌ [CONFIRM] Erro após validações:', error);
+      console.error('❌ [CONFIRM] Erro:', error);
+      skipBackgroundRefetchRef.current = true; // ✅ Evitar refetch duplicado
       
-      if (error instanceof Error) {
-        // Se já mostramos toast específico, apenas refetch e sair
-        if (error.message === 'STATUS_INVALID' || error.message === 'Agendamento já confirmado') {
-          await refetch();
-          return; // ✅ Sair sem lançar erro
-        }
-        
-        // Para outros erros, refetch e mostrar feedback
-        let errorDescription = 'Tente novamente';
-        if (error.message.includes('não encontrado')) {
-          errorDescription = 'O agendamento não foi encontrado. A lista será atualizada.';
-        } else if (error.message.includes('RPC')) {
-          errorDescription = 'Erro ao processar a confirmação. Tente novamente.';
-        } else {
-          errorDescription = 'Erro inesperado. A lista será atualizada.';
-        }
-        
-        await refetch();
+      await refetch();
+      
+      if (error instanceof Error && !['STATUS_INVALID', 'Agendamento já confirmado'].includes(error.message)) {
         toast({
           title: 'Erro ao confirmar agendamento',
-          description: errorDescription,
+          description: 'Tente novamente',
           variant: 'destructive',
         });
       }
-      // ✅ REMOVIDO: throw error
-      
     } finally {
       isOperatingRef.current = false;
-      // ✅ FASE 2: Retomar polling após 2s
-      setTimeout(() => {
-        isPausedRef.current = false;
-        console.log('▶️ [CONFIRM] Polling retomado');
-      }, 2000);
+      isPausedRef.current = false; // ✅ Retomar imediatamente
+      
+      // ✅ Refetch em background apenas se NÃO houve erro
+      if (!skipBackgroundRefetchRef.current) {
+        setTimeout(() => {
+          invalidateCache();
+          refetch();
+        }, 100);
+      }
+      
+      skipBackgroundRefetchRef.current = false; // Reset
     }
   };
 
