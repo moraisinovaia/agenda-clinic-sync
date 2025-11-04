@@ -513,7 +513,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           variant: 'destructive',
         });
         await refetch();
-        throw new Error('Agendamento não encontrado');
+        return; // ✅ MUDADO de throw para evitar travamento
       }
       
       console.log('🔍 [CANCEL] Status local verificado:', {
@@ -530,7 +530,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           variant: 'default',
         });
         await refetch();
-        throw new Error('Agendamento já cancelado');
+        return; // ✅ MUDADO de throw para evitar travamento
       }
       
       // ✅ Buscar status atualizado do banco
@@ -729,14 +729,16 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       }
     } finally {
       isOperatingRef.current = false;
-      isPausedRef.current = false; // ✅ Retomar imediatamente
       
       // ✅ Refetch em background apenas se NÃO houve erro
       if (!skipBackgroundRefetchRef.current) {
         setTimeout(() => {
           invalidateCache();
           refetch();
+          isPausedRef.current = false; // ✅ Retomar APÓS validação
         }, 100);
+      } else {
+        isPausedRef.current = false; // ✅ Retomar imediatamente em caso de erro
       }
       
       skipBackgroundRefetchRef.current = false; // Reset
@@ -764,7 +766,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           variant: 'destructive',
         });
         await refetch();
-        throw new Error('Agendamento não encontrado');
+        return; // ✅ MUDADO de throw para evitar travamento
       }
       
       console.log('🔍 [UNCONFIRM] Status local verificado:', {
@@ -781,7 +783,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           variant: 'default',
         });
         await refetch();
-        throw new Error('Agendamento já sem confirmação');
+        return; // ✅ MUDADO de throw para evitar travamento
       }
       
       // ✅ Buscar status atualizado do banco
@@ -892,6 +894,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   };
 
   const deleteAppointment = async (appointmentId: string) => {
+    isPausedRef.current = true; // ✅ ADICIONAR controle de polling
     isOperatingRef.current = true;
     try {
       // ✅ FASE 2: Aplicar retry automático
@@ -934,8 +937,9 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       });
       throw error;
     } finally {
-      // ✅ FASE 2: GARANTIR que flag seja resetada
+      // ✅ FASE 2: GARANTIR que flags sejam resetadas
       isOperatingRef.current = false;
+      isPausedRef.current = false; // ✅ ADICIONAR retomada de polling
     }
   };
 
