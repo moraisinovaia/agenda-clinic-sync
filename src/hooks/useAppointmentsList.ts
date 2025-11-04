@@ -346,6 +346,47 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     ));
   }, []);
 
+  // ✅ RETRY AUTOMÁTICO com exponential backoff
+  const retryOperation = async <T>(
+    operation: () => Promise<T>,
+    maxRetries: number = 3,
+    delayMs: number = 1000
+  ): Promise<T> => {
+    let lastError: Error | null = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`🔄 [RETRY] Tentativa ${attempt}/${maxRetries}`);
+        return await operation();
+      } catch (error) {
+        lastError = error as Error;
+        console.warn(`⚠️ [RETRY] Tentativa ${attempt} falhou:`, error);
+        
+        if (attempt < maxRetries) {
+          const backoffDelay = delayMs * Math.pow(2, attempt - 1);
+          console.log(`⏳ [RETRY] Aguardando ${backoffDelay}ms antes da próxima tentativa...`);
+          await new Promise(resolve => setTimeout(resolve, backoffDelay));
+        }
+      }
+    }
+    
+    console.error(`❌ [RETRY] Todas as ${maxRetries} tentativas falharam`);
+    throw lastError || new Error('Operação falhou após múltiplas tentativas');
+  };
+
+  // ✅ TIMEOUT PROTECTION
+  const withTimeout = <T>(
+    promise: Promise<T>,
+    timeoutMs: number = 15000
+  ): Promise<T> => {
+    return Promise.race([
+      promise,
+      new Promise<T>((_, reject) =>
+        setTimeout(() => reject(new Error('Operação expirou (timeout)')), timeoutMs)
+      )
+    ]);
+  };
+
   // Log quando appointments mudar
   useEffect(() => {
     console.log('🔍 useAppointmentsList: Estado atual', {
@@ -464,34 +505,6 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     );
   };
 
-  // ✅ FASE 2: Helper para retry com backoff exponencial
-  const retryOperation = async <T>(
-    operation: () => Promise<T>,
-    maxRetries = 3,
-    delayMs = 1000
-  ): Promise<T> => {
-    let lastError: Error | null = null;
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        console.log(`🔄 [RETRY] Tentativa ${attempt}/${maxRetries}`);
-        return await operation();
-      } catch (error) {
-        lastError = error as Error;
-        console.warn(`⚠️ [RETRY] Tentativa ${attempt}/${maxRetries} falhou:`, error);
-        
-        if (attempt < maxRetries) {
-          const waitTime = delayMs * attempt; // Backoff exponencial simples
-          console.log(`⏳ [RETRY] Aguardando ${waitTime}ms antes da próxima tentativa...`);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
-        }
-      }
-    }
-    
-    console.error(`❌ [RETRY] Todas as ${maxRetries} tentativas falhararam`);
-    throw lastError;
-  };
-
   const cancelAppointment = async (appointmentId: string) => {
     console.log('🎯 [CANCEL] Iniciando cancelamento:', {
       appointmentId,
@@ -564,20 +577,28 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       // ⚡ OTIMIZAÇÃO: Buscar perfil cacheado
       const profile = await getUserProfile();
 
-      // ✅ Executar cancelamento
-      await retryOperation(async () => {
-        await measureApiCall(async () => {
-          const { data, error } = await supabase.rpc('cancelar_agendamento_soft', {
-            p_agendamento_id: appointmentId,
-            p_cancelado_por: profile.nome,
-            p_cancelado_por_user_id: profile.user_id
-          });
-
-          if (error) throw error;
-          if (!(data as any)?.success) throw new Error((data as any)?.error || 'Erro ao cancelar');
-          return data;
-        }, 'cancel_appointment', 'PUT');
+      // ✅ Executar cancelamento com RETRY e TIMEOUT
+      const response = await retryOperation(async () => {
+        return await withTimeout(
+          (async () => {
+            return await supabase.rpc('cancelar_agendamento_soft', {
+              p_agendamento_id: appointmentId,
+              p_cancelado_por: profile.nome,
+              p_cancelado_por_user_id: profile.user_id
+            });
+          })(),
+          10000 // 10 segundos timeout
+        );
       });
+
+      if (response.error) {
+        throw response.error;
+      }
+      
+      const result = response.data;
+      if (!(result as any)?.success) {
+        throw new Error((result as any)?.error || 'Erro ao cancelar');
+      }
 
       toast({ 
         title: 'Agendamento cancelado', 
@@ -687,19 +708,27 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       const profile = await getUserProfile();
 
       // ✅ Executar RPC (que já valida no backend)
-      await retryOperation(async () => {
-        await measureApiCall(async () => {
-          const { data, error } = await supabase.rpc('confirmar_agendamento', {
-            p_agendamento_id: appointmentId,
-            p_confirmado_por: profile.nome,
-            p_confirmado_por_user_id: profile.user_id
-          });
-
-          if (error) throw error;
-          if (!(data as any)?.success) throw new Error((data as any)?.error || 'Erro ao confirmar');
-          return data;
-        }, 'confirm_appointment', 'PUT');
+      const response = await retryOperation(async () => {
+        return await withTimeout(
+          (async () => {
+            return await supabase.rpc('confirmar_agendamento', {
+              p_agendamento_id: appointmentId,
+              p_confirmado_por: profile.nome,
+              p_confirmado_por_user_id: profile.user_id
+            });
+          })(),
+          10000 // 10 segundos timeout
+        );
       });
+
+      if (response.error) {
+        throw response.error;
+      }
+      
+      const result = response.data;
+      if (!(result as any)?.success) {
+        throw new Error((result as any)?.error || 'Erro ao confirmar');
+      }
 
       toast({ 
         title: 'Agendamento confirmado', 
@@ -733,10 +762,12 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       // ✅ Refetch em background apenas se NÃO houve erro
       if (!skipBackgroundRefetchRef.current) {
         setTimeout(() => {
-          invalidateCache();
-          refetch();
+          if (!isOperatingRef.current) {
+            invalidateCache();
+            refetch();
+          }
           isPausedRef.current = false; // ✅ Retomar APÓS validação
-        }, 100);
+        }, 1000); // ✅ 1 segundo para garantir consistência
       } else {
         isPausedRef.current = false; // ✅ Retomar imediatamente em caso de erro
       }
@@ -827,19 +858,27 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       const profile = await getUserProfile();
 
       // ✅ Executar desconfirmação
-      await retryOperation(async () => {
-        await measureApiCall(async () => {
-          const { data, error } = await supabase.rpc('desconfirmar_agendamento', {
-            p_agendamento_id: appointmentId,
-            p_desconfirmado_por: profile.nome,
-            p_desconfirmado_por_user_id: profile.user_id
-          });
-
-          if (error) throw error;
-          if (!(data as any)?.success) throw new Error((data as any)?.error || 'Erro ao desconfirmar');
-          return data;
-        }, 'unconfirm_appointment', 'PUT');
+      const response = await retryOperation(async () => {
+        return await withTimeout(
+          (async () => {
+            return await supabase.rpc('desconfirmar_agendamento', {
+              p_agendamento_id: appointmentId,
+              p_desconfirmado_por: profile.nome,
+              p_desconfirmado_por_user_id: profile.user_id
+            });
+          })(),
+          10000 // 10 segundos timeout
+        );
       });
+
+      if (response.error) {
+        throw response.error;
+      }
+      
+      const result = response.data;
+      if (!(result as any)?.success) {
+        throw new Error((result as any)?.error || 'Erro ao desconfirmar');
+      }
 
       toast({ 
         title: 'Confirmação removida', 
@@ -856,9 +895,11 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       
       // Validar no background sem bloquear UI
       setTimeout(() => {
-        invalidateCache();
-        refetch();
-      }, 100);
+        if (!isOperatingRef.current) {
+          invalidateCache();
+          refetch();
+        }
+      }, 1000); // ✅ 1 segundo para garantir consistência
     } catch (error) {
       console.error('❌ [UNCONFIRM] Erro:', error);
       
@@ -897,23 +938,29 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     isPausedRef.current = true; // ✅ ADICIONAR controle de polling
     isOperatingRef.current = true;
     try {
-      // ✅ FASE 2: Aplicar retry automático
-      await retryOperation(async () => {
-        await measureApiCall(async () => {
-          // ✅ Usar cache de perfil (sem nova chamada RPC)
-          const profile = await getUserProfile();
-
-          const { data, error } = await supabase.rpc('excluir_agendamento_soft', {
-            p_agendamento_id: appointmentId,
-            p_excluido_por: profile.nome,
-            p_excluido_por_user_id: profile.user_id
-          });
-
-          if (error) throw error;
-          if (!(data as any)?.success) throw new Error((data as any)?.error || 'Erro ao excluir');
-          return data;
-        }, 'delete_appointment', 'DELETE');
+      // ✅ FASE 2: Aplicar retry automático com TIMEOUT
+      const response = await retryOperation(async () => {
+        return await withTimeout(
+          (async () => {
+            const profile = await getUserProfile();
+            return await supabase.rpc('excluir_agendamento_soft', {
+              p_agendamento_id: appointmentId,
+              p_excluido_por: profile.nome,
+              p_excluido_por_user_id: profile.user_id
+            });
+          })(),
+          10000 // 10 segundos timeout
+        );
       });
+
+      if (response.error) {
+        throw response.error;
+      }
+      
+      const result = response.data;
+      if (!(result as any)?.success) {
+        throw new Error((result as any)?.error || 'Erro ao excluir');
+      }
 
       toast({ 
         title: 'Agendamento excluído', 
@@ -925,9 +972,11 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
 
       // ✅ Validar no background (sem bloquear UI)
       setTimeout(() => {
-        invalidateCache();
-        refetch();
-      }, 100);
+        if (!isOperatingRef.current) {
+          invalidateCache();
+          refetch();
+        }
+      }, 1000); // ✅ 1 segundo para garantir consistência
     } catch (error) {
       console.error('❌ [DELETE] Erro após todas as tentativas:', error);
       toast({
