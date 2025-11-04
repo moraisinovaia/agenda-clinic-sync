@@ -22,8 +22,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   const lastErrorRef = useRef<string | null>(null);
   const isOperatingRef = useRef(false);
   const refetchDebounceRef = useRef<NodeJS.Timeout | null>(null);
-  const isPausedRef = useRef(false); // ✅ FASE 2: Flag para pausar polling
-  const skipBackgroundRefetchRef = useRef(false); // ✅ OTIMIZAÇÃO: Flag para evitar refetch duplicado em erros
+  const isPausedRef = useRef(false);
   
   // 🚨 OTIMIZAÇÃO FASE 2: Cache local por instância usando refs
   const fetchPromiseRef = useRef<Promise<AppointmentWithRelations[]> | null>(null);
@@ -506,78 +505,48 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   };
 
   const cancelAppointment = async (appointmentId: string) => {
-    console.log('🎯 [CANCEL] Iniciando cancelamento:', {
-      appointmentId,
-      timestamp: new Date().toISOString()
-    });
+    console.log('🎯 [CANCEL] Iniciando cancelamento:', appointmentId);
     
-    isPausedRef.current = true;
+    if (isOperatingRef.current) {
+      console.warn('⚠️ [CANCEL] Operação já em andamento');
+      return;
+    }
+    
     isOperatingRef.current = true;
+    isPausedRef.current = true;
     
     try {
-      // ✅ DOUBLE-CHECK DE STATUS LOCAL
-      const appointment = appointments.find(apt => apt.id === appointmentId);
+      const profile = await getUserProfile();
       
-      if (!appointment) {
-        console.error('❌ [CANCEL] Agendamento não encontrado na lista local');
-        toast({
-          title: 'Agendamento não encontrado',
-          description: 'O agendamento pode ter sido excluído. Atualizando lista...',
-          variant: 'destructive',
-        });
-        await refetch();
-        return; // ✅ MUDADO de throw para evitar travamento
-      }
+      console.log('🔍 [CANCEL] Verificando status no banco...');
+      const { data: currentAppointment, error: fetchError } = await withTimeout(
+        (async () => {
+          return await supabase
+            .from('agendamentos')
+            .select('status, pacientes(nome_completo)')
+            .eq('id', appointmentId)
+            .is('excluido_em', null)
+            .single();
+        })(),
+        8000
+      );
       
-      console.log('🔍 [CANCEL] Status local verificado:', {
-        status: appointment.status,
-        paciente: appointment.pacientes?.nome_completo
-      });
-      
-      // Verificar se já está cancelado
-      if (appointment.status === 'cancelado') {
-        console.warn('⚠️ [CANCEL] Agendamento já cancelado localmente');
-        toast({
-          title: 'Agendamento já cancelado',
-          description: 'Este agendamento já foi cancelado anteriormente.',
-          variant: 'default',
-        });
-        await refetch();
-        return; // ✅ MUDADO de throw para evitar travamento
-      }
-      
-      // ✅ Buscar status atualizado do banco
-      console.log('🔍 [CANCEL] Buscando agendamento atualizado no banco...');
-      const { data: currentAppointment, error: fetchError } = await supabase
-        .from('agendamentos')
-        .select('status')
-        .eq('id', appointmentId)
-        .single();
-      
-      if (fetchError || !currentAppointment) {
-        console.error('❌ [CANCEL] Erro ao buscar agendamento:', fetchError);
-        throw new Error('Agendamento não encontrado no banco de dados');
+      if (fetchError) {
+        console.error('❌ [CANCEL] Erro ao buscar:', fetchError);
+        throw new Error('Agendamento não encontrado');
       }
       
       if (currentAppointment.status === 'cancelado') {
-        console.error('❌ [CANCEL] Status inválido no banco:', currentAppointment.status);
-        
         toast({
-          title: 'Ação não permitida',
-          description: 'Este agendamento já foi cancelado por outro usuário.',
+          title: 'Já cancelado',
+          description: 'Este agendamento já foi cancelado.',
           variant: 'default',
         });
-        
         await refetch();
-        throw new Error('STATUS_INVALID');
+        return;
       }
       
-      console.log('✅ [CANCEL] Agendamento validado:', currentAppointment);
-
-      // ⚡ OTIMIZAÇÃO: Buscar perfil cacheado
-      const profile = await getUserProfile();
-
-      // ✅ Executar cancelamento com RETRY e TIMEOUT
+      console.log('🔄 [CANCEL] Executando RPC...');
       const response = await retryOperation(async () => {
         return await withTimeout(
           (async () => {
@@ -587,7 +556,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
               p_cancelado_por_user_id: profile.user_id
             });
           })(),
-          10000 // 10 segundos timeout
+          10000
         );
       });
 
@@ -597,15 +566,9 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       
       const result = response.data;
       if (!(result as any)?.success) {
-        throw new Error((result as any)?.error || 'Erro ao cancelar');
+        throw new Error((result as any)?.error || 'Falha ao cancelar');
       }
-
-      toast({ 
-        title: 'Agendamento cancelado', 
-        description: 'O agendamento foi cancelado com sucesso' 
-      });
       
-      // ⚡ OTIMIZAÇÃO: Atualização local otimista + validação em background
       updateLocalAppointment(appointmentId, { 
         status: 'cancelado',
         cancelado_em: new Date().toISOString(),
@@ -613,101 +576,96 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         cancelado_por_user_id: profile.user_id
       });
       
-      // Validar no background sem bloquear UI
+      toast({ 
+        title: 'Cancelado com sucesso', 
+        description: 'O agendamento foi cancelado' 
+      });
+      
       setTimeout(() => {
-        invalidateCache();
-        refetch();
-      }, 100);
+        if (!isOperatingRef.current) {
+          invalidateCache();
+          refetch();
+        }
+      }, 1000);
+      
     } catch (error) {
       console.error('❌ [CANCEL] Erro:', error);
       
-      if (error instanceof Error) {
-        // Se já mostramos um toast específico, apenas fazer refetch e sair
-        if (error.message === 'STATUS_INVALID' || error.message === 'Agendamento já cancelado') {
-          await refetch();
-          return; // ✅ Sair sem lançar erro
-        }
-        
-        // Para outros erros, mostrar feedback e refetch
-        let errorDescription = 'Tente novamente';
-        if (error.message.includes('não encontrado')) {
-          errorDescription = 'O agendamento não foi encontrado. A lista será atualizada.';
-        } else if (error.message.includes('RPC')) {
-          errorDescription = 'Erro ao processar o cancelamento. Tente novamente.';
-        } else {
-          errorDescription = 'Erro inesperado. A lista será atualizada.';
-        }
-        
-        await refetch();
-        toast({
-          title: 'Erro ao cancelar',
-          description: errorDescription,
-          variant: 'destructive',
-        });
+      const errorMsg = error instanceof Error ? error.message : 'Erro desconhecido';
+      let userMessage = 'Tente novamente';
+      
+      if (errorMsg.includes('não encontrado')) {
+        userMessage = 'Agendamento não encontrado';
+      } else if (errorMsg.includes('timeout') || errorMsg.includes('expirou')) {
+        userMessage = 'Operação demorou demais. Verifique sua conexão.';
       }
-      // ✅ REMOVIDO: throw error - agora o finally sempre executa
+      
+      toast({
+        title: 'Erro ao cancelar',
+        description: userMessage,
+        variant: 'destructive',
+      });
+      
+      await refetch();
+      
     } finally {
-      isPausedRef.current = false;
       isOperatingRef.current = false;
+      isPausedRef.current = false;
     }
   };
 
   const confirmAppointment = async (appointmentId: string) => {
-    console.log('🎯 [CONFIRM] Iniciando confirmação:', {
-      appointmentId,
-      timestamp: new Date().toISOString()
-    });
+    console.log('🎯 [CONFIRM] Iniciando confirmação:', appointmentId);
     
-    isPausedRef.current = true;
+    if (isOperatingRef.current) {
+      console.warn('⚠️ [CONFIRM] Operação já em andamento');
+      return;
+    }
+    
     isOperatingRef.current = true;
-    skipBackgroundRefetchRef.current = false; // ✅ Reset da flag
+    isPausedRef.current = true;
     
     try {
-      // ✅ VERIFICAÇÃO LOCAL (previne race condition)
-      const appointment = appointments.find(apt => apt.id === appointmentId);
+      const profile = await getUserProfile();
       
-      if (!appointment) {
-        console.error('❌ [CONFIRM] Agendamento não encontrado');
-        skipBackgroundRefetchRef.current = true;
-        toast({
-          title: 'Agendamento não encontrado',
-          description: 'O agendamento pode ter sido excluído. Atualizando lista...',
-          variant: 'destructive',
-        });
-        await refetch();
-        return;
+      console.log('🔍 [CONFIRM] Verificando status no banco...');
+      const { data: currentAppointment, error: fetchError } = await withTimeout(
+        (async () => {
+          return await supabase
+            .from('agendamentos')
+            .select('status, pacientes(nome_completo)')
+            .eq('id', appointmentId)
+            .is('excluido_em', null)
+            .single();
+        })(),
+        8000
+      );
+      
+      if (fetchError) {
+        throw new Error('Agendamento não encontrado');
       }
       
-      if (appointment.status === 'confirmado') {
-        console.warn('⚠️ [CONFIRM] Já confirmado');
-        skipBackgroundRefetchRef.current = true;
+      if (currentAppointment.status === 'confirmado') {
         toast({
-          title: 'Agendamento já confirmado',
-          description: 'Este agendamento já foi confirmado anteriormente.',
+          title: 'Já confirmado',
+          description: 'Este agendamento já está confirmado.',
           variant: 'default',
         });
         await refetch();
         return;
       }
       
-      if (appointment.status !== 'agendado' && appointment.status !== 'cancelado_bloqueio') {
-        console.error('❌ [CONFIRM] Status não permite confirmação:', appointment.status);
-        skipBackgroundRefetchRef.current = true;
+      if (currentAppointment.status !== 'agendado' && currentAppointment.status !== 'cancelado_bloqueio') {
         toast({
           title: 'Ação não permitida',
-          description: `Agendamentos com status "${appointment.status}" não podem ser confirmados.`,
+          description: `Agendamentos com status "${currentAppointment.status}" não podem ser confirmados.`,
           variant: 'destructive',
         });
         await refetch();
         return;
       }
       
-      console.log('✅ [CONFIRM] Validação local passou');
-      
-      // ✅ Buscar perfil cacheado
-      const profile = await getUserProfile();
-
-      // ✅ Executar RPC (que já valida no backend)
+      console.log('🔄 [CONFIRM] Executando RPC...');
       const response = await retryOperation(async () => {
         return await withTimeout(
           (async () => {
@@ -717,7 +675,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
               p_confirmado_por_user_id: profile.user_id
             });
           })(),
-          10000 // 10 segundos timeout
+          10000
         );
       });
 
@@ -727,15 +685,9 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       
       const result = response.data;
       if (!(result as any)?.success) {
-        throw new Error((result as any)?.error || 'Erro ao confirmar');
+        throw new Error((result as any)?.error || 'Falha ao confirmar');
       }
-
-      toast({ 
-        title: 'Agendamento confirmado', 
-        description: 'O agendamento foi confirmado com sucesso' 
-      });
       
-      // ✅ Atualização otimista
       updateLocalAppointment(appointmentId, { 
         status: 'confirmado',
         confirmado_em: new Date().toISOString(),
@@ -743,101 +695,89 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         confirmado_por_user_id: profile.user_id
       });
       
+      toast({ 
+        title: 'Confirmado com sucesso', 
+        description: 'O agendamento foi confirmado' 
+      });
+      
+      setTimeout(() => {
+        if (!isOperatingRef.current) {
+          invalidateCache();
+          refetch();
+        }
+      }, 1000);
+      
     } catch (error) {
       console.error('❌ [CONFIRM] Erro:', error);
-      skipBackgroundRefetchRef.current = true; // ✅ Evitar refetch duplicado
+      
+      const errorMsg = error instanceof Error ? error.message : 'Erro desconhecido';
+      let userMessage = 'Tente novamente';
+      
+      if (errorMsg.includes('não encontrado')) {
+        userMessage = 'Agendamento não encontrado';
+      } else if (errorMsg.includes('timeout') || errorMsg.includes('expirou')) {
+        userMessage = 'Operação demorou demais. Verifique sua conexão.';
+      }
+      
+      toast({
+        title: 'Erro ao confirmar',
+        description: userMessage,
+        variant: 'destructive',
+      });
       
       await refetch();
       
-      if (error instanceof Error && !['STATUS_INVALID', 'Agendamento já confirmado'].includes(error.message)) {
-        toast({
-          title: 'Erro ao confirmar agendamento',
-          description: 'Tente novamente',
-          variant: 'destructive',
-        });
-      }
     } finally {
       isOperatingRef.current = false;
-      
-      // ✅ Refetch em background apenas se NÃO houve erro
-      if (!skipBackgroundRefetchRef.current) {
-        setTimeout(() => {
-          if (!isOperatingRef.current) {
-            invalidateCache();
-            refetch();
-          }
-          isPausedRef.current = false; // ✅ Retomar APÓS validação
-        }, 1000); // ✅ 1 segundo para garantir consistência
-      } else {
-        isPausedRef.current = false; // ✅ Retomar imediatamente em caso de erro
-      }
-      
-      skipBackgroundRefetchRef.current = false; // Reset
+      isPausedRef.current = false;
     }
   };
 
   const unconfirmAppointment = async (appointmentId: string) => {
-    console.log('🎯 [UNCONFIRM] Iniciando desconfirmação:', {
-      appointmentId,
-      timestamp: new Date().toISOString()
-    });
+    console.log('🎯 [UNCONFIRM] Iniciando desconfirmação:', appointmentId);
     
-    isPausedRef.current = true;
+    if (isOperatingRef.current) {
+      console.warn('⚠️ [UNCONFIRM] Operação já em andamento');
+      return;
+    }
+    
     isOperatingRef.current = true;
+    isPausedRef.current = true;
     
     try {
-      // ✅ DOUBLE-CHECK DE STATUS LOCAL
-      const appointment = appointments.find(apt => apt.id === appointmentId);
+      const profile = await getUserProfile();
       
-      if (!appointment) {
-        console.error('❌ [UNCONFIRM] Agendamento não encontrado na lista local');
-        toast({
-          title: 'Agendamento não encontrado',
-          description: 'O agendamento pode ter sido excluído. Atualizando lista...',
-          variant: 'destructive',
-        });
-        await refetch();
-        return; // ✅ MUDADO de throw para evitar travamento
+      console.log('🔍 [UNCONFIRM] Verificando status no banco...');
+      const { data: currentAppointment, error: fetchError } = await withTimeout(
+        (async () => {
+          return await supabase
+            .from('agendamentos')
+            .select('status, pacientes(nome_completo)')
+            .eq('id', appointmentId)
+            .is('excluido_em', null)
+            .single();
+        })(),
+        8000
+      );
+      
+      if (fetchError) {
+        throw new Error('Agendamento não encontrado');
       }
       
-      console.log('🔍 [UNCONFIRM] Status local verificado:', {
-        status: appointment.status,
-        paciente: appointment.pacientes?.nome_completo
-      });
-      
-      // Verificar se já está agendado (não confirmado)
-      if (appointment.status === 'agendado') {
-        console.warn('⚠️ [UNCONFIRM] Agendamento já está sem confirmação localmente');
+      if (currentAppointment.status === 'agendado') {
         toast({
-          title: 'Agendamento sem confirmação',
+          title: 'Sem confirmação',
           description: 'Este agendamento já está sem confirmação.',
           variant: 'default',
         });
         await refetch();
-        return; // ✅ MUDADO de throw para evitar travamento
-      }
-      
-      // ✅ Buscar status atualizado do banco
-      console.log('🔍 [UNCONFIRM] Buscando agendamento atualizado no banco...');
-      const { data: currentAppointment, error: fetchError } = await supabase
-        .from('agendamentos')
-        .select('status')
-        .eq('id', appointmentId)
-        .single();
-      
-      if (fetchError || !currentAppointment) {
-        console.error('❌ [UNCONFIRM] Erro ao buscar agendamento:', fetchError);
-        throw new Error('Agendamento não encontrado no banco de dados');
+        return;
       }
       
       if (currentAppointment.status !== 'confirmado') {
-        console.error('❌ [UNCONFIRM] Status inválido no banco:', currentAppointment.status);
-        
         let userMessage = '';
-        if (currentAppointment.status === 'agendado') {
-          userMessage = 'Este agendamento já está sem confirmação.';
-        } else if (currentAppointment.status === 'cancelado') {
-          userMessage = 'Este agendamento foi cancelado e não pode ser desconfirmado.';
+        if (currentAppointment.status === 'cancelado') {
+          userMessage = 'Agendamentos cancelados não podem ser desconfirmados.';
         } else {
           userMessage = `Agendamentos com status "${currentAppointment.status}" não podem ser desconfirmados.`;
         }
@@ -845,19 +785,13 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         toast({
           title: 'Ação não permitida',
           description: userMessage,
-          variant: 'default',
+          variant: 'destructive',
         });
-        
         await refetch();
-        throw new Error('STATUS_INVALID');
+        return;
       }
       
-      console.log('✅ [UNCONFIRM] Agendamento validado:', currentAppointment);
-
-      // ⚡ OTIMIZAÇÃO: Buscar perfil cacheado
-      const profile = await getUserProfile();
-
-      // ✅ Executar desconfirmação
+      console.log('🔄 [UNCONFIRM] Executando RPC...');
       const response = await retryOperation(async () => {
         return await withTimeout(
           (async () => {
@@ -867,7 +801,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
               p_desconfirmado_por_user_id: profile.user_id
             });
           })(),
-          10000 // 10 segundos timeout
+          10000
         );
       });
 
@@ -877,15 +811,9 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       
       const result = response.data;
       if (!(result as any)?.success) {
-        throw new Error((result as any)?.error || 'Erro ao desconfirmar');
+        throw new Error((result as any)?.error || 'Falha ao desconfirmar');
       }
-
-      toast({ 
-        title: 'Confirmação removida', 
-        description: 'A confirmação do agendamento foi removida' 
-      });
       
-      // ⚡ OTIMIZAÇÃO: Atualização local otimista + validação em background
       updateLocalAppointment(appointmentId, { 
         status: 'agendado',
         confirmado_em: null,
@@ -893,63 +821,69 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         confirmado_por_user_id: null
       });
       
-      // Validar no background sem bloquear UI
+      toast({ 
+        title: 'Confirmação removida', 
+        description: 'A confirmação do agendamento foi removida' 
+      });
+      
       setTimeout(() => {
         if (!isOperatingRef.current) {
           invalidateCache();
           refetch();
         }
-      }, 1000); // ✅ 1 segundo para garantir consistência
+      }, 1000);
+      
     } catch (error) {
       console.error('❌ [UNCONFIRM] Erro:', error);
       
-      if (error instanceof Error) {
-        // Se já mostramos toast específico, apenas refetch e sair
-        if (error.message === 'STATUS_INVALID' || error.message === 'Agendamento já sem confirmação') {
-          await refetch();
-          return; // ✅ Sair sem lançar erro
-        }
-        
-        // Para outros erros, refetch e mostrar feedback
-        let errorDescription = 'Tente novamente';
-        if (error.message.includes('não encontrado')) {
-          errorDescription = 'O agendamento não foi encontrado. A lista será atualizada.';
-        } else if (error.message.includes('RPC')) {
-          errorDescription = 'Erro ao processar a desconfirmação. Tente novamente.';
-        } else {
-          errorDescription = 'Erro inesperado. A lista será atualizada.';
-        }
-        
-        await refetch();
-        toast({
-          title: 'Erro ao desconfirmar',
-          description: errorDescription,
-          variant: 'destructive',
-        });
+      const errorMsg = error instanceof Error ? error.message : 'Erro desconhecido';
+      let userMessage = 'Tente novamente';
+      
+      if (errorMsg.includes('não encontrado')) {
+        userMessage = 'Agendamento não encontrado';
+      } else if (errorMsg.includes('timeout') || errorMsg.includes('expirou')) {
+        userMessage = 'Operação demorou demais. Verifique sua conexão.';
       }
-      // ✅ REMOVIDO: throw error
+      
+      toast({
+        title: 'Erro ao desconfirmar',
+        description: userMessage,
+        variant: 'destructive',
+      });
+      
+      await refetch();
+      
     } finally {
-      isPausedRef.current = false;
       isOperatingRef.current = false;
+      isPausedRef.current = false;
     }
   };
 
   const deleteAppointment = async (appointmentId: string) => {
-    isPausedRef.current = true; // ✅ ADICIONAR controle de polling
+    console.log('🎯 [DELETE] Iniciando exclusão:', appointmentId);
+    
+    if (isOperatingRef.current) {
+      console.warn('⚠️ [DELETE] Operação já em andamento');
+      return;
+    }
+    
     isOperatingRef.current = true;
+    isPausedRef.current = true;
+    
     try {
-      // ✅ FASE 2: Aplicar retry automático com TIMEOUT
+      const profile = await getUserProfile();
+      
+      console.log('🔄 [DELETE] Executando RPC...');
       const response = await retryOperation(async () => {
         return await withTimeout(
           (async () => {
-            const profile = await getUserProfile();
             return await supabase.rpc('excluir_agendamento_soft', {
               p_agendamento_id: appointmentId,
               p_excluido_por: profile.nome,
               p_excluido_por_user_id: profile.user_id
             });
           })(),
-          10000 // 10 segundos timeout
+          10000
         );
       });
 
@@ -959,36 +893,46 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       
       const result = response.data;
       if (!(result as any)?.success) {
-        throw new Error((result as any)?.error || 'Erro ao excluir');
+        throw new Error((result as any)?.error || 'Falha ao excluir');
       }
-
-      toast({ 
-        title: 'Agendamento excluído', 
-        description: 'O agendamento foi excluído com sucesso' 
-      });
-
-      // ✅ Remoção instantânea da lista (atualização otimista)
+      
       setAppointments(prev => prev.filter(apt => apt.id !== appointmentId));
-
-      // ✅ Validar no background (sem bloquear UI)
+      
+      toast({ 
+        title: 'Excluído com sucesso', 
+        description: 'O agendamento foi excluído' 
+      });
+      
       setTimeout(() => {
         if (!isOperatingRef.current) {
           invalidateCache();
           refetch();
         }
-      }, 1000); // ✅ 1 segundo para garantir consistência
+      }, 1000);
+      
     } catch (error) {
-      console.error('❌ [DELETE] Erro após todas as tentativas:', error);
+      console.error('❌ [DELETE] Erro:', error);
+      
+      const errorMsg = error instanceof Error ? error.message : 'Erro desconhecido';
+      let userMessage = 'Não foi possível excluir';
+      
+      if (errorMsg.includes('não encontrado')) {
+        userMessage = 'Agendamento não encontrado';
+      } else if (errorMsg.includes('timeout') || errorMsg.includes('expirou')) {
+        userMessage = 'Operação demorou demais. Verifique sua conexão.';
+      }
+      
       toast({
         title: 'Erro ao excluir',
-        description: error instanceof Error ? error.message : 'Não foi possível excluir',
+        description: userMessage,
         variant: 'destructive',
       });
-      throw error;
+      
+      await refetch();
+      
     } finally {
-      // ✅ FASE 2: GARANTIR que flags sejam resetadas
       isOperatingRef.current = false;
-      isPausedRef.current = false; // ✅ ADICIONAR retomada de polling
+      isPausedRef.current = false;
     }
   };
 
