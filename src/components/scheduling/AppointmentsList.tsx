@@ -520,10 +520,49 @@ export const AppointmentsList = React.memo(({ appointments, doctors, onEditAppoi
     </div>
   );
 }, (prevProps, nextProps) => {
-  // 🚨 OTIMIZAÇÃO FASE 2: Comparação customizada para evitar re-renders desnecessários
-  return (
-    prevProps.appointments.length === nextProps.appointments.length &&
-    prevProps.doctors.length === nextProps.doctors.length &&
-    prevProps.allowCanceled === nextProps.allowCanceled
-  );
+  // 🔥 CORREÇÃO CRÍTICA: Comparação profunda para detectar mudanças de status
+  
+  // Verificar se número de appointments mudou
+  if (prevProps.appointments.length !== nextProps.appointments.length) {
+    console.log('🔄 [MEMO] Length mudou, re-renderizando');
+    return false; // Deve re-renderizar
+  }
+  
+  // Verificar se doctors mudou
+  if (prevProps.doctors.length !== nextProps.doctors.length) {
+    console.log('🔄 [MEMO] Doctors mudou, re-renderizando');
+    return false;
+  }
+  
+  // Verificar se allowCanceled mudou
+  if (prevProps.allowCanceled !== nextProps.allowCanceled) {
+    console.log('🔄 [MEMO] AllowCanceled mudou, re-renderizando');
+    return false;
+  }
+  
+  // ✅ CRÍTICO: Verificar se algum appointment mudou (ID, status ou timestamps)
+  for (let i = 0; i < prevProps.appointments.length; i++) {
+    const prev = prevProps.appointments[i];
+    const next = nextProps.appointments[i];
+    
+    // Verificar mudanças em campos críticos
+    if (
+      prev.id !== next.id ||
+      prev.status !== next.status ||
+      prev.confirmado_em !== next.confirmado_em ||
+      prev.cancelado_em !== next.cancelado_em ||
+      prev.data_agendamento !== next.data_agendamento ||
+      prev.hora_agendamento !== next.hora_agendamento
+    ) {
+      console.log('🔄 [MEMO] Appointment mudou, re-renderizando:', {
+        id: prev.id.substring(0, 8),
+        statusAntes: prev.status,
+        statusDepois: next.status
+      });
+      return false; // Deve re-renderizar
+    }
+  }
+  
+  console.log('✅ [MEMO] Nenhuma mudança relevante, mantendo render');
+  return true; // Não precisa re-renderizar
 });

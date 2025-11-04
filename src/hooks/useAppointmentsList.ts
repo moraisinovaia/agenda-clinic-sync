@@ -339,10 +339,32 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
 
   // ⚡ OTIMIZAÇÃO: Atualização local otimista para feedback instantâneo
   const updateLocalAppointment = useCallback((appointmentId: string, updates: Partial<AppointmentWithRelations>) => {
-    console.log('⚡ [LOCAL-UPDATE] Atualizando localmente:', { appointmentId: appointmentId.substring(0, 8), updates });
-    setAppointments(prev => prev.map(apt => 
-      apt.id === appointmentId ? { ...apt, ...updates } : apt
-    ));
+    console.log('⚡ [LOCAL-UPDATE] Iniciando:', { 
+      id: appointmentId.substring(0, 8), 
+      updates 
+    });
+    
+    setAppointments(prev => {
+      console.log('📋 [LOCAL-UPDATE] Total appointments:', prev.length);
+      
+      const oldAppointment = prev.find(apt => apt.id === appointmentId);
+      console.log('🔍 [LOCAL-UPDATE] Encontrado?', !!oldAppointment);
+      
+      if (oldAppointment) {
+        console.log('📊 [LOCAL-UPDATE] Status ANTES:', oldAppointment.status);
+        console.log('📊 [LOCAL-UPDATE] Status DEPOIS:', updates.status || oldAppointment.status);
+      }
+      
+      const updated = prev.map(apt => 
+        apt.id === appointmentId ? { ...apt, ...updates } : apt
+      );
+      
+      const newAppointment = updated.find(apt => apt.id === appointmentId);
+      console.log('✅ [LOCAL-UPDATE] Novo status confirmado:', newAppointment?.status);
+      console.log('🔄 [LOCAL-UPDATE] Array reference mudou?', prev !== updated);
+      
+      return updated;
+    });
   }, []);
 
   // ✅ RETRY AUTOMÁTICO com exponential backoff
@@ -583,10 +605,13 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       
       setTimeout(() => {
         if (!isOperatingRef.current) {
+          console.log('🔄 [BACKGROUND-CANCEL] Executando refetch de validação...');
           invalidateCache();
           refetch();
+        } else {
+          console.warn('⚠️ [BACKGROUND-CANCEL] Refetch cancelado - operação em andamento');
         }
-      }, 1000);
+      }, 2000);
       
     } catch (error) {
       console.error('❌ [CANCEL] Erro:', error);
@@ -702,10 +727,13 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       
       setTimeout(() => {
         if (!isOperatingRef.current) {
+          console.log('🔄 [BACKGROUND-CONFIRM] Executando refetch de validação...');
           invalidateCache();
           refetch();
+        } else {
+          console.warn('⚠️ [BACKGROUND-CONFIRM] Refetch cancelado - operação em andamento');
         }
-      }, 1000);
+      }, 2000);
       
     } catch (error) {
       console.error('❌ [CONFIRM] Erro:', error);
@@ -828,10 +856,13 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       
       setTimeout(() => {
         if (!isOperatingRef.current) {
+          console.log('🔄 [BACKGROUND-UNCONFIRM] Executando refetch de validação...');
           invalidateCache();
           refetch();
+        } else {
+          console.warn('⚠️ [BACKGROUND-UNCONFIRM] Refetch cancelado - operação em andamento');
         }
-      }, 1000);
+      }, 2000);
       
     } catch (error) {
       console.error('❌ [UNCONFIRM] Erro:', error);
@@ -905,10 +936,13 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       
       setTimeout(() => {
         if (!isOperatingRef.current) {
+          console.log('🔄 [BACKGROUND-DELETE] Executando refetch de validação...');
           invalidateCache();
           refetch();
+        } else {
+          console.warn('⚠️ [BACKGROUND-DELETE] Refetch cancelado - operação em andamento');
         }
-      }, 1000);
+      }, 2000);
       
     } catch (error) {
       console.error('❌ [DELETE] Erro:', error);
