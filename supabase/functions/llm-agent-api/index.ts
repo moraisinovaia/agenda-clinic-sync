@@ -79,8 +79,8 @@ const BUSINESS_RULES = {
           tipo: 'ordem_chegada',
           dias_semana: [1, 2, 3, 4, 5], // seg-sex
           periodos: {
-            manha: { inicio: '07:00', fim: '12:00', limite: 9, distribuicao_fichas: '07:00 às 12:00' },
-            tarde: { inicio: '13:00', fim: '17:00', limite: 9, dias_especificos: [1, 3], distribuicao_fichas: '13:00 às 17:00' } // seg e qua
+            manha: { inicio: '07:00', fim: '12:00', limite: 9, atendimento_inicio: '07:45', distribuicao_fichas: '07:00 às 09:30' },
+            tarde: { inicio: '13:00', fim: '17:00', limite: 9, dias_especificos: [1, 3], atendimento_inicio: '13:45', distribuicao_fichas: '13:00 às 15:00' } // seg e qua
           }
         },
         'Teste Ergométrico': {
@@ -88,8 +88,8 @@ const BUSINESS_RULES = {
           tipo: 'ordem_chegada',
           dias_semana: [2, 3, 4], // ter, qua, qui
           periodos: {
-            manha: { inicio: '07:00', fim: '12:00', limite: 9, dias_especificos: [3], distribuicao_fichas: '07:00 às 12:00' }, // qua
-            tarde: { inicio: '13:00', fim: '17:00', limite: 9, dias_especificos: [2, 4], distribuicao_fichas: '13:00 às 17:00' } // ter e qui
+            manha: { inicio: '07:00', fim: '12:00', limite: 9, dias_especificos: [3], atendimento_inicio: '07:45', distribuicao_fichas: '07:00 às 09:30' }, // qua
+            tarde: { inicio: '13:00', fim: '17:00', limite: 9, dias_especificos: [2, 4], atendimento_inicio: '13:45', distribuicao_fichas: '13:00 às 15:00' } // ter e qui
           }
         },
         'ECG': {
@@ -110,8 +110,8 @@ const BUSINESS_RULES = {
           tipo: 'ordem_chegada',
           dias_semana: [1, 2, 3, 4, 5],
           periodos: {
-            manha: { inicio: '07:00', fim: '12:00', limite: 9, atendimento_inicio: '08:45', distribuicao_fichas: '07:00 às 12:00' },
-            tarde: { inicio: '13:00', fim: '17:00', limite: 9, dias_especificos: [2, 3], atendimento_inicio: '14:45', distribuicao_fichas: '13:00 às 17:00' }
+            manha: { inicio: '07:00', fim: '12:00', limite: 9, atendimento_inicio: '08:45', distribuicao_fichas: '08:00 às 10:00' },
+            tarde: { inicio: '13:00', fim: '17:00', limite: 9, dias_especificos: [2, 3], atendimento_inicio: '14:45', distribuicao_fichas: '13:00 às 15:00' }
           }
         }
       }
@@ -127,7 +127,7 @@ const BUSINESS_RULES = {
           tipo: 'ordem_chegada',
           dias_semana: [2, 4], // ter e qui apenas
           periodos: {
-            manha: { inicio: '07:00', fim: '12:00', limite: 9, distribuicao_fichas: '07:00 às 12:00' }
+            manha: { inicio: '07:00', fim: '12:00', limite: 9, distribuicao_fichas: '09:30 às 10:00' }
           },
           mensagem_extra: 'Chegue entre 9h30 e 10h. O atendimento é após os exames, por ordem de chegada.'
         }
@@ -144,7 +144,7 @@ const BUSINESS_RULES = {
           tipo: 'ordem_chegada',
           dias_semana: [1], // apenas segunda
           periodos: {
-            manha: { inicio: '07:00', fim: '12:00', limite: 9, distribuicao_fichas: '07:00 às 12:00' }
+            manha: { inicio: '07:00', fim: '12:00', limite: 9, atendimento_inicio: '08:00', distribuicao_fichas: '08:00 às 09:30' }
           }
         },
         'Consulta Cardiológica': {
