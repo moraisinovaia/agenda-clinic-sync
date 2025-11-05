@@ -1658,10 +1658,18 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
               return periodoClassificado === periodo;
             }).length;
             
-            console.log(`📊 Período ${periodo}: ${vagasOcupadas} agendamentos de ${todosAgendamentos.length} totais`);
+            console.log(`📊 [DISPONIBILIDADE] Data: ${dataFormatada}`);
+            console.log(`📊 [DISPONIBILIDADE] Período ${periodo}:`);
+            console.log(`   - Total agendamentos no dia: ${todosAgendamentos.length}`);
+            console.log(`   - Agendamentos neste período: ${vagasOcupadas}`);
+            console.log(`   - Limite do período: ${(config as any).limite}`);
+          } else {
+            console.log(`📊 [DISPONIBILIDADE] Data: ${dataFormatada} - Período ${periodo}: SEM agendamentos`);
+            console.log(`   - Limite do período: ${(config as any).limite}`);
           }
 
           const vagasDisponiveis = (config as any).limite - vagasOcupadas;
+          console.log(`   - 🎯 Vagas disponíveis: ${vagasDisponiveis}`);
 
           if (vagasDisponiveis > 0) {
             periodosDisponiveis.push({
@@ -1697,6 +1705,20 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         - Puladas (bloqueio): ${datasPuladasBloqueio}
         - Sem vagas: ${datasSemVagas}
         - Datas disponíveis encontradas: ${proximasDatas.length}`);
+
+      // ✅ Validação: verificar total de vagas
+      if (proximasDatas.length > 0) {
+        proximasDatas.forEach((data: any) => {
+          const totalVagasData = data.periodos.reduce(
+            (sum: number, p: any) => sum + p.vagas_disponiveis, 
+            0
+          );
+          console.log(`✅ [VALIDAÇÃO] ${data.data} tem ${totalVagasData} vagas totais distribuídas em ${data.periodos.length} período(s)`);
+          data.periodos.forEach((p: any) => {
+            console.log(`   → ${p.periodo}: ${p.vagas_disponiveis}/${p.total_vagas} vagas`);
+          });
+        });
+      }
 
       if (proximasDatas.length === 0) {
         return errorResponse(`Não encontrei datas disponíveis para ${medico.nome} nos próximos ${dias_busca} dias. Por favor, entre em contato com a clínica.`);
