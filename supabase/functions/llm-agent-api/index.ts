@@ -127,7 +127,7 @@ const BUSINESS_RULES = {
           tipo: 'ordem_chegada',
           dias_semana: [2, 4], // ter e qui apenas
           periodos: {
-            manha: { inicio: '07:00', fim: '12:00', limite: 9, distribuicao_fichas: '09:30 às 10:00' }
+            manha: { inicio: '07:00', fim: '12:00', limite: 3, distribuicao_fichas: '09:30 às 10:00' }
           },
           mensagem_extra: 'Chegue entre 9h30 e 10h. O atendimento é após os exames, por ordem de chegada.'
         }
