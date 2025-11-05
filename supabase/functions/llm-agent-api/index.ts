@@ -53,9 +53,9 @@ function classificarPeriodoAgendamento(
     const inicioMinutos = hInicio * 60 + mInicio;
     const fimMinutos = hFim * 60 + mFim;
 
-    // Para ORDEM DE CHEGADA: considerar margem de 2h antes do início oficial
-    // Exemplo: período 07:30-10:00 aceita agendamentos desde 05:30
-    const margemMinutos = 120; // 2 horas
+    // Para ORDEM DE CHEGADA: considerar margem de 15 minutos
+    // Exemplo: período 07:00-12:00 aceita agendamentos desde 06:45
+    const margemMinutos = 15; // 15 minutos
     
     if (minutos >= (inicioMinutos - margemMinutos) && minutos <= fimMinutos) {
       return periodo;
@@ -79,8 +79,8 @@ const BUSINESS_RULES = {
           tipo: 'ordem_chegada',
           dias_semana: [1, 2, 3, 4, 5], // seg-sex
           periodos: {
-            manha: { inicio: '07:30', fim: '10:00', limite: 9, distribuicao_fichas: '07:30 às 10:00' },
-            tarde: { inicio: '13:30', fim: '15:00', limite: 9, dias_especificos: [1, 3], distribuicao_fichas: '13:30 às 15:00' } // seg e qua
+            manha: { inicio: '07:00', fim: '12:00', limite: 30, distribuicao_fichas: '07:00 às 12:00' },
+            tarde: { inicio: '13:00', fim: '17:00', limite: 24, dias_especificos: [1, 3], distribuicao_fichas: '13:00 às 17:00' } // seg e qua
           }
         },
         'Teste Ergométrico': {
@@ -88,8 +88,8 @@ const BUSINESS_RULES = {
           tipo: 'ordem_chegada',
           dias_semana: [2, 3, 4], // ter, qua, qui
           periodos: {
-            manha: { inicio: '07:30', fim: '10:00', limite: 8, dias_especificos: [3], distribuicao_fichas: '07:30 às 10:00' }, // qua
-            tarde: { inicio: '13:30', fim: '15:00', limite: 8, dias_especificos: [2, 4], distribuicao_fichas: '13:30 às 15:00' } // ter e qui
+            manha: { inicio: '07:00', fim: '12:00', limite: 30, dias_especificos: [3], distribuicao_fichas: '07:00 às 12:00' }, // qua
+            tarde: { inicio: '13:00', fim: '17:00', limite: 24, dias_especificos: [2, 4], distribuicao_fichas: '13:00 às 17:00' } // ter e qui
           }
         },
         'ECG': {
@@ -110,8 +110,8 @@ const BUSINESS_RULES = {
           tipo: 'ordem_chegada',
           dias_semana: [1, 2, 3, 4, 5],
           periodos: {
-            manha: { inicio: '08:00', fim: '10:00', limite: 9, atendimento_inicio: '08:45', distribuicao_fichas: '08:00 às 10:00' },
-            tarde: { inicio: '13:00', fim: '15:00', limite: 9, dias_especificos: [2, 3], atendimento_inicio: '14:45', distribuicao_fichas: '13:00 às 15:00' }
+            manha: { inicio: '07:00', fim: '12:00', limite: 30, atendimento_inicio: '08:45', distribuicao_fichas: '07:00 às 12:00' },
+            tarde: { inicio: '13:00', fim: '17:00', limite: 24, dias_especificos: [2, 3], atendimento_inicio: '14:45', distribuicao_fichas: '13:00 às 17:00' }
           }
         }
       }
@@ -127,7 +127,7 @@ const BUSINESS_RULES = {
           tipo: 'ordem_chegada',
           dias_semana: [2, 4], // ter e qui apenas
           periodos: {
-            manha: { inicio: '09:30', fim: '10:00', limite: 4, distribuicao_fichas: '09:30 às 10:00' }
+            manha: { inicio: '07:00', fim: '12:00', limite: 30, distribuicao_fichas: '07:00 às 12:00' }
           },
           mensagem_extra: 'Chegue entre 9h30 e 10h. O atendimento é após os exames, por ordem de chegada.'
         }
@@ -144,7 +144,7 @@ const BUSINESS_RULES = {
           tipo: 'ordem_chegada',
           dias_semana: [1], // apenas segunda
           periodos: {
-            manha: { inicio: '08:00', fim: '09:00', limite: 9, distribuicao_fichas: '08:00 às 09:00' }
+            manha: { inicio: '07:00', fim: '12:00', limite: 30, distribuicao_fichas: '07:00 às 12:00' }
           }
         },
         'Consulta Cardiológica': {
@@ -427,6 +427,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
                 .eq('cliente_id', clienteId)
                 .gte('hora_agendamento', horaInicio)
                 .lt('hora_agendamento', horaFim)
+                .is('excluido_em', null)
                 .in('status', ['agendado', 'confirmado']);
               
               const vagasOcupadas = agendamentosExistentes?.length || 0;
@@ -1327,6 +1328,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
               .eq('cliente_id', clienteId)
               .gte('hora_agendamento', manha.inicio)
               .lte('hora_agendamento', manha.fim)
+              .is('excluido_em', null)
               .in('status', ['agendado', 'confirmado']);
             
             const ocupadas = agendados?.length || 0;
@@ -1358,6 +1360,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
               .eq('cliente_id', clienteId)
               .gte('hora_agendamento', tarde.inicio)
               .lte('hora_agendamento', tarde.fim)
+              .is('excluido_em', null)
               .in('status', ['agendado', 'confirmado']);
             
             const ocupadas = agendados?.length || 0;
@@ -1640,6 +1643,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
             .eq('medico_id', medico.id)
             .eq('data_agendamento', dataFormatada)
             .eq('cliente_id', clienteId)
+            .is('excluido_em', null)
             .in('status', ['agendado', 'confirmado']);
 
           if (countError) {
@@ -1826,6 +1830,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         .eq('medico_id', medico.id)
         .eq('data_agendamento', data_consulta)
         .eq('cliente_id', clienteId)
+        .is('excluido_em', null)
         .in('status', ['agendado', 'confirmado']);
 
       if (countError) {
@@ -1923,6 +1928,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
             .eq('data_agendamento', data_consulta)
             .eq('hora_agendamento', horarioFormatado)
             .eq('cliente_id', clienteId)
+            .is('excluido_em', null)
             .in('status', ['agendado', 'confirmado']);
           
           if (count === 0) {
