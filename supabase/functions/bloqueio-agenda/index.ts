@@ -333,26 +333,151 @@ serve(async (req) => {
         console.log(`✅ ${agendamentos.length} agendamentos cancelados por bloqueio`);
       }
       
-      // 🔥 DISPARAR NOTIFICAÇÕES AUTOMÁTICAS
-      console.log('📤 Disparando notificações automáticas em background...');
+      // 🔥 DISPARAR WEBHOOK N8N PARA REAGENDAMENTO
+      console.log('📤 Enviando dados para N8N via webhook...');
       
-      // Chamar edge function de notificação de forma assíncrona
-      supabase.functions.invoke('notificar-bloqueio', {
-        body: {
-          medico_id: medicoId,
-          medico_nome: medico.nome,
+      // Buscar dados completos dos pacientes afetados
+      const { data: agendamentosCompletos, error: agendamentosCompletosError } = await supabase
+        .from('agendamentos')
+        .select(`
+          id,
+          data_agendamento,
+          hora_agendamento,
+          convenio,
+          pacientes!inner(
+            id,
+            nome_completo,
+            celular,
+            telefone
+          ),
+          atendimentos!inner(
+            id,
+            nome,
+            tipo
+          )
+        `)
+        .in('id', agendamentos.map(a => a.id));
+
+      if (agendamentosCompletosError) {
+        console.error('⚠️ Erro ao buscar dados completos:', agendamentosCompletosError);
+      }
+
+      // Formatar data para exibição (DD/MM/YYYY)
+      const formatDateForDisplay = (dateStr: string) => {
+        const [year, month, day] = dateStr.split('-');
+        return `${day}/${month}/${year}`;
+      };
+
+      // Formatar dados para N8N
+      const webhookPayload = {
+        tipo_evento: 'bloqueio_agenda',
+        timestamp: new Date().toISOString(),
+        medico: {
+          id: medicoId,
+          nome: medico.nome,
+          especialidade: 'Endoscopia'
+        },
+        bloqueio: {
+          id: bloqueio.id,
           data_inicio: dataInicio,
           data_fim: dataFim,
           motivo: motivo,
-          agendamentos_afetados: agendamentos.length
+          criado_por: 'recepcionista',
+          criado_em: new Date().toISOString()
+        },
+        pacientes_afetados: (agendamentosCompletos || []).map(ag => ({
+          agendamento_id: ag.id,
+          paciente_id: ag.pacientes.id,
+          paciente_nome: ag.pacientes.nome_completo,
+          paciente_celular: ag.pacientes.celular || '',
+          paciente_telefone: ag.pacientes.telefone || '',
+          data_agendamento_original: ag.data_agendamento,
+          hora_agendamento_original: ag.hora_agendamento,
+          data_hora_formatada: `${formatDateForDisplay(ag.data_agendamento)} às ${ag.hora_agendamento.substring(0, 5)}`,
+          atendimento: {
+            id: ag.atendimentos.id,
+            nome: ag.atendimentos.nome,
+            tipo: ag.atendimentos.tipo
+          },
+          convenio: ag.convenio
+        })),
+        total_pacientes_afetados: agendamentos.length,
+        url_sistema: 'https://endogastro.lovable.app',
+        contato_clinica: {
+          telefone: '(19) 3442-8053',
+          whatsapp: '5519987654321'
         }
-      }).then(result => {
-        console.log('✅ Notificações disparadas com sucesso:', result);
-      }).catch(error => {
-        console.error('⚠️ Erro ao disparar notificações (não crítico):', error);
-      });
+      };
+
+      console.log('📦 Payload preparado:', JSON.stringify(webhookPayload, null, 2));
+
+      // Enviar webhook para N8N
+      const webhookUrl = 'https://n8n.inovaia.online/webhook/remarcar';
       
-      console.log('✅ Processo de notificação iniciado em background');
+      try {
+        console.log('🌐 Enviando para webhook N8N:', webhookUrl);
+        
+        const webhookResponse = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(webhookPayload)
+        });
+
+        if (webhookResponse.ok) {
+          const responseData = await webhookResponse.text();
+          console.log('✅ Webhook N8N disparado com sucesso:', responseData);
+          
+          // Log de sucesso
+          await supabase.from('system_logs').insert({
+            timestamp: new Date().toISOString(),
+            level: 'info',
+            message: `Webhook N8N disparado para bloqueio: ${agendamentos.length} pacientes`,
+            context: 'BLOQUEIO_WEBHOOK_N8N',
+            data: {
+              bloqueio_id: bloqueio.id,
+              medico: medico.nome,
+              total_pacientes: agendamentos.length,
+              webhook_url: webhookUrl
+            }
+          });
+        } else {
+          const errorText = await webhookResponse.text();
+          console.error('⚠️ Erro no webhook N8N:', webhookResponse.status, errorText);
+          
+          // Log de erro
+          await supabase.from('system_logs').insert({
+            timestamp: new Date().toISOString(),
+            level: 'error',
+            message: `Erro ao disparar webhook N8N: ${webhookResponse.status}`,
+            context: 'BLOQUEIO_WEBHOOK_N8N_ERROR',
+            data: {
+              status: webhookResponse.status,
+              error: errorText,
+              bloqueio_id: bloqueio.id,
+              webhook_url: webhookUrl
+            }
+          });
+        }
+      } catch (error: any) {
+        console.error('❌ Erro ao chamar webhook N8N:', error.message);
+        
+        // Log de erro crítico
+        await supabase.from('system_logs').insert({
+          timestamp: new Date().toISOString(),
+          level: 'error',
+          message: `Falha crítica no webhook N8N: ${error.message}`,
+          context: 'BLOQUEIO_WEBHOOK_N8N_CRITICAL',
+          data: {
+            error: error.message,
+            bloqueio_id: bloqueio.id,
+            webhook_url: webhookUrl
+          }
+        });
+      }
+      
+      console.log('✅ Processo de webhook N8N concluído');
     }
 
     // Retornar sucesso
