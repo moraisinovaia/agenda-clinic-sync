@@ -333,11 +333,23 @@ serve(async (req) => {
         console.log(`✅ ${agendamentos.length} agendamentos cancelados por bloqueio`);
       }
       
-      // 🔥 DISPARAR WEBHOOK N8N PARA REAGENDAMENTO
-      console.log('📤 Enviando dados para N8N via webhook...');
-      
-      // Buscar dados completos dos pacientes afetados
-      const { data: agendamentosCompletos, error: agendamentosCompletosError } = await supabase
+      // Lista de médicos que disparam webhook N8N
+      const MEDICOS_COM_WEBHOOK_N8N = [
+        '32d30887-b876-4502-bf04-e55d7fb55b50', // Dra. Adriana Carla de Sena
+        '1e110923-50df-46ff-a57a-29d88e372900', // Dr. Marcelo D'Carli
+        'c192e08e-e216-4c22-99bf-b5992ce05e17', // Dr. Alessandro Dias
+        '66e9310d-34cd-4005-8937-74e87125dc03'  // Dr. Pedro Francisco
+      ];
+
+      // Verificar se este médico deve disparar webhook
+      const deveDispararWebhook = MEDICOS_COM_WEBHOOK_N8N.includes(medicoId);
+
+      if (deveDispararWebhook && agendamentos.length > 0) {
+        // 🔥 DISPARAR WEBHOOK N8N PARA REAGENDAMENTO
+        console.log('📤 Enviando dados para N8N via webhook...');
+        
+        // Buscar dados completos dos pacientes afetados
+        const { data: agendamentosCompletos, error: agendamentosCompletosError } = await supabase
         .from('agendamentos')
         .select(`
           id,
@@ -478,6 +490,28 @@ serve(async (req) => {
       }
       
       console.log('✅ Processo de webhook N8N concluído');
+      } else {
+        // Webhook não será disparado
+        const motivo = !deveDispararWebhook 
+          ? 'Médico não configurado para webhook N8N'
+          : 'Sem agendamentos afetados';
+        
+        console.log(`ℹ️ Webhook N8N não será disparado: ${motivo}`);
+        
+        await supabase.from('system_logs').insert({
+          timestamp: new Date().toISOString(),
+          level: 'info',
+          message: `Bloqueio criado sem webhook N8N: ${medico.nome}`,
+          context: 'BLOQUEIO_SEM_WEBHOOK',
+          data: {
+            bloqueio_id: bloqueio.id,
+            medico_id: medicoId,
+            medico_nome: medico.nome,
+            motivo: motivo,
+            agendamentos_afetados: agendamentos.length
+          }
+        });
+      }
     }
 
     // Retornar sucesso
