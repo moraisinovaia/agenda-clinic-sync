@@ -1881,9 +1881,8 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       });
     }
 
-    // 🎯 DETECTAR TIPO DE ATENDIMENTO
-    const tipoAtendimento = servico.tipo || regras.tipo_agendamento || 'ordem_chegada';
-    console.log(`📋 Tipo de atendimento detectado: ${tipoAtendimento}`);
+    // 🎯 TIPO DE ATENDIMENTO JÁ DETECTADO (linha 1247)
+    console.log(`📋 Tipo de atendimento: ${tipoAtendimento} (já detectado anteriormente)`);
 
     // Contar agendamentos existentes para cada período
     const periodosDisponiveis = [];
