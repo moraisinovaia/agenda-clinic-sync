@@ -322,7 +322,9 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
 
     // Buscar médico por ID ou nome (COM filtro de cliente)
     let medico;
+    console.log('🔍 Iniciando busca de médico...');
     if (medico_id) {
+      console.log(`🔍 Buscando médico por ID: ${medico_id}`);
       const { data, error } = await supabase
         .from('medicos')
         .select('id, nome, ativo')
@@ -335,7 +337,9 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
       if (error || !medico) {
         return errorResponse(`Médico com ID "${medico_id}" não encontrado ou inativo`);
       }
+      console.log(`✅ Médico encontrado por ID: ${medico.nome}`);
     } else {
+      console.log(`🔍 Buscando médico por nome: ${medico_nome}`);
       const { data, error } = await supabase
         .from('medicos')
         .select('id, nome, ativo')
@@ -348,13 +352,17 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
       if (error || !medico) {
         return errorResponse(`Médico "${medico_nome}" não encontrado ou inativo`);
       }
+      console.log(`✅ Médico encontrado por nome: ${medico.nome}`);
     }
 
+    console.log('🔍 Buscando regras de negócio...');
     // ===== VALIDAÇÕES DE REGRAS DE NEGÓCIO (APENAS PARA N8N) =====
     const regras = BUSINESS_RULES.medicos[medico.id];
+    console.log(`📋 Regras encontradas: ${regras ? 'SIM' : 'NÃO'}`);
     
     if (regras) {
       console.log(`🔍 Aplicando regras de negócio para ${regras.nome}`);
+      console.log(`📋 Regras.servicos: ${regras.servicos ? 'EXISTE' : 'NULL/UNDEFINED'}`);
       
       // 1. Validar idade mínima
       if (regras.idade_minima) {
@@ -539,8 +547,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
     console.log(`📅 Criando agendamento para ${paciente_nome} com médico ${medico.nome}`);
     
     const { data: result, error: agendamentoError } = await supabase
-      .rpc('criar_agendamento_atomico_externo', {
-        p_cliente_id: clienteId,
+      .rpc('criar_agendamento_atomico', {
         p_nome_completo: paciente_nome.toUpperCase(),
         p_data_nascimento: data_nascimento,
         p_convenio: convenio, // Manter capitalização original para validação correta
@@ -552,6 +559,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
         p_hora_agendamento: hora_consulta,
         p_observacoes: (observacoes || 'Agendamento via LLM Agent WhatsApp').toUpperCase(),
         p_criado_por: 'LLM Agent WhatsApp',
+        p_criado_por_user_id: null,
         p_force_conflict: false
       });
 
@@ -2104,8 +2112,14 @@ async function handlePatientSearch(supabase: any, body: any, clienteId: string) 
         query = query.ilike('nome_completo', `%${busca}%`);
         break;
       case 'telefone':
-        const telefone = busca.replace(/\D/g, '');
-        query = query.or(`celular.ilike.%${telefone}%,telefone.ilike.%${telefone}%`);
+        // Remover formatação e buscar apenas os dígitos
+        const telefoneLimpo = busca.replace(/\D/g, '');
+        if (telefoneLimpo.length < 8) {
+          return errorResponse('Telefone deve ter pelo menos 8 dígitos');
+        }
+        // Buscar pelos últimos 8 dígitos para pegar tanto fixo quanto celular
+        const ultimos8 = telefoneLimpo.slice(-8);
+        query = query.or(`celular.ilike.%${ultimos8}%,telefone.ilike.%${ultimos8}%`);
         break;
       case 'nascimento':
         query = query.eq('data_nascimento', busca);
@@ -2119,8 +2133,9 @@ async function handlePatientSearch(supabase: any, body: any, clienteId: string) 
           // Se parece uma data, buscar por data E nome
           query = query.or(`nome_completo.ilike.%${busca}%,data_nascimento.eq.${busca}`);
         } else if (telefoneGeral.length >= 8) {
-          // Se tem números suficientes, buscar por nome E telefone
-          query = query.or(`nome_completo.ilike.%${busca}%,celular.ilike.%${telefoneGeral}%,telefone.ilike.%${telefoneGeral}%`);
+          // Se tem números suficientes, buscar por nome E telefone (últimos 8 dígitos)
+          const ultimos8Geral = telefoneGeral.slice(-8);
+          query = query.or(`nome_completo.ilike.%${busca}%,celular.ilike.%${ultimos8Geral}%,telefone.ilike.%${ultimos8Geral}%`);
         } else {
           // Apenas buscar por nome
           query = query.ilike('nome_completo', `%${busca}%`);
