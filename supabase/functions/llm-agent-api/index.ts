@@ -428,8 +428,9 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
                   return errorResponse(
                     `Não há mais vagas disponíveis para ${regras.nome} - ${servicoKeyValidacao} neste período. Limite: ${configPeriodo.limite} pacientes, Ocupado: ${vagasOcupadas}`
                   );
+                }
+                console.log(`✅ Vagas disponíveis: ${configPeriodo.limite - vagasOcupadas}`);
               }
-              console.log(`✅ Vagas disponíveis: ${configPeriodo.limite - vagasOcupadas}`);
             }
           }
         }
