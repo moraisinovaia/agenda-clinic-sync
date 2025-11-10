@@ -1270,6 +1270,17 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       console.log(`🔍 Ampliando busca para ${quantidade_dias} dias devido ao período específico: ${periodoPreferido}`);
     }
     
+    // 🆕 AJUSTAR BUSCA PARA MÉDICOS COM DIAS RESTRITOS
+    const regras = BUSINESS_RULES.medicos[medico.id];
+    const servico = regras?.servicos?.[atendimento_nome];
+    if (periodoPreferido && servico?.periodos?.[periodoPreferido]?.dias_especificos) {
+      const diasDisponiveis = servico.periodos[periodoPreferido].dias_especificos.length;
+      if (diasDisponiveis <= 2) {
+        quantidade_dias = Math.max(quantidade_dias, 21); // Mínimo 3 semanas
+        console.log(`🔍 Médico atende ${periodoPreferido} apenas ${diasDisponiveis} dia(s)/semana. Ampliando busca para ${quantidade_dias} dias`);
+      }
+    }
+    
     // 🆕 BUSCAR PRÓXIMAS DATAS DISPONÍVEIS (quando buscar_proximas = true ou sem data específica)
     if (buscar_proximas || (!data_consulta && mensagem_original)) {
       console.log(`🔍 Buscando próximas ${quantidade_dias} datas disponíveis...`);
@@ -1738,6 +1749,30 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         (tipoAtendimento === 'ordem_chegada' 
           ? '\n\n⚠️ ORDEM DE CHEGADA: Não há horário marcado. Paciente deve chegar no período para pegar ficha.'
           : '');
+
+      // 🆕 CONTEXTO ADICIONAL QUANDO SÓ TEM 1 DATA
+      if (proximasDatas.length === 1) {
+        const resultado = successResponse({
+          disponivel: true,
+          tipo_agendamento: tipoAtendimento,
+          medico: medico.nome,
+          servico: servicoKey,
+          horario_busca: agora.toISOString(),
+          proximas_datas: proximasDatas,
+          mensagem_whatsapp: mensagem,
+          message: `${proximasDatas.length} data disponível encontrada`,
+          data_unica: true, // ⚠️ FLAG IMPORTANTE!
+          contexto: {
+            medico_id: medico.id,
+            medico_nome: medico.nome,
+            servico: atendimento_nome,
+            periodo_solicitado: periodoPreferido
+          }
+        });
+        
+        console.log('⚠️ Apenas 1 data encontrada. Retornando com flag data_unica=true');
+        return resultado;
+      }
 
       return successResponse({
         disponivel: true,
