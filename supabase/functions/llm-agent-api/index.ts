@@ -1239,13 +1239,27 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     if (mensagem_original) {
       const mensagemLower = mensagem_original.toLowerCase();
       
+      // 🆕 RECONHECER SINÔNIMOS DE AGENDAMENTO
+      const sinonimosAgendamento = [
+        'retorno', 'remarcar', 'reagendar', 'voltar', 'retornar',
+        'nova consulta', 'outra consulta', 'consulta de novo',
+        'marcar de novo', 'segunda vez', 'consulta de volta'
+      ];
+      
+      const ehSinonimo = sinonimosAgendamento.some(sin => mensagemLower.includes(sin));
+      
       // Detectar se é pergunta aberta ("quando tem vaga?")
       isPerguntaAberta = 
+        ehSinonimo ||  // 🆕 Incluir sinônimos
         mensagemLower.includes('quando') ||
         mensagemLower.includes('próxima') ||
         mensagemLower.includes('proxima') ||
         mensagemLower.includes('disponível') ||
         mensagemLower.includes('disponivel');
+      
+      if (ehSinonimo) {
+        console.log('🔄 Sinônimo de agendamento detectado:', mensagem_original);
+      }
       
       // 🆕 DETECTAR PERÍODO PREFERIDO
       if (mensagemLower.includes('tarde') || mensagemLower.includes('tade')) {
@@ -1271,8 +1285,8 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     }
     
     // 🆕 AJUSTAR BUSCA PARA MÉDICOS COM DIAS RESTRITOS
-    const regras = BUSINESS_RULES.medicos[medico.id];
-    const servico = regras?.servicos?.[atendimento_nome];
+    let regras = BUSINESS_RULES.medicos[medico.id];
+    let servico = regras?.servicos?.[atendimento_nome];
     if (periodoPreferido && servico?.periodos?.[periodoPreferido]?.dias_especificos) {
       const diasDisponiveis = servico.periodos[periodoPreferido].dias_especificos.length;
       if (diasDisponiveis <= 2) {
@@ -1285,9 +1299,9 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     if (buscar_proximas || (!data_consulta && mensagem_original)) {
       console.log(`🔍 Buscando próximas ${quantidade_dias} datas disponíveis...`);
       
-      // Buscar regras de negócio e configuração do serviço
-      const regras = BUSINESS_RULES.medicos[medico.id];
-      const servico = regras?.servicos?.[atendimento_nome];
+      // Buscar regras de negócio e configuração do serviço (reutilizar variáveis)
+      if (!regras) regras = BUSINESS_RULES.medicos[medico.id];
+      if (!servico) servico = regras?.servicos?.[atendimento_nome];
       const tipoAtendimento = servico?.tipo || regras?.tipo_agendamento || 'ordem_chegada';
       
       console.log(`📋 [${medico.nome}] Tipo: ${tipoAtendimento} | Serviço: ${atendimento_nome}`);
@@ -1404,41 +1418,114 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         if (proximasDatas.length >= datasNecessarias) break;
       }
       
-      if (proximasDatas.length === 0) {
-        let mensagemContextual = `Não há datas disponíveis nos próximos ${quantidade_dias} dias para ${medico.nome}`;
+      // 🔄 RETRY AUTOMÁTICO: Se não encontrou vagas e ainda não buscou 45 dias, ampliar
+      if (proximasDatas.length === 0 && quantidade_dias < 45) {
+        console.log(`⚠️ Nenhuma data encontrada em ${quantidade_dias} dias. Ampliando busca para 45 dias...`);
+        quantidade_dias = 45;
         
-        // 🆕 MENSAGEM ESPECÍFICA POR PERÍODO COM DIAS ESPECÍFICOS
-        if (periodoPreferido === 'tarde') {
-          // Verificar se há restrição de dias específicos
-          const servico = BUSINESS_RULES.medicos[medico.id]?.servicos?.[atendimento_nome];
-          const diasEspecificos = servico?.periodos?.tarde?.dias_especificos;
+        // 🔁 REPETIR O LOOP DE BUSCA com 45 dias
+        for (let diasAdiantados = 1; diasAdiantados <= quantidade_dias; diasAdiantados++) {
+          const dataCheck = new Date(dataInicial + 'T00:00:00');
+          dataCheck.setDate(dataCheck.getDate() + diasAdiantados);
+          const dataCheckStr = dataCheck.toISOString().split('T')[0];
+          const diaSemanaNum = dataCheck.getDay();
           
-          if (diasEspecificos && diasEspecificos.length > 0) {
-            const diasNomes = diasEspecificos.map(d => {
-              const nomes = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
-              return nomes[d];
-            }).join(' e ');
-            mensagemContextual = `${medico.nome} atende à tarde apenas em **${diasNomes}**. Não há vagas disponíveis à tarde nos próximos ${quantidade_dias} dias. Gostaria de verificar disponibilidade pela manhã ou em outra data?`;
-          } else {
-            mensagemContextual += ' à tarde. Gostaria de verificar disponibilidade pela manhã?';
+          // Pular finais de semana
+          if (diaSemanaNum === 0 || diaSemanaNum === 6) continue;
+          
+          // 🔒 Verificar bloqueios
+          const { data: bloqueiosData } = await supabase
+            .from('bloqueios_agenda')
+            .select('id')
+            .eq('medico_id', medico.id)
+            .lte('data_inicio', dataCheckStr)
+            .gte('data_fim', dataCheckStr)
+            .eq('status', 'ativo')
+            .eq('cliente_id', clienteId);
+          
+          if (bloqueiosData && bloqueiosData.length > 0) {
+            console.log(`⏭️ Pulando ${dataCheckStr} (bloqueada)`);
+            continue;
           }
-        } else if (periodoPreferido === 'manha') {
-          mensagemContextual += ' pela manhã. Gostaria de verificar disponibilidade à tarde?';
-        } else {
-          mensagemContextual += ` no serviço ${atendimento_nome}`;
+          
+          // Contar agendamentos para este dia
+          const { count: totalAgendamentos } = await supabase
+            .from('agendamentos')
+            .select('*', { count: 'exact', head: true })
+            .eq('medico_id', medico.id)
+            .eq('data_agendamento', dataCheckStr)
+            .neq('status', 'cancelado')
+            .eq('cliente_id', clienteId);
+          
+          const periodosDisponiveis = [];
+          
+          for (const [periodo, config] of Object.entries(servico?.periodos || {})) {
+            if (periodoPreferido && periodo !== periodoPreferido) continue;
+            
+            const limite = (config as any).limite || 9;
+            const { count: agendadosPeriodo } = await supabase
+              .from('agendamentos')
+              .select('*', { count: 'exact', head: true })
+              .eq('medico_id', medico.id)
+              .eq('data_agendamento', dataCheckStr)
+              .gte('hora_agendamento', (config as any).inicio)
+              .lt('hora_agendamento', (config as any).fim)
+              .neq('status', 'cancelado')
+              .eq('cliente_id', clienteId);
+            
+            const vagasDisponiveis = limite - (agendadosPeriodo || 0);
+            
+            if (vagasDisponiveis > 0) {
+              periodosDisponiveis.push({
+                periodo: periodo.charAt(0).toUpperCase() + periodo.slice(1),
+                horario_distribuicao: (config as any).distribuicao_fichas || `${(config as any).inicio} às ${(config as any).fim}`,
+                vagas_disponiveis: vagasDisponiveis,
+                limite_total: limite,
+                tipo: tipoAtendimento
+              });
+            }
+          }
+          
+          if (periodosDisponiveis.length > 0) {
+            const diasSemana = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+            proximasDatas.push({
+              data: dataCheckStr,
+              dia_semana: diasSemana[diaSemanaNum],
+              periodos: periodosDisponiveis
+            });
+            
+            const datasNecessarias = periodoPreferido ? 5 : 3;
+            if (proximasDatas.length >= datasNecessarias) break;
+          }
         }
         
+        console.log(`📊 Após ampliação: ${proximasDatas.length} datas encontradas`);
+      }
+      
+      // 🚫 SE AINDA NÃO ENCONTROU NADA após 45 dias, retornar erro claro
+      if (proximasDatas.length === 0) {
+        const mensagemSemVagas = 
+          `😔 Não encontrei vagas disponíveis para ${medico.nome} nos próximos 45 dias.\n\n` +
+          `📞 Por favor, ligue para (87) 3866-4050 para:\n` +
+          `• Entrar na fila de espera\n` +
+          `• Verificar outras opções\n` +
+          `• Consultar disponibilidade futura`;
+        
+        console.log('❌ Nenhuma data disponível mesmo após buscar 45 dias');
+        
         return successResponse({
-          message: mensagemContextual,
+          message: mensagemSemVagas,
           medico: medico.nome,
           medico_id: medico.id,
-          tipo_atendimento: 'ordem_chegada',
+          tipo_atendimento: tipoAtendimento,
           proximas_datas: [],
+          sem_vagas: true,  // 🆕 FLAG
           contexto: {
             medico_id: medico.id,
             medico_nome: medico.nome,
             servico: atendimento_nome,
-            periodo_solicitado: periodoPreferido
+            periodo_solicitado: periodoPreferido,
+            dias_buscados: 45
           }
         });
       }
@@ -1458,39 +1545,11 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       });
     }
     
-    if (mensagem_original && !data_consulta) {
-      const mensagemLower = mensagem_original.toLowerCase();
-      
-      // Detectar se é pergunta aberta ("quando tem vaga?")
-      const isPerguntaAberta = 
-        mensagemLower.includes('quando') ||
-        mensagemLower.includes('próxima') ||
-        mensagemLower.includes('proxima') ||
-        mensagemLower.includes('disponível') ||
-        mensagemLower.includes('disponivel');
-      
-      if (isPerguntaAberta) {
-        console.log('🔍 Pergunta aberta detectada. Buscando múltiplas datas disponíveis.');
-      }
-      
-      // Detectar menção a dia da semana
-      const diasSemanaMap: Record<string, number> = {
-        'domingo': 0, 'segunda': 1, 'terça': 2, 'terca': 2,
-        'quarta': 3, 'quinta': 4, 'sexta': 5, 'sábado': 6, 'sabado': 6
-      };
-      
-      for (const [dia, num] of Object.entries(diasSemanaMap)) {
-        if (mensagemLower.includes(dia)) {
-          console.log(`📅 Dia da semana detectado na mensagem: ${dia} (${num})`);
-          // Nota: Lógica de filtro por dia da semana pode ser implementada no futuro
-          break;
-        }
-      }
-    }
+    // Nota: Detecção de pergunta aberta e sinônimos já foi feita acima (linhas 1240-1265)
 
-    // Buscar regras de negócio
+    // Buscar regras de negócio (reutilizar se já existe)
     console.log(`🔍 Buscando regras para médico ID: ${medico.id}, Nome: ${medico.nome}`);
-    const regras = BUSINESS_RULES.medicos[medico.id];
+    if (!regras) regras = BUSINESS_RULES.medicos[medico.id];
     if (!regras) {
       console.error(`❌ Regras não encontradas para médico ${medico.nome} (ID: ${medico.id})`);
       console.error(`📋 IDs disponíveis nas BUSINESS_RULES:`, Object.keys(BUSINESS_RULES.medicos));
@@ -1739,41 +1798,35 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         return errorResponse(`Não encontrei datas disponíveis para ${medico.nome} nos próximos ${dias_busca} dias. Por favor, entre em contato com a clínica.`);
       }
 
-      const mensagem = `✅ ${medico.nome} - ${servicoKey}\n\n📅 ${proximasDatas.length} datas disponíveis:\n\n` +
-        proximasDatas.map((d: any) => {
-          const periodos = d.periodos.map((p: any) => 
-            `  • ${p.periodo}: ${p.vagas_disponiveis} vaga(s) disponível(is) de ${p.total_vagas}`
-          ).join('\n');
-          return `${d.dia_semana}, ${d.data}\n${periodos}`;
-        }).join('\n\n') +
-        (tipoAtendimento === 'ordem_chegada' 
-          ? '\n\n⚠️ ORDEM DE CHEGADA: Não há horário marcado. Paciente deve chegar no período para pegar ficha.'
-          : '');
-
-      // 🆕 CONTEXTO ADICIONAL QUANDO SÓ TEM 1 DATA
+      // 🆕 MENSAGEM CONTEXTUAL baseada na disponibilidade
+      let mensagemInicial = '';
+      
       if (proximasDatas.length === 1) {
-        const resultado = successResponse({
-          disponivel: true,
-          tipo_agendamento: tipoAtendimento,
-          medico: medico.nome,
-          servico: servicoKey,
-          horario_busca: agora.toISOString(),
-          proximas_datas: proximasDatas,
-          mensagem_whatsapp: mensagem,
-          message: `${proximasDatas.length} data disponível encontrada`,
-          data_unica: true, // ⚠️ FLAG IMPORTANTE!
-          contexto: {
-            medico_id: medico.id,
-            medico_nome: medico.nome,
-            servico: atendimento_nome,
-            periodo_solicitado: periodoPreferido
-          }
-        });
-        
-        console.log('⚠️ Apenas 1 data encontrada. Retornando com flag data_unica=true');
-        return resultado;
+        mensagemInicial = `😊 Encontrei apenas 1 data disponível para ${medico.nome}:\n\n`;
+      } else if (proximasDatas.length <= 3) {
+        mensagemInicial = `✅ ${medico.nome} está com poucas vagas. Encontrei ${proximasDatas.length} datas:\n\n`;
+      } else {
+        mensagemInicial = `✅ ${medico.nome} - ${servicoKey}\n\n📅 ${proximasDatas.length} datas disponíveis:\n\n`;
       }
+      
+      const listaDatas = proximasDatas.map((d: any) => {
+        const periodos = d.periodos.map((p: any) => 
+          `  • ${p.periodo}: ${p.horario_distribuicao} - ${p.vagas_disponiveis} vaga(s)`
+        ).join('\n');
+        return `📆 ${d.dia_semana}, ${d.data}\n${periodos}`;
+      }).join('\n\n');
+      
+      const avisoOrdemChegada = (tipoAtendimento === 'ordem_chegada' 
+        ? '\n\n⚠️ ORDEM DE CHEGADA\nChegue no período indicado para pegar ficha.'
+        : '');
+      
+      const callToAction = '\n\n💬 Qual data funciona melhor para você?';
+      
+      const mensagem = mensagemInicial + listaDatas + avisoOrdemChegada + callToAction;
 
+      // 🆕 FLAG DE BAIXA DISPONIBILIDADE
+      const baixaDisponibilidade = proximasDatas.length <= 2;
+      
       return successResponse({
         disponivel: true,
         tipo_agendamento: tipoAtendimento,
@@ -1782,7 +1835,16 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         horario_busca: agora.toISOString(),
         proximas_datas: proximasDatas,
         mensagem_whatsapp: mensagem,
-        message: mensagem
+        message: mensagem,
+        baixa_disponibilidade: baixaDisponibilidade,  // 🆕 FLAG
+        total_datas_encontradas: proximasDatas.length,
+        contexto: {
+          medico_id: medico.id,
+          medico_nome: medico.nome,
+          servico: atendimento_nome,
+          periodo_solicitado: periodoPreferido,
+          dias_buscados: quantidade_dias
+        }
       });
     }
 
