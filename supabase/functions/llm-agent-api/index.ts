@@ -1224,7 +1224,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     }
     
     // 🔍 BUSCAR REGRAS DE NEGÓCIO E CONFIGURAÇÃO DO SERVIÇO (declarar uma única vez)
-    const regras = BUSINESS_RULES.medicos[medico.id];
+    let regras = BUSINESS_RULES.medicos[medico.id];
     let servicoKey = Object.keys(regras?.servicos || {}).find(s => 
       s.toLowerCase().includes(atendimento_nome.toLowerCase()) ||
       atendimento_nome.toLowerCase().includes(s.toLowerCase())
