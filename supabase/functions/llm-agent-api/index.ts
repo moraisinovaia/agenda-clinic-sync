@@ -1232,6 +1232,21 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       console.log(`✅ Médico encontrado: "${medico_nome}" → "${medico.nome}"`);
     }
     
+    // 🔍 BUSCAR REGRAS DE NEGÓCIO E CONFIGURAÇÃO DO SERVIÇO (declarar uma única vez)
+    const regras = BUSINESS_RULES.medicos[medico.id];
+    const servicoKey = Object.keys(regras?.servicos || {}).find(s => 
+      s.toLowerCase().includes(atendimento_nome.toLowerCase()) ||
+      atendimento_nome.toLowerCase().includes(s.toLowerCase())
+    );
+    const servico = servicoKey ? regras.servicos[servicoKey] : null;
+    
+    if (!servico) {
+      return errorResponse(`Serviço "${atendimento_nome}" não encontrado para ${medico.nome}`);
+    }
+    
+    const tipoAtendimento = servico?.tipo || regras?.tipo_agendamento || 'ordem_chegada';
+    console.log(`📋 [${medico.nome}] Tipo: ${tipoAtendimento} | Serviço: ${servicoKey}`);
+    
     // 🧠 ANÁLISE DE CONTEXTO: Usar mensagem original para inferir intenção
     let isPerguntaAberta = false;
     let periodoPreferido: 'manha' | 'tarde' | null = null;
@@ -1287,17 +1302,6 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     // 🆕 BUSCAR PRÓXIMAS DATAS DISPONÍVEIS (quando buscar_proximas = true ou sem data específica)
     if (buscar_proximas || (!data_consulta && mensagem_original)) {
       console.log(`🔍 Buscando próximas ${quantidade_dias} datas disponíveis...`);
-      
-      // Buscar regras de negócio e configuração do serviço
-      const regras = BUSINESS_RULES.medicos[medico.id];
-      const servicoKey = Object.keys(regras?.servicos || {}).find(s => 
-        s.toLowerCase().includes(atendimento_nome.toLowerCase()) ||
-        atendimento_nome.toLowerCase().includes(s.toLowerCase())
-      );
-      const servico = servicoKey ? regras.servicos[servicoKey] : null;
-      const tipoAtendimento = servico?.tipo || regras?.tipo_agendamento || 'ordem_chegada';
-      
-      console.log(`📋 [${medico.nome}] Tipo: ${tipoAtendimento} | Serviço: ${atendimento_nome}`);
       
       const proximasDatas: Array<{
         data: string;
