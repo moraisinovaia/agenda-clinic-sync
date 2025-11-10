@@ -363,81 +363,71 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
       
       // 2. Validar serviço específico
       if (atendimento_nome && regras.servicos) {
-        const servicoKey = Object.keys(regras.servicos).find(s => 
+        const servicoKeyValidacao = Object.keys(regras.servicos).find(s => 
           s.toLowerCase().includes(atendimento_nome.toLowerCase()) ||
           atendimento_nome.toLowerCase().includes(s.toLowerCase())
         );
         
-        if (servicoKey) {
-          const servicoLocal = regras.servicos[servicoKey];
-          console.log(`🔍 Validando serviço: ${servicoKey}`);
+        if (servicoKeyValidacao) {
+          const servicoLocal = regras.servicos[servicoKeyValidacao];
+          console.log(`🔍 Validando serviço: ${servicoKeyValidacao}`);
           
           // 2.1 Verificar se permite agendamento online
           if (!servicoLocal.permite_online) {
-            console.log(`❌ Serviço ${servicoKey} não permite agendamento online`);
+            console.log(`❌ Serviço ${servicoKeyValidacao} não permite agendamento online`);
             return errorResponse(servicoLocal.mensagem || 'Este serviço não pode ser agendado online.');
           }
           
-          // 2.2 Verificar dia da semana
-          const diaSemana = getDiaSemana(data_consulta);
-          if (servicoLocal.dias_semana && !servicoLocal.dias_semana.includes(diaSemana)) {
-            const diasNomes = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-            const diasPermitidos = servicoLocal.dias_semana.map((d: number) => diasNomes[d]).join(', ');
-            console.log(`❌ Dia da semana inválido: ${diasNomes[diaSemana]} não está em [${diasPermitidos}]`);
+          // 2.2 Verificar dias permitidos
+          if (servicoLocal.dias_permitidos && dia_semana && !servicoLocal.dias_permitidos.includes(dia_semana)) {
+            const diasPermitidos = servicoLocal.dias_permitidos.join(', ');
+            console.log(`❌ ${regras.nome} não atende ${servicoKeyValidacao} às ${dia_semana}s`);
             return errorResponse(
-              `${regras.nome} não atende ${servicoKey} no dia escolhido. Dias disponíveis: ${diasPermitidos}`
+              `${regras.nome} não atende ${servicoKeyValidacao} no dia escolhido. Dias disponíveis: ${diasPermitidos}`
             );
           }
-          console.log(`✅ Dia da semana válido`);
           
-          // 2.3 Verificar período e limite de vagas
-          if (servicoLocal.periodos) {
-            const hora = parseInt(hora_consulta.split(':')[0]);
-            const periodo = hora < 12 ? 'manha' : 'tarde';
+          // 2.3 Verificar períodos específicos por dia
+          if (servicoLocal.periodos_por_dia && periodo && dia_semana) {
+            const periodosPermitidos = servicoLocal.periodos_por_dia[dia_semana];
+            if (periodosPermitidos && !periodosPermitidos.includes(periodo)) {
+              console.log(`❌ ${regras.nome} não atende ${servicoKeyValidacao} no período da ${periodo} às ${dia_semana}s`);
+              return errorResponse(
+                `${regras.nome} não atende ${servicoKeyValidacao} no período da ${periodo === 'manha' ? 'manhã' : 'tarde'}`
+              );
+            }
+            
+            if (!periodosPermitidos) {
+              const diasDisponiveis = Object.keys(servicoLocal.periodos_por_dia);
+              const diasPermitidos = diasDisponiveis.join(', ');
+              console.log(`❌ ${regras.nome} não atende ${servicoKeyValidacao} às ${dia_semana}s no período da ${periodo}`);
+              return errorResponse(
+                `${regras.nome} não atende ${servicoKeyValidacao} no período da ${periodo === 'manha' ? 'manhã' : 'tarde'} no dia escolhido. Dias disponíveis para este período: ${diasPermitidos}`
+              );
+            }
+          }
+          
+          // 2.4 Verificar limite de vagas
+          if (servicoLocal.periodos && periodo && data_consulta) {
             const configPeriodo = servicoLocal.periodos[periodo];
-            
-            if (!configPeriodo) {
-              console.log(`❌ Período ${periodo} não disponível para este serviço`);
-              return errorResponse(
-                `${regras.nome} não atende ${servicoKey} no período da ${periodo === 'manha' ? 'manhã' : 'tarde'}`
-              );
-            }
-            
-            // Verificar dias específicos do período (ex: tarde só ter e qui)
-            if (configPeriodo.dias_especificos && !configPeriodo.dias_especificos.includes(diaSemana)) {
-              const diasNomes = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-              const diasPermitidos = configPeriodo.dias_especificos.map((d: number) => diasNomes[d]).join(', ');
-              console.log(`❌ Período ${periodo} não disponível neste dia da semana`);
-              return errorResponse(
-                `${regras.nome} não atende ${servicoKey} no período da ${periodo === 'manha' ? 'manhã' : 'tarde'} no dia escolhido. Dias disponíveis para este período: ${diasPermitidos}`
-              );
-            }
-            
-            // Verificar limite de vagas
-            if (configPeriodo.limite) {
-              // Contar agendamentos já existentes no período
-              const horaInicio = periodo === 'manha' ? '00:00:00' : '12:00:00';
-              const horaFim = periodo === 'manha' ? '12:00:00' : '23:59:59';
-              
-              const { data: agendamentosExistentes } = await supabase
+            if (configPeriodo && configPeriodo.limite) {
+              const { data: agendamentos, error: agendError } = await supabase
                 .from('agendamentos')
                 .select('id')
-                .eq('medico_id', medico.id)
-                .eq('data_agendamento', data_consulta)
-                .eq('cliente_id', clienteId)
-                .gte('hora_agendamento', horaInicio)
-                .lt('hora_agendamento', horaFim)
-                .is('excluido_em', null)
-                .in('status', ['agendado', 'confirmado']);
+                .eq('medico_id', regras.id)
+                .eq('data_consulta', data_consulta)
+                .eq('periodo', periodo)
+                .neq('status', 'cancelado');
               
-              const vagasOcupadas = agendamentosExistentes?.length || 0;
-              console.log(`📊 Vagas ocupadas: ${vagasOcupadas}/${configPeriodo.limite}`);
-              
-              if (vagasOcupadas >= configPeriodo.limite) {
-                console.log(`❌ Limite de vagas atingido`);
-                return errorResponse(
-                  `Não há mais vagas disponíveis para ${regras.nome} - ${servicoKey} neste período. Limite: ${configPeriodo.limite} pacientes, Ocupado: ${vagasOcupadas}`
-                );
+              if (agendError) {
+                console.error('Erro ao verificar limite de vagas:', agendError);
+              } else {
+                const vagasOcupadas = agendamentos?.length || 0;
+                if (vagasOcupadas >= configPeriodo.limite) {
+                  console.log(`❌ Limite atingido para ${servicoKeyValidacao}: ${vagasOcupadas}/${configPeriodo.limite}`);
+                  return errorResponse(
+                    `Não há mais vagas disponíveis para ${regras.nome} - ${servicoKeyValidacao} neste período. Limite: ${configPeriodo.limite} pacientes, Ocupado: ${vagasOcupadas}`
+                  );
               }
               console.log(`✅ Vagas disponíveis: ${configPeriodo.limite - vagasOcupadas}`);
             }
@@ -1234,18 +1224,16 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     
     // 🔍 BUSCAR REGRAS DE NEGÓCIO E CONFIGURAÇÃO DO SERVIÇO (declarar uma única vez)
     const regras = BUSINESS_RULES.medicos[medico.id];
-    const servicoKey = Object.keys(regras?.servicos || {}).find(s => 
+    let servicoKey = Object.keys(regras?.servicos || {}).find(s => 
       s.toLowerCase().includes(atendimento_nome.toLowerCase()) ||
       atendimento_nome.toLowerCase().includes(s.toLowerCase())
     );
-    const servico = servicoKey ? regras.servicos[servicoKey] : null;
+    let servico = servicoKey ? regras.servicos[servicoKey] : null;
     
-    if (!servico) {
-      return errorResponse(`Serviço "${atendimento_nome}" não encontrado para ${medico.nome}`);
-    }
+    // Não retornar erro ainda - busca melhorada será feita depois se necessário
     
     const tipoAtendimento = servico?.tipo || regras?.tipo_agendamento || 'ordem_chegada';
-    console.log(`📋 [${medico.nome}] Tipo: ${tipoAtendimento} | Serviço: ${servicoKey}`);
+    console.log(`📋 [${medico.nome}] Tipo: ${tipoAtendimento} | Serviço: ${servicoKey || 'não encontrado ainda'}`);
     
     // 🧠 ANÁLISE DE CONTEXTO: Usar mensagem original para inferir intenção
     let isPerguntaAberta = false;
@@ -1554,8 +1542,9 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     }
     console.log(`✅ Regras encontradas para ${regras.nome}`);
 
-    // Buscar serviço nas regras com matching inteligente MELHORADO
-    const servicoKey = Object.keys(regras.servicos || {}).find(s => {
+    // Buscar serviço nas regras com matching inteligente MELHORADO (só se ainda não encontrado)
+    if (!servicoKey) {
+      const servicoKeyMelhorado = Object.keys(regras.servicos || {}).find(s => {
       const servicoLower = s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // Remove acentos
       const atendimentoLower = atendimento_nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       
@@ -1585,6 +1574,12 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       return false;
     });
     
+    // Se encontrou um match melhorado, atualizar servicoKey
+    if (servicoKeyMelhorado) {
+      servicoKey = servicoKeyMelhorado;
+    }
+  }
+    
     // Logs de debug para matching
     if (servicoKey) {
       console.log(`✅ Match encontrado: "${atendimento_nome}" → "${servicoKey}"`);
@@ -1603,8 +1598,19 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       );
     }
 
-    // Reutilizar variável servico já declarada
-    if (!servico) servico = regras.servicos[servicoKey];
+    // Reutilizar/atualizar variável servico já declarada
+    if (!servico && servicoKey) {
+      servico = regras.servicos[servicoKey];
+      console.log(`✅ Serviço encontrado na busca melhorada: ${servicoKey}`);
+    }
+    
+    // Validar se encontrou o serviço
+    if (!servico || !servicoKey) {
+      console.error(`❌ ERRO FINAL: Serviço não encontrado após todas as tentativas`);
+      return errorResponse(
+        `Serviço "${atendimento_nome}" não encontrado para ${medico.nome}. Serviços disponíveis: ${Object.keys(regras.servicos || {}).join(', ')}`
+      );
+    }
 
     // Verificar se permite agendamento online
     if (!servico.permite_online) {
