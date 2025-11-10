@@ -369,20 +369,20 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
         );
         
         if (servicoKey) {
-          const servico = regras.servicos[servicoKey];
+          const servicoLocal = regras.servicos[servicoKey];
           console.log(`🔍 Validando serviço: ${servicoKey}`);
           
           // 2.1 Verificar se permite agendamento online
-          if (!servico.permite_online) {
+          if (!servicoLocal.permite_online) {
             console.log(`❌ Serviço ${servicoKey} não permite agendamento online`);
-            return errorResponse(servico.mensagem || 'Este serviço não pode ser agendado online.');
+            return errorResponse(servicoLocal.mensagem || 'Este serviço não pode ser agendado online.');
           }
           
           // 2.2 Verificar dia da semana
           const diaSemana = getDiaSemana(data_consulta);
-          if (servico.dias_semana && !servico.dias_semana.includes(diaSemana)) {
+          if (servicoLocal.dias_semana && !servicoLocal.dias_semana.includes(diaSemana)) {
             const diasNomes = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-            const diasPermitidos = servico.dias_semana.map((d: number) => diasNomes[d]).join(', ');
+            const diasPermitidos = servicoLocal.dias_semana.map((d: number) => diasNomes[d]).join(', ');
             console.log(`❌ Dia da semana inválido: ${diasNomes[diaSemana]} não está em [${diasPermitidos}]`);
             return errorResponse(
               `${regras.nome} não atende ${servicoKey} no dia escolhido. Dias disponíveis: ${diasPermitidos}`
@@ -391,10 +391,10 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
           console.log(`✅ Dia da semana válido`);
           
           // 2.3 Verificar período e limite de vagas
-          if (servico.periodos) {
+          if (servicoLocal.periodos) {
             const hora = parseInt(hora_consulta.split(':')[0]);
             const periodo = hora < 12 ? 'manha' : 'tarde';
-            const configPeriodo = servico.periodos[periodo];
+            const configPeriodo = servicoLocal.periodos[periodo];
             
             if (!configPeriodo) {
               console.log(`❌ Período ${periodo} não disponível para este serviço`);
@@ -1284,24 +1284,17 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       console.log(`🔍 Ampliando busca para ${quantidade_dias} dias devido ao período específico: ${periodoPreferido}`);
     }
     
-    // 🆕 AJUSTAR BUSCA PARA MÉDICOS COM DIAS RESTRITOS
-    let regras = BUSINESS_RULES.medicos[medico.id];
-    let servico = regras?.servicos?.[atendimento_nome];
-    if (periodoPreferido && servico?.periodos?.[periodoPreferido]?.dias_especificos) {
-      const diasDisponiveis = servico.periodos[periodoPreferido].dias_especificos.length;
-      if (diasDisponiveis <= 2) {
-        quantidade_dias = Math.max(quantidade_dias, 21); // Mínimo 3 semanas
-        console.log(`🔍 Médico atende ${periodoPreferido} apenas ${diasDisponiveis} dia(s)/semana. Ampliando busca para ${quantidade_dias} dias`);
-      }
-    }
-    
     // 🆕 BUSCAR PRÓXIMAS DATAS DISPONÍVEIS (quando buscar_proximas = true ou sem data específica)
     if (buscar_proximas || (!data_consulta && mensagem_original)) {
       console.log(`🔍 Buscando próximas ${quantidade_dias} datas disponíveis...`);
       
-      // Buscar regras de negócio e configuração do serviço (reutilizar variáveis)
-      if (!regras) regras = BUSINESS_RULES.medicos[medico.id];
-      if (!servico) servico = regras?.servicos?.[atendimento_nome];
+      // Buscar regras de negócio e configuração do serviço
+      const regras = BUSINESS_RULES.medicos[medico.id];
+      const servicoKey = Object.keys(regras?.servicos || {}).find(s => 
+        s.toLowerCase().includes(atendimento_nome.toLowerCase()) ||
+        atendimento_nome.toLowerCase().includes(s.toLowerCase())
+      );
+      const servico = servicoKey ? regras.servicos[servicoKey] : null;
       const tipoAtendimento = servico?.tipo || regras?.tipo_agendamento || 'ordem_chegada';
       
       console.log(`📋 [${medico.nome}] Tipo: ${tipoAtendimento} | Serviço: ${atendimento_nome}`);
@@ -1606,7 +1599,8 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       );
     }
 
-    const servico = regras.servicos[servicoKey];
+    // Reutilizar variável servico já declarada
+    if (!servico) servico = regras.servicos[servicoKey];
 
     // Verificar se permite agendamento online
     if (!servico.permite_online) {
