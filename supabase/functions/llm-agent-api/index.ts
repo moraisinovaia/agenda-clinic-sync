@@ -314,6 +314,12 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
       return errorResponse(`Campos obrigatórios faltando: ${missingFields.join(', ')}`);
     }
 
+    // 🗓️ Calcular dia da semana e período (necessário para validações)
+    const dataObj = new Date(data_consulta + 'T00:00:00');
+    const diasSemana = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
+    const dia_semana = diasSemana[dataObj.getDay()];
+    const periodo = classificarPeriodoAgendamento(hora_consulta);
+
     // Buscar médico por ID ou nome (COM filtro de cliente)
     let medico;
     if (medico_id) {
@@ -2105,9 +2111,20 @@ async function handlePatientSearch(supabase: any, body: any, clienteId: string) 
         query = query.eq('data_nascimento', busca);
         break;
       default:
-        // Busca geral
+        // Busca geral - detectar tipo automaticamente
         const telefoneGeral = busca.replace(/\D/g, '');
-        query = query.or(`nome_completo.ilike.%${busca}%,celular.ilike.%${telefoneGeral}%,telefone.ilike.%${telefoneGeral}%,data_nascimento.eq.${busca}`);
+        const isDataFormat = /^\d{4}-\d{2}-\d{2}$/.test(busca);
+        
+        if (isDataFormat) {
+          // Se parece uma data, buscar por data E nome
+          query = query.or(`nome_completo.ilike.%${busca}%,data_nascimento.eq.${busca}`);
+        } else if (telefoneGeral.length >= 8) {
+          // Se tem números suficientes, buscar por nome E telefone
+          query = query.or(`nome_completo.ilike.%${busca}%,celular.ilike.%${telefoneGeral}%,telefone.ilike.%${telefoneGeral}%`);
+        } else {
+          // Apenas buscar por nome
+          query = query.ilike('nome_completo', `%${busca}%`);
+        }
     }
 
     const { data: pacientes, error } = await query;
