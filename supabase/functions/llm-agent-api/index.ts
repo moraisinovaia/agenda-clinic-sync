@@ -236,6 +236,31 @@ function normalizarNome(nome: string | null | undefined): string | null {
     .toUpperCase();
 }
 
+/**
+ * 🛡️ Sanitiza valores inválidos vindos do N8N/LLM
+ * Converte: "indefinido", "undefined", "null", "", "None" → undefined
+ */
+function sanitizarCampoOpcional(valor: any): any {
+  if (valor === null || valor === undefined) return undefined;
+  
+  if (typeof valor === 'string') {
+    const valorTrim = valor.trim().toLowerCase();
+    
+    // Lista de valores inválidos comuns
+    const valoresInvalidos = [
+      'indefinido', 'undefined', 'null', 'none', 
+      'n/a', 'na', '', 'empty'
+    ];
+    
+    if (valoresInvalidos.includes(valorTrim)) {
+      console.log(`🧹 Campo com valor inválido "${valor}" convertido para undefined`);
+      return undefined;
+    }
+  }
+  
+  return valor;
+}
+
 // Função para mapear dados flexivelmente
 function mapSchedulingData(body: any) {
   const mapped = {
@@ -357,8 +382,16 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
       Object.entries(body).map(([key, value]) => [key, sanitizeValue(value)])
     );
     
+    // 🆕 Aplicar sanitização robusta em campos opcionais
+    const robustSanitizedBody = {
+      ...sanitizedBody,
+      data_nascimento: sanitizarCampoOpcional(sanitizedBody.data_nascimento),
+      telefone: sanitizarCampoOpcional(sanitizedBody.telefone),
+      celular: sanitizarCampoOpcional(sanitizedBody.celular)
+    };
+    
     // Mapear dados flexivelmente (aceitar diferentes formatos)
-    const mappedData = mapSchedulingData(sanitizedBody);
+    const mappedData = mapSchedulingData(robustSanitizedBody);
     console.log('🔄 Dados mapeados:', JSON.stringify(mappedData, null, 2));
     
     const { 
@@ -730,10 +763,16 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
 // Verificar se paciente tem consultas agendadas
 async function handleCheckPatient(supabase: any, body: any, clienteId: string) {
   try {
-    // Normalizar dados de busca
-    const celularNormalizado = normalizarTelefone(body.celular);
-    const dataNascimentoNormalizada = normalizarDataNascimento(body.data_nascimento);
-    const pacienteNomeNormalizado = normalizarNome(body.paciente_nome);
+    // Sanitizar e normalizar dados de busca
+    const celularNormalizado = normalizarTelefone(
+      sanitizarCampoOpcional(body.celular)
+    );
+    const dataNascimentoNormalizada = normalizarDataNascimento(
+      sanitizarCampoOpcional(body.data_nascimento)
+    );
+    const pacienteNomeNormalizado = normalizarNome(
+      sanitizarCampoOpcional(body.paciente_nome)
+    );
 
     // Log de busca
     console.log('🔍 Buscando paciente:', {
@@ -786,15 +825,15 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string) {
     // Filtrar por data de nascimento ou celular se fornecidos
     let filteredAgendamentos = agendamentos || [];
     
-    if (data_nascimento) {
+    if (dataNascimentoNormalizada) {
       filteredAgendamentos = filteredAgendamentos.filter((a: any) =>
-        a.pacientes?.data_nascimento === data_nascimento
+        a.pacientes?.data_nascimento === dataNascimentoNormalizada
       );
     }
 
-    if (celular) {
+    if (celularNormalizado) {
       filteredAgendamentos = filteredAgendamentos.filter((a: any) => 
-        a.pacientes?.celular?.includes(celular.replace(/\D/g, ''))
+        a.pacientes?.celular?.includes(celularNormalizado)
       );
     }
 
@@ -837,7 +876,16 @@ async function handleReschedule(supabase: any, body: any, clienteId: string) {
     console.log('📥 Dados recebidos:', JSON.stringify(body, null, 2));
     console.log('🏥 Cliente ID:', clienteId);
     
-    const { agendamento_id, nova_data, nova_hora, observacoes } = body;
+    // 🆕 Sanitizar campos opcionais antes de processar
+    const { 
+      agendamento_id,
+      nova_data: novaDataRaw,
+      nova_hora: novaHoraRaw,
+      observacoes
+    } = body;
+
+    const nova_data = sanitizarCampoOpcional(novaDataRaw);
+    const nova_hora = sanitizarCampoOpcional(novaHoraRaw);
 
     // Validação detalhada
     const camposFaltando = [];
@@ -1170,6 +1218,12 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     
     let { medico_nome, medico_id, data_consulta, atendimento_nome, dias_busca = 14, mensagem_original, buscar_proximas = false, quantidade_dias = 7 } = body;
     
+    // 🆕 SANITIZAÇÃO ROBUSTA: Converter valores inválidos em undefined
+    data_consulta = sanitizarCampoOpcional(data_consulta);
+    medico_nome = sanitizarCampoOpcional(medico_nome);
+    medico_id = sanitizarCampoOpcional(medico_id);
+    atendimento_nome = sanitizarCampoOpcional(atendimento_nome);
+    
     // 🆕 DETECÇÃO DE DADOS INVERTIDOS: Verificar se medico_nome contém data ou se data_consulta contém nome
     if (data_consulta && typeof data_consulta === 'string') {
       // Se data_consulta contém "|" ou nome de médico, está invertido
@@ -1199,12 +1253,6 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         console.log('Depois:', { medico_nome, atendimento_nome, data_consulta });
       }
     }
-    
-    // Aplicar sanitização
-    medico_nome = sanitizeValue(medico_nome);
-    medico_id = sanitizeValue(medico_id);
-    atendimento_nome = sanitizeValue(atendimento_nome);
-    data_consulta = sanitizeValue(data_consulta);
     
     // 🆕 CONVERTER FORMATO DE DATA: DD/MM/YYYY → YYYY-MM-DD
     if (data_consulta && /^\d{2}\/\d{2}\/\d{4}$/.test(data_consulta)) {
