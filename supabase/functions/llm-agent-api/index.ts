@@ -1535,10 +1535,10 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         if (proximasDatas.length >= datasNecessarias) break;
       }
       
-      // 🔄 RETRY AUTOMÁTICO: Se não encontrou vagas e ainda não buscou 45 dias, ampliar
-      if (proximasDatas.length === 0 && quantidade_dias < 45) {
-        console.log(`⚠️ Nenhuma data encontrada em ${quantidade_dias} dias. Ampliando busca para 45 dias...`);
-        quantidade_dias = 45;
+      // 🔄 RETRY AUTOMÁTICO: Se não encontrou vagas e ainda não buscou 100 dias, ampliar
+      if (proximasDatas.length === 0 && quantidade_dias < 100) {
+        console.log(`⚠️ Nenhuma data encontrada em ${quantidade_dias} dias. Ampliando busca para 100 dias...`);
+        quantidade_dias = 100;
         
         // 🔁 REPETIR O LOOP DE BUSCA com 45 dias
         for (let diasAdiantados = 0; diasAdiantados <= quantidade_dias; diasAdiantados++) {
