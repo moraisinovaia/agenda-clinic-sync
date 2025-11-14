@@ -1435,7 +1435,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       // 🎫 LÓGICA PARA ORDEM DE CHEGADA (todos os médicos)
       console.log('🎫 Buscando períodos disponíveis (ordem de chegada)...');
       
-      for (let diasAdiantados = 1; diasAdiantados <= quantidade_dias; diasAdiantados++) {
+      for (let diasAdiantados = 0; diasAdiantados <= quantidade_dias; diasAdiantados++) {
         const dataCheck = new Date(dataInicial + 'T00:00:00');
         dataCheck.setDate(dataCheck.getDate() + diasAdiantados);
         const dataCheckStr = dataCheck.toISOString().split('T')[0];
@@ -1541,7 +1541,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         quantidade_dias = 45;
         
         // 🔁 REPETIR O LOOP DE BUSCA com 45 dias
-        for (let diasAdiantados = 1; diasAdiantados <= quantidade_dias; diasAdiantados++) {
+        for (let diasAdiantados = 0; diasAdiantados <= quantidade_dias; diasAdiantados++) {
           const dataCheck = new Date(dataInicial + 'T00:00:00');
           dataCheck.setDate(dataCheck.getDate() + diasAdiantados);
           const dataCheckStr = dataCheck.toISOString().split('T')[0];
