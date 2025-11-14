@@ -1155,17 +1155,26 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       const dataConsulta = new Date(data_consulta + 'T00:00:00');
       const hoje = new Date(dataAtual + 'T00:00:00');
       
-      if (dataConsulta < hoje) {
-        // Data no passado: se for horário noturno, já vai direto para AMANHÃ
+      // Calcular diferença em dias entre data solicitada e hoje
+      const diferencaDias = Math.floor((hoje.getTime() - dataConsulta.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (dataConsulta < hoje && diferencaDias > 90) {
+        // Só ajusta se for REALMENTE passado (mais de 90 dias no passado)
+        // Isso evita ajustar datas futuras que o usuário especificou explicitamente
         if (horaAtual >= 18) {
           const amanha = new Date(dataAtual + 'T00:00:00');
           amanha.setDate(amanha.getDate() + 1);
           data_consulta = amanha.toISOString().split('T')[0];
-          console.log(`⚠️ Data no passado detectada E horário noturno (${horaAtual}h). Ajustando para AMANHÃ: ${data_consulta}`);
+          console.log(`⚠️ Data muito antiga detectada (${diferencaDias} dias no passado) E horário noturno (${horaAtual}h). Ajustando para AMANHÃ: ${data_consulta}`);
         } else {
           data_consulta = dataAtual;
-          console.log(`⚠️ Data no passado detectada. Ajustando para HOJE: ${data_consulta} (${horaAtual}h)`);
+          console.log(`⚠️ Data muito antiga detectada (${diferencaDias} dias no passado). Ajustando para HOJE: ${data_consulta}`);
         }
+      } else if (dataConsulta >= hoje) {
+        console.log(`📅 Ponto de partida da busca: ${data_consulta} (data futura fornecida pelo usuário)`);
+      } else {
+        // Data está no passado mas há menos de 90 dias - respeitar a escolha do usuário
+        console.log(`⚠️ Data ${diferencaDias} dias no passado, mas será respeitada como ponto de partida (${data_consulta})`);
       }
     }
     
