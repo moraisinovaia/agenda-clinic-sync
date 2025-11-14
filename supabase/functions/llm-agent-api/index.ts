@@ -1315,11 +1315,52 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         console.log('☀️ Paciente solicitou especificamente período da MANHÃ');
       }
       
-      // Se for pergunta aberta OU houver período específico, IGNORAR data_consulta e buscar próximas datas
-      if ((isPerguntaAberta || periodoPreferido) && data_consulta) {
-        const motivo = periodoPreferido ? `período específico (${periodoPreferido})` : 'pergunta aberta';
-        console.log(`🔍 ${motivo} detectado. Ignorando data específica "${data_consulta}" para buscar próximas disponibilidades.`);
-        data_consulta = null;
+      // 🆕 EXTRAIR REFERÊNCIA A MÊS na mensagem original
+      let mesEspecifico: string | null = null;
+      const mesesMap: Record<string, string> = {
+        'janeiro': '01', 'jan': '01',
+        'fevereiro': '02', 'fev': '02',
+        'março': '03', 'mar': '03', 'marco': '03',
+        'abril': '04', 'abr': '04',
+        'maio': '05', 'mai': '05',
+        'junho': '06', 'jun': '06',
+        'julho': '07', 'jul': '07',
+        'agosto': '08', 'ago': '08',
+        'setembro': '09', 'set': '09',
+        'outubro': '10', 'out': '10',
+        'novembro': '11', 'nov': '11',
+        'dezembro': '12', 'dez': '12'
+      };
+      
+      for (const [nome, numero] of Object.entries(mesesMap)) {
+        if (mensagemLower.includes(nome)) {
+          mesEspecifico = numero;
+          console.log(`📆 Mês específico detectado na mensagem: ${nome} (${numero})`);
+          
+          // Se data_consulta não foi fornecida mas mês foi mencionado, construir primeira data do mês
+          if (!data_consulta) {
+            const anoAtual = new Date().getFullYear();
+            const mesAtual = new Date().getMonth() + 1;
+            const anoAlvo = parseInt(numero) < mesAtual ? anoAtual + 1 : anoAtual;
+            data_consulta = `${anoAlvo}-${numero}-01`;
+            console.log(`🗓️ Construída data inicial do mês: ${data_consulta}`);
+          }
+          break;
+        }
+      }
+      
+      // Só anular data_consulta se for pergunta REALMENTE aberta (sem contexto de mês/data)
+      if (isPerguntaAberta && !data_consulta && !mesEspecifico) {
+        console.log('🔍 Pergunta aberta sem data específica detectada. Buscando próximas disponibilidades a partir de hoje.');
+        // data_consulta permanece null, usará hoje como base
+      } else if (data_consulta) {
+        console.log(`📅 Data específica fornecida: ${data_consulta}. Respeitando como ponto de partida da busca.`);
+        // data_consulta mantida, será usada como dataInicial
+      }
+
+      if (periodoPreferido) {
+        console.log(`⏰ Período preferido detectado: ${periodoPreferido}. Mantendo compatibilidade com data fornecida.`);
+        // Não anular data_consulta - período + data são compatíveis
       }
     }
     
@@ -1345,7 +1386,12 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         }>;
       }> = [];
       
-      const { data: dataInicial } = getDataHoraAtualBrasil();
+      // Se data_consulta foi fornecida, usar como ponto de partida
+      // Caso contrário, usar data atual
+      const { data: dataAtualBrasil } = getDataHoraAtualBrasil();
+      const dataInicial = data_consulta || dataAtualBrasil;
+
+      console.log(`📅 Ponto de partida da busca: ${dataInicial} ${data_consulta ? '(fornecida pelo usuário)' : '(data atual)'}`);
       
       // 🎫 LÓGICA PARA ORDEM DE CHEGADA (todos os médicos)
       console.log('🎫 Buscando períodos disponíveis (ordem de chegada)...');
