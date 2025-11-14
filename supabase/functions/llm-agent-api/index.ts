@@ -108,9 +108,10 @@ const BUSINESS_RULES = {
         'Consulta Endocrinológica': {
           permite_online: true,
           tipo: 'ordem_chegada',
-          dias_semana: [4], // Apenas quinta-feira
+          dias_semana: [1, 2, 3, 4, 5], // Segunda a sexta
           periodos: {
-            manha: { inicio: '08:00', fim: '12:00', limite: 9, atendimento_inicio: '08:45', distribuicao_fichas: '08:00 às 10:00' }
+            manha: { inicio: '08:00', fim: '10:00', limite: 9, atendimento_inicio: '08:45', distribuicao_fichas: '08:00 às 10:00' },
+            tarde: { inicio: '13:00', fim: '15:00', limite: 9, dias_especificos: [2, 3], atendimento_inicio: '14:45', distribuicao_fichas: '13:00 às 15:00' }
           }
         }
       }
