@@ -575,7 +575,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
     
     const { data: result, error: agendamentoError } = await supabase
       .rpc('criar_agendamento_atomico_externo', {
-        p_cliente_id: CLIENTE_ID, // 🆕 Passar cliente_id explicitamente
+        p_cliente_id: clienteId, // 🆕 Passar cliente_id explicitamente
         p_nome_completo: paciente_nome.toUpperCase(),
         p_data_nascimento: data_nascimento,
         p_convenio: convenio, // Manter capitalização original para validação correta
