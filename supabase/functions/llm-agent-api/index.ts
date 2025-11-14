@@ -173,21 +173,88 @@ function getDiaSemana(data: string): number {
   return new Date(data).getDay();
 }
 
+// ============= FUNÇÕES DE NORMALIZAÇÃO DE DADOS =============
+
+/**
+ * Normaliza data de nascimento de vários formatos para YYYY-MM-DD
+ * Aceita: DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD, YYYY/MM/DD
+ */
+function normalizarDataNascimento(data: string | null | undefined): string | null {
+  if (!data) return null;
+  
+  const limpo = data.trim();
+  
+  // Já está no formato correto YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(limpo)) {
+    return limpo;
+  }
+  
+  // Formato DD/MM/YYYY ou DD-MM-YYYY
+  if (/^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/.test(limpo)) {
+    const [dia, mes, ano] = limpo.split(/[\/\-]/);
+    return `${ano}-${mes}-${dia}`;
+  }
+  
+  // Formato YYYY/MM/DD
+  if (/^\d{4}[\/]\d{2}[\/]\d{2}$/.test(limpo)) {
+    return limpo.replace(/\//g, '-');
+  }
+  
+  console.warn(`⚠️ Formato de data_nascimento não reconhecido: "${data}"`);
+  return null;
+}
+
+/**
+ * Normaliza número de telefone/celular
+ * Remove todos os caracteres não numéricos
+ * Aceita: (87) 9 9123-4567, 87991234567, +55 87 99123-4567
+ */
+function normalizarTelefone(telefone: string | null | undefined): string | null {
+  if (!telefone) return null;
+  
+  // Remover tudo que não é número
+  const apenasNumeros = telefone.replace(/\D/g, '');
+  
+  // Remover código do país (+55) se presente
+  if (apenasNumeros.startsWith('55') && apenasNumeros.length > 11) {
+    return apenasNumeros.substring(2);
+  }
+  
+  return apenasNumeros;
+}
+
+/**
+ * Normaliza nome do paciente
+ * Remove espaços extras e capitaliza corretamente
+ */
+function normalizarNome(nome: string | null | undefined): string | null {
+  if (!nome) return null;
+  
+  return nome
+    .trim()
+    .replace(/\s+/g, ' ') // Remove espaços duplicados
+    .toUpperCase();
+}
+
 // Função para mapear dados flexivelmente
 function mapSchedulingData(body: any) {
   const mapped = {
-    // Nome do paciente - aceitar diferentes formatos
-    paciente_nome: body.paciente_nome || body.nome_paciente || body.nome_completo || body.patient_name,
+    // Nome do paciente - aceitar diferentes formatos e normalizar
+    paciente_nome: normalizarNome(
+      body.paciente_nome || body.nome_paciente || body.nome_completo || body.patient_name
+    ),
     
-    // Data de nascimento - aceitar diferentes formatos
-    data_nascimento: body.data_nascimento || body.paciente_nascimento || body.birth_date || body.nascimento,
+    // Data de nascimento - aceitar diferentes formatos e normalizar
+    data_nascimento: normalizarDataNascimento(
+      body.data_nascimento || body.paciente_nascimento || body.birth_date || body.nascimento
+    ),
     
     // Convênio
     convenio: body.convenio || body.insurance || body.plano_saude,
     
-    // Telefones
-    telefone: body.telefone || body.phone || body.telefone_fixo,
-    celular: body.celular || body.mobile || body.whatsapp || body.telefone_celular,
+    // Telefones - normalizar
+    telefone: normalizarTelefone(body.telefone || body.phone || body.telefone_fixo),
+    celular: normalizarTelefone(body.celular || body.mobile || body.whatsapp || body.telefone_celular),
     
     // Médico - aceitar ID ou nome
     medico_nome: body.medico_nome || body.doctor_name || body.nome_medico,
@@ -203,6 +270,14 @@ function mapSchedulingData(body: any) {
     // Observações
     observacoes: body.observacoes || body.notes || body.comments || body.obs
   };
+  
+  // Log para debug (sem dados sensíveis completos)
+  console.log('📝 Dados normalizados:', {
+    paciente_nome: mapped.paciente_nome ? '✓' : '✗',
+    data_nascimento: mapped.data_nascimento,
+    celular: mapped.celular ? `${mapped.celular.substring(0, 4)}****` : '✗',
+    telefone: mapped.telefone ? `${mapped.telefone.substring(0, 4)}****` : '✗',
+  });
   
   return mapped;
 }
@@ -655,9 +730,19 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
 // Verificar se paciente tem consultas agendadas
 async function handleCheckPatient(supabase: any, body: any, clienteId: string) {
   try {
-    const { paciente_nome, data_nascimento, celular } = body;
+    // Normalizar dados de busca
+    const celularNormalizado = normalizarTelefone(body.celular);
+    const dataNascimentoNormalizada = normalizarDataNascimento(body.data_nascimento);
+    const pacienteNomeNormalizado = normalizarNome(body.paciente_nome);
 
-    if (!paciente_nome && !data_nascimento && !celular) {
+    // Log de busca
+    console.log('🔍 Buscando paciente:', {
+      nome: pacienteNomeNormalizado,
+      nascimento: dataNascimentoNormalizada,
+      celular: celularNormalizado ? `${celularNormalizado.substring(0, 4)}****` : null
+    });
+
+    if (!pacienteNomeNormalizado && !dataNascimentoNormalizada && !celularNormalizado) {
       return errorResponse('Informe pelo menos: paciente_nome, data_nascimento ou celular para busca');
     }
 
@@ -678,12 +763,12 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string) {
       .gte('data_agendamento', new Date().toISOString().split('T')[0])
       .order('data_agendamento', { ascending: true });
 
-    // Buscar por nome do paciente COM filtro de cliente
-    if (paciente_nome) {
+    // Buscar por nome do paciente COM filtro de cliente (usando nome normalizado)
+    if (pacienteNomeNormalizado) {
       const { data: pacientes } = await supabase
         .from('pacientes')
         .select('id')
-        .ilike('nome_completo', `%${paciente_nome}%`)
+        .ilike('nome_completo', `%${pacienteNomeNormalizado}%`)
         .eq('cliente_id', clienteId);
 
       if (pacientes && pacientes.length > 0) {
