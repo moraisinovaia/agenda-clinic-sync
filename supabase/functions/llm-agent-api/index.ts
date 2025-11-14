@@ -1289,6 +1289,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     // 🧠 ANÁLISE DE CONTEXTO: Usar mensagem original para inferir intenção
     let isPerguntaAberta = false;
     let periodoPreferido: 'manha' | 'tarde' | null = null;
+    let diaPreferido: number | null = null; // 1=seg, 2=ter, 3=qua, 4=qui, 5=sex
     
     if (mensagem_original) {
       const mensagemLower = mensagem_original.toLowerCase();
@@ -1325,7 +1326,6 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       }
       
       // 🆕 DETECTAR DIA DA SEMANA PREFERIDO
-      let diaPreferido: number | null = null; // 1=seg, 2=ter, 3=qua, 4=qui, 5=sex
       const diasMap: Record<string, number> = {
         'segunda': 1, 'seg': 1, 'segunda-feira': 1, 'segundafeira': 1,
         'terça': 2, 'terca': 2, 'ter': 2, 'terça-feira': 2, 'tercafeira': 2,
