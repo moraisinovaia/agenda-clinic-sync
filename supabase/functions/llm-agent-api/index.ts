@@ -1324,6 +1324,28 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         console.log('☀️ Paciente solicitou especificamente período da MANHÃ');
       }
       
+      // 🆕 DETECTAR DIA DA SEMANA PREFERIDO
+      let diaPreferido: number | null = null; // 1=seg, 2=ter, 3=qua, 4=qui, 5=sex
+      const diasMap: Record<string, number> = {
+        'segunda': 1, 'seg': 1, 'segunda-feira': 1, 'segundafeira': 1,
+        'terça': 2, 'terca': 2, 'ter': 2, 'terça-feira': 2, 'tercafeira': 2,
+        'quarta': 3, 'qua': 3, 'quarta-feira': 3, 'quartafeira': 3,
+        'quinta': 4, 'qui': 4, 'quinta-feira': 4, 'quintafeira': 4,
+        'sexta': 5, 'sex': 5, 'sexta-feira': 5, 'sextafeira': 5
+      };
+
+      for (const [nome, numero] of Object.entries(diasMap)) {
+        if (mensagemLower.includes(nome)) {
+          diaPreferido = numero;
+          console.log(`📅 Dia da semana específico detectado: ${nome} (${numero})`);
+          break;
+        }
+      }
+
+      if (diaPreferido) {
+        console.log(`🗓️ Dia preferido: ${diaPreferido}. Filtrando apenas esse dia da semana.`);
+      }
+      
       // 🆕 EXTRAIR REFERÊNCIA A MÊS na mensagem original
       let mesEspecifico: string | null = null;
       const mesesMap: Record<string, string> = {
@@ -1379,9 +1401,17 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       console.log(`🔍 Ampliando busca para ${quantidade_dias} dias devido ao período específico: ${periodoPreferido}`);
     }
     
+    // 🆕 AMPLIAR também quando houver dia específico
+    if (diaPreferido && quantidade_dias < 21) {
+      quantidade_dias = 21; // 3 semanas para garantir 3 ocorrências do dia
+      console.log(`🔍 Ampliando busca para ${quantidade_dias} dias devido ao dia específico`);
+    }
+    
     // 🆕 BUSCAR PRÓXIMAS DATAS DISPONÍVEIS (quando buscar_proximas = true ou sem data específica)
     if (buscar_proximas || (!data_consulta && mensagem_original)) {
       console.log(`🔍 Buscando próximas ${quantidade_dias} datas disponíveis...`);
+      if (periodoPreferido) console.log(`  → Filtro: período ${periodoPreferido}`);
+      if (diaPreferido) console.log(`  → Filtro: dia da semana ${diaPreferido}`);
       
       const proximasDatas: Array<{
         data: string;
@@ -1413,6 +1443,11 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         
         // Pular finais de semana
         if (diaSemanaNum === 0 || diaSemanaNum === 6) continue;
+        
+        // 🗓️ Filtrar por dia da semana preferido
+        if (diaPreferido && diaSemanaNum !== diaPreferido) {
+          continue; // Pular dias que não correspondem ao preferido
+        }
         
         // Verificar se dia permitido pelo serviço
         if (servico?.dias_semana && !servico.dias_semana.includes(diaSemanaNum)) {
@@ -1514,6 +1549,11 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
           
           // Pular finais de semana
           if (diaSemanaNum === 0 || diaSemanaNum === 6) continue;
+          
+          // 🗓️ Filtrar por dia da semana preferido
+          if (diaPreferido && diaSemanaNum !== diaPreferido) {
+            continue; // Pular dias que não correspondem ao preferido
+          }
           
           // 🔒 Verificar bloqueios
           const { data: bloqueiosData } = await supabase
