@@ -37,6 +37,41 @@ function getDataAtualBrasil(): string {
 }
 
 /**
+ * 🛡️ SANITIZAÇÃO ROBUSTA: Converte valores inválidos em undefined
+ * Aceita: "indefinido", "undefined", "null", null, "", undefined
+ * Retorna: undefined (para campos opcionais) ou valor original
+ */
+function sanitizarCampoOpcional(valor: any): string | undefined {
+  // Lista de valores considerados "vazios" ou "indefinidos"
+  const valoresInvalidos = [
+    'indefinido',
+    'undefined', 
+    'null',
+    '',
+    null,
+    undefined
+  ];
+  
+  // Se o valor está na lista de inválidos, retorna undefined
+  if (valoresInvalidos.includes(valor)) {
+    console.log(`🧹 Sanitização: "${valor}" convertido para undefined`);
+    return undefined;
+  }
+  
+  // Se é string, faz trim para remover espaços
+  if (typeof valor === 'string') {
+    const valorTrimmed = valor.trim();
+    if (valorTrimmed === '') {
+      console.log('🧹 Sanitização: string vazia após trim convertida para undefined');
+      return undefined;
+    }
+    return valorTrimmed;
+  }
+  
+  return valor;
+}
+
+/**
  * Classifica um horário de agendamento no período correto (manhã/tarde)
  * considerando margem de tolerância para ordem de chegada
  */
