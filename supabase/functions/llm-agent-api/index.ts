@@ -15,6 +15,34 @@ const MIGRATION_MESSAGES = {
   no_availability: `Não há vagas disponíveis antes de janeiro/2026. Para consultas anteriores a esta data, ligue: ${MIGRATION_PHONE}`
 };
 
+/**
+ * Gera mensagem de bloqueio de migração personalizada por médico
+ * @param medicoNome - Nome do médico (ex: "Dra. Adriana Carla de Sena")
+ * @returns Mensagem personalizada ou genérica
+ */
+function getMigrationBlockMessage(medicoNome?: string): string {
+  // Normalizar nome do médico (remover acentos, minúsculas, apenas palavras-chave)
+  const nomeNormalizado = medicoNome
+    ?.toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+    .trim() || '';
+
+  // Detectar se é Dra. Adriana (várias variações possíveis)
+  const isDraAdriana = 
+    nomeNormalizado.includes('adriana') || 
+    nomeNormalizado.includes('adriana carla') ||
+    nomeNormalizado.includes('dra. adriana') ||
+    nomeNormalizado.includes('dra adriana');
+
+  if (isDraAdriana) {
+    return `O(a) paciente pode tentar um encaixe com a Dra. Adriana por ligação normal nesse mesmo número ${MIGRATION_PHONE} (não atendemos ligação via whatsapp), de segunda a sexta-feira, às 10:00h, ou nas terças e quartas-feiras, às 14:30h`;
+  }
+
+  // Mensagem genérica para outros médicos
+  return `Agendamentos disponíveis a partir de janeiro/2026. Para datas anteriores, entre em contato pelo telefone: ${MIGRATION_PHONE}`;
+}
+
 // 🌎 Função para obter data E HORA atual no fuso horário de São Paulo
 function getDataHoraAtualBrasil() {
   const agora = new Date();
@@ -589,7 +617,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
                 return new Response(JSON.stringify({
                   success: false,
                   error: 'DATA_BLOQUEADA',
-                  message: MIGRATION_MESSAGES.date_blocked,
+                  message: getMigrationBlockMessage(medico_nome),
                   data_solicitada: data_consulta,
                   data_minima: MINIMUM_BOOKING_DATE,
                   timestamp: new Date().toISOString()
@@ -1159,7 +1187,7 @@ async function handleReschedule(supabase: any, body: any, clienteId: string) {
       return new Response(JSON.stringify({
         success: false,
         error: 'DATA_BLOQUEADA',
-        message: MIGRATION_MESSAGES.date_blocked,
+        message: getMigrationBlockMessage(agendamento.medicos?.nome),
         data_solicitada: nova_data,
         data_minima: MINIMUM_BOOKING_DATE,
         timestamp: new Date().toISOString()
@@ -1518,7 +1546,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       if (data_consulta < MINIMUM_BOOKING_DATE) {
         console.log(`🚫 Data solicitada (${data_consulta}) é anterior à data mínima (${MINIMUM_BOOKING_DATE})`);
         return successResponse({
-          message: MIGRATION_MESSAGES.date_blocked,
+          message: getMigrationBlockMessage(medico_nome),
           proximas_datas: [],
           data_solicitada: data_consulta,
           data_minima: MINIMUM_BOOKING_DATE,
