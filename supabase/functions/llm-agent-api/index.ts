@@ -6,6 +6,15 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// 🚨 MIGRAÇÃO DE SISTEMA - Data mínima para agendamentos
+const MINIMUM_BOOKING_DATE = '2026-01-01';
+const MIGRATION_PHONE = '(87) 3866-4050';
+const MIGRATION_MESSAGES = {
+  date_blocked: `Agendamentos disponíveis a partir de janeiro/2026. Para datas anteriores, entre em contato pelo telefone: ${MIGRATION_PHONE}`,
+  old_appointments: `Não encontrei agendamentos no sistema novo. Se sua consulta é anterior a janeiro/2026, os dados estão no sistema anterior. Entre em contato: ${MIGRATION_PHONE}`,
+  no_availability: `Não há vagas disponíveis antes de janeiro/2026. Para consultas anteriores a esta data, ligue: ${MIGRATION_PHONE}`
+};
+
 // 🌎 Função para obter data E HORA atual no fuso horário de São Paulo
 function getDataHoraAtualBrasil() {
   const agora = new Date();
@@ -574,6 +583,22 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
               const servicoLocal = regras.servicos[servicoKeyValidacao];
               console.log(`🔍 Validando serviço: ${servicoKeyValidacao}`);
               
+              // ⚠️ MIGRAÇÃO: Bloquear agendamentos antes de janeiro/2026
+              if (data_consulta && data_consulta < MINIMUM_BOOKING_DATE) {
+                console.log(`🚫 Tentativa de agendar antes da data mínima: ${data_consulta}`);
+                return new Response(JSON.stringify({
+                  success: false,
+                  error: 'DATA_BLOQUEADA',
+                  message: MIGRATION_MESSAGES.date_blocked,
+                  data_solicitada: data_consulta,
+                  data_minima: MINIMUM_BOOKING_DATE,
+                  timestamp: new Date().toISOString()
+                }), {
+                  status: 200,
+                  headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                });
+              }
+              
               // 2.1 Verificar se permite agendamento online
               if (!servicoLocal.permite_online) {
                 console.log(`❌ Serviço ${servicoKeyValidacao} não permite agendamento online`);
@@ -1021,8 +1046,11 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string) {
 
     if (filteredAgendamentos.length === 0) {
       return successResponse({
-        message: 'Nenhuma consulta encontrada para este paciente',
+        encontrado: false,
         consultas: [],
+        message: MIGRATION_MESSAGES.old_appointments,
+        observacao: 'Sistema em migração - dados anteriores a janeiro/2026 não disponíveis',
+        contato: MIGRATION_PHONE,
         total: 0
       });
     }
@@ -1123,6 +1151,22 @@ async function handleReschedule(supabase: any, body: any, clienteId: string) {
     if (agendamento.status === 'cancelado') {
       console.error('❌ Tentativa de remarcar consulta cancelada');
       return errorResponse('Não é possível remarcar consulta cancelada');
+    }
+
+    // ⚠️ MIGRAÇÃO: Bloquear remarcações antes de janeiro/2026
+    if (nova_data < MINIMUM_BOOKING_DATE) {
+      console.log(`🚫 Tentativa de remarcar para antes da data mínima: ${nova_data}`);
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'DATA_BLOQUEADA',
+        message: MIGRATION_MESSAGES.date_blocked,
+        data_solicitada: nova_data,
+        data_minima: MINIMUM_BOOKING_DATE,
+        timestamp: new Date().toISOString()
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
     }
 
     // Verificar disponibilidade do novo horário COM filtro de cliente
@@ -1470,6 +1514,18 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       const dataConsulta = new Date(data_consulta + 'T00:00:00');
       const hoje = new Date(dataAtual + 'T00:00:00');
       
+      // ⚠️ MIGRAÇÃO: Bloquear consultas de disponibilidade antes de janeiro/2026
+      if (data_consulta < MINIMUM_BOOKING_DATE) {
+        console.log(`🚫 Data solicitada (${data_consulta}) é anterior à data mínima (${MINIMUM_BOOKING_DATE})`);
+        return successResponse({
+          message: MIGRATION_MESSAGES.date_blocked,
+          proximas_datas: [],
+          data_solicitada: data_consulta,
+          data_minima: MINIMUM_BOOKING_DATE,
+          observacao: 'Sistema em migração - agendamentos a partir de janeiro/2026'
+        });
+      }
+      
       // Calcular diferença em dias entre data solicitada e hoje
       const diferencaDias = Math.floor((hoje.getTime() - dataConsulta.getTime()) / (1000 * 60 * 60 * 24));
       
@@ -1789,6 +1845,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
               .eq('cliente_id', clienteId)
               .gte('hora_agendamento', manha.inicio)
               .lte('hora_agendamento', manha.fim)
+              .gte('data_agendamento', MINIMUM_BOOKING_DATE)
               .is('excluido_em', null)
               .in('status', ['agendado', 'confirmado']);
             
@@ -1821,6 +1878,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
               .eq('cliente_id', clienteId)
               .gte('hora_agendamento', tarde.inicio)
               .lte('hora_agendamento', tarde.fim)
+              .gte('data_agendamento', MINIMUM_BOOKING_DATE)
               .is('excluido_em', null)
               .in('status', ['agendado', 'confirmado']);
             
