@@ -2004,16 +2004,32 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       const servicoLower = s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // Remove acentos
       const atendimentoLower = atendimento_nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       
+      // 🆕 Função auxiliar para normalizar removendo plurais e palavras comuns
+      const normalizarParaMatch = (texto: string): string[] => {
+        // Remove plurais (s no final) e divide em palavras
+        const semPlural = texto.replace(/s\s*$/i, '');
+        const palavras = semPlural.split(/\s+/).filter(p => p.length > 2); // Ignora palavras muito curtas
+        return [texto, semPlural, ...palavras]; // Retorna original, sem plural, e palavras individuais
+      };
+      
+      const servicoVariacoes = normalizarParaMatch(servicoLower);
+      const atendimentoVariacoes = normalizarParaMatch(atendimentoLower);
+      
       // Match exato (sem acentos)
       if (servicoLower === atendimentoLower) return true;
       
-      // Match bidirecional (contém)
-      if (servicoLower.includes(atendimentoLower) || atendimentoLower.includes(servicoLower)) {
-        return true;
+      // Match bidirecional (contém) com variações
+      for (const sv of servicoVariacoes) {
+        for (const av of atendimentoVariacoes) {
+          if (sv.includes(av) || av.includes(sv)) {
+            return true;
+          }
+        }
       }
       
       // 🆕 MELHORADO: Match por keywords com variações de grafia
       const keywords: Record<string, string[]> = {
+        'consulta': ['consultas', 'agendamento', 'atendimento'], // Variações de "consulta"
         'endocrinologica': ['endocrino', 'endocrinologia', 'endocrinologista', 'consulta endocrino', 'consulta endocrinologista'],
         'cardiologica': ['cardio', 'cardiologia', 'cardiologista', 'consulta cardio', 'consulta cardiologista'],
         'ergometrico': ['ergo', 'ergometrico', 'teste ergo'],
@@ -2023,7 +2039,12 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       
       for (const [base, aliases] of Object.entries(keywords)) {
         if (servicoLower.includes(base)) {
-          return aliases.some(alias => atendimentoLower.includes(alias));
+          // Verifica se alguma variação do atendimento bate com a base ou aliases
+          const matchBase = atendimentoVariacoes.some(av => av.includes(base) || base.includes(av));
+          const matchAliases = aliases.some(alias => 
+            atendimentoVariacoes.some(av => av.includes(alias) || alias.includes(av))
+          );
+          if (matchBase || matchAliases) return true;
         }
       }
       
