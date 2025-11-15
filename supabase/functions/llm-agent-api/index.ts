@@ -998,10 +998,8 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
 // Verificar se paciente tem consultas agendadas
 async function handleCheckPatient(supabase: any, body: any, clienteId: string) {
   try {
-    // Sanitizar e normalizar dados de busca
-    const celularNormalizado = normalizarTelefone(
-      sanitizarCampoOpcional(body.celular)
-    );
+    // Sanitizar dados de busca
+    const celularRaw = sanitizarCampoOpcional(body.celular);
     const dataNascimentoNormalizada = normalizarDataNascimento(
       sanitizarCampoOpcional(body.data_nascimento)
     );
@@ -1009,11 +1007,15 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string) {
       sanitizarCampoOpcional(body.paciente_nome)
     );
 
+    // 🔍 VERIFICAR CELULAR MASCARADO ANTES DE NORMALIZAR
+    const isCelularMascarado = celularRaw ? celularRaw.includes('*') : false;
+    const celularNormalizado = isCelularMascarado ? null : normalizarTelefone(celularRaw);
+
     // Log de busca
     console.log('🔍 Buscando paciente:', {
       nome: pacienteNomeNormalizado,
       nascimento: dataNascimentoNormalizada,
-      celular: celularNormalizado ? `${celularNormalizado.substring(0, 4)}****` : null
+      celular: isCelularMascarado ? `${celularRaw} (MASCARADO - IGNORADO)` : (celularNormalizado ? `${celularNormalizado.substring(0, 4)}****` : null)
     });
 
     if (!pacienteNomeNormalizado && !dataNascimentoNormalizada && !celularNormalizado) {
@@ -1032,7 +1034,7 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string) {
     if (dataNascimentoNormalizada) {
       pacienteQuery = pacienteQuery.eq('data_nascimento', dataNascimentoNormalizada);
     }
-    if (celularNormalizado && !celularNormalizado.includes('*')) {
+    if (celularNormalizado) {
       // 🔍 BUSCA FUZZY: Gerar múltiplas variações do celular para encontrar independente da formatação
       console.log('📞 Celular fornecido para busca:', celularNormalizado);
       
@@ -1075,8 +1077,8 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string) {
       
       pacienteQuery = pacienteQuery.or(orConditions);
       
-    } else if (celularNormalizado && celularNormalizado.includes('*')) {
-      console.log('⚠️ Celular mascarado detectado - buscando apenas por nome + nascimento:', celularNormalizado);
+    } else if (isCelularMascarado) {
+      console.log('⚠️ Celular mascarado detectado - buscando apenas por nome + nascimento:', celularRaw);
       // NÃO adiciona filtro de celular - busca apenas por nome + nascimento
     }
 
