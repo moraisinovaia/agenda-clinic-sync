@@ -1937,8 +1937,8 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       const tipoAtendimento = servico.tipo || regras.tipo_agendamento || 'ordem_chegada';
       const proximasDatas = [];
       
-      // Capturar datetime atual COMPLETO (com hora e minuto)
-      const agora = new Date();
+      // 🎯 Se usuário pediu data inválida, buscar a partir daquela data (não de hoje)
+      const agora = dataInvalidaOriginal ? new Date(dataInvalidaOriginal) : new Date();
       const horaAtual = agora.getHours();
       const minutoAtual = agora.getMinutes();
       
@@ -1946,7 +1946,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       const hoje = new Date(agora);
       hoje.setHours(0, 0, 0, 0);
       
-      console.log(`🔍 Buscando próximas datas disponíveis a partir de ${agora.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (próximos ${dias_busca} dias)...`);
+      console.log(`🔍 Buscando próximas datas disponíveis a partir de ${agora.toLocaleDateString('pt-BR')} ${dataInvalidaOriginal ? '(data solicitada: ' + dataInvalidaOriginal + ')' : '(hoje)'} - próximos ${dias_busca} dias`);
       
       let datasVerificadas = 0;
       let datasPuladasDiaSemana = 0;
