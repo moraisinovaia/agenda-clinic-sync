@@ -1074,64 +1074,27 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string) {
       return errorResponse('Informe pelo menos: paciente_nome, data_nascimento ou celular para busca');
     }
 
-    // 🔍 PASSO 1: Buscar TODOS os pacientes candidatos (sem consolidação ainda)
+    // 🔍 PASSO 1: Buscar TODOS os pacientes candidatos (BUSCA FUZZY MELHORADA)
+    // Estratégia: Buscar por NOME + NASCIMENTO como filtros principais
+    // O celular será usado apenas como filtro opcional em memória (não na query)
     let pacienteQuery = supabase
       .from('pacientes')
       .select('id, nome_completo, data_nascimento, celular, telefone, convenio, created_at, updated_at')
       .eq('cliente_id', clienteId);
 
+    // Filtros principais: NOME + NASCIMENTO (sem celular)
     if (pacienteNomeNormalizado) {
       pacienteQuery = pacienteQuery.ilike('nome_completo', `%${pacienteNomeNormalizado}%`);
     }
     if (dataNascimentoNormalizada) {
       pacienteQuery = pacienteQuery.eq('data_nascimento', dataNascimentoNormalizada);
     }
+    
+    // 📝 Log de estratégia de busca
     if (celularNormalizado) {
-      // 🔍 BUSCA FUZZY: Gerar múltiplas variações do celular para encontrar independente da formatação
-      console.log('📞 Celular fornecido para busca:', celularNormalizado);
-      
-      const variacoes: string[] = [
-        celularNormalizado, // Original normalizado (ex: 87991311991)
-      ];
-      
-      // Se tiver pelo menos 11 dígitos, gerar variações formatadas
-      if (celularNormalizado.length >= 11) {
-        const ddd = celularNormalizado.substring(0, 2);
-        const prefixo = celularNormalizado.substring(2, 7);
-        const sufixo = celularNormalizado.substring(7, 11);
-        
-        variacoes.push(
-          `(${ddd}) ${prefixo}-${sufixo}`,     // (87) 99131-1991
-          `(${ddd}) ${celularNormalizado.substring(2)}`, // (87) 991311991
-          `${ddd}${prefixo}${sufixo}`,          // 87991311991
-          `${ddd} ${prefixo}${sufixo}`,         // 87 991311991
-          `${ddd} ${prefixo}-${sufixo}`         // 87 99131-1991
-        );
-      } else if (celularNormalizado.length >= 10) {
-        // Telefone fixo (10 dígitos)
-        const ddd = celularNormalizado.substring(0, 2);
-        const prefixo = celularNormalizado.substring(2, 6);
-        const sufixo = celularNormalizado.substring(6, 10);
-        
-        variacoes.push(
-          `(${ddd}) ${prefixo}-${sufixo}`,     // (87) 9131-1991
-          `${ddd}${prefixo}${sufixo}`,          // 8791311991
-          `${ddd} ${prefixo}-${sufixo}`         // 87 9131-1991
-        );
-      }
-      
-      console.log(`🔍 Buscando celular com ${variacoes.length} variações:`, variacoes);
-      
-      // Buscar por qualquer uma das variações usando OR
-      const orConditions = variacoes
-        .map(v => `celular.ilike.%${v}%`)
-        .join(',');
-      
-      pacienteQuery = pacienteQuery.or(orConditions);
-      
+      console.log('📞 Celular fornecido será usado para filtro fuzzy em memória:', celularNormalizado);
     } else if (isCelularMascarado) {
       console.log('⚠️ Celular mascarado detectado - buscando apenas por nome + nascimento:', celularRaw);
-      // NÃO adiciona filtro de celular - busca apenas por nome + nascimento
     }
 
     const { data: pacientesEncontrados, error: pacienteError } = await pacienteQuery;
@@ -1153,11 +1116,52 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string) {
       });
     }
 
-    console.log(`🔍 Encontrados ${pacientesEncontrados.length} registros de pacientes antes da consolidação`);
+    console.log(`🔍 Encontrados ${pacientesEncontrados.length} registros de pacientes antes do filtro de celular`);
+
+    // 🎯 FILTRO FUZZY DE CELULAR (em memória, após busca)
+    // Se celular foi fornecido, aplicar tolerância de 1-2 dígitos nos últimos dígitos
+    let pacientesFiltrados = pacientesEncontrados;
+    
+    if (celularNormalizado && celularNormalizado.length >= 10) {
+      console.log('🔍 Aplicando filtro fuzzy de celular com tolerância nos últimos dígitos...');
+      
+      // Extrair últimos 4 dígitos do celular fornecido
+      const sufixoFornecido = celularNormalizado.slice(-4);
+      
+      pacientesFiltrados = pacientesEncontrados.filter((p: any) => {
+        if (!p.celular) return true; // Se não tem celular, mantém no resultado
+        
+        // Normalizar celular do paciente
+        const celularPaciente = normalizarTelefone(p.celular);
+        if (!celularPaciente || celularPaciente.length < 10) return true;
+        
+        // Extrair últimos 4 dígitos do celular do paciente
+        const sufixoPaciente = celularPaciente.slice(-4);
+        
+        // Calcular diferença entre os últimos 4 dígitos
+        const diff = Math.abs(parseInt(sufixoPaciente) - parseInt(sufixoFornecido));
+        
+        // Tolerância: aceitar diferença de até 5 nos últimos dígitos
+        // Ex: 1991 vs 1992 (diff=1) ✅ | 1991 vs 1995 (diff=4) ✅ | 1991 vs 1998 (diff=7) ❌
+        const tolerado = diff <= 5;
+        
+        if (!tolerado) {
+          console.log(`⚠️ Celular rejeitado por diferença: ${sufixoPaciente} vs ${sufixoFornecido} (diff=${diff})`);
+        } else if (diff > 0) {
+          console.log(`✅ Celular aceito com diferença tolerada: ${sufixoPaciente} vs ${sufixoFornecido} (diff=${diff})`);
+        }
+        
+        return tolerado;
+      });
+      
+      console.log(`🔍 Após filtro fuzzy: ${pacientesFiltrados.length} de ${pacientesEncontrados.length} pacientes mantidos`);
+    }
+
+    console.log(`🔍 Total de registros após filtragem: ${pacientesFiltrados.length}`);
 
     // 🔄 PASSO 2: CONSOLIDAR DUPLICATAS
     // Buscar último convênio usado em agendamentos para cada paciente
-    const pacienteIds = pacientesEncontrados.map((p: any) => p.id);
+    const pacienteIds = pacientesFiltrados.map((p: any) => p.id);
     const { data: ultimosAgendamentos } = await supabase
       .from('agendamentos')
       .select('paciente_id, convenio, data_agendamento, hora_agendamento')
@@ -1169,7 +1173,7 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string) {
     const lastConvenios: Record<string, string> = {};
     if (ultimosAgendamentos) {
       const patientToKeyMap: Record<string, string> = {};
-      pacientesEncontrados.forEach((p: any) => {
+      pacientesFiltrados.forEach((p: any) => {
         patientToKeyMap[p.id] = `${p.nome_completo.toLowerCase().trim()}-${p.data_nascimento}`;
       });
 
@@ -1182,15 +1186,15 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string) {
     }
 
     // Consolidar pacientes duplicados
-    const pacientesConsolidados = consolidatePatients(pacientesEncontrados, lastConvenios);
+    const pacientesConsolidados = consolidatePatients(pacientesFiltrados, lastConvenios);
     
-    console.log(`✅ Consolidação concluída: ${pacientesEncontrados.length} registros → ${pacientesConsolidados.length} pacientes únicos`);
+    console.log(`✅ Consolidação concluída: ${pacientesFiltrados.length} registros → ${pacientesConsolidados.length} pacientes únicos`);
     
-    if (pacientesConsolidados.length !== pacientesEncontrados.length) {
+    if (pacientesConsolidados.length !== pacientesFiltrados.length) {
       console.log('🔄 Duplicatas detectadas e consolidadas:', {
-        antes: pacientesEncontrados.length,
+        antes: pacientesFiltrados.length,
         depois: pacientesConsolidados.length,
-        duplicatasRemovidas: pacientesEncontrados.length - pacientesConsolidados.length
+        duplicatasRemovidas: pacientesFiltrados.length - pacientesConsolidados.length
       });
     }
 
