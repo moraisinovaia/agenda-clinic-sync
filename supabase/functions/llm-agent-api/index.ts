@@ -1899,10 +1899,13 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       });
     }
 
+    // 🎯 DECLARAR VARIÁVEIS DE DIA DA SEMANA (usadas em vários lugares)
+    const diasNomes = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+    let diaSemana: number | null = null;
+    
     // 🎯 VALIDAÇÃO DE DIA DA SEMANA (apenas se data_consulta foi fornecida)
     if (data_consulta) {
-      const diaSemana = getDiaSemana(data_consulta);
-      const diasNomes = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+      diaSemana = getDiaSemana(data_consulta);
       
       console.log(`📅 Validação: Data ${data_consulta} = ${diasNomes[diaSemana]} (${diaSemana})`);
       console.log(`📋 Dias permitidos para ${servicoKey}: ${servico.dias_semana?.map((d: number) => diasNomes[d]).join(', ') || 'todos'}`);
@@ -2170,6 +2173,13 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     }
 
     // 🎯 COMPORTAMENTO: VERIFICAR DATA ESPECÍFICA (se não entrou no bloco anterior)
+    // Se chegamos aqui, significa que data_consulta ainda existe (não foi redirecionada)
+    // Recalcular diaSemana se necessário
+    if (!diaSemana && data_consulta) {
+      diaSemana = getDiaSemana(data_consulta);
+      console.log(`📅 Recalculando dia da semana para ${data_consulta}: ${diasNomes[diaSemana]}`);
+    }
+    
     // 🔒 VERIFICAR SE A DATA ESTÁ BLOQUEADA
     const { data: bloqueios, error: bloqueioError } = await supabase
       .from('bloqueios_agenda')
