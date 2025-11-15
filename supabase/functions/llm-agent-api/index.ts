@@ -1032,8 +1032,10 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string) {
     if (dataNascimentoNormalizada) {
       pacienteQuery = pacienteQuery.eq('data_nascimento', dataNascimentoNormalizada);
     }
-    if (celularNormalizado) {
+    if (celularNormalizado && !celularNormalizado.includes('*')) {
       // 🔍 BUSCA FUZZY: Gerar múltiplas variações do celular para encontrar independente da formatação
+      console.log('📞 Celular fornecido para busca:', celularNormalizado);
+      
       const variacoes: string[] = [
         celularNormalizado, // Original normalizado (ex: 87991311991)
       ];
@@ -1072,6 +1074,10 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string) {
         .join(',');
       
       pacienteQuery = pacienteQuery.or(orConditions);
+      
+    } else if (celularNormalizado && celularNormalizado.includes('*')) {
+      console.log('⚠️ Celular mascarado detectado - buscando apenas por nome + nascimento:', celularNormalizado);
+      // NÃO adiciona filtro de celular - busca apenas por nome + nascimento
     }
 
     const { data: pacientesEncontrados, error: pacienteError } = await pacienteQuery;
