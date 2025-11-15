@@ -1033,7 +1033,45 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string) {
       pacienteQuery = pacienteQuery.eq('data_nascimento', dataNascimentoNormalizada);
     }
     if (celularNormalizado) {
-      pacienteQuery = pacienteQuery.ilike('celular', `%${celularNormalizado}%`);
+      // 🔍 BUSCA FUZZY: Gerar múltiplas variações do celular para encontrar independente da formatação
+      const variacoes: string[] = [
+        celularNormalizado, // Original normalizado (ex: 87991311991)
+      ];
+      
+      // Se tiver pelo menos 11 dígitos, gerar variações formatadas
+      if (celularNormalizado.length >= 11) {
+        const ddd = celularNormalizado.substring(0, 2);
+        const prefixo = celularNormalizado.substring(2, 7);
+        const sufixo = celularNormalizado.substring(7, 11);
+        
+        variacoes.push(
+          `(${ddd}) ${prefixo}-${sufixo}`,     // (87) 99131-1991
+          `(${ddd}) ${celularNormalizado.substring(2)}`, // (87) 991311991
+          `${ddd}${prefixo}${sufixo}`,          // 87991311991
+          `${ddd} ${prefixo}${sufixo}`,         // 87 991311991
+          `${ddd} ${prefixo}-${sufixo}`         // 87 99131-1991
+        );
+      } else if (celularNormalizado.length >= 10) {
+        // Telefone fixo (10 dígitos)
+        const ddd = celularNormalizado.substring(0, 2);
+        const prefixo = celularNormalizado.substring(2, 6);
+        const sufixo = celularNormalizado.substring(6, 10);
+        
+        variacoes.push(
+          `(${ddd}) ${prefixo}-${sufixo}`,     // (87) 9131-1991
+          `${ddd}${prefixo}${sufixo}`,          // 8791311991
+          `${ddd} ${prefixo}-${sufixo}`         // 87 9131-1991
+        );
+      }
+      
+      console.log(`🔍 Buscando celular com ${variacoes.length} variações:`, variacoes);
+      
+      // Buscar por qualquer uma das variações usando OR
+      const orConditions = variacoes
+        .map(v => `celular.ilike.%${v}%`)
+        .join(',');
+      
+      pacienteQuery = pacienteQuery.or(orConditions);
     }
 
     const { data: pacientesEncontrados, error: pacienteError } = await pacienteQuery;
