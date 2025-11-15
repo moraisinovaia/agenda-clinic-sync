@@ -995,6 +995,58 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
   }
 }
 
+// 🔧 CONSOLIDAÇÃO DE PACIENTES: Agrupa duplicatas e retorna registro único + todos IDs
+interface ConsolidatedPatient {
+  id: string;
+  all_ids: string[]; // TODOS os IDs de duplicatas para buscar agendamentos
+  nome_completo: string;
+  data_nascimento: string;
+  celular: string | null;
+  telefone: string | null;
+  ultimo_convenio: string;
+  updated_at: string;
+  created_at: string;
+}
+
+function consolidatePatients(patients: any[], lastConvenios: Record<string, string>): ConsolidatedPatient[] {
+  const consolidated = new Map<string, ConsolidatedPatient>();
+  
+  patients.forEach(patient => {
+    // Chave única: nome_completo (lowercase trim) + data_nascimento
+    const key = `${patient.nome_completo.toLowerCase().trim()}-${patient.data_nascimento}`;
+    
+    if (consolidated.has(key)) {
+      // Duplicata encontrada - adicionar ID ao array e usar o registro mais recente
+      const existing = consolidated.get(key)!;
+      existing.all_ids.push(patient.id);
+      
+      if (new Date(patient.updated_at) > new Date(existing.updated_at)) {
+        existing.id = patient.id;
+        existing.celular = patient.celular;
+        existing.telefone = patient.telefone;
+        existing.updated_at = patient.updated_at;
+      }
+    } else {
+      // Primeiro registro deste paciente
+      const ultimoConvenio = lastConvenios[key] || patient.convenio;
+      
+      consolidated.set(key, {
+        id: patient.id,
+        all_ids: [patient.id], // Iniciar array com o primeiro ID
+        nome_completo: patient.nome_completo,
+        data_nascimento: patient.data_nascimento,
+        celular: patient.celular,
+        telefone: patient.telefone,
+        ultimo_convenio: ultimoConvenio,
+        created_at: patient.created_at,
+        updated_at: patient.updated_at,
+      });
+    }
+  });
+  
+  return Array.from(consolidated.values());
+}
+
 // Verificar se paciente tem consultas agendadas
 async function handleCheckPatient(supabase: any, body: any, clienteId: string) {
   try {
@@ -1022,10 +1074,10 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string) {
       return errorResponse('Informe pelo menos: paciente_nome, data_nascimento ou celular para busca');
     }
 
-    // 🔍 PASSO 1: Verificar se o PACIENTE existe no sistema (independente de agendamentos)
+    // 🔍 PASSO 1: Buscar TODOS os pacientes candidatos (sem consolidação ainda)
     let pacienteQuery = supabase
       .from('pacientes')
-      .select('id, nome_completo, data_nascimento, celular, convenio, created_at')
+      .select('id, nome_completo, data_nascimento, celular, telefone, convenio, created_at, updated_at')
       .eq('cliente_id', clienteId);
 
     if (pacienteNomeNormalizado) {
@@ -1101,11 +1153,54 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string) {
       });
     }
 
-    // 🎯 PASSO 2: Paciente EXISTE no sistema! Buscar seus agendamentos FUTUROS
-    const paciente_ids = pacientesEncontrados.map((p: any) => p.id);
-    console.log(`✅ Paciente(s) encontrado(s): ${pacientesEncontrados.length}`, {
-      ids: paciente_ids,
-      nomes: pacientesEncontrados.map((p: any) => p.nome_completo)
+    console.log(`🔍 Encontrados ${pacientesEncontrados.length} registros de pacientes antes da consolidação`);
+
+    // 🔄 PASSO 2: CONSOLIDAR DUPLICATAS
+    // Buscar último convênio usado em agendamentos para cada paciente
+    const pacienteIds = pacientesEncontrados.map((p: any) => p.id);
+    const { data: ultimosAgendamentos } = await supabase
+      .from('agendamentos')
+      .select('paciente_id, convenio, data_agendamento, hora_agendamento')
+      .in('paciente_id', pacienteIds)
+      .order('data_agendamento', { ascending: false })
+      .order('hora_agendamento', { ascending: false });
+
+    // Mapear último convênio por chave (nome + nascimento)
+    const lastConvenios: Record<string, string> = {};
+    if (ultimosAgendamentos) {
+      const patientToKeyMap: Record<string, string> = {};
+      pacientesEncontrados.forEach((p: any) => {
+        patientToKeyMap[p.id] = `${p.nome_completo.toLowerCase().trim()}-${p.data_nascimento}`;
+      });
+
+      ultimosAgendamentos.forEach((apt: any) => {
+        const patientKey = patientToKeyMap[apt.paciente_id];
+        if (patientKey && !lastConvenios[patientKey] && apt.convenio) {
+          lastConvenios[patientKey] = apt.convenio;
+        }
+      });
+    }
+
+    // Consolidar pacientes duplicados
+    const pacientesConsolidados = consolidatePatients(pacientesEncontrados, lastConvenios);
+    
+    console.log(`✅ Consolidação concluída: ${pacientesEncontrados.length} registros → ${pacientesConsolidados.length} pacientes únicos`);
+    
+    if (pacientesConsolidados.length !== pacientesEncontrados.length) {
+      console.log('🔄 Duplicatas detectadas e consolidadas:', {
+        antes: pacientesEncontrados.length,
+        depois: pacientesConsolidados.length,
+        duplicatasRemovidas: pacientesEncontrados.length - pacientesConsolidados.length
+      });
+    }
+
+    // 🎯 PASSO 3: Buscar agendamentos FUTUROS de TODOS os IDs (incluindo duplicatas)
+    // Isso garante que encontramos agendamentos mesmo se estiverem vinculados a duplicatas
+    const paciente_ids = pacientesConsolidados.flatMap(p => p.all_ids);
+    console.log(`🔍 Buscando agendamentos para ${pacientesConsolidados.length} paciente(s) consolidado(s) (${paciente_ids.length} IDs totais)`, {
+      pacientes_unicos: pacientesConsolidados.length,
+      ids_totais: paciente_ids.length,
+      nomes: pacientesConsolidados.map(p => p.nome_completo)
     });
 
     const { data: agendamentos, error: agendamentoError } = await supabase
