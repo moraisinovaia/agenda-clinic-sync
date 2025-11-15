@@ -168,6 +168,67 @@ function calcularIdade(dataNascimento: string): number {
   return idade;
 }
 
+/**
+ * Busca o próximo horário livre no mesmo dia e período (incremento de 1 minuto)
+ * @returns { horario: string, tentativas: number } ou null se período lotado
+ */
+async function buscarProximoHorarioLivre(
+  supabase: any,
+  clienteId: string,
+  medicoId: string,
+  dataConsulta: string,
+  horarioInicial: string, // ex: "08:00:00"
+  periodoConfig: { inicio: string, fim: string, limite: number }
+): Promise<{ horario: string, tentativas: number } | null> {
+  
+  const [horaInicio, minInicio] = periodoConfig.inicio.split(':').map(Number);
+  const [horaFim, minFim] = periodoConfig.fim.split(':').map(Number);
+  
+  // Converter para minutos desde meia-noite
+  const minutoInicio = horaInicio * 60 + minInicio;
+  const minutoFim = horaFim * 60 + minFim;
+  
+  // Buscar TODOS os agendamentos do dia para esse médico
+  const { data: agendamentos } = await supabase
+    .from('agendamentos')
+    .select('hora_agendamento')
+    .eq('medico_id', medicoId)
+    .eq('data_agendamento', dataConsulta)
+    .eq('cliente_id', clienteId)
+    .in('status', ['agendado', 'confirmado']);
+  
+  // Verificar se já atingiu o limite de vagas
+  if (agendamentos && agendamentos.length >= periodoConfig.limite) {
+    console.log(`❌ Período lotado: ${agendamentos.length}/${periodoConfig.limite} vagas ocupadas`);
+    return null;
+  }
+  
+  console.log(`✅ Vagas disponíveis no período: ${agendamentos?.length || 0}/${periodoConfig.limite}`);
+  
+  // Criar Set de horários ocupados para busca rápida (formato HH:MM)
+  const horariosOcupados = new Set(
+    agendamentos?.map(a => a.hora_agendamento.substring(0, 5)) || []
+  );
+  
+  // Começar do horário inicial e buscar de 1 em 1 minuto
+  let tentativas = 0;
+  
+  for (let minuto = minutoInicio; minuto < minutoFim; minuto++) {
+    tentativas++;
+    const hora = Math.floor(minuto / 60);
+    const min = minuto % 60;
+    const horarioTeste = `${String(hora).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+    
+    if (!horariosOcupados.has(horarioTeste)) {
+      console.log(`✅ Horário livre encontrado: ${horarioTeste} (após ${tentativas} tentativas)`);
+      return { horario: horarioTeste + ':00', tentativas };
+    }
+  }
+  
+  console.log(`❌ Nenhum horário livre encontrado após ${tentativas} tentativas`);
+  return null;
+}
+
 // Função auxiliar para obter dia da semana (0=dom, 1=seg, ...)
 // ✅ CORRIGIDO: Forçar interpretação local da data (evitar deslocamento UTC)
 function getDiaSemana(data: string): number {
@@ -709,8 +770,127 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
 
     if (!result?.success) {
       console.error('❌ Função retornou erro:', result);
-      // Retornar como sucesso HTTP 200 mas com success: false no JSON
-      // Isso permite que o N8N processe a resposta sem erro HTTP
+      
+      // 🆕 SE FOR CONFLITO DE HORÁRIO, TENTAR ALOCAR AUTOMATICAMENTE
+      if (result?.error === 'CONFLICT') {
+        console.log('🔄 Conflito detectado, tentando alocação automática...');
+        
+        // Determinar período baseado no horário solicitado
+        const [hora] = hora_consulta.split(':').map(Number);
+        let periodoConfig = null;
+        let nomePeriodo = '';
+        
+        // Buscar regras do médico
+        const regrasMedico = BUSINESS_RULES.medicos[medico.id];
+        if (regrasMedico) {
+          // Pegar primeiro serviço (já validamos que existe anteriormente)
+          const servicoKey = Object.keys(regrasMedico.servicos)[0];
+          const servico = regrasMedico.servicos[servicoKey];
+          
+          // Determinar se é manhã ou tarde
+          if (servico.periodos?.manha) {
+            const [hInicio] = servico.periodos.manha.inicio.split(':').map(Number);
+            const [hFim] = servico.periodos.manha.fim.split(':').map(Number);
+            if (hora >= hInicio && hora < hFim) {
+              periodoConfig = servico.periodos.manha;
+              nomePeriodo = 'manhã';
+            }
+          }
+          
+          if (!periodoConfig && servico.periodos?.tarde) {
+            const [hInicio] = servico.periodos.tarde.inicio.split(':').map(Number);
+            const [hFim] = servico.periodos.tarde.fim.split(':').map(Number);
+            if (hora >= hInicio && hora < hFim) {
+              periodoConfig = servico.periodos.tarde;
+              nomePeriodo = 'tarde';
+            }
+          }
+        }
+        
+        // Se encontrou período válido, tentar buscar horário livre
+        if (periodoConfig) {
+          console.log(`📋 Período detectado: ${nomePeriodo} (${periodoConfig.inicio}-${periodoConfig.fim}, limite: ${periodoConfig.limite})`);
+          
+          const resultado = await buscarProximoHorarioLivre(
+            supabase,
+            clienteId,
+            medico.id,
+            data_consulta,
+            hora_consulta,
+            periodoConfig
+          );
+          
+          if (resultado) {
+            console.log(`🎯 Tentando alocar em ${resultado.horario}...`);
+            
+            // Tentar criar agendamento no novo horário
+            const { data: novoResult, error: novoError } = await supabase
+              .rpc('criar_agendamento_atomico_externo', {
+                p_cliente_id: clienteId,
+                p_nome_completo: paciente_nome.toUpperCase(),
+                p_data_nascimento: data_nascimento,
+                p_convenio: convenio,
+                p_telefone: telefone || null,
+                p_celular: celular,
+                p_medico_id: medico.id,
+                p_atendimento_id: atendimento_id,
+                p_data_agendamento: data_consulta,
+                p_hora_agendamento: resultado.horario,
+                p_observacoes: (observacoes || 'Agendamento via LLM Agent WhatsApp - Alocado automaticamente').toUpperCase(),
+                p_criado_por: 'LLM Agent WhatsApp',
+                p_force_conflict: false
+              });
+            
+            if (!novoError && novoResult?.success) {
+              console.log(`✅ Alocado com sucesso em ${resultado.horario}`);
+              
+              // Gerar mensagem personalizada
+              const isDraAdriana = medico.id === '32d30887-b876-4502-bf04-e55d7fb55b50';
+              let mensagem = `Consulta agendada com sucesso para ${paciente_nome}`;
+              
+              if (isDraAdriana) {
+                const mensagemPeriodo = nomePeriodo === 'manhã'
+                  ? 'Das 08:00 às 10:00 para fazer a ficha. A Dra. começa a atender às 08:45'
+                  : 'Das 13:00 às 15:00 para fazer a ficha. A Dra. começa a atender às 14:45';
+                
+                mensagem = `Agendada! ${mensagemPeriodo}, por ordem de chegada. Caso o plano Unimed seja coparticipação ou particular, recebemos apenas em espécie. Posso ajudar em algo mais?`;
+              }
+              
+              return successResponse({
+                message: mensagem,
+                agendamento_id: novoResult.agendamento_id,
+                paciente_id: novoResult.paciente_id,
+                data: data_consulta,
+                horario_solicitado: hora_consulta,
+                horario_alocado: resultado.horario,
+                medico: medico.nome,
+                atendimento: atendimento_nome || 'Consulta',
+                observacao: `Horário ${hora_consulta} estava ocupado. Alocado automaticamente em ${resultado.horario} (${nomePeriodo})`,
+                alocacao_automatica: true
+              });
+            }
+          }
+          
+          // Se chegou aqui, período está lotado
+          console.log(`❌ Período ${nomePeriodo} está lotado (${periodoConfig.limite} vagas)`);
+          return new Response(JSON.stringify({
+            success: false,
+            error: 'PERIOD_FULL',
+            message: `O período da ${nomePeriodo} está com todas as vagas ocupadas (${periodoConfig.limite}/${periodoConfig.limite}). Por favor, escolha outro período ou outro dia.`,
+            detalhes: {
+              periodo: nomePeriodo,
+              vagas_total: periodoConfig.limite,
+              data_solicitada: data_consulta
+            },
+            timestamp: new Date().toISOString()
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+      }
+      
+      // Para outros erros, manter comportamento original
       return new Response(JSON.stringify({
         success: false,
         error: result?.error || result?.message || 'Erro desconhecido',
