@@ -1020,7 +1020,49 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string) {
       return errorResponse('Informe pelo menos: paciente_nome, data_nascimento ou celular para busca');
     }
 
-    let query = supabase
+    // 🔍 PASSO 1: Verificar se o PACIENTE existe no sistema (independente de agendamentos)
+    let pacienteQuery = supabase
+      .from('pacientes')
+      .select('id, nome_completo, data_nascimento, celular, convenio, created_at')
+      .eq('cliente_id', clienteId);
+
+    if (pacienteNomeNormalizado) {
+      pacienteQuery = pacienteQuery.ilike('nome_completo', `%${pacienteNomeNormalizado}%`);
+    }
+    if (dataNascimentoNormalizada) {
+      pacienteQuery = pacienteQuery.eq('data_nascimento', dataNascimentoNormalizada);
+    }
+    if (celularNormalizado) {
+      pacienteQuery = pacienteQuery.ilike('celular', `%${celularNormalizado}%`);
+    }
+
+    const { data: pacientesEncontrados, error: pacienteError } = await pacienteQuery;
+
+    if (pacienteError) {
+      return errorResponse(`Erro ao buscar paciente: ${pacienteError.message}`);
+    }
+
+    // Se não encontrou NENHUM paciente com esses dados, é caso de migração
+    if (!pacientesEncontrados || pacientesEncontrados.length === 0) {
+      console.log('❌ Paciente não encontrado no sistema novo - possível caso de migração');
+      return successResponse({
+        encontrado: false,
+        consultas: [],
+        message: MIGRATION_MESSAGES.old_appointments,
+        observacao: 'Sistema em migração - dados anteriores a janeiro/2026 não disponíveis',
+        contato: MIGRATION_PHONE,
+        total: 0
+      });
+    }
+
+    // 🎯 PASSO 2: Paciente EXISTE no sistema! Buscar seus agendamentos FUTUROS
+    const paciente_ids = pacientesEncontrados.map((p: any) => p.id);
+    console.log(`✅ Paciente(s) encontrado(s): ${pacientesEncontrados.length}`, {
+      ids: paciente_ids,
+      nomes: pacientesEncontrados.map((p: any) => p.nome_completo)
+    });
+
+    const { data: agendamentos, error: agendamentoError } = await supabase
       .from('agendamentos')
       .select(`
         id,
@@ -1033,57 +1075,30 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string) {
         atendimentos(nome, tipo)
       `)
       .eq('cliente_id', clienteId)
+      .in('paciente_id', paciente_ids)
       .in('status', ['agendado', 'confirmado'])
       .gte('data_agendamento', new Date().toISOString().split('T')[0])
       .order('data_agendamento', { ascending: true });
 
-    // Buscar por nome do paciente COM filtro de cliente (usando nome normalizado)
-    if (pacienteNomeNormalizado) {
-      const { data: pacientes } = await supabase
-        .from('pacientes')
-        .select('id')
-        .ilike('nome_completo', `%${pacienteNomeNormalizado}%`)
-        .eq('cliente_id', clienteId);
-
-      if (pacientes && pacientes.length > 0) {
-        const paciente_ids = pacientes.map((p: any) => p.id);
-        query = query.in('paciente_id', paciente_ids);
-      }
+    if (agendamentoError) {
+      return errorResponse(`Erro ao buscar agendamentos: ${agendamentoError.message}`);
     }
 
-    const { data: agendamentos, error } = await query;
-
-    if (error) {
-      return errorResponse(`Erro ao buscar agendamentos: ${error.message}`);
-    }
-
-    // Filtrar por data de nascimento ou celular se fornecidos
-    let filteredAgendamentos = agendamentos || [];
-    
-    if (dataNascimentoNormalizada) {
-      filteredAgendamentos = filteredAgendamentos.filter((a: any) =>
-        a.pacientes?.data_nascimento === dataNascimentoNormalizada
-      );
-    }
-
-    if (celularNormalizado) {
-      filteredAgendamentos = filteredAgendamentos.filter((a: any) => 
-        a.pacientes?.celular?.includes(celularNormalizado)
-      );
-    }
-
-    if (filteredAgendamentos.length === 0) {
+    // Se não tem agendamentos FUTUROS, informar que existe mas sem consultas futuras
+    if (!agendamentos || agendamentos.length === 0) {
+      console.log('ℹ️ Paciente existe mas não tem agendamentos futuros');
       return successResponse({
-        encontrado: false,
+        encontrado: true,
+        paciente_cadastrado: true,
         consultas: [],
-        message: MIGRATION_MESSAGES.old_appointments,
-        observacao: 'Sistema em migração - dados anteriores a janeiro/2026 não disponíveis',
-        contato: MIGRATION_PHONE,
+        message: `Paciente ${pacientesEncontrados[0].nome_completo} está cadastrado(a) no sistema, mas não possui consultas futuras agendadas`,
+        observacao: 'Paciente pode agendar nova consulta',
         total: 0
       });
     }
 
-    const consultas = filteredAgendamentos.map((a: any) => ({
+    // 📋 PASSO 3: Montar resposta com agendamentos futuros
+    const consultas = agendamentos.map((a: any) => ({
       id: a.id,
       paciente: a.pacientes?.nome_completo,
       medico: a.medicos?.nome,
@@ -1096,7 +1111,9 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string) {
       observacoes: a.observacoes
     }));
 
+    console.log(`✅ ${consultas.length} consulta(s) futura(s) encontrada(s)`);
     return successResponse({
+      encontrado: true,
       message: `${consultas.length} consulta(s) encontrada(s)`,
       consultas,
       total: consultas.length
