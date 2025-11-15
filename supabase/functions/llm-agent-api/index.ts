@@ -169,8 +169,10 @@ function calcularIdade(dataNascimento: string): number {
 }
 
 // Função auxiliar para obter dia da semana (0=dom, 1=seg, ...)
+// ✅ CORRIGIDO: Forçar interpretação local da data (evitar deslocamento UTC)
 function getDiaSemana(data: string): number {
-  return new Date(data).getDay();
+  const [ano, mes, dia] = data.split('-').map(Number);
+  return new Date(ano, mes - 1, dia).getDay(); // Mês é 0-indexed
 }
 
 // ============= FUNÇÕES DE NORMALIZAÇÃO DE DADOS =============
@@ -1424,6 +1426,10 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     let periodoPreferido: 'manha' | 'tarde' | null = null;
     let diaPreferido: number | null = null; // 1=seg, 2=ter, 3=qua, 4=qui, 5=sex
     
+    // 🆕 CONTEXTO PARA DATA INVÁLIDA (usado quando dia da semana não é permitido)
+    let dataInvalidaOriginal: string | null = null;
+    let diaNomeInvalido: string | null = null;
+    
     if (mensagem_original) {
       const mensagemLower = mensagem_original.toLowerCase();
       
@@ -1893,6 +1899,36 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       });
     }
 
+    // 🎯 VALIDAÇÃO DE DIA DA SEMANA (apenas se data_consulta foi fornecida)
+    if (data_consulta) {
+      const diaSemana = getDiaSemana(data_consulta);
+      const diasNomes = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+      
+      console.log(`📅 Validação: Data ${data_consulta} = ${diasNomes[diaSemana]} (${diaSemana})`);
+      console.log(`📋 Dias permitidos para ${servicoKey}: ${servico.dias_semana?.map((d: number) => diasNomes[d]).join(', ') || 'todos'}`);
+      
+      if (servico.dias_semana && !servico.dias_semana.includes(diaSemana)) {
+        const diasPermitidos = servico.dias_semana.map((d: number) => diasNomes[d]).join(', ');
+        
+        console.log(`⚠️ Data inválida detectada! ${diasNomes[diaSemana]} não está em [${diasPermitidos}]`);
+        console.log(`🔄 Redirecionando para busca automática de próximas datas...`);
+        
+        // 🎯 SALVAR CONTEXTO DA DATA INVÁLIDA
+        dataInvalidaOriginal = data_consulta;
+        diaNomeInvalido = diasNomes[diaSemana];
+        
+        // 🔄 REDIRECIONAR PARA BUSCA AUTOMÁTICA
+        // Limpar data_consulta para acionar o fluxo de busca de próximas datas
+        data_consulta = undefined as any;
+        buscar_proximas = true;
+        
+        console.log(`✅ Redirecionamento configurado: buscar_proximas=true, data_consulta=undefined`);
+        console.log(`🔁 O código agora entrará no bloco de busca de próximas datas...`);
+      } else {
+        console.log(`✅ Validação de dia da semana passou: ${diasNomes[diaSemana]} está permitido`);
+      }
+    }
+
     // 🆕 SE NÃO FOI FORNECIDA DATA ESPECÍFICA, BUSCAR PRÓXIMAS DATAS DISPONÍVEIS
     if (!data_consulta) {
       const tipoAtendimento = servico.tipo || regras.tipo_agendamento || 'ordem_chegada';
@@ -2075,7 +2111,13 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       // 🆕 MENSAGEM CONTEXTUAL baseada na disponibilidade
       let mensagemInicial = '';
       
-      if (proximasDatas.length === 1) {
+      // 🎯 CONTEXTO DE DATA INVÁLIDA (quando houve redirecionamento)
+      if (dataInvalidaOriginal && diaNomeInvalido) {
+        const [ano, mes, dia] = dataInvalidaOriginal.split('-');
+        const dataFormatada = `${dia}/${mes}/${ano}`;
+        mensagemInicial = `⚠️ A data ${dataFormatada} (${diaNomeInvalido}) não está disponível para ${medico.nome}.\n\n`;
+        mensagemInicial += `✅ Mas encontrei estas datas disponíveis:\n\n`;
+      } else if (proximasDatas.length === 1) {
         mensagemInicial = `😊 Encontrei apenas 1 data disponível para ${medico.nome}:\n\n`;
       } else if (proximasDatas.length <= 3) {
         mensagemInicial = `✅ ${medico.nome} está com poucas vagas. Encontrei ${proximasDatas.length} datas:\n\n`;
@@ -2112,6 +2154,11 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         message: mensagem,
         baixa_disponibilidade: baixaDisponibilidade,  // 🆕 FLAG
         total_datas_encontradas: proximasDatas.length,
+        ...(dataInvalidaOriginal && { // 🆕 ADICIONAR CONTEXTO DE REDIRECIONAMENTO
+          data_solicitada_invalida: dataInvalidaOriginal,
+          dia_invalido: diaNomeInvalido,
+          motivo_redirecionamento: `${medico.nome} não atende ${servicoKey} aos ${diaNomeInvalido}s`
+        }),
         contexto: {
           medico_id: medico.id,
           medico_nome: medico.nome,
@@ -2122,18 +2169,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       });
     }
 
-    // 🎯 COMPORTAMENTO ORIGINAL: VERIFICAR DATA ESPECÍFICA
-    // Verificar dia da semana permitido
-    const diaSemana = getDiaSemana(data_consulta);
-    const diasNomes = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
-    
-    if (servico.dias_semana && !servico.dias_semana.includes(diaSemana)) {
-      const diasPermitidos = servico.dias_semana.map((d: number) => diasNomes[d]).join(', ');
-      return errorResponse(
-        `${medico.nome} não atende ${servicoKey} neste dia. Dias disponíveis: ${diasPermitidos}`
-      );
-    }
-
+    // 🎯 COMPORTAMENTO: VERIFICAR DATA ESPECÍFICA (se não entrou no bloco anterior)
     // 🔒 VERIFICAR SE A DATA ESTÁ BLOQUEADA
     const { data: bloqueios, error: bloqueioError } = await supabase
       .from('bloqueios_agenda')
