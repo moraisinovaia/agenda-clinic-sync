@@ -1688,6 +1688,10 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     // ✅ LÓGICA INTELIGENTE: Se for noite, buscar a partir de AMANHÃ
     const { data: dataAtual, hora: horaAtual, horarioEmMinutos: horarioAtualEmMinutos } = getDataHoraAtualBrasil();
 
+    // Variáveis para controle de migração e data original
+    let mensagemEspecial = null;
+    let data_consulta_original = data_consulta;
+
     if (!data_consulta) {
       // Se for depois das 18h, começar a busca de AMANHÃ
       if (horaAtual >= 18) {
@@ -1704,16 +1708,16 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       const dataConsulta = new Date(data_consulta + 'T00:00:00');
       const hoje = new Date(dataAtual + 'T00:00:00');
       
-      // ⚠️ MIGRAÇÃO: Bloquear consultas de disponibilidade antes de janeiro/2026
+      // ⚠️ MIGRAÇÃO: Ajustar data mínima e continuar busca
       if (data_consulta < MINIMUM_BOOKING_DATE) {
         console.log(`🚫 Data solicitada (${data_consulta}) é anterior à data mínima (${MINIMUM_BOOKING_DATE})`);
-        return successResponse({
-          message: getMigrationBlockMessage(medico_nome),
-          proximas_datas: [],
-          data_solicitada: data_consulta,
-          data_minima: MINIMUM_BOOKING_DATE,
-          observacao: 'Sistema em migração - agendamentos a partir de janeiro/2026'
-        });
+        console.log(`📅 Ajustando para buscar a partir de: ${MINIMUM_BOOKING_DATE}`);
+        
+        // Salvar mensagem especial mas continuar o fluxo para buscar datas disponíveis
+        mensagemEspecial = getMigrationBlockMessage(medico_nome);
+        
+        // Ajustar a data para iniciar a busca a partir da data mínima
+        data_consulta = MINIMUM_BOOKING_DATE;
       }
       
       // Calcular diferença em dias entre data solicitada e hoje
@@ -2220,11 +2224,14 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       }
       
       return successResponse({
-        message: `${proximasDatas.length} datas disponíveis encontradas`,
+        message: mensagemEspecial || `${proximasDatas.length} datas disponíveis encontradas`,
         medico: medico.nome,
         medico_id: medico.id,
         tipo_atendimento: 'ordem_chegada',
         proximas_datas: proximasDatas,
+        data_solicitada: data_consulta_original || data_consulta,
+        data_minima: mensagemEspecial ? MINIMUM_BOOKING_DATE : undefined,
+        observacao: mensagemEspecial ? 'Sistema em migração - sugestões a partir de janeiro/2026' : undefined,
         contexto: {
           medico_id: medico.id,
           medico_nome: medico.nome,
