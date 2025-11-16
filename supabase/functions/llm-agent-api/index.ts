@@ -899,7 +899,6 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
             servicos_disponiveis: atendimentosDisponiveis || []
           }
         });
-        );
       }
       
       atendimento_id = atendimento.id;
