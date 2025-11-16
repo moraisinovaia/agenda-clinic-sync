@@ -1640,6 +1640,20 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     medico_id = sanitizarCampoOpcional(medico_id);
     atendimento_nome = sanitizarCampoOpcional(atendimento_nome);
     
+    // 🆕 DETECTAR PERÍODO SOLICITADO: Extrair período da mensagem original
+    let periodo_solicitado = null;
+    if (mensagem_original) {
+      const msg = mensagem_original.toLowerCase();
+      if (msg.includes('manhã') || msg.includes('manha')) {
+        periodo_solicitado = 'manha';
+      } else if (msg.includes('tarde')) {
+        periodo_solicitado = 'tarde';
+      } else if (msg.includes('noite')) {
+        periodo_solicitado = 'noite';
+      }
+    }
+    console.log(`🕐 Período solicitado pelo usuário: ${periodo_solicitado || 'não especificado'}`);
+    
     // 🆕 DETECÇÃO DE DADOS INVERTIDOS: Verificar se medico_nome contém data ou se data_consulta contém nome
     if (data_consulta && typeof data_consulta === 'string') {
       // Se data_consulta contém "|" ou nome de médico, está invertido
@@ -2914,6 +2928,103 @@ async function handlePatientSearch(supabase: any, body: any, clienteId: string) 
   } catch (error: any) {
     return errorResponse(`Erro ao buscar pacientes: ${error?.message || 'Erro desconhecido'}`);
   }
+}
+
+/**
+ * 🆕 FUNÇÃO AUXILIAR: Buscar próximas datas com período específico disponível
+ */
+async function buscarProximasDatasComPeriodo(
+  supabase: any,
+  medico: any,
+  servico: any,
+  periodo: 'manha' | 'tarde' | 'noite',
+  dataInicial: string,
+  clienteId: string,
+  quantidade: number = 5
+) {
+  const datasEncontradas = [];
+  const periodoMap = {
+    'manha': 'manha',
+    'tarde': 'tarde',
+    'noite': 'noite'
+  };
+  const periodoKey = periodoMap[periodo];
+  
+  // Verificar se o serviço tem configuração para este período
+  if (!servico.periodos?.[periodoKey]) {
+    console.log(`⚠️ Serviço não atende no período: ${periodoKey}`);
+    return [];
+  }
+  
+  const configPeriodo = servico.periodos[periodoKey];
+  
+  console.log(`🔍 Buscando próximas ${quantidade} datas com ${periodo} disponível a partir de ${dataInicial}`);
+  
+  // Buscar próximos 30 dias (para garantir encontrar pelo menos 'quantidade' datas)
+  for (let diasAdiantados = 1; diasAdiantados <= 30; diasAdiantados++) {
+    const dataCheck = new Date(dataInicial + 'T00:00:00');
+    dataCheck.setDate(dataCheck.getDate() + diasAdiantados);
+    const dataCheckStr = dataCheck.toISOString().split('T')[0];
+    const diaSemanaNum = dataCheck.getDay();
+    
+    // Verificar se data é válida (>= MINIMUM_BOOKING_DATE)
+    if (dataCheckStr < MINIMUM_BOOKING_DATE) {
+      continue;
+    }
+    
+    // Pular finais de semana (se aplicável)
+    if (diaSemanaNum === 0 || diaSemanaNum === 6) {
+      continue;
+    }
+    
+    // Verificar disponibilidade APENAS do período específico
+    const { data: agendados, error } = await supabase
+      .from('agendamentos')
+      .select('id')
+      .eq('medico_id', medico.id)
+      .eq('data_agendamento', dataCheckStr)
+      .eq('cliente_id', clienteId)
+      .gte('hora_agendamento', configPeriodo.inicio)
+      .lte('hora_agendamento', configPeriodo.fim)
+      .gte('data_agendamento', MINIMUM_BOOKING_DATE)
+      .is('excluido_em', null)
+      .in('status', ['agendado', 'confirmado']);
+    
+    if (error) {
+      console.error(`❌ Erro ao verificar ${dataCheckStr}:`, error);
+      continue;
+    }
+    
+    const ocupadas = agendados?.length || 0;
+    const disponiveis = configPeriodo.limite - ocupadas;
+    
+    if (disponiveis > 0) {
+      const diasSemana = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+      const periodoNomes = { 'manha': 'Manhã', 'tarde': 'Tarde', 'noite': 'Noite' };
+      
+      datasEncontradas.push({
+        data: dataCheckStr,
+        dia_semana: diasSemana[diaSemanaNum],
+        periodos: [{
+          periodo: periodoNomes[periodo],
+          horario_distribuicao: configPeriodo.distribuicao_fichas || `${configPeriodo.inicio} às ${configPeriodo.fim}`,
+          vagas_disponiveis: disponiveis,
+          total_vagas: configPeriodo.limite,
+          tipo: 'ordem_chegada'
+        }]
+      });
+      
+      console.log(`✅ Encontrada: ${dataCheckStr} - ${disponiveis} vagas no período ${periodo}`);
+      
+      // Parar quando encontrar quantidade suficiente
+      if (datasEncontradas.length >= quantidade) {
+        break;
+      }
+    }
+  }
+  
+  console.log(`📊 Total de datas encontradas com ${periodo}: ${datasEncontradas.length}`);
+  return datasEncontradas;
 }
 
 // Funções auxiliares
