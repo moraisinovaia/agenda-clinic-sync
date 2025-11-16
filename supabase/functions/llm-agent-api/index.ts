@@ -723,6 +723,9 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
                     .select('id')
                     .eq('medico_id', medico.id)
                     .eq('data_agendamento', data_consulta)
+                    .eq('cliente_id', clienteId)
+                    .is('excluido_em', null)
+                    .is('cancelado_em', null)
                     .in('status', ['agendado', 'confirmado']);
                   
                   if (agendError) {
@@ -734,44 +737,71 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
                       
                       // 🆕 Buscar próximas datas com vagas disponíveis
                       let proximasDatasDisponiveis = [];
+                      console.log(`🔍 Buscando datas alternativas para ${regras.nome} - ${servicoKeyValidacao}...`);
+                      console.log(`📋 Limite de vagas: ${configPeriodo.limite}`);
+                      console.log(`📋 Período: ${configPeriodo.periodo || 'não especificado'}`);
+                      
                       try {
-                        // Buscar próximas 5 datas com vagas (simplificado)
-                        for (let dias = 1; dias <= 14; dias++) {
+                        // Buscar próximas 30 datas com vagas (aumentado de 14 para 30 dias)
+                        for (let dias = 1; dias <= 30; dias++) {
                           const dataFutura = new Date(data_consulta + 'T00:00:00');
                           dataFutura.setDate(dataFutura.getDate() + dias);
                           const dataFuturaStr = dataFutura.toISOString().split('T')[0];
                           
                           // Pular finais de semana
                           const diaSemana = dataFutura.getDay();
-                          if (diaSemana === 0 || diaSemana === 6) continue;
+                          if (diaSemana === 0 || diaSemana === 6) {
+                            console.log(`⏭️  Pulando ${dataFuturaStr} (final de semana)`);
+                            continue;
+                          }
                           
                           // Verificar se está dentro do período permitido
-                          if (dataFuturaStr < MINIMUM_BOOKING_DATE) continue;
+                          if (dataFuturaStr < MINIMUM_BOOKING_DATE) {
+                            console.log(`⏭️  Pulando ${dataFuturaStr} (antes da data mínima ${MINIMUM_BOOKING_DATE})`);
+                            continue;
+                          }
                           
-                          // Verificar disponibilidade
-                          const { data: agendadosFuturos } = await supabase
+                          // ✅ Buscar TODOS os agendamentos para qualquer atendimento deste médico
+                          const { data: agendadosFuturos, error: errorFuturo } = await supabase
                             .from('agendamentos')
-                            .select('id')
+                            .select('id, atendimento_id, hora_agendamento')
                             .eq('medico_id', medico.id)
                             .eq('data_agendamento', dataFuturaStr)
+                            .eq('cliente_id', clienteId)
                             .is('excluido_em', null)
+                            .is('cancelado_em', null)
                             .in('status', ['agendado', 'confirmado']);
                           
+                          if (errorFuturo) {
+                            console.error(`❌ Erro ao buscar agendamentos para ${dataFuturaStr}:`, errorFuturo);
+                            continue;
+                          }
+                          
                           const ocupadasFuturo = agendadosFuturos?.length || 0;
+                          console.log(`📊 ${dataFuturaStr}: ${ocupadasFuturo}/${configPeriodo.limite} vagas ocupadas`);
+                          
                           if (ocupadasFuturo < configPeriodo.limite) {
                             const diasSemanaArr = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+                            const vagasLivres = configPeriodo.limite - ocupadasFuturo;
+                            console.log(`✅ Data disponível encontrada: ${dataFuturaStr} - ${vagasLivres} vaga(s) livre(s)`);
+                            
                             proximasDatasDisponiveis.push({
                               data: dataFuturaStr,
                               dia_semana: diasSemanaArr[diaSemana],
-                              vagas_disponiveis: configPeriodo.limite - ocupadasFuturo,
+                              vagas_disponiveis: vagasLivres,
                               total_vagas: configPeriodo.limite
                             });
                             
-                            if (proximasDatasDisponiveis.length >= 5) break;
+                            if (proximasDatasDisponiveis.length >= 5) {
+                              console.log(`✅ Encontradas 5 datas disponíveis, parando busca.`);
+                              break;
+                            }
                           }
                         }
+                        
+                        console.log(`📊 Total de datas alternativas encontradas: ${proximasDatasDisponiveis.length}`);
                       } catch (err) {
-                        console.error('Erro ao buscar datas futuras:', err);
+                        console.error('❌ Erro ao buscar datas futuras:', err);
                       }
                       
                       // Construir mensagem amigável para WhatsApp
@@ -785,7 +815,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
                         });
                         mensagemUsuario += `\n💡 Gostaria de agendar em uma destas datas?`;
                       } else {
-                        mensagemUsuario += `⚠️ Não encontramos vagas nos próximos 14 dias.\n`;
+                        mensagemUsuario += `⚠️ Não encontramos vagas nos próximos 30 dias.\n`;
                         mensagemUsuario += `Por favor, entre em contato com a clínica para mais opções.`;
                       }
                       
