@@ -742,8 +742,8 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
                       console.log(`📋 Período: ${configPeriodo.periodo || 'não especificado'}`);
                       
                       try {
-                        // Buscar próximas 30 datas com vagas (aumentado de 14 para 30 dias)
-                        for (let dias = 1; dias <= 30; dias++) {
+                        // Buscar próximas 60 datas com vagas
+                        for (let dias = 1; dias <= 60; dias++) {
                           const dataFutura = new Date(data_consulta + 'T00:00:00');
                           dataFutura.setDate(dataFutura.getDate() + dias);
                           const dataFuturaStr = dataFutura.toISOString().split('T')[0];
@@ -815,7 +815,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
                         });
                         mensagemUsuario += `\n💡 Gostaria de agendar em uma destas datas?`;
                       } else {
-                        mensagemUsuario += `⚠️ Não encontramos vagas nos próximos 30 dias.\n`;
+                        mensagemUsuario += `⚠️ Não encontramos vagas nos próximos 60 dias.\n`;
                         mensagemUsuario += `Por favor, entre em contato com a clínica para mais opções.`;
                       }
                       
