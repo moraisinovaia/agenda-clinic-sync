@@ -519,7 +519,13 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
       if (!data_consulta) missingFields.push('data_consulta');
       if (!hora_consulta) missingFields.push('hora_consulta');
       
-      return errorResponse(`Campos obrigatórios faltando: ${missingFields.join(', ')}`);
+      return businessErrorResponse({
+        codigo_erro: 'DADOS_INCOMPLETOS',
+        mensagem_usuario: `❌ Faltam informações obrigatórias para o agendamento:\n\n${missingFields.map(f => `   • ${f}`).join('\n')}\n\n💡 Por favor, forneça todos os dados necessários.`,
+        detalhes: {
+          campos_faltando: missingFields
+        }
+      });
     }
 
     // 🗓️ Calcular dia da semana (necessário para validações)
@@ -549,7 +555,11 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
       
       medico = data;
       if (error || !medico) {
-        return errorResponse(`Médico com ID "${medico_id}" não encontrado ou inativo`);
+        return businessErrorResponse({
+          codigo_erro: 'MEDICO_NAO_ENCONTRADO',
+          mensagem_usuario: `❌ Médico com ID "${medico_id}" não foi encontrado ou está inativo.\n\n💡 Verifique se o código do médico está correto ou entre em contato com a clínica.`,
+          detalhes: { medico_id }
+        });
       }
       console.log(`✅ Médico encontrado por ID: ${medico.nome}`);
     } else {
@@ -564,7 +574,11 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
       
       medico = data;
       if (error || !medico) {
-        return errorResponse(`Médico "${medico_nome}" não encontrado ou inativo`);
+        return businessErrorResponse({
+          codigo_erro: 'MEDICO_NAO_ENCONTRADO',
+          mensagem_usuario: `❌ Médico "${medico_nome}" não foi encontrado ou está inativo.\n\n💡 Verifique o nome do médico ou entre em contato com a clínica para confirmar a disponibilidade.`,
+          detalhes: { medico_nome }
+        });
       }
       console.log(`✅ Médico encontrado por nome: ${medico.nome}`);
     }
@@ -592,9 +606,15 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
         if (regras.idade_minima) {
           const idade = calcularIdade(data_nascimento);
           if (idade < regras.idade_minima) {
-            return errorResponse(
-              `${regras.nome} atende apenas pacientes com ${regras.idade_minima}+ anos. Idade informada: ${idade} anos.`
-            );
+            return businessErrorResponse({
+              codigo_erro: 'IDADE_INCOMPATIVEL',
+              mensagem_usuario: `❌ ${regras.nome} atende apenas pacientes com ${regras.idade_minima}+ anos.\n\n📋 Idade informada: ${idade} anos\n\n💡 Por favor, consulte outro profissional adequado para a faixa etária.`,
+              detalhes: {
+                medico: regras.nome,
+                idade_minima: regras.idade_minima,
+                idade_paciente: idade
+              }
+            });
           }
           console.log(`✅ Validação de idade OK: ${idade} anos`);
         }
@@ -630,16 +650,30 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
               // 2.1 Verificar se permite agendamento online
               if (!servicoLocal.permite_online) {
                 console.log(`❌ Serviço ${servicoKeyValidacao} não permite agendamento online`);
-                return errorResponse(servicoLocal.mensagem || 'Este serviço não pode ser agendado online.');
+                return businessErrorResponse({
+                  codigo_erro: 'SERVICO_NAO_DISPONIVEL_ONLINE',
+                  mensagem_usuario: servicoLocal.mensagem || `❌ O serviço "${servicoKeyValidacao}" não pode ser agendado online.\n\n📞 Por favor, entre em contato com a clínica para agendar este procedimento.`,
+                  detalhes: {
+                    servico: servicoKeyValidacao,
+                    medico: regras.nome
+                  }
+                });
               }
               
               // 2.2 Verificar dias permitidos
               if (servicoLocal.dias_permitidos && dia_semana && !servicoLocal.dias_permitidos.includes(dia_semana)) {
                 const diasPermitidos = servicoLocal.dias_permitidos.join(', ');
                 console.log(`❌ ${regras.nome} não atende ${servicoKeyValidacao} às ${dia_semana}s`);
-                return errorResponse(
-                  `${regras.nome} não atende ${servicoKeyValidacao} no dia escolhido. Dias disponíveis: ${diasPermitidos}`
-                );
+                return businessErrorResponse({
+                  codigo_erro: 'DIA_NAO_PERMITIDO',
+                  mensagem_usuario: `❌ ${regras.nome} não atende ${servicoKeyValidacao} no dia escolhido.\n\n✅ Dias disponíveis: ${diasPermitidos}\n\n💡 Escolha uma data em um dos dias disponíveis.`,
+                  detalhes: {
+                    medico: regras.nome,
+                    servico: servicoKeyValidacao,
+                    dia_solicitado: dia_semana,
+                    dias_permitidos: servicoLocal.dias_permitidos
+                  }
+                });
               }
               
               // 2.3 Verificar períodos específicos por dia
@@ -647,18 +681,36 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
                 const periodosPermitidos = servicoLocal.periodos_por_dia[dia_semana];
                 if (periodosPermitidos && !periodosPermitidos.includes(periodo)) {
                   console.log(`❌ ${regras.nome} não atende ${servicoKeyValidacao} no período da ${periodo} às ${dia_semana}s`);
-                  return errorResponse(
-                    `${regras.nome} não atende ${servicoKeyValidacao} no período da ${periodo === 'manha' ? 'manhã' : 'tarde'}`
-                  );
+                  const periodoTexto = periodo === 'manha' ? 'Manhã' : periodo === 'tarde' ? 'Tarde' : 'Noite';
+                  return businessErrorResponse({
+                    codigo_erro: 'PERIODO_NAO_PERMITIDO',
+                    mensagem_usuario: `❌ ${regras.nome} não atende ${servicoKeyValidacao} no período da ${periodoTexto} às ${dia_semana}s.\n\n✅ Períodos disponíveis neste dia: ${periodosPermitidos.map(p => p === 'manha' ? 'Manhã' : p === 'tarde' ? 'Tarde' : 'Noite').join(', ')}\n\n💡 Escolha um dos períodos disponíveis.`,
+                    detalhes: {
+                      medico: regras.nome,
+                      servico: servicoKeyValidacao,
+                      dia_semana: dia_semana,
+                      periodo_solicitado: periodo,
+                      periodos_disponiveis: periodosPermitidos
+                    }
+                  });
                 }
                 
                 if (!periodosPermitidos && servicoLocal.periodos_por_dia) {
                   const diasDisponiveis = Object.keys(servicoLocal.periodos_por_dia);
                   const diasPermitidos = diasDisponiveis.join(', ');
                   console.log(`❌ ${regras.nome} não atende ${servicoKeyValidacao} às ${dia_semana}s no período da ${periodo}`);
-                  return errorResponse(
-                    `${regras.nome} não atende ${servicoKeyValidacao} no período da ${periodo === 'manha' ? 'manhã' : 'tarde'} no dia escolhido. Dias disponíveis para este período: ${diasPermitidos}`
-                  );
+                  const periodoTexto = periodo === 'manha' ? 'Manhã' : periodo === 'tarde' ? 'Tarde' : 'Noite';
+                  return businessErrorResponse({
+                    codigo_erro: 'DIA_PERIODO_NAO_PERMITIDO',
+                    mensagem_usuario: `❌ ${regras.nome} não atende ${servicoKeyValidacao} no período da ${periodoTexto} no dia escolhido.\n\n✅ Dias disponíveis para este período: ${diasPermitidos}\n\n💡 Escolha uma data em um dos dias disponíveis.`,
+                    detalhes: {
+                      medico: regras.nome,
+                      servico: servicoKeyValidacao,
+                      dia_solicitado: dia_semana,
+                      periodo: periodo,
+                      dias_com_periodo: diasDisponiveis
+                    }
+                  });
                 }
               }
               
@@ -679,9 +731,80 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
                     const vagasOcupadas = agendamentos?.length || 0;
                     if (vagasOcupadas >= configPeriodo.limite) {
                       console.log(`❌ Limite atingido para ${servicoKeyValidacao}: ${vagasOcupadas}/${configPeriodo.limite}`);
-                      return errorResponse(
-                        `Não há mais vagas disponíveis para ${regras.nome} - ${servicoKeyValidacao} neste período. Limite: ${configPeriodo.limite} pacientes, Ocupado: ${vagasOcupadas}`
-                      );
+                      
+                      // 🆕 Buscar próximas datas com vagas disponíveis
+                      let proximasDatasDisponiveis = [];
+                      try {
+                        // Buscar próximas 5 datas com vagas (simplificado)
+                        for (let dias = 1; dias <= 14; dias++) {
+                          const dataFutura = new Date(data_consulta + 'T00:00:00');
+                          dataFutura.setDate(dataFutura.getDate() + dias);
+                          const dataFuturaStr = dataFutura.toISOString().split('T')[0];
+                          
+                          // Pular finais de semana
+                          const diaSemana = dataFutura.getDay();
+                          if (diaSemana === 0 || diaSemana === 6) continue;
+                          
+                          // Verificar se está dentro do período permitido
+                          if (dataFuturaStr < MINIMUM_BOOKING_DATE) continue;
+                          
+                          // Verificar disponibilidade
+                          const { data: agendadosFuturos } = await supabase
+                            .from('agendamentos')
+                            .select('id')
+                            .eq('medico_id', medico.id)
+                            .eq('data_agendamento', dataFuturaStr)
+                            .is('excluido_em', null)
+                            .in('status', ['agendado', 'confirmado']);
+                          
+                          const ocupadasFuturo = agendadosFuturos?.length || 0;
+                          if (ocupadasFuturo < configPeriodo.limite) {
+                            const diasSemanaArr = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+                            proximasDatasDisponiveis.push({
+                              data: dataFuturaStr,
+                              dia_semana: diasSemanaArr[diaSemana],
+                              vagas_disponiveis: configPeriodo.limite - ocupadasFuturo,
+                              total_vagas: configPeriodo.limite
+                            });
+                            
+                            if (proximasDatasDisponiveis.length >= 5) break;
+                          }
+                        }
+                      } catch (err) {
+                        console.error('Erro ao buscar datas futuras:', err);
+                      }
+                      
+                      // Construir mensagem amigável para WhatsApp
+                      let mensagemUsuario = `❌ Não há mais vagas para ${regras.nome} - ${servicoKeyValidacao} em ${data_consulta}.\n\n`;
+                      mensagemUsuario += `📊 Status: ${vagasOcupadas}/${configPeriodo.limite} vagas ocupadas\n\n`;
+                      
+                      if (proximasDatasDisponiveis.length > 0) {
+                        mensagemUsuario += `✅ Próximas datas disponíveis:\n\n`;
+                        proximasDatasDisponiveis.forEach(d => {
+                          mensagemUsuario += `📅 ${d.data} (${d.dia_semana}) - ${d.vagas_disponiveis} vaga(s)\n`;
+                        });
+                        mensagemUsuario += `\n💡 Gostaria de agendar em uma destas datas?`;
+                      } else {
+                        mensagemUsuario += `⚠️ Não encontramos vagas nos próximos 14 dias.\n`;
+                        mensagemUsuario += `Por favor, entre em contato com a clínica para mais opções.`;
+                      }
+                      
+                      return businessErrorResponse({
+                        codigo_erro: 'LIMITE_VAGAS_ATINGIDO',
+                        mensagem_usuario: mensagemUsuario,
+                        detalhes: {
+                          medico: regras.nome,
+                          servico: servicoKeyValidacao,
+                          data_solicitada: data_consulta,
+                          limite_vagas: configPeriodo.limite,
+                          vagas_ocupadas: vagasOcupadas,
+                          vagas_disponiveis: 0
+                        },
+                        sugestoes: proximasDatasDisponiveis.length > 0 ? {
+                          proximas_datas: proximasDatasDisponiveis,
+                          acao_sugerida: 'reagendar_data_alternativa'
+                        } : null
+                      });
                     }
                     console.log(`✅ Vagas disponíveis: ${configPeriodo.limite - vagasOcupadas}`);
                   }
@@ -767,9 +890,15 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
         
         console.error(`❌ Atendimento "${atendimento_nome}" não encontrado. Disponíveis: ${listaAtendimentos}`);
         
-        return errorResponse(
-          `Atendimento "${atendimento_nome}" não encontrado para ${medico.nome}. ` +
-          `Atendimentos disponíveis: ${listaAtendimentos}`
+        return businessErrorResponse({
+          codigo_erro: 'SERVICO_NAO_ENCONTRADO',
+          mensagem_usuario: `❌ O serviço "${atendimento_nome}" não foi encontrado para ${medico.nome}.\n\n✅ Serviços disponíveis:\n${atendimentosDisponiveis?.map(a => `   • ${a.nome} (${a.tipo})`).join('\n') || '   (nenhum cadastrado)'}\n\n💡 Escolha um dos serviços disponíveis acima.`,
+          detalhes: {
+            servico_solicitado: atendimento_nome,
+            medico: medico.nome,
+            servicos_disponiveis: atendimentosDisponiveis || []
+          }
+        });
         );
       }
       
@@ -1695,7 +1824,14 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     if (data_consulta) {
       // Validar formato YYYY-MM-DD (após conversão)
       if (!/^\d{4}-\d{2}-\d{2}$/.test(data_consulta)) {
-        return errorResponse(`Formato de data inválido: "${data_consulta}". Use YYYY-MM-DD (ex: 2026-01-20) ou DD/MM/YYYY (ex: 20/01/2026)`);
+        return businessErrorResponse({
+          codigo_erro: 'FORMATO_DATA_INVALIDO',
+          mensagem_usuario: `❌ Formato de data inválido: "${data_consulta}"\n\n✅ Formatos aceitos:\n   • YYYY-MM-DD (ex: 2026-01-20)\n   • DD/MM/YYYY (ex: 20/01/2026)\n\n💡 Por favor, informe a data no formato correto.`,
+          detalhes: {
+            data_informada: data_consulta,
+            formatos_aceitos: ['YYYY-MM-DD', 'DD/MM/YYYY']
+          }
+        });
       }
     }
     
@@ -1772,11 +1908,23 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     
     // ✅ Validar campos obrigatórios
     if (!atendimento_nome || atendimento_nome.trim() === '') {
-      return errorResponse('Campo obrigatório: atendimento_nome (ex: "Consulta Cardiológica", "Colonoscopia")');
+      return businessErrorResponse({
+        codigo_erro: 'CAMPO_OBRIGATORIO',
+        mensagem_usuario: '❌ É necessário informar o tipo de atendimento.\n\n📋 Exemplos:\n   • Consulta Cardiológica\n   • Colonoscopia\n   • Endoscopia\n\n💡 Informe o nome do exame ou consulta desejada.',
+        detalhes: {
+          campo_faltando: 'atendimento_nome'
+        }
+      });
     }
     
     if (!medico_nome && !medico_id) {
-      return errorResponse('É necessário informar medico_nome OU medico_id');
+      return businessErrorResponse({
+        codigo_erro: 'CAMPO_OBRIGATORIO',
+        mensagem_usuario: '❌ É necessário informar o médico.\n\n📋 Você pode informar:\n   • Nome do médico (medico_nome)\n   • ID do médico (medico_id)\n\n💡 Escolha qual médico deseja consultar.',
+        detalhes: {
+          campo_faltando: 'medico_nome ou medico_id'
+        }
+      });
     }
     
     // 🔍 Buscar médico COM busca inteligente (aceita nomes parciais) - MOVIDO PARA ANTES DE USAR
@@ -1794,7 +1942,11 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       medico = data;
       if (error || !medico) {
         console.error(`❌ Médico ID não encontrado: ${medico_id}`, error);
-        return errorResponse(`Médico com ID "${medico_id}" não encontrado ou inativo`);
+        return businessErrorResponse({
+          codigo_erro: 'MEDICO_NAO_ENCONTRADO',
+          mensagem_usuario: `❌ Médico com ID "${medico_id}" não foi encontrado ou está inativo.\n\n💡 Verifique se o código do médico está correto.`,
+          detalhes: { medico_id }
+        });
       }
       console.log(`✅ Médico encontrado por ID: ${medico.nome}`);
       
@@ -1815,7 +1967,11 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       }
       
       if (!todosMedicos || todosMedicos.length === 0) {
-        return errorResponse('Nenhum médico ativo cadastrado no sistema');
+        return businessErrorResponse({
+          codigo_erro: 'NENHUM_MEDICO_ATIVO',
+          mensagem_usuario: '❌ Não há médicos ativos cadastrados no sistema no momento.\n\n📞 Por favor, entre em contato com a clínica para mais informações.',
+          detalhes: {}
+        });
       }
       
       // Função auxiliar: normalizar texto para comparação (sem pontuação, tudo minúsculo)
@@ -1837,10 +1993,15 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       
       if (medicosEncontrados.length === 0) {
         console.error(`❌ Nenhum médico encontrado para: "${medico_nome}"`);
-        const sugestoes = todosMedicos.map(m => m.nome).slice(0, 10).join(', ');
-        return errorResponse(
-          `Médico "${medico_nome}" não encontrado. Médicos disponíveis: ${sugestoes}`
-        );
+        const sugestoes = todosMedicos.map(m => m.nome).slice(0, 10);
+        return businessErrorResponse({
+          codigo_erro: 'MEDICO_NAO_ENCONTRADO',
+          mensagem_usuario: `❌ Médico "${medico_nome}" não encontrado.\n\n✅ Médicos disponíveis:\n${sugestoes.map(m => `   • ${m}`).join('\n')}\n\n💡 Escolha um dos médicos disponíveis acima.`,
+          detalhes: {
+            medico_solicitado: medico_nome,
+            medicos_disponiveis: sugestoes
+          }
+        });
       }
       
       if (medicosEncontrados.length > 1) {
@@ -3035,6 +3196,30 @@ function successResponse(data: any) {
     ...data
   }), {
     status: 200,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+  });
+}
+
+/**
+ * 🆕 Retorna erro de VALIDAÇÃO DE NEGÓCIO (não erro técnico)
+ * Status 200 para que n8n/LLM possa processar a resposta
+ */
+function businessErrorResponse(config: {
+  codigo_erro: string;
+  mensagem_usuario: string;
+  detalhes?: any;
+  sugestoes?: any;
+}) {
+  return new Response(JSON.stringify({
+    success: false,
+    codigo_erro: config.codigo_erro,
+    mensagem_usuario: config.mensagem_usuario,
+    mensagem_whatsapp: config.mensagem_usuario, // Compatibilidade
+    detalhes: config.detalhes || {},
+    sugestoes: config.sugestoes || null,
+    timestamp: new Date().toISOString()
+  }), {
+    status: 200, // ✅ Status 200 para n8n processar
     headers: { ...corsHeaders, 'Content-Type': 'application/json' }
   });
 }
