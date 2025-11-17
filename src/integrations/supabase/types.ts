@@ -1962,6 +1962,18 @@ export type Database = {
       }
       is_current_user_admin: { Args: never; Returns: boolean }
       is_super_admin: { Args: never; Returns: boolean }
+      listar_agendamentos_medico_dia: {
+        Args: { p_data: string; p_nome_medico: string }
+        Returns: {
+          agendamento_id: string
+          hora_agendamento: string
+          nome_paciente: string
+          observacoes: string
+          periodo: string
+          telefone_contato: string
+          tipo_atendimento: string
+        }[]
+      }
       listar_usuarios_orfaos: {
         Args: never
         Returns: {
