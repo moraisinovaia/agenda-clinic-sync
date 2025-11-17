@@ -1599,6 +1599,7 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string) {
       .from('agendamentos')
       .select(`
         id,
+        medico_id,
         data_agendamento,
         hora_agendamento,
         status,
