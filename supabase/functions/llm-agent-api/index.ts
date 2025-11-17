@@ -449,8 +449,10 @@ serve(async (req) => {
           return await handleAvailability(supabase, body, CLIENTE_ID);
         case 'patient-search':
           return await handlePatientSearch(supabase, body, CLIENTE_ID);
+        case 'list-appointments':
+          return await handleListAppointments(supabase, body, CLIENTE_ID);
         default:
-          return errorResponse('Ação não reconhecida. Ações disponíveis: schedule, check-patient, reschedule, cancel, availability, patient-search');
+          return errorResponse('Ação não reconhecida. Ações disponíveis: schedule, check-patient, reschedule, cancel, availability, patient-search, list-appointments');
       }
     }
 
@@ -1203,6 +1205,96 @@ function consolidatePatients(patients: any[], lastConvenios: Record<string, stri
   });
   
   return Array.from(consolidated.values());
+}
+
+// Listar agendamentos de um médico em uma data específica
+async function handleListAppointments(supabase: any, body: any, clienteId: string) {
+  try {
+    const { medico_nome, data } = body;
+
+    if (!medico_nome || !data) {
+      return errorResponse('Campos obrigatórios: medico_nome, data (formato YYYY-MM-DD ou "CURRENT_DATE")');
+    }
+
+    // Normalizar data
+    let dataFormatada = data;
+    if (data === 'CURRENT_DATE' || data.toLowerCase() === 'hoje' || data.toLowerCase() === 'today') {
+      dataFormatada = getDataAtualBrasil();
+      console.log(`📅 Data convertida de "${data}" para ${dataFormatada}`);
+    }
+
+    // Validar formato de data
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dataFormatada)) {
+      return errorResponse('Data inválida. Use formato YYYY-MM-DD ou "CURRENT_DATE"');
+    }
+
+    console.log(`📋 Listando agendamentos: médico="${medico_nome}", data=${dataFormatada}`);
+
+    // Chamar função do banco que retorna TODOS os médicos que correspondem à busca
+    const { data: agendamentos, error } = await supabase
+      .rpc('listar_agendamentos_medico_dia', {
+        p_nome_medico: medico_nome,
+        p_data: dataFormatada
+      });
+
+    if (error) {
+      console.error('❌ Erro ao listar agendamentos:', error);
+      return errorResponse(`Erro ao buscar agendamentos: ${error.message}`);
+    }
+
+    if (!agendamentos || agendamentos.length === 0) {
+      const mensagem = `Não foi encontrado nenhum agendamento para o Dr. ${medico_nome} em ${dataFormatada}.`;
+      return successResponse({
+        encontrado: false,
+        agendamentos: [],
+        total: 0,
+        message: mensagem,
+        data_busca: dataFormatada,
+        medico_busca: medico_nome
+      });
+    }
+
+    // Agrupar por período e tipo de atendimento
+    const manha = agendamentos.filter((a: any) => a.periodo === 'manhã');
+    const tarde = agendamentos.filter((a: any) => a.periodo === 'tarde');
+    
+    // Contar tipos
+    const tiposCount: Record<string, number> = {};
+    agendamentos.forEach((a: any) => {
+      tiposCount[a.tipo_atendimento] = (tiposCount[a.tipo_atendimento] || 0) + 1;
+    });
+
+    // Formatar mensagem amigável
+    const tiposLista = Object.entries(tiposCount)
+      .map(([tipo, qtd]) => `${qtd} ${tipo}${qtd > 1 ? 's' : ''}`)
+      .join(', ');
+    
+    const mensagem = `Encontrei ${agendamentos.length} agendamento(s) para o Dr. ${medico_nome} em ${dataFormatada}:\n\n` +
+      `📊 Resumo: ${tiposLista}\n\n` +
+      (manha.length > 0 ? `☀️ Manhã: ${manha.length} agendamento(s)\n` : '') +
+      (tarde.length > 0 ? `🌙 Tarde: ${tarde.length} agendamento(s)\n` : '');
+
+    console.log(`✅ Encontrados ${agendamentos.length} agendamentos (${manha.length} manhã, ${tarde.length} tarde)`);
+
+    return successResponse({
+      encontrado: true,
+      agendamentos: agendamentos,
+      total: agendamentos.length,
+      resumo: {
+        total: agendamentos.length,
+        manha: manha.length,
+        tarde: tarde.length,
+        tipos: tiposCount
+      },
+      message: mensagem,
+      data_busca: dataFormatada,
+      medico_busca: medico_nome
+    });
+
+  } catch (error: any) {
+    console.error('❌ Erro ao processar list-appointments:', error);
+    return errorResponse(`Erro ao processar requisição: ${error.message}`);
+  }
 }
 
 // Verificar se paciente tem consultas agendadas

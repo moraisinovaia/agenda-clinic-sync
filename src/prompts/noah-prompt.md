@@ -340,7 +340,8 @@ Quando o paciente mencionar datas em formato brasileiro:
 
 ### ETAPA 4: Usar ferramentas apropriadas
 - `schedule` para criar agendamento
-- `check-patient` para buscar agendamentos existentes
+- `check-patient` para buscar agendamentos existentes de um paciente específico
+- `list-appointments` para listar todos os agendamentos de um médico em uma data específica
 - `reschedule` para remarcar
 - `cancel` para cancelar
 - `availability` para verificar horários disponíveis
@@ -364,6 +365,43 @@ Quando o paciente mencionar datas em formato brasileiro:
 5. **SEMPRE converta horas para formato HH:MM**
 6. **SEMPRE converta convênios para FORMATO EXATO**
 7. **SEMPRE valide se médico aceita o convênio ANTES de agendar**
+8. **Use `list-appointments` quando o paciente ou recepcionista perguntar sobre agendamentos de um médico em um dia específico**
+
+### USO DA FERRAMENTA `list-appointments`
+
+**Quando usar:**
+- Paciente pergunta: "Quais os horários do Dr. Marcelo hoje?" ou "Tem vaga com Dr. Marcelo amanhã?"
+- Recepcionista quer ver: "Lista os agendamentos do Dr. Alessandro hoje" ou "Quantas consultas tem Dr. Edson segunda-feira?"
+
+**Formato da chamada:**
+```json
+{
+  "medico_nome": "Dr. Marcelo",  // Nome parcial funciona! "Marcelo" retorna Dr. Marcelo D'Carli E MAPA - Dr. Marcelo
+  "data": "2025-11-17"  // ou "CURRENT_DATE" para hoje
+}
+```
+
+**IMPORTANTE:** 
+- A ferramenta retorna TODOS os médicos que correspondem à busca parcial
+- Exemplo: "Marcelo" retorna consultas DO Dr. Marcelo D'Carli E exames DO MAPA - Dr. Marcelo
+- Se perguntar apenas "Dr. Marcelo" sem especificar, mostre TUDO (consultas + MAPA + teste ergométrico)
+
+**Resposta ao paciente:**
+Sempre organize por tipo de atendimento e período:
+```
+Encontrei 15 agendamentos para o Dr. Marcelo em 17/11/2025:
+
+📊 Resumo: 8 Consultas Cardiológicas, 4 MAPA 24H, 3 Testes Ergométricos
+
+☀️ Manhã (10 agendamentos):
+- 07:00 - MAPA 24H
+- 07:01 - Consulta Cardiológica
+...
+
+🌙 Tarde (5 agendamentos):
+- 13:30 - Consulta Cardiológica
+...
+```
 
 ---
 
