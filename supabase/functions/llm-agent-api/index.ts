@@ -154,7 +154,7 @@ const BUSINESS_RULES = {
       }
     },
     
-    // Dr. Pedro Francisco - Ultrassonografista - ORDEM DE CHEGADA
+    // Dr. Pedro Francisco - Clínico Geral (Consulta e Retorno) - ORDEM DE CHEGADA
     '66e9310d-34cd-4005-8937-74e87125dc03': {
       nome: 'DR. PEDRO FRANCISCO',
       tipo_agendamento: 'ordem_chegada',
@@ -162,11 +162,34 @@ const BUSINESS_RULES = {
         'Consulta': {
           permite_online: true,
           tipo: 'ordem_chegada',
-          dias_semana: [2, 4], // ter e qui apenas
+          dias_semana: [2, 4], // terça e quinta
           periodos: {
-            manha: { inicio: '07:00', fim: '12:00', limite: 3, distribuicao_fichas: '09:30 às 10:00' }
+            manha: { 
+              inicio: '09:30', 
+              fim: '10:00', 
+              limite: 4, 
+              atendimento_inicio: null, // Começa quando termina os exames
+              distribuicao_fichas: '09:30 às 10:00',
+              observacao: 'O Dr. começa a atender quando termina os exames'
+            }
           },
-          mensagem_extra: 'Chegue entre 9h30 e 10h. O atendimento é após os exames, por ordem de chegada.'
+          convenios_aceitos: ['UNIMED NACIONAL', 'UNIMED REGIONAL', 'UNIMED 40%', 'UNIMED 20%', 'UNIMED INTERCAMBIO', 'MEDPREV']
+        },
+        'Retorno': {
+          permite_online: true,
+          tipo: 'ordem_chegada',
+          dias_semana: [2, 4], // terça e quinta
+          periodos: {
+            manha: { 
+              inicio: '09:30', 
+              fim: '10:00', 
+              limite: 4,
+              atendimento_inicio: null,
+              distribuicao_fichas: '09:30 às 10:00',
+              observacao: 'O Dr. começa a atender quando termina os exames'
+            }
+          },
+          convenios_aceitos: ['UNIMED NACIONAL', 'UNIMED REGIONAL', 'UNIMED 40%', 'UNIMED 20%', 'UNIMED INTERCAMBIO', 'MEDPREV']
         }
       }
     },
@@ -181,12 +204,19 @@ const BUSINESS_RULES = {
           tipo: 'ordem_chegada',
           dias_semana: [1], // apenas segunda
           periodos: {
-            manha: { inicio: '07:00', fim: '12:00', limite: 9, atendimento_inicio: '08:00', distribuicao_fichas: '08:00 às 09:30' }
-          }
+            manha: { 
+              inicio: '08:00', 
+              fim: '09:00', 
+              limite: 10, 
+              atendimento_inicio: '08:00', 
+              distribuicao_fichas: '08:00 às 09:00' 
+            }
+          },
+          convenios_aceitos: ['UNIMED NACIONAL', 'UNIMED REGIONAL', 'UNIMED 40%', 'UNIMED 20%', 'UNIMED INTERCAMBIO', 'MEDPREV']
         },
         'Consulta Cardiológica': {
           permite_online: false,
-          mensagem: 'Para consultas e retornos com Dr. Alessandro Dias, agende por telefone: (87) 3866-4050'
+          mensagem: 'Consultas devem ser agendadas por ligação: (87) 3866-4050'
         }
       }
     }
