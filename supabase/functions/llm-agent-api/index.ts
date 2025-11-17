@@ -193,6 +193,114 @@ const BUSINESS_RULES = {
   }
 };
 
+/**
+ * Formata data em português por extenso (ex: "06/02/2026")
+ */
+function formatarDataPorExtenso(dataISO: string): string {
+  const [ano, mes, dia] = dataISO.split('-');
+  return `${dia}/${mes}/${ano}`;
+}
+
+/**
+ * Monta mensagem contextual de consulta com informações do período e pagamento
+ */
+function montarMensagemConsulta(
+  agendamento: any,
+  regras: any,
+  periodoConfig: any,
+  isOrdemChegada: boolean
+): string {
+  const dataFormatada = formatarDataPorExtenso(agendamento.data_agendamento);
+  const periodo = periodoConfig.distribuicao_fichas || 
+                  `${periodoConfig.inicio} às ${periodoConfig.fim}`;
+  
+  let mensagem = `O(a) paciente ${agendamento.paciente_nome} tem uma consulta agendada para o dia ${dataFormatada}`;
+  
+  if (isOrdemChegada) {
+    mensagem += ` no horário de ${periodo}`;
+    
+    if (periodoConfig.atendimento_inicio) {
+      mensagem += `. ${regras.nome} começa a atender às ${periodoConfig.atendimento_inicio}, por ordem de chegada`;
+    } else {
+      mensagem += `, por ordem de chegada`;
+    }
+  } else {
+    mensagem += ` às ${agendamento.hora_agendamento}`;
+  }
+  
+  // Adicionar informação sobre pagamento Unimed
+  if (agendamento.convenio && agendamento.convenio.toLowerCase().includes('unimed')) {
+    mensagem += `. Caso o plano Unimed seja coparticipação ou particular, recebemos apenas em espécie`;
+  }
+  
+  return mensagem + '.';
+}
+
+/**
+ * Formata consulta com contexto de regras de negócio (períodos, ordem de chegada, etc)
+ */
+function formatarConsultaComContexto(agendamento: any): any {
+  // 1. Buscar regras do médico em BUSINESS_RULES.medicos
+  const regras = BUSINESS_RULES.medicos[agendamento.medico_id];
+  
+  // 2. Se não tem regras, retornar formato simples
+  if (!regras) {
+    return {
+      ...agendamento,
+      horario_formatado: agendamento.hora_agendamento,
+      mensagem: `Consulta agendada para ${formatarDataPorExtenso(agendamento.data_agendamento)} às ${agendamento.hora_agendamento}.`
+    };
+  }
+  
+  // 3. Identificar o serviço/atendimento
+  const servicoKey = Object.keys(regras.servicos).find(s => {
+    const atendimentoNome = agendamento.atendimento_nome?.toLowerCase() || '';
+    return atendimentoNome.includes(s.toLowerCase()) || s.toLowerCase().includes(atendimentoNome);
+  });
+  
+  if (!servicoKey) {
+    return {
+      ...agendamento,
+      horario_formatado: agendamento.hora_agendamento,
+      mensagem: `Consulta agendada para ${formatarDataPorExtenso(agendamento.data_agendamento)} às ${agendamento.hora_agendamento}.`
+    };
+  }
+  
+  const servico = regras.servicos[servicoKey];
+  
+  // 4. Usar classificarPeriodoAgendamento para identificar o período
+  const periodo = classificarPeriodoAgendamento(
+    agendamento.hora_agendamento, 
+    servico.periodos
+  );
+  
+  if (!periodo) {
+    return {
+      ...agendamento,
+      horario_formatado: agendamento.hora_agendamento,
+      mensagem: `Consulta agendada para ${formatarDataPorExtenso(agendamento.data_agendamento)} às ${agendamento.hora_agendamento}.`
+    };
+  }
+  
+  const periodoConfig = servico.periodos[periodo];
+  
+  // 5. Montar mensagem contextual
+  const mensagem = montarMensagemConsulta(
+    agendamento,
+    regras,
+    periodoConfig,
+    servico.tipo === 'ordem_chegada'
+  );
+  
+  return {
+    ...agendamento,
+    periodo: periodoConfig.distribuicao_fichas || `${periodoConfig.inicio} às ${periodoConfig.fim}`,
+    atendimento_inicio: periodoConfig.atendimento_inicio,
+    tipo_agendamento: servico.tipo,
+    mensagem
+  };
+}
+
 // Função auxiliar para calcular idade
 function calcularIdade(dataNascimento: string): number {
   const hoje = new Date();
@@ -1492,24 +1600,37 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string) {
       });
     }
 
-    // 📋 PASSO 3: Montar resposta com agendamentos futuros
-    const consultas = agendamentos.map((a: any) => ({
-      id: a.id,
-      paciente: a.pacientes?.nome_completo,
-      medico: a.medicos?.nome,
-      especialidade: a.medicos?.especialidade,
-      atendimento: a.atendimentos?.nome,
-      data: a.data_agendamento,
-      hora: a.hora_agendamento,
-      status: a.status,
-      convenio: a.pacientes?.convenio,
-      observacoes: a.observacoes
-    }));
+    // 📋 PASSO 3: Montar resposta com agendamentos futuros formatados contextualmente
+    const consultas = agendamentos.map((a: any) => {
+      const consultaBase = {
+        id: a.id,
+        paciente_nome: a.pacientes?.nome_completo,
+        medico_id: a.medico_id,
+        medico_nome: a.medicos?.nome,
+        especialidade: a.medicos?.especialidade,
+        atendimento_nome: a.atendimentos?.nome,
+        data_agendamento: a.data_agendamento,
+        hora_agendamento: a.hora_agendamento,
+        status: a.status,
+        convenio: a.pacientes?.convenio,
+        observacoes: a.observacoes
+      };
+      
+      // ✅ Aplicar formatação contextual com regras de negócio
+      return formatarConsultaComContexto(consultaBase);
+    });
+
+    // Construir mensagem geral com todas as consultas formatadas
+    const mensagensConsultas = consultas.map((c, i) => 
+      `${i + 1}. ${c.mensagem}`
+    ).join('\n\n');
 
     console.log(`✅ ${consultas.length} consulta(s) futura(s) encontrada(s)`);
     return successResponse({
       encontrado: true,
-      message: `${consultas.length} consulta(s) encontrada(s)`,
+      message: consultas.length === 1 
+        ? consultas[0].mensagem 
+        : `${consultas.length} consulta(s) encontrada(s):\n\n${mensagensConsultas}`,
       consultas,
       total: consultas.length
     });
