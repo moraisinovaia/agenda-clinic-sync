@@ -1965,13 +1965,7 @@ export type Database = {
       listar_agendamentos_medico_dia: {
         Args: { p_data: string; p_nome_medico: string }
         Returns: {
-          agendamento_id: string
-          hora_agendamento: string
-          nome_paciente: string
-          observacoes: string
-          periodo: string
-          telefone_contato: string
-          tipo_atendimento: string
+          agendamento_info: string
         }[]
       }
       listar_usuarios_orfaos: {
