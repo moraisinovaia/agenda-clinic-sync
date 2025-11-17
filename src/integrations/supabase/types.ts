@@ -1964,9 +1964,7 @@ export type Database = {
       is_super_admin: { Args: never; Returns: boolean }
       listar_agendamentos_medico_dia: {
         Args: { p_data: string; p_nome_medico: string }
-        Returns: {
-          agendamento_info: string
-        }[]
+        Returns: Json
       }
       listar_usuarios_orfaos: {
         Args: never
