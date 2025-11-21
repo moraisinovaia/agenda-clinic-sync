@@ -2762,27 +2762,34 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
             continue;
           }
           
-          // Buscar agendamentos existentes
-          const { data: agendamentos } = await supabase
-            .from('agendamentos')
-            .select('hora_agendamento')
-            .eq('medico_id', medico.id)
-            .eq('data_agendamento', dataFuturaStr)
-            .eq('cliente_id', clienteId)
-            .is('excluido_em', null)
-            .in('status', ['agendado', 'confirmado']);
+      // Buscar agendamentos existentes
+      const { data: agendamentos } = await supabase
+        .from('agendamentos')
+        .select('hora_agendamento')
+        .eq('medico_id', medico.id)
+        .eq('data_agendamento', dataFuturaStr)
+        .eq('cliente_id', clienteId)
+        .is('excluido_em', null)
+        .in('status', ['agendado', 'confirmado']);
+      
+      // Classificar agendamentos no período correto
+      let vagasOcupadas = 0;
+      if (agendamentos && agendamentos.length > 0) {
+        // 🛡️ Verificar se hora_inicio e hora_fim existem antes de processar
+        if ((config as any).hora_inicio && (config as any).hora_fim) {
+          const [horaInicio] = (config as any).hora_inicio.split(':').map(Number);
+          const [horaFim] = (config as any).hora_fim.split(':').map(Number);
           
-          // Classificar agendamentos no período correto
-          let vagasOcupadas = 0;
-          if (agendamentos && agendamentos.length > 0) {
-            const [horaInicio] = (config as any).hora_inicio.split(':').map(Number);
-            const [horaFim] = (config as any).hora_fim.split(':').map(Number);
-            
-            vagasOcupadas = agendamentos.filter(ag => {
-              const [horaAg] = ag.hora_agendamento.split(':').map(Number);
-              return horaAg >= horaInicio && horaAg < horaFim;
-            }).length;
-          }
+          vagasOcupadas = agendamentos.filter(ag => {
+            const [horaAg] = ag.hora_agendamento.split(':').map(Number);
+            return horaAg >= horaInicio && horaAg < horaFim;
+          }).length;
+        } else {
+          // Se não tem hora_inicio/hora_fim configurado, contar todos os agendamentos do dia
+          console.warn(`⚠️ hora_inicio ou hora_fim não configurados para ${servicoKey} - ${periodo}`);
+          vagasOcupadas = agendamentos.length;
+        }
+      }
           
           const vagasDisponiveis = (config as any).limite - vagasOcupadas;
           
