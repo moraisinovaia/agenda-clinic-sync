@@ -602,6 +602,23 @@ serve(async (req) => {
   }
 })
 
+/**
+ * Normaliza nome do convênio para padronizar variações
+ * Exemplos:
+ * - "unimed" → "UNIMED"
+ * - "Unimed Nacional" → "UNIMED NACIONAL"
+ * - "UNIMED-REGIONAL" → "UNIMED REGIONAL"
+ */
+function normalizarConvenio(convenio: string): string {
+  if (!convenio) return convenio;
+  
+  return convenio
+    .toUpperCase()
+    .trim()
+    .replace(/[-_]/g, ' ') // Trocar hífens e underscores por espaços
+    .replace(/\s+/g, ' '); // Remover espaços duplicados
+}
+
 // Agendar consulta
 async function handleSchedule(supabase: any, body: any, clienteId: string) {
   try {
@@ -1169,9 +1186,49 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
                 );
               }
             } else {
-              // ORDEM DE CHEGADA: usar horário de início do período
-              console.log(`📋 Ordem de chegada: usando horário de início ${configPeriodo.inicio}`);
-              horarioFinal = configPeriodo.inicio + ':00';
+              // ORDEM DE CHEGADA: buscar primeiro horário LIVRE (não fixo!)
+              console.log(`📋 Ordem de chegada: buscando primeiro horário livre no período ${periodoNormalizado}`);
+              
+              const intervaloMinutos = 1; // Incremento de 1min para ordem de chegada
+              const [horaInicio, minInicio] = configPeriodo.inicio.split(':').map(Number);
+              const [horaFim, minFim] = configPeriodo.fim.split(':').map(Number);
+              
+              let horaAtual = horaInicio * 60 + minInicio;
+              const horaLimite = horaFim * 60 + minFim;
+              
+              // Buscar primeiro minuto livre
+              while (horaAtual < horaLimite) {
+                const h = Math.floor(horaAtual / 60);
+                const m = horaAtual % 60;
+                const horarioTeste = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:00`;
+                
+                // Verificar se este horário está disponível
+                const { count } = await supabase
+                  .from('agendamentos')
+                  .select('*', { count: 'exact', head: true })
+                  .eq('medico_id', medico.id)
+                  .eq('data_agendamento', data_consulta)
+                  .eq('hora_agendamento', horarioTeste)
+                  .eq('cliente_id', clienteId)
+                  .is('excluido_em', null)
+                  .in('status', ['agendado', 'confirmado']);
+                
+                if (count === 0) {
+                  console.log(`✅ Primeiro horário livre encontrado: ${horarioTeste}`);
+                  horarioFinal = horarioTeste;
+                  break;
+                }
+                
+                horaAtual += intervaloMinutos;
+              }
+              
+              if (horarioFinal === hora_consulta) {
+                // Não encontrou nenhum horário livre no período
+                return errorResponse(
+                  `❌ Não há horários disponíveis no período da ${hora_consulta} em ${data_consulta}.\n\n` +
+                  `💡 Todas as vagas da ${hora_consulta} já foram ocupadas. Consulte a disponibilidade para ver outros períodos.`
+                );
+              }
             }
           } else {
             return errorResponse(
@@ -1203,7 +1260,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
         p_cliente_id: clienteId, // 🆕 Passar cliente_id explicitamente
         p_nome_completo: paciente_nome.toUpperCase(),
         p_data_nascimento: data_nascimento,
-        p_convenio: convenio, // Manter capitalização original para validação correta
+        p_convenio: normalizarConvenio(convenio), // ✅ Normalizar convênio
         p_telefone: telefone || null,
         p_celular: celular,
         p_medico_id: medico.id,
@@ -1229,8 +1286,8 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
       if (result?.error === 'CONFLICT') {
         console.log('🔄 Conflito detectado, tentando alocação automática...');
         
-        // Determinar período baseado no horário solicitado
-        const [hora] = hora_consulta.split(':').map(Number);
+        // Determinar período baseado no horário FINAL (não hora_consulta!)
+        const [hora] = horarioFinal.split(':').map(Number); // ✅ Usar horarioFinal!
         let periodoConfig = null;
         let nomePeriodo = '';
         
@@ -1363,23 +1420,30 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
     const isDraAdriana = medico.id === '32d30887-b876-4502-bf04-e55d7fb55b50';
 
     if (isDraAdriana) {
-      // Detectar período baseado no horário
-      const [hora] = hora_consulta.split(':').map(Number);
+      // Formatar data e hora explicitamente
+      const dataFormatada = new Date(data_consulta + 'T00:00:00').toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+      
+      const horaFormatada = horarioFinal.substring(0, 5); // "08:00:00" → "08:00"
+      const [hora] = horarioFinal.split(':').map(Number);
       
       let mensagemPeriodo = '';
-      if (hora >= 8 && hora < 12) {
-        // Manhã
-        mensagemPeriodo = 'Das 08:00 às 10:00 para fazer a ficha. A Dra. começa a atender às 08:45';
+      if (hora >= 7 && hora < 12) {
+        // Manhã: 07:00-12:00
+        mensagemPeriodo = `📅 ${dataFormatada} às ${horaFormatada}\n\n⏰ Das 08:00 às 10:00 para fazer a ficha. A Dra. começa a atender às 08:45`;
       } else if (hora >= 13 && hora < 18) {
-        // Tarde
-        mensagemPeriodo = 'Das 13:00 às 15:00 para fazer a ficha. A Dra. começa a atender às 14:45';
+        // Tarde: 13:00-18:00
+        mensagemPeriodo = `📅 ${dataFormatada} às ${horaFormatada}\n\n⏰ Das 13:00 às 15:00 para fazer a ficha. A Dra. começa a atender às 14:45`;
       } else {
-        // Fallback (não deveria acontecer, mas por segurança)
-        mensagemPeriodo = 'Compareça no horário agendado. A Dra. atende por ordem de chegada';
+        // Fallback com hora sempre visível
+        mensagemPeriodo = `📅 ${dataFormatada} às ${horaFormatada}\n\n⏰ Compareça no horário marcado. A Dra. atende por ordem de chegada`;
       }
       
-      mensagem = `Agendada! ${mensagemPeriodo}, por ordem de chegada. Caso o plano Unimed seja coparticipação ou particular, recebemos apenas em espécie. Posso ajudar em algo mais?`;
-      console.log(`💬 Mensagem personalizada Dra. Adriana (período: ${hora >= 8 && hora < 12 ? 'manhã' : 'tarde'})`);
+      mensagem = `✅ Agendada! ${mensagemPeriodo}, por ordem de chegada.\n\n💰 Caso o plano Unimed seja coparticipação ou particular, recebemos apenas em espécie.\n\nPosso ajudar em algo mais?`;
+      console.log(`💬 Mensagem personalizada Dra. Adriana (${dataFormatada} às ${horaFormatada})`);
     }
 
     return successResponse({
@@ -1918,23 +1982,30 @@ async function handleReschedule(supabase: any, body: any, clienteId: string) {
     const isDraAdriana = agendamento.medico_id === '32d30887-b876-4502-bf04-e55d7fb55b50';
 
     if (isDraAdriana) {
-      // Detectar período baseado no NOVO horário
+      // Formatar data e hora explicitamente
+      const dataFormatada = new Date(nova_data + 'T00:00:00').toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+      
+      const horaFormatada = nova_hora.substring(0, 5); // "08:00:00" → "08:00"
       const [hora] = nova_hora.split(':').map(Number);
       
       let mensagemPeriodo = '';
-      if (hora >= 8 && hora < 12) {
-        // Manhã
-        mensagemPeriodo = 'Das 08:00 às 10:00 para fazer a ficha. A Dra. começa a atender às 08:45';
+      if (hora >= 7 && hora < 12) {
+        // Manhã: 07:00-12:00
+        mensagemPeriodo = `📅 ${dataFormatada} às ${horaFormatada}\n\n⏰ Das 08:00 às 10:00 para fazer a ficha. A Dra. começa a atender às 08:45`;
       } else if (hora >= 13 && hora < 18) {
-        // Tarde
-        mensagemPeriodo = 'Das 13:00 às 15:00 para fazer a ficha. A Dra. começa a atender às 14:45';
+        // Tarde: 13:00-18:00
+        mensagemPeriodo = `📅 ${dataFormatada} às ${horaFormatada}\n\n⏰ Das 13:00 às 15:00 para fazer a ficha. A Dra. começa a atender às 14:45`;
       } else {
-        // Fallback
-        mensagemPeriodo = 'Compareça no horário agendado. A Dra. atende por ordem de chegada';
+        // Fallback com hora sempre visível
+        mensagemPeriodo = `📅 ${dataFormatada} às ${horaFormatada}\n\n⏰ Compareça no horário marcado. A Dra. atende por ordem de chegada`;
       }
       
-      mensagem = `Remarcada! ${mensagemPeriodo}, por ordem de chegada. Caso o plano Unimed seja coparticipação ou particular, recebemos apenas em espécie. Posso ajudar em algo mais?`;
-      console.log(`💬 Mensagem personalizada Dra. Adriana (período: ${hora >= 8 && hora < 12 ? 'manhã' : 'tarde'})`);
+      mensagem = `✅ Remarcada! ${mensagemPeriodo}, por ordem de chegada.\n\n💰 Caso o plano Unimed seja coparticipação ou particular, recebemos apenas em espécie.\n\nPosso ajudar em algo mais?`;
+      console.log(`💬 Mensagem personalizada Dra. Adriana (${dataFormatada} às ${horaFormatada})`);
     }
 
     return successResponse({
