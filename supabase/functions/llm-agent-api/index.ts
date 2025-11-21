@@ -1092,8 +1092,111 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
       console.log(`✅ Primeiro atendimento disponível selecionado: ${atendimentos[0].nome}`);
     }
 
+    // 🆕 SE HORA_CONSULTA FOR PERÍODO, BUSCAR HORÁRIO ESPECÍFICO AUTOMATICAMENTE
+    let horarioFinal = hora_consulta;
+    
+    // Detectar se é período ("manhã", "tarde", "noite") ao invés de horário específico
+    const isPeriodo = /^(manh[aã]|tarde|noite)$/i.test(hora_consulta);
+    
+    if (isPeriodo) {
+      console.log(`🔄 Detectado período "${hora_consulta}" ao invés de horário específico. Buscando primeiro horário disponível...`);
+      
+      // Normalizar período
+      const periodoNormalizado = hora_consulta.toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+        .replace(/manha/g, 'manha')
+        .replace(/tarde/g, 'tarde')
+        .replace(/noite/g, 'noite');
+      
+      // Buscar regras do médico
+      const regras = BUSINESS_RULES.medicos[medico.id];
+      
+      if (regras && regras.servicos) {
+        // Encontrar serviço
+        const servicoKey = Object.keys(regras.servicos).find(s => 
+          s.toLowerCase().includes(atendimento_nome.toLowerCase()) ||
+          atendimento_nome.toLowerCase().includes(s.toLowerCase())
+        );
+        
+        if (servicoKey) {
+          const servico = regras.servicos[servicoKey];
+          const configPeriodo = servico.periodos?.[periodoNormalizado];
+          
+          if (configPeriodo) {
+            if (regras.tipo_agendamento === 'hora_marcada') {
+              // HORA MARCADA: buscar primeiro horário disponível
+              console.log(`🕒 Buscando slots disponíveis para hora marcada no período ${periodoNormalizado}`);
+              
+              const intervaloMinutos = configPeriodo.intervalo_minutos || 30;
+              const [horaInicio, minInicio] = configPeriodo.inicio.split(':').map(Number);
+              const [horaFim, minFim] = configPeriodo.fim.split(':').map(Number);
+              
+              let horaAtual = horaInicio * 60 + minInicio;
+              const horaLimite = horaFim * 60 + minFim;
+              
+              // Buscar primeiro slot livre
+              while (horaAtual < horaLimite) {
+                const h = Math.floor(horaAtual / 60);
+                const m = horaAtual % 60;
+                const horarioTeste = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:00`;
+                
+                // Verificar se este horário está disponível
+                const { count } = await supabase
+                  .from('agendamentos')
+                  .select('*', { count: 'exact', head: true })
+                  .eq('medico_id', medico.id)
+                  .eq('data_agendamento', data_consulta)
+                  .eq('hora_agendamento', horarioTeste)
+                  .eq('cliente_id', clienteId)
+                  .is('excluido_em', null)
+                  .in('status', ['agendado', 'confirmado']);
+                
+                if (count === 0) {
+                  console.log(`✅ Primeiro horário disponível encontrado: ${horarioTeste}`);
+                  horarioFinal = horarioTeste;
+                  break;
+                }
+                
+                horaAtual += intervaloMinutos;
+              }
+              
+              if (horarioFinal === hora_consulta) {
+                // Não encontrou nenhum horário livre
+                return errorResponse(
+                  `❌ Não há horários disponíveis no período da ${hora_consulta} em ${data_consulta}.\n\n` +
+                  `💡 Por favor, consulte a disponibilidade primeiro ou escolha outro período.`
+                );
+              }
+            } else {
+              // ORDEM DE CHEGADA: usar horário de início do período
+              console.log(`📋 Ordem de chegada: usando horário de início ${configPeriodo.inicio}`);
+              horarioFinal = configPeriodo.inicio + ':00';
+            }
+          } else {
+            return errorResponse(
+              `❌ O médico ${medico.nome} não atende no período da ${hora_consulta}.\n\n` +
+              `💡 Por favor, consulte a disponibilidade primeiro para ver os períodos disponíveis.`
+            );
+          }
+        } else {
+          return errorResponse(
+            `❌ Não foi possível validar o serviço "${atendimento_nome}".\n\n` +
+            `💡 Por favor, especifique um horário específico (ex: "08:00") ao invés de um período.`
+          );
+        }
+      } else {
+        return errorResponse(
+          `❌ Período "${hora_consulta}" detectado, mas não há regras configuradas para este médico.\n\n` +
+          `💡 Por favor, especifique um horário específico no formato HH:MM (ex: "08:00").`
+        );
+      }
+      
+      console.log(`🎯 Horário final selecionado: ${horarioFinal} (convertido de "${hora_consulta}")`);
+    }
+
     // Criar agendamento usando a função atômica
-    console.log(`📅 Criando agendamento para ${paciente_nome} com médico ${medico.nome}`);
+    console.log(`📅 Criando agendamento para ${paciente_nome} com médico ${medico.nome} às ${horarioFinal}`);
     
     const { data: result, error: agendamentoError } = await supabase
       .rpc('criar_agendamento_atomico_externo', {
@@ -1106,7 +1209,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
         p_medico_id: medico.id,
         p_atendimento_id: atendimento_id,
         p_data_agendamento: data_consulta,
-        p_hora_agendamento: hora_consulta,
+        p_hora_agendamento: horarioFinal, // 🆕 Usar horário convertido
         p_observacoes: (observacoes || 'Agendamento via LLM Agent WhatsApp').toUpperCase(),
         p_criado_por: 'LLM Agent WhatsApp',
         p_force_conflict: false
