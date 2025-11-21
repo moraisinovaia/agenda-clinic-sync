@@ -2701,6 +2701,116 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     }
     console.log(`✅ Regras encontradas para ${regras.nome}`);
 
+    // 🆕 FUNÇÃO AUXILIAR: Buscar próximas datas disponíveis
+    async function buscarProximasDatasDisponiveis(
+      supabase: any,
+      medico: any,
+      servicoKey: string,
+      servico: any,
+      dataInicial: string,
+      clienteId: string,
+      periodoPreferido?: string,
+      diasBusca: number = 60,
+      maxResultados: number = 5
+    ): Promise<Array<{
+      data: string;
+      dia_semana: string;
+      vagas_disponiveis: number;
+      total_vagas: number;
+      periodo?: string;
+    }>> {
+      
+      const proximasDatas = [];
+      const diasNomes = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+      
+      console.log(`🔍 Buscando próximas datas disponíveis para ${medico.nome} - ${servicoKey}`);
+      
+      for (let dias = 1; dias <= diasBusca; dias++) {
+        const dataFutura = new Date(dataInicial + 'T00:00:00');
+        dataFutura.setDate(dataFutura.getDate() + dias);
+        const dataFuturaStr = dataFutura.toISOString().split('T')[0];
+        const diaSemana = dataFutura.getDay();
+        
+        // Pular finais de semana
+        if (diaSemana === 0 || diaSemana === 6) {
+          continue;
+        }
+        
+        // Verificar se a data está bloqueada
+        const { data: bloqueios } = await supabase
+          .from('bloqueios_agenda')
+          .select('id')
+          .eq('medico_id', medico.id)
+          .lte('data_inicio', dataFuturaStr)
+          .gte('data_fim', dataFuturaStr)
+          .eq('status', 'ativo')
+          .eq('cliente_id', clienteId);
+        
+        if (bloqueios && bloqueios.length > 0) {
+          console.log(`⏭️ ${dataFuturaStr} bloqueada, pulando...`);
+          continue;
+        }
+        
+        // Verificar disponibilidade por período
+        for (const [periodo, config] of Object.entries(servico.periodos)) {
+          // Filtrar por período preferido
+          if (periodoPreferido === 'tarde' && periodo === 'manha') continue;
+          if (periodoPreferido === 'manha' && periodo === 'tarde') continue;
+          
+          // Verificar dias específicos do período
+          if ((config as any).dias_especificos && !(config as any).dias_especificos.includes(diaSemana)) {
+            continue;
+          }
+          
+          // Buscar agendamentos existentes
+          const { data: agendamentos } = await supabase
+            .from('agendamentos')
+            .select('hora_agendamento')
+            .eq('medico_id', medico.id)
+            .eq('data_agendamento', dataFuturaStr)
+            .eq('cliente_id', clienteId)
+            .is('excluido_em', null)
+            .in('status', ['agendado', 'confirmado']);
+          
+          // Classificar agendamentos no período correto
+          let vagasOcupadas = 0;
+          if (agendamentos && agendamentos.length > 0) {
+            const [horaInicio] = (config as any).hora_inicio.split(':').map(Number);
+            const [horaFim] = (config as any).hora_fim.split(':').map(Number);
+            
+            vagasOcupadas = agendamentos.filter(ag => {
+              const [horaAg] = ag.hora_agendamento.split(':').map(Number);
+              return horaAg >= horaInicio && horaAg < horaFim;
+            }).length;
+          }
+          
+          const vagasDisponiveis = (config as any).limite - vagasOcupadas;
+          
+          if (vagasDisponiveis > 0) {
+            const periodoNome = periodo === 'manha' ? 'Manhã' : 'Tarde';
+            console.log(`✅ ${dataFuturaStr} (${diasNomes[diaSemana]}) - ${vagasDisponiveis} vaga(s) - ${periodoNome}`);
+            
+            proximasDatas.push({
+              data: dataFuturaStr,
+              dia_semana: diasNomes[diaSemana],
+              vagas_disponiveis: vagasDisponiveis,
+              total_vagas: (config as any).limite,
+              periodo: periodoNome
+            });
+            
+            if (proximasDatas.length >= maxResultados) {
+              return proximasDatas;
+            }
+            
+            // Não buscar outros períodos da mesma data
+            break;
+          }
+        }
+      }
+      
+      return proximasDatas;
+    }
+
     // Buscar serviço nas regras com matching inteligente MELHORADO (só se ainda não encontrado)
     if (!servicoKey) {
       const servicoKeyMelhorado = Object.keys(regras.servicos || {}).find(s => {
@@ -3096,6 +3206,34 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
 
     if (!bloqueioError && bloqueios && bloqueios.length > 0) {
       console.log(`⛔ Data ${data_consulta} bloqueada:`, bloqueios[0].motivo);
+      
+      // 🆕 Buscar próximas datas disponíveis automaticamente
+      const proximasDatas = await buscarProximasDatasDisponiveis(
+        supabase,
+        medico,
+        servicoKey,
+        servico,
+        data_consulta,
+        clienteId,
+        periodoPreferido,
+        60,
+        5
+      );
+      
+      let mensagem = `❌ A agenda do(a) ${medico.nome} está bloqueada em ${data_consulta}.\n`;
+      mensagem += `📋 Motivo: ${bloqueios[0].motivo}\n\n`;
+      
+      if (proximasDatas.length > 0) {
+        mensagem += `✅ Próximas datas disponíveis:\n\n`;
+        proximasDatas.forEach(d => {
+          mensagem += `📅 ${d.data} (${d.dia_semana}) - ${d.periodo} - ${d.vagas_disponiveis} vaga(s)\n`;
+        });
+        mensagem += `\n💡 Gostaria de agendar em uma destas datas?`;
+      } else {
+        mensagem += `⚠️ Não encontramos vagas nos próximos 60 dias.\n`;
+        mensagem += `Por favor, entre em contato com a clínica.`;
+      }
+      
       return successResponse({
         disponivel: false,
         bloqueada: true,
@@ -3103,7 +3241,8 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         servico: servicoKey,
         data: data_consulta,
         motivo_bloqueio: bloqueios[0].motivo,
-        message: `A agenda do(a) ${medico.nome} está bloqueada em ${data_consulta}. Motivo: ${bloqueios[0].motivo}. Por favor, escolha outra data.`
+        proximas_datas: proximasDatas,
+        message: mensagem
       });
     }
 
@@ -3199,17 +3338,57 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       console.log('✅ Retornando disponibilidade por ORDEM DE CHEGADA');
       
       const temVagas = periodosDisponiveis.some(p => p.disponivel);
-      const mensagem = temVagas
-        ? `✅ ${medico.nome} - ${servicoKey}\n📅 ${data_consulta}\n\n` +
-          periodosDisponiveis.filter(p => p.disponivel).map(p => 
-            `${p.periodo}: ${p.vagas_disponiveis} vaga(s) disponível(is) de ${p.total_vagas}\n` +
-            `Distribuição: ${p.horario_distribuicao}`
-          ).join('\n\n') +
-          '\n\n⚠️ ORDEM DE CHEGADA: Não há horário marcado. Paciente deve chegar no período para pegar ficha.'
-        : `❌ Sem vagas disponíveis para ${medico.nome} em ${data_consulta}`;
+      
+      // 🆕 Se não tem vagas, buscar próximas datas
+      if (!temVagas) {
+        const proximasDatas = await buscarProximasDatasDisponiveis(
+          supabase,
+          medico,
+          servicoKey,
+          servico,
+          data_consulta,
+          clienteId,
+          periodoPreferido,
+          60,
+          5
+        );
+        
+        let mensagem = `❌ Sem vagas disponíveis para ${medico.nome} em ${data_consulta}.\n\n`;
+        
+        if (proximasDatas.length > 0) {
+          mensagem += `✅ Próximas datas disponíveis:\n\n`;
+          proximasDatas.forEach(d => {
+            mensagem += `📅 ${d.data} (${d.dia_semana}) - ${d.periodo} - ${d.vagas_disponiveis} vaga(s)\n`;
+          });
+          mensagem += `\n💡 Gostaria de agendar em uma destas datas?`;
+        } else {
+          mensagem += `⚠️ Não encontramos vagas nos próximos 60 dias.\n`;
+          mensagem += `Por favor, entre em contato com a clínica.`;
+        }
+        
+        return successResponse({
+          disponivel: false,
+          tipo_agendamento: 'ordem_chegada',
+          medico: medico.nome,
+          servico: servicoKey,
+          data: data_consulta,
+          periodos: periodosDisponiveis,
+          proximas_datas: proximasDatas,
+          mensagem_whatsapp: mensagem,
+          message: mensagem
+        });
+      }
+      
+      // Se tem vagas, retornar normalmente
+      const mensagem = `✅ ${medico.nome} - ${servicoKey}\n📅 ${data_consulta}\n\n` +
+        periodosDisponiveis.filter(p => p.disponivel).map(p => 
+          `${p.periodo}: ${p.vagas_disponiveis} vaga(s) disponível(is) de ${p.total_vagas}\n` +
+          `Distribuição: ${p.horario_distribuicao}`
+        ).join('\n\n') +
+        '\n\n⚠️ ORDEM DE CHEGADA: Não há horário marcado. Paciente deve chegar no período para pegar ficha.';
       
       return successResponse({
-        disponivel: temVagas,
+        disponivel: true,
         tipo_agendamento: 'ordem_chegada',
         medico: medico.nome,
         servico: servicoKey,
@@ -3263,11 +3442,51 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         }
       }
 
-      const mensagem = horariosDisponiveis.length > 0
-        ? `✅ ${medico.nome} - ${servicoKey}\n📅 ${data_consulta}\n\n` +
-          `${horariosDisponiveis.length} horários disponíveis:\n` +
-          horariosDisponiveis.map(h => `• ${h.hora}`).join('\n')
-        : `❌ Sem horários disponíveis para ${medico.nome} em ${data_consulta}`;
+      // 🆕 Se não tem horários, buscar próximas datas
+      if (horariosDisponiveis.length === 0) {
+        const proximasDatas = await buscarProximasDatasDisponiveis(
+          supabase,
+          medico,
+          servicoKey,
+          servico,
+          data_consulta,
+          clienteId,
+          periodoPreferido,
+          60,
+          5
+        );
+        
+        let mensagem = `❌ Sem horários disponíveis para ${medico.nome} em ${data_consulta}.\n\n`;
+        
+        if (proximasDatas.length > 0) {
+          mensagem += `✅ Próximas datas disponíveis:\n\n`;
+          proximasDatas.forEach(d => {
+            mensagem += `📅 ${d.data} (${d.dia_semana}) - ${d.periodo} - ${d.vagas_disponiveis} vaga(s)\n`;
+          });
+          mensagem += `\n💡 Gostaria de agendar em uma destas datas?`;
+        } else {
+          mensagem += `⚠️ Não encontramos vagas nos próximos 60 dias.\n`;
+          mensagem += `Por favor, entre em contato com a clínica.`;
+        }
+        
+        return successResponse({
+          disponivel: false,
+          tipo_agendamento: 'hora_marcada',
+          medico: medico.nome,
+          servico: servicoKey,
+          data: data_consulta,
+          horarios_disponiveis: [],
+          total: 0,
+          proximas_datas: proximasDatas,
+          mensagem_whatsapp: mensagem,
+          message: mensagem
+        });
+      }
+
+      // Se tem horários, retornar normalmente
+      const mensagem = `✅ ${medico.nome} - ${servicoKey}\n📅 ${data_consulta}\n\n` +
+        `${horariosDisponiveis.length} horários disponíveis:\n` +
+        horariosDisponiveis.map(h => `• ${h.hora}`).join('\n');
       
       return successResponse({
         disponivel: horariosDisponiveis.length > 0,
