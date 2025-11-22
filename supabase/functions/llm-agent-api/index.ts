@@ -29,6 +29,16 @@ function getMigrationBlockMessage(medicoNome?: string): string {
     .replace(/[\u0300-\u036f]/g, '') // Remove acentos
     .trim() || '';
 
+  // Detectar se é Dr. Marcelo (várias variações possíveis)
+  const isDrMarcelo = 
+    nomeNormalizado.includes('marcelo') ||
+    nomeNormalizado.includes('dr. marcelo') ||
+    nomeNormalizado.includes('dr marcelo');
+
+  if (isDrMarcelo) {
+    return `Para tentar encaixe antes é apenas com a secretária Jeniffe ou Luh no WhatsApp: 87981126744`;
+  }
+
   // Detectar se é Dra. Adriana (várias variações possíveis)
   const isDraAdriana = 
     nomeNormalizado.includes('adriana') || 
