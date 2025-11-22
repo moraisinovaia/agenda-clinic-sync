@@ -9,7 +9,7 @@ import NotFound from "./pages/NotFound";
 import ErrorBoundary from "./components/ErrorBoundary";
 
 // 🔑 Key única para forçar remontagem completa quando necessário
-const APP_MOUNT_KEY = 'v2025-11-03-realtime-v3-polling-fallback';
+const APP_MOUNT_KEY = 'v2025-11-22-realtime-v3.1-tolerant-reconnect';
 
 const App = () => (
   <ErrorBoundary>
