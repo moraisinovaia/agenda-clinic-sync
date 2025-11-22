@@ -1401,24 +1401,75 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
             }
           }
           
-          // Se chegou aqui, período está lotado
-          console.log(`❌ Período ${nomePeriodo} está lotado (${periodoConfig.limite} vagas)`);
-          return new Response(JSON.stringify({
-            success: false,
-            error: 'PERIOD_FULL',
-            message: `O período da ${nomePeriodo} está com todas as vagas ocupadas (${periodoConfig.limite}/${periodoConfig.limite}). Por favor, escolha outro período ou outro dia.`,
-            detalhes: {
-              periodo: nomePeriodo,
-              vagas_total: periodoConfig.limite,
-              data_solicitada: data_consulta
-            },
-            timestamp: new Date().toISOString()
-          }), {
-            status: 200,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          });
+          // Se chegou aqui, verificar se realmente está lotado ou se foi race condition
+          console.log(`⚠️ Não foi possível alocar automaticamente. Verificando se período está realmente lotado...`);
+          
+          // 🔍 VERIFICAR CONTAGEM REAL DE AGENDAMENTOS NO PERÍODO
+          const { data: agendamentosDoPeriodo } = await supabase
+            .from('agendamentos')
+            .select('hora_agendamento')
+            .eq('medico_id', medico.id)
+            .eq('data_agendamento', data_consulta)
+            .eq('cliente_id', clienteId)
+            .in('status', ['agendado', 'confirmado']);
+          
+          // Filtrar apenas agendamentos do período específico
+          const [hInicioPeriodo] = periodoConfig.inicio.split(':').map(Number);
+          const [hFimPeriodo] = periodoConfig.fim.split(':').map(Number);
+          const minutoInicioPeriodo = hInicioPeriodo * 60;
+          const minutoFimPeriodo = hFimPeriodo * 60;
+          
+          const agendamentosNoPeriodo = agendamentosDoPeriodo?.filter(a => {
+            const [h, m] = a.hora_agendamento.split(':').map(Number);
+            const minutoAgendamento = h * 60 + m;
+            return minutoAgendamento >= minutoInicioPeriodo && minutoAgendamento < minutoFimPeriodo;
+          }) || [];
+          
+          const vagasOcupadas = agendamentosNoPeriodo.length;
+          const vagasDisponiveis = periodoConfig.limite - vagasOcupadas;
+          
+          console.log(`📊 Verificação final: ${vagasOcupadas}/${periodoConfig.limite} vagas ocupadas no período ${nomePeriodo}`);
+          
+          if (vagasDisponiveis <= 0) {
+            // Realmente está lotado
+            console.log(`❌ Período ${nomePeriodo} está REALMENTE lotado`);
+            return new Response(JSON.stringify({
+              success: false,
+              error: 'PERIOD_FULL',
+              message: `O período da ${nomePeriodo} está com todas as vagas ocupadas (${vagasOcupadas}/${periodoConfig.limite}). Por favor, escolha outro período ou outro dia.`,
+              detalhes: {
+                periodo: nomePeriodo,
+                vagas_ocupadas: vagasOcupadas,
+                vagas_total: periodoConfig.limite,
+                data_solicitada: data_consulta
+              },
+              timestamp: new Date().toISOString()
+            }), {
+              status: 200,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+          } else {
+            // Tem vagas mas não conseguiu alocar (race condition ou horários específicos ocupados)
+            console.log(`⚠️ Período tem ${vagasDisponiveis} vaga(s) mas não foi possível alocar (possível race condition)`);
+            return new Response(JSON.stringify({
+              success: false,
+              error: 'ALLOCATION_FAILED',
+              message: `Não foi possível alocar horário automaticamente. O período da ${nomePeriodo} tem ${vagasDisponiveis} vaga(s) disponível(is), mas ocorreu um conflito. Por favor, tente outro horário específico.`,
+              detalhes: {
+                periodo: nomePeriodo,
+                vagas_disponiveis: vagasDisponiveis,
+                vagas_ocupadas: vagasOcupadas,
+                vagas_total: periodoConfig.limite,
+                data_solicitada: data_consulta,
+                sugestao: 'Tente especificar um horário exato ou escolha outro período'
+              },
+              timestamp: new Date().toISOString()
+            }), {
+              status: 200,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+          }
         }
-      }
       
       // Para outros erros, manter comportamento original
       return new Response(JSON.stringify({
