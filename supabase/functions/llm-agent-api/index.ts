@@ -1408,16 +1408,6 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
                 p_criado_por: 'LLM Agent WhatsApp',
                 p_force_conflict: false
               });
-                p_telefone: telefone || null,
-                p_celular: celular,
-                p_medico_id: medico.id,
-                p_atendimento_id: atendimento_id,
-                p_data_agendamento: data_consulta,
-                p_hora_agendamento: horarioTeste,
-                p_observacoes: (observacoes || 'Agendamento via LLM Agent WhatsApp - Alocado automaticamente').toUpperCase(),
-                p_criado_por: 'LLM Agent WhatsApp',
-                p_force_conflict: false
-              });
             
             // Verificar resultado
             if (tentativaError) {
