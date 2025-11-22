@@ -593,7 +593,9 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         : !!resultAny.success;
 
       if (!isSuccess) {
-        throw new Error(resultAny?.error || resultAny?.message || 'Falha ao cancelar');
+        const errorMsg = resultAny?.error || resultAny?.message || 'Falha ao cancelar';
+        console.error('[CANCEL-ERROR]', errorMsg);
+        throw new Error(errorMsg);
       }
       
       updateLocalAppointment(appointmentId, { 
@@ -731,7 +733,9 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         : !!resultAny.success;
 
       if (!isSuccess) {
-        throw new Error(resultAny?.error || resultAny?.message || 'Falha ao confirmar');
+        const errorMsg = resultAny?.error || resultAny?.message || 'Falha ao confirmar';
+        console.error('[CONFIRM-ERROR]', errorMsg);
+        throw new Error(errorMsg);
       }
       
       updateLocalAppointment(appointmentId, { 
@@ -876,7 +880,9 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         : !!resultAny.success;
 
       if (!isSuccess) {
-        throw new Error(resultAny?.error || resultAny?.message || 'Falha ao desconfirmar');
+        const errorMsg = resultAny?.error || resultAny?.message || 'Falha ao desconfirmar';
+        console.error('[UNCONFIRM-ERROR]', errorMsg);
+        throw new Error(errorMsg);
       }
       
       updateLocalAppointment(appointmentId, { 
@@ -966,7 +972,9 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         : !!resultAny.success;
 
       if (!isSuccess) {
-        throw new Error(resultAny?.error || resultAny?.message || 'Falha ao excluir');
+        const errorMsg = resultAny?.error || resultAny?.message || 'Falha ao excluir';
+        console.error('[DELETE-ERROR]', errorMsg);
+        throw new Error(errorMsg);
       }
       
       setAppointments(prev => prev.filter(apt => apt.id !== appointmentId));
