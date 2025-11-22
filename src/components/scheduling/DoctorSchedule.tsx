@@ -176,6 +176,8 @@ export function DoctorSchedule({
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [activeBloqueio, setActiveBloqueio] = useState<{motivo: string, data_inicio: string, data_fim: string} | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [isUnconfirming, setIsUnconfirming] = useState(false);
   
   const getAppointmentsForDate = (date: Date) => {
     try {
@@ -632,22 +634,46 @@ export function DoctorSchedule({
                                     <Button 
                                       variant="ghost" 
                                       size="sm"
-                                      onClick={() => onConfirmAppointment(appointment.id)}
+                                      disabled={isConfirming}
+                                      onClick={async () => {
+                                        setIsConfirming(true);
+                                        try {
+                                          await onConfirmAppointment(appointment.id);
+                                        } finally {
+                                          setIsConfirming(false);
+                                        }
+                                      }}
                                       className="h-4 w-4 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
                                       title="Confirmar"
                                     >
-                                      <CheckCircle className="h-2 w-2" />
+                                      {isConfirming ? (
+                                        <Loader2 className="h-2 w-2 animate-spin" />
+                                      ) : (
+                                        <CheckCircle className="h-2 w-2" />
+                                      )}
                                     </Button>
                                   )}
                                   {appointment.status === 'confirmado' && onUnconfirmAppointment && (
                                     <Button 
                                       variant="ghost" 
                                       size="sm"
-                                      onClick={() => onUnconfirmAppointment(appointment.id)}
+                                      disabled={isUnconfirming}
+                                      onClick={async () => {
+                                        setIsUnconfirming(true);
+                                        try {
+                                          await onUnconfirmAppointment(appointment.id);
+                                        } finally {
+                                          setIsUnconfirming(false);
+                                        }
+                                      }}
                                       className="h-4 w-4 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                                       title="Desconfirmar"
                                     >
-                                      <RotateCcw className="h-2 w-2" />
+                                      {isUnconfirming ? (
+                                        <Loader2 className="h-2 w-2 animate-spin" />
+                                      ) : (
+                                        <RotateCcw className="h-2 w-2" />
+                                      )}
                                     </Button>
                                   )}
                                   {appointment.status === 'agendado' && (

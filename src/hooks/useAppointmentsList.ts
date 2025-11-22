@@ -674,7 +674,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
             .is('excluido_em', null)
             .single();
         })(),
-        8000
+        15000 // Aumentado de 8000 para 15000ms
       );
       
       if (fetchError) {
@@ -711,9 +711,9 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
               p_confirmado_por_user_id: profile.user_id
             });
           })(),
-          10000
+          20000 // Aumentado de 10000 para 20000ms
         );
-      });
+      }, 5); // Aumentado de 3 para 5 tentativas
 
       if (response.error) {
         throw response.error;
@@ -747,7 +747,12 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       }, 2000);
       
     } catch (error) {
-      console.error('❌ [CONFIRM] Erro:', error);
+      console.error('❌ [CONFIRM] Erro detalhado:', {
+        message: error instanceof Error ? error.message : 'Erro desconhecido',
+        stack: error instanceof Error ? error.stack : undefined,
+        appointmentId,
+        timestamp: new Date().toISOString()
+      });
       
       const errorMsg = error instanceof Error ? error.message : 'Erro desconhecido';
       let userMessage = 'Tente novamente';
@@ -755,7 +760,13 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       if (errorMsg.includes('não encontrado')) {
         userMessage = 'Agendamento não encontrado';
       } else if (errorMsg.includes('timeout') || errorMsg.includes('expirou')) {
-        userMessage = 'Operação demorou demais. Verifique sua conexão.';
+        userMessage = 'A operação demorou muito. Verifique sua conexão com a internet.';
+      } else if (errorMsg.includes('network') || errorMsg.includes('fetch')) {
+        userMessage = 'Problema de conexão. Verifique sua internet e tente novamente.';
+      } else if (errorMsg.includes('permission') || errorMsg.includes('denied')) {
+        userMessage = 'Você não tem permissão para confirmar este agendamento.';
+      } else if (errorMsg.length > 0 && errorMsg !== 'Erro desconhecido') {
+        userMessage = `Erro: ${errorMsg.substring(0, 80)}${errorMsg.length > 80 ? '...' : ''}`;
       }
       
       toast({
