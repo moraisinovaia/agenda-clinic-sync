@@ -587,8 +587,13 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       }
       
       const result = response.data;
-      if (!(result as any)?.success) {
-        throw new Error((result as any)?.error || 'Falha ao cancelar');
+      const resultAny = result as any;
+      const isSuccess = resultAny?.success === undefined || resultAny?.success === null
+        ? true
+        : !!resultAny.success;
+
+      if (!isSuccess) {
+        throw new Error(resultAny?.error || resultAny?.message || 'Falha ao cancelar');
       }
       
       updateLocalAppointment(appointmentId, { 
@@ -720,8 +725,13 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       }
       
       const result = response.data;
-      if (!(result as any)?.success) {
-        throw new Error((result as any)?.error || 'Falha ao confirmar');
+      const resultAny = result as any;
+      const isSuccess = resultAny?.success === undefined || resultAny?.success === null
+        ? true
+        : !!resultAny.success;
+
+      if (!isSuccess) {
+        throw new Error(resultAny?.error || resultAny?.message || 'Falha ao confirmar');
       }
       
       updateLocalAppointment(appointmentId, { 
@@ -860,8 +870,13 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       }
       
       const result = response.data;
-      if (!(result as any)?.success) {
-        throw new Error((result as any)?.error || 'Falha ao desconfirmar');
+      const resultAny = result as any;
+      const isSuccess = resultAny?.success === undefined || resultAny?.success === null
+        ? true
+        : !!resultAny.success;
+
+      if (!isSuccess) {
+        throw new Error(resultAny?.error || resultAny?.message || 'Falha ao desconfirmar');
       }
       
       updateLocalAppointment(appointmentId, { 
@@ -945,8 +960,13 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       }
       
       const result = response.data;
-      if (!(result as any)?.success) {
-        throw new Error((result as any)?.error || 'Falha ao excluir');
+      const resultAny = result as any;
+      const isSuccess = resultAny?.success === undefined || resultAny?.success === null
+        ? true
+        : !!resultAny.success;
+
+      if (!isSuccess) {
+        throw new Error(resultAny?.error || resultAny?.message || 'Falha ao excluir');
       }
       
       setAppointments(prev => prev.filter(apt => apt.id !== appointmentId));
