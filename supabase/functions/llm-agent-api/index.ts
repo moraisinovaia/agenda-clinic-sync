@@ -1305,19 +1305,18 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
     if (!result?.success) {
       console.error('❌ Função retornou erro:', result);
       
-      // 🆕 SE FOR CONFLITO DE HORÁRIO, TENTAR ALOCAR AUTOMATICAMENTE
+      // 🆕 SE FOR CONFLITO DE HORÁRIO, TENTAR ALOCAR AUTOMATICAMENTE MINUTO A MINUTO
       if (result?.error === 'CONFLICT') {
-        console.log('🔄 Conflito detectado, tentando alocação automática...');
+        console.log('🔄 Conflito detectado, iniciando busca minuto a minuto...');
         
         // Determinar período baseado no horário FINAL (não hora_consulta!)
-        const [hora] = horarioFinal.split(':').map(Number); // ✅ Usar horarioFinal!
+        const [hora] = horarioFinal.split(':').map(Number);
         let periodoConfig = null;
         let nomePeriodo = '';
         
         // Buscar regras do médico
         const regrasMedico = BUSINESS_RULES.medicos[medico.id];
         if (regrasMedico) {
-          // Pegar primeiro serviço (já validamos que existe anteriormente)
           const servicoKey = Object.keys(regrasMedico.servicos)[0];
           const servico = regrasMedico.servicos[servicoKey];
           
@@ -1341,72 +1340,114 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
           }
         }
         
-        // Se encontrou período válido, tentar buscar horário livre
+        // Se encontrou período válido, fazer loop minuto a minuto
         if (periodoConfig) {
           console.log(`📋 Período detectado: ${nomePeriodo} (${periodoConfig.inicio}-${periodoConfig.fim}, limite: ${periodoConfig.limite})`);
           
-          const resultado = await buscarProximoHorarioLivre(
-            supabase,
-            clienteId,
-            medico.id,
-            data_consulta,
-            hora_consulta,
-            periodoConfig
-          );
+          // Calcular minutos do período
+          const [hInicio, minInicio] = periodoConfig.inicio.split(':').map(Number);
+          const [hFim, minFim] = periodoConfig.fim.split(':').map(Number);
+          const minutoInicio = hInicio * 60 + minInicio;
+          const minutoFim = hFim * 60 + minFim;
           
-          if (resultado) {
-            console.log(`🎯 Tentando alocar em ${resultado.horario}...`);
+          console.log(`🔍 Iniciando busca de ${periodoConfig.inicio} até ${periodoConfig.fim} (${minutoFim - minutoInicio} minutos)`);
+          
+          let tentativas = 0;
+          let horarioAlocado = null;
+          let resultadoFinal = null;
+          
+          // Loop minuto a minuto
+          for (let minutoAtual = minutoInicio; minutoAtual < minutoFim; minutoAtual++) {
+            tentativas++;
+            const hora = Math.floor(minutoAtual / 60);
+            const min = minutoAtual % 60;
+            const horarioTeste = `${String(hora).padStart(2, '0')}:${String(min).padStart(2, '0')}:00`;
             
-            // Tentar criar agendamento no novo horário
-            const { data: novoResult, error: novoError } = await supabase
+            console.log(`🔁 Tentativa ${tentativas}: Testando ${horarioTeste}...`);
+            
+            // Tentar agendar neste minuto
+            const { data: tentativaResult, error: tentativaError } = await supabase
               .rpc('criar_agendamento_atomico_externo', {
                 p_cliente_id: clienteId,
                 p_nome_completo: paciente_nome.toUpperCase(),
                 p_data_nascimento: data_nascimento,
-                p_convenio: convenio,
+                p_convenio: normalizarConvenio(convenio),
                 p_telefone: telefone || null,
                 p_celular: celular,
                 p_medico_id: medico.id,
                 p_atendimento_id: atendimento_id,
                 p_data_agendamento: data_consulta,
-                p_hora_agendamento: resultado.horario,
+                p_hora_agendamento: horarioTeste,
                 p_observacoes: (observacoes || 'Agendamento via LLM Agent WhatsApp - Alocado automaticamente').toUpperCase(),
                 p_criado_por: 'LLM Agent WhatsApp',
                 p_force_conflict: false
               });
             
-            if (!novoError && novoResult?.success) {
-              console.log(`✅ Alocado com sucesso em ${resultado.horario}`);
-              
-              // Gerar mensagem personalizada
-              const isDraAdriana = medico.id === '32d30887-b876-4502-bf04-e55d7fb55b50';
-              let mensagem = `Consulta agendada com sucesso para ${paciente_nome}`;
-              
-              if (isDraAdriana) {
-                const mensagemPeriodo = nomePeriodo === 'manhã'
-                  ? 'Das 08:00 às 10:00 para fazer a ficha. A Dra. começa a atender às 08:45'
-                  : 'Das 13:00 às 15:00 para fazer a ficha. A Dra. começa a atender às 14:45';
-                
-                mensagem = `Agendada! ${mensagemPeriodo}, por ordem de chegada. Caso o plano Unimed seja coparticipação ou particular, recebemos apenas em espécie. Posso ajudar em algo mais?`;
-              }
-              
-              return successResponse({
-                message: mensagem,
-                agendamento_id: novoResult.agendamento_id,
-                paciente_id: novoResult.paciente_id,
-                data: data_consulta,
-                horario_solicitado: hora_consulta,
-                horario_alocado: resultado.horario,
-                medico: medico.nome,
-                atendimento: atendimento_nome || 'Consulta',
-                observacao: `Horário ${hora_consulta} estava ocupado. Alocado automaticamente em ${resultado.horario} (${nomePeriodo})`,
-                alocacao_automatica: true
-              });
+            // Verificar resultado
+            if (tentativaError) {
+              console.error(`❌ Erro inesperado em ${horarioTeste}:`, tentativaError);
+              // Continuar tentando outros horários mesmo com erro
+              continue;
             }
+            
+            if (tentativaResult?.success) {
+              // ✅ SUCESSO! Encontramos um horário livre
+              console.log(`✅ SUCESSO! Agendado em ${horarioTeste} após ${tentativas} tentativas`);
+              horarioAlocado = horarioTeste;
+              resultadoFinal = tentativaResult;
+              break;
+            }
+            
+            if (tentativaResult?.error === 'CONFLICT') {
+              // Horário ocupado, continuar para o próximo
+              console.log(`⏭️  ${horarioTeste} ocupado, tentando próximo...`);
+              continue;
+            }
+            
+            // Outro tipo de erro (idade, convênio, etc.) - parar o loop
+            console.error(`⚠️ Erro não-conflito em ${horarioTeste}:`, tentativaResult?.error);
+            return new Response(JSON.stringify({
+              success: false,
+              error: tentativaResult?.error || 'UNKNOWN_ERROR',
+              message: tentativaResult?.message || `Erro ao tentar agendar: ${tentativaResult?.error}`,
+              timestamp: new Date().toISOString()
+            }), {
+              status: 200,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
           }
           
-          // Se chegou aqui, verificar se realmente está lotado ou se foi race condition
-          console.log(`⚠️ Não foi possível alocar automaticamente. Verificando se período está realmente lotado...`);
+          // Verificar se conseguiu alocar
+          if (horarioAlocado && resultadoFinal) {
+            // Gerar mensagem personalizada
+            const isDraAdriana = medico.id === '32d30887-b876-4502-bf04-e55d7fb55b50';
+            let mensagem = `Consulta agendada com sucesso para ${paciente_nome}`;
+            
+            if (isDraAdriana) {
+              const mensagemPeriodo = nomePeriodo === 'manhã'
+                ? 'Das 08:00 às 10:00 para fazer a ficha. A Dra. começa a atender às 08:45'
+                : 'Das 13:00 às 15:00 para fazer a ficha. A Dra. começa a atender às 14:45';
+              
+              mensagem = `Agendada! ${mensagemPeriodo}, por ordem de chegada. Caso o plano Unimed seja coparticipação ou particular, recebemos apenas em espécie. Posso ajudar em algo mais?`;
+            }
+            
+            return successResponse({
+              message: mensagem,
+              agendamento_id: resultadoFinal.agendamento_id,
+              paciente_id: resultadoFinal.paciente_id,
+              data: data_consulta,
+              horario_solicitado: hora_consulta,
+              horario_alocado: horarioAlocado,
+              medico: medico.nome,
+              atendimento: atendimento_nome || 'Consulta',
+              observacao: `Horário ${hora_consulta} estava ocupado. Alocado automaticamente em ${horarioAlocado} após ${tentativas} tentativas (${nomePeriodo})`,
+              alocacao_automatica: true,
+              tentativas_realizadas: tentativas
+            });
+          }
+          
+          // Se chegou aqui, não conseguiu alocar em nenhum minuto
+          console.log(`⚠️ Não foi possível alocar após ${tentativas} tentativas. Verificando estado do período...`);
           
           // 🔍 VERIFICAR CONTAGEM REAL DE AGENDAMENTOS NO PERÍODO
           const { data: agendamentosDoPeriodo } = await supabase
@@ -1417,26 +1458,20 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
             .eq('cliente_id', clienteId)
             .in('status', ['agendado', 'confirmado']);
           
-          // Filtrar apenas agendamentos do período específico
-          const [hInicioPeriodo] = periodoConfig.inicio.split(':').map(Number);
-          const [hFimPeriodo] = periodoConfig.fim.split(':').map(Number);
-          const minutoInicioPeriodo = hInicioPeriodo * 60;
-          const minutoFimPeriodo = hFimPeriodo * 60;
-          
           const agendamentosNoPeriodo = agendamentosDoPeriodo?.filter(a => {
             const [h, m] = a.hora_agendamento.split(':').map(Number);
             const minutoAgendamento = h * 60 + m;
-            return minutoAgendamento >= minutoInicioPeriodo && minutoAgendamento < minutoFimPeriodo;
+            return minutoAgendamento >= minutoInicio && minutoAgendamento < minutoFim;
           }) || [];
           
           const vagasOcupadas = agendamentosNoPeriodo.length;
           const vagasDisponiveis = periodoConfig.limite - vagasOcupadas;
           
-          console.log(`📊 Verificação final: ${vagasOcupadas}/${periodoConfig.limite} vagas ocupadas no período ${nomePeriodo}`);
+          console.log(`📊 Estado final: ${vagasOcupadas}/${periodoConfig.limite} vagas ocupadas no período ${nomePeriodo}`);
           
           if (vagasDisponiveis <= 0) {
-            // Realmente está lotado
-            console.log(`❌ Período ${nomePeriodo} está REALMENTE lotado`);
+            // Período realmente lotado
+            console.log(`❌ Período ${nomePeriodo} está completamente lotado`);
             return new Response(JSON.stringify({
               success: false,
               error: 'PERIOD_FULL',
@@ -1445,7 +1480,8 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
                 periodo: nomePeriodo,
                 vagas_ocupadas: vagasOcupadas,
                 vagas_total: periodoConfig.limite,
-                data_solicitada: data_consulta
+                data_solicitada: data_consulta,
+                tentativas_realizadas: tentativas
               },
               timestamp: new Date().toISOString()
             }), {
@@ -1453,19 +1489,20 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
               headers: { ...corsHeaders, 'Content-Type': 'application/json' }
             });
           } else {
-            // Tem vagas mas não conseguiu alocar (race condition ou horários específicos ocupados)
-            console.log(`⚠️ Período tem ${vagasDisponiveis} vaga(s) mas não foi possível alocar (possível race condition)`);
+            // Tem vagas mas nenhum minuto passou na função atômica
+            console.log(`⚠️ Período tem ${vagasDisponiveis} vaga(s) mas nenhum horário foi aceito pelo banco após ${tentativas} tentativas`);
             return new Response(JSON.stringify({
               success: false,
               error: 'ALLOCATION_FAILED',
-              message: `Não foi possível alocar horário automaticamente. O período da ${nomePeriodo} tem ${vagasDisponiveis} vaga(s) disponível(is), mas ocorreu um conflito. Por favor, tente outro horário específico.`,
+              message: `Não foi possível encontrar um horário disponível no período da ${nomePeriodo}. Foram testados ${tentativas} minutos, mas todos apresentaram conflitos. Por favor, tente outro período ou entre em contato.`,
               detalhes: {
                 periodo: nomePeriodo,
                 vagas_disponiveis: vagasDisponiveis,
                 vagas_ocupadas: vagasOcupadas,
                 vagas_total: periodoConfig.limite,
                 data_solicitada: data_consulta,
-                sugestao: 'Tente especificar um horário exato ou escolha outro período'
+                tentativas_realizadas: tentativas,
+                sugestao: 'O sistema pode estar com alta demanda ou há restrições específicas. Tente outro período.'
               },
               timestamp: new Date().toISOString()
             }), {
