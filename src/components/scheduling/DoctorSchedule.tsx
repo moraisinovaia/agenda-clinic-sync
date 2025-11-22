@@ -4,7 +4,6 @@ import { ptBR } from 'date-fns/locale';
 import { formatInTimeZone } from 'date-fns-tz';
 import { BRAZIL_TIMEZONE } from '@/utils/timezone';
 import { Doctor, AppointmentWithRelations, Atendimento } from '@/types/scheduling';
-import { getStatusRules } from '@/types/appointment-status-rules';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,7 +11,6 @@ import { Calendar } from '@/components/ui/calendar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User, Trash2, Plus, Edit, CheckCircle, Phone, RotateCcw, Printer, Settings, AlertTriangle, Loader2 } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { 
   AlertDialog, 
   AlertDialogAction, 
@@ -620,193 +618,144 @@ export function DoctorSchedule({
                               </TableCell>
                               
                               <TableCell className="w-[100px] py-1 px-2 print:hidden">
-                                <TooltipProvider>
-                                  <div className="flex items-center justify-center gap-0.5">
-                                    {(() => {
-                                      const rules = getStatusRules(appointment.status);
-                                      
-                                      return (
-                                        <>
-                                          {/* Botão Editar */}
-                                          {onEditAppointment && rules.canEdit && (
-                                            <Button 
-                                              variant="ghost" 
-                                              size="sm"
-                                              onClick={() => onEditAppointment(appointment)}
-                                              className="h-4 w-4 p-0"
-                                              title="Editar"
-                                            >
-                                              <Edit className="h-2 w-2" />
-                                            </Button>
-                                          )}
-                                          
-                                          {/* Botão Confirmar */}
-                                          {onConfirmAppointment && (
-                                            <Tooltip>
-                                              <TooltipTrigger asChild>
-                                                <span>
-                                                  <Button 
-                                                    variant="ghost" 
-                                                    size="sm"
-                                                    disabled={!rules.canConfirm || isConfirming}
-                                                    onClick={async () => {
-                                                      if (!rules.canConfirm) return;
-                                                      setIsConfirming(true);
-                                                      try {
-                                                        await onConfirmAppointment(appointment.id);
-                                                      } finally {
-                                                        setIsConfirming(false);
-                                                      }
-                                                    }}
-                                                    className="h-4 w-4 p-0 text-green-600 hover:text-green-700 hover:bg-green-50 disabled:opacity-30 disabled:cursor-not-allowed"
-                                                    title={rules.canConfirm ? "Confirmar" : rules.confirmDisabledReason}
-                                                  >
-                                                    {isConfirming ? (
-                                                      <Loader2 className="h-2 w-2 animate-spin" />
-                                                    ) : (
-                                                      <CheckCircle className="h-2 w-2" />
-                                                    )}
-                                                  </Button>
-                                                </span>
-                                              </TooltipTrigger>
-                                              {!rules.canConfirm && (
-                                                <TooltipContent>
-                                                  <p className="text-xs">{rules.confirmDisabledReason}</p>
-                                                </TooltipContent>
-                                              )}
-                                            </Tooltip>
-                                          )}
-                                          
-                                          {/* Botão Desconfirmar */}
-                                          {onUnconfirmAppointment && rules.canUnconfirm && (
-                                            <Button 
-                                              variant="ghost" 
-                                              size="sm"
-                                              disabled={isUnconfirming}
-                                              onClick={async () => {
-                                                setIsUnconfirming(true);
-                                                try {
-                                                  await onUnconfirmAppointment(appointment.id);
-                                                } finally {
-                                                  setIsUnconfirming(false);
-                                                }
-                                              }}
-                                              className="h-4 w-4 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                              title="Desconfirmar"
-                                            >
-                                              {isUnconfirming ? (
-                                                <Loader2 className="h-2 w-2 animate-spin" />
-                                              ) : (
-                                                <RotateCcw className="h-2 w-2" />
-                                              )}
-                                            </Button>
-                                          )}
-                                          
-                                          {/* Botão Cancelar */}
-                                          {rules.canCancel && (
-                                            <AlertDialog>
-                                              <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                  <span>
-                                                    <AlertDialogTrigger asChild>
-                                                      <Button 
-                                                        variant="ghost" 
-                                                        size="sm"
-                                                        className="h-4 w-4 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                                        title="Cancelar"
-                                                      >
-                                                        <Trash2 className="h-2 w-2" />
-                                                      </Button>
-                                                    </AlertDialogTrigger>
-                                                  </span>
-                                                </TooltipTrigger>
-                                              </Tooltip>
-                                              <AlertDialogContent>
-                                                <AlertDialogHeader>
-                                                  <AlertDialogTitle>Cancelar Agendamento</AlertDialogTitle>
-                                                  <AlertDialogDescription>
-                                                    Tem certeza que deseja cancelar este agendamento para {format(selectedDate, "dd/MM/yyyy")} às {appointment.hora_agendamento}? 
-                                                    Esta ação não pode ser desfeita.
-                                                  </AlertDialogDescription>
-                                                </AlertDialogHeader>
-                                                <AlertDialogFooter>
-                                                  <AlertDialogCancel>Não cancelar</AlertDialogCancel>
-                                                  <AlertDialogAction
-                                                    disabled={isCancelling}
-                                                    onClick={async () => {
-                                                      setIsCancelling(true);
-                                                      try {
-                                                        await onCancelAppointment(appointment.id);
-                                                      } finally {
-                                                        setIsCancelling(false);
-                                                      }
-                                                    }}
-                                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                                  >
-                                                    {isCancelling ? (
-                                                      <>
-                                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                        Cancelando...
-                                                      </>
-                                                    ) : (
-                                                      'Sim, cancelar'
-                                                    )}
-                                                  </AlertDialogAction>
-                                                </AlertDialogFooter>
-                                              </AlertDialogContent>
-                                            </AlertDialog>
-                                          )}
-                                          
-                                          {/* Botão Excluir */}
-                                          {onDeleteAppointment && (
-                                            <AlertDialog>
-                                              <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                  <span>
-                                                    <AlertDialogTrigger asChild>
-                                                      <Button 
-                                                        variant="ghost" 
-                                                        size="sm"
-                                                        disabled={!rules.canDelete}
-                                                        className="h-4 w-4 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed"
-                                                        title={rules.canDelete ? "Excluir" : rules.deleteDisabledReason}
-                                                      >
-                                                        <Trash2 className="h-2 w-2" />
-                                                      </Button>
-                                                    </AlertDialogTrigger>
-                                                  </span>
-                                                </TooltipTrigger>
-                                                {!rules.canDelete && (
-                                                  <TooltipContent>
-                                                    <p className="text-xs">{rules.deleteDisabledReason}</p>
-                                                  </TooltipContent>
-                                                )}
-                                              </Tooltip>
-                                              <AlertDialogContent>
-                                                <AlertDialogHeader>
-                                                  <AlertDialogTitle>Excluir Agendamento</AlertDialogTitle>
-                                                  <AlertDialogDescription>
-                                                    Tem certeza que deseja excluir permanentemente este agendamento cancelado para {format(selectedDate, "dd/MM/yyyy")} às {appointment.hora_agendamento}? 
-                                                    Esta ação não pode ser desfeita.
-                                                  </AlertDialogDescription>
-                                                </AlertDialogHeader>
-                                                <AlertDialogFooter>
-                                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                  <AlertDialogAction
-                                                    onClick={() => onDeleteAppointment(appointment.id)}
-                                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                                  >
-                                                    Sim, excluir
-                                                  </AlertDialogAction>
-                                                </AlertDialogFooter>
-                                              </AlertDialogContent>
-                                            </AlertDialog>
-                                          )}
-                                        </>
-                                      );
-                                    })()}
-                                  </div>
-                                </TooltipProvider>
+                                <div className="flex items-center justify-center gap-0.5">
+                                  {onEditAppointment && (
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm"
+                                      onClick={() => onEditAppointment(appointment)}
+                                      className="h-4 w-4 p-0"
+                                      title="Editar"
+                                    >
+                                      <Edit className="h-2 w-2" />
+                                    </Button>
+                                  )}
+                                  {appointment.status === 'agendado' && onConfirmAppointment && (
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm"
+                                      disabled={isConfirming}
+                                      onClick={async () => {
+                                        setIsConfirming(true);
+                                        try {
+                                          await onConfirmAppointment(appointment.id);
+                                        } finally {
+                                          setIsConfirming(false);
+                                        }
+                                      }}
+                                      className="h-4 w-4 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                      title="Confirmar"
+                                    >
+                                      {isConfirming ? (
+                                        <Loader2 className="h-2 w-2 animate-spin" />
+                                      ) : (
+                                        <CheckCircle className="h-2 w-2" />
+                                      )}
+                                    </Button>
+                                  )}
+                                  {appointment.status === 'confirmado' && onUnconfirmAppointment && (
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm"
+                                      disabled={isUnconfirming}
+                                      onClick={async () => {
+                                        setIsUnconfirming(true);
+                                        try {
+                                          await onUnconfirmAppointment(appointment.id);
+                                        } finally {
+                                          setIsUnconfirming(false);
+                                        }
+                                      }}
+                                      className="h-4 w-4 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                      title="Desconfirmar"
+                                    >
+                                      {isUnconfirming ? (
+                                        <Loader2 className="h-2 w-2 animate-spin" />
+                                      ) : (
+                                        <RotateCcw className="h-2 w-2" />
+                                      )}
+                                    </Button>
+                                  )}
+                                  {appointment.status === 'agendado' && (
+                                    <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                        <Button 
+                                          variant="ghost" 
+                                          size="sm"
+                                          className="h-4 w-4 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                          title="Cancelar"
+                                        >
+                                          <Trash2 className="h-2 w-2" />
+                                        </Button>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                          <AlertDialogTitle>Cancelar Agendamento</AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                            Tem certeza que deseja cancelar este agendamento para {format(selectedDate, "dd/MM/yyyy")} às {appointment.hora_agendamento}? 
+                                            Esta ação não pode ser desfeita.
+                                          </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                          <AlertDialogCancel>Não cancelar</AlertDialogCancel>
+                                          <AlertDialogAction
+                                            disabled={isCancelling}
+                                            onClick={async () => {
+                                              setIsCancelling(true);
+                                              try {
+                                                await onCancelAppointment(appointment.id);
+                                              } finally {
+                                                setIsCancelling(false);
+                                              }
+                                            }}
+                                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                          >
+                                            {isCancelling ? (
+                                              <>
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                Cancelando...
+                                              </>
+                                            ) : (
+                                              'Sim, cancelar'
+                                            )}
+                                          </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                    </AlertDialog>
+                                  )}
+                                  {appointment.status === 'cancelado' && onDeleteAppointment && (
+                                    <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                        <Button 
+                                          variant="ghost" 
+                                          size="sm"
+                                          className="h-4 w-4 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                          title="Excluir"
+                                        >
+                                          <Trash2 className="h-2 w-2" />
+                                        </Button>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                          <AlertDialogTitle>Excluir Agendamento</AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                            Tem certeza que deseja excluir permanentemente este agendamento cancelado para {format(selectedDate, "dd/MM/yyyy")} às {appointment.hora_agendamento}? 
+                                            Esta ação não pode ser desfeita.
+                                          </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                          <AlertDialogAction
+                                            onClick={() => onDeleteAppointment(appointment.id)}
+                                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                          >
+                                            Sim, excluir
+                                          </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                    </AlertDialog>
+                                  )}
+                                </div>
                               </TableCell>
                             </TableRow>
                             );
