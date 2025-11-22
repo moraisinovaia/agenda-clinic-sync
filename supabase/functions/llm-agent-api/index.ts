@@ -364,21 +364,31 @@ async function buscarProximoHorarioLivre(
   const minutoFim = horaFim * 60 + minFim;
   
   // Buscar TODOS os agendamentos do dia para esse médico
-  const { data: agendamentos } = await supabase
-    .from('agendamentos')
-    .select('hora_agendamento')
-    .eq('medico_id', medicoId)
-    .eq('data_agendamento', dataConsulta)
-    .eq('cliente_id', clienteId)
-    .in('status', ['agendado', 'confirmado']);
-  
-  // Verificar se já atingiu o limite de vagas
-  if (agendamentos && agendamentos.length >= periodoConfig.limite) {
-    console.log(`❌ Período lotado: ${agendamentos.length}/${periodoConfig.limite} vagas ocupadas`);
-    return null;
-  }
-  
-  console.log(`✅ Vagas disponíveis no período: ${agendamentos?.length || 0}/${periodoConfig.limite}`);
+    const { data: agendamentosDia } = await supabase
+      .from('agendamentos')
+      .select('hora_agendamento')
+      .eq('medico_id', medicoId)
+      .eq('data_agendamento', dataConsulta)
+      .eq('cliente_id', clienteId)
+      .in('status', ['agendado', 'confirmado']);
+
+    // 🆕 FILTRAR APENAS AGENDAMENTOS DO PERÍODO ESPECÍFICO
+    const agendamentos = agendamentosDia?.filter(a => {
+      const [h, m] = a.hora_agendamento.split(':').map(Number);
+      const minutoAgendamento = h * 60 + m;
+      return minutoAgendamento >= minutoInicio && minutoAgendamento < minutoFim;
+    }) || [];
+
+    console.log(`📊 Agendamentos totais do dia: ${agendamentosDia?.length || 0}`);
+    console.log(`📊 Agendamentos do período (${periodoConfig.inicio}-${periodoConfig.fim}): ${agendamentos.length}/${periodoConfig.limite}`);
+
+    // Verificar se já atingiu o limite de vagas DO PERÍODO
+    if (agendamentos.length >= periodoConfig.limite) {
+      console.log(`❌ Período ${periodoConfig.inicio}-${periodoConfig.fim} está lotado (${agendamentos.length}/${periodoConfig.limite})`);
+      return null;
+    }
+
+    console.log(`✅ Vagas disponíveis no período: ${agendamentos.length}/${periodoConfig.limite}`);
   
   // Criar Set de horários ocupados para busca rápida (formato HH:MM)
   const horariosOcupados = new Set(
