@@ -17,10 +17,11 @@ class RealtimeManager {
   private connectionTime = new Map<string, number>(); // ✅ FASE 1: Timestamp da última conexão
   private isRealtimeDisabled = new Map<string, boolean>(); // ✅ FASE 3: Flag para fallback polling
   private pollingIntervals = new Map<string, NodeJS.Timeout>(); // ✅ FASE 3: Intervalos de polling
-  private readonly VERSION = '3.0.0'; // ✅ Versão 3.0 com polling fallback
-  private readonly MAX_RETRY_ATTEMPTS = 5; // ✅ REDUZIDO para 5 tentativas antes do fallback
+  private readonly VERSION = '3.1.0'; // ✅ Versão 3.1 com reconexão mais tolerante
+  private readonly MAX_RETRY_ATTEMPTS = 20; // ✅ AUMENTADO: 20 tentativas antes do fallback
   private readonly RETRY_COOLDOWN = 5 * 60 * 1000; // 5 minutos
-  private readonly MIN_CONNECTION_TIME = 5000; // ✅ FASE 1: Conexão < 5s é considerada instável
+  private readonly MIN_CONNECTION_TIME = 30000; // ✅ Conexão < 30s é considerada instável
+  private readonly STABLE_CONNECTION_RESET = 5 * 60 * 1000; // ✅ Resetar contador após 5min estável
 
   constructor() {
     console.log(`🎯 [SINGLETON v${this.VERSION}] RealtimeManager inicializado com MAX_RETRY=${this.MAX_RETRY_ATTEMPTS} antes de fallback para polling`);
@@ -110,9 +111,21 @@ class RealtimeManager {
       )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          console.log(`✅ [SINGLETON] Realtime conectado para ${table}`);
-          // ✅ NÃO resetar retry count aqui - só resetar se conexão for estável (>5s)
+          console.log(`✅ [SINGLETON v${this.VERSION}] Realtime conectado para ${table}`);
           this.isReconnecting.set(table, false);
+          
+          // ✅ Agendar reset de contador após período estável
+          setTimeout(() => {
+            const connTime = this.connectionTime.get(table) || 0;
+            const duration = Date.now() - connTime;
+            if (duration >= this.STABLE_CONNECTION_RESET) {
+              const previousRetries = this.retryCount.get(table) || 0;
+              if (previousRetries > 0) {
+                console.log(`✅ [SINGLETON v${this.VERSION}] Conexão ${table} estável por ${Math.floor(duration/1000)}s - resetando contador de ${previousRetries} para 0`);
+                this.retryCount.set(table, 0);
+              }
+            }
+          }, this.STABLE_CONNECTION_RESET);
         } else if (status === 'CLOSED') {
           console.log(`⚠️ [SINGLETON] Conexão fechada para ${table}`);
           this.handleReconnect(table);
@@ -132,17 +145,17 @@ class RealtimeManager {
       return;
     }
 
-    // ✅ FASE 1: Verificar se a conexão foi muito curta (instável)
+    // ✅ Verificar se a conexão foi muito curta (instável)
     const connTime = this.connectionTime.get(table) || 0;
     const duration = Date.now() - connTime;
     
     if (duration > this.MIN_CONNECTION_TIME) {
-      console.log(`✅ [SINGLETON] Conexão ${table} durou ${duration}ms - conexão estável, resetando contador`);
+      console.log(`✅ [SINGLETON v${this.VERSION}] Conexão ${table} durou ${Math.floor(duration/1000)}s - conexão estável, resetando contador`);
       this.retryCount.set(table, 0); // ✅ SÓ resetar se conexão foi estável
       return; // Conexão foi longa o suficiente, não reconectar
     }
 
-    console.warn(`⚠️ [SINGLETON] Conexão instável detectada para ${table} (durou apenas ${duration}ms)`);
+    console.warn(`⚠️ [SINGLETON v${this.VERSION}] Conexão instável detectada para ${table} (durou apenas ${Math.floor(duration/1000)}s, mínimo ${this.MIN_CONNECTION_TIME/1000}s)`);
 
     const currentRetries = this.retryCount.get(table) || 0;
     
