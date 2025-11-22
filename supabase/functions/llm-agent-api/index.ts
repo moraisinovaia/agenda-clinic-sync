@@ -633,6 +633,32 @@ function normalizarConvenio(convenio: string): string {
     .replace(/\s+/g, ' '); // Remover espaços duplicados
 }
 
+/**
+ * Formata convênio para o padrão do banco de dados (Title Case)
+ * Exemplos:
+ * - "unimed nacional" → "Unimed Nacional"
+ * - "UNIMED-REGIONAL" → "Unimed Regional"
+ * - "unimed 40%" → "Unimed 40%"
+ */
+function formatarConvenioParaBanco(convenio: string): string {
+  if (!convenio) return convenio;
+  
+  // Primeiro normaliza
+  const normalizado = normalizarConvenio(convenio);
+  
+  // Depois converte para Title Case
+  return normalizado
+    .split(' ')
+    .map(palavra => {
+      // Mantém números e porcentagens como estão
+      if (/^\d+%?$/.test(palavra)) return palavra;
+      
+      // Primeira letra maiúscula, resto minúsculo
+      return palavra.charAt(0) + palavra.slice(1).toLowerCase();
+    })
+    .join(' ');
+}
+
 // Agendar consulta
 async function handleSchedule(supabase: any, body: any, clienteId: string) {
   try {
@@ -1283,7 +1309,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
         p_cliente_id: clienteId, // 🆕 Passar cliente_id explicitamente
         p_nome_completo: paciente_nome.toUpperCase(),
         p_data_nascimento: data_nascimento,
-        p_convenio: normalizarConvenio(convenio), // ✅ Normalizar convênio
+        p_convenio: formatarConvenioParaBanco(convenio), // ✅ Formatar para padrão do banco
         p_telefone: telefone || null,
         p_celular: celular,
         p_medico_id: medico.id,
@@ -1371,7 +1397,17 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
                 p_cliente_id: clienteId,
                 p_nome_completo: paciente_nome.toUpperCase(),
                 p_data_nascimento: data_nascimento,
-                p_convenio: normalizarConvenio(convenio),
+                p_convenio: formatarConvenioParaBanco(convenio), // ✅ Formatar para padrão do banco
+                p_telefone: telefone || null,
+                p_celular: celular,
+                p_medico_id: medico.id,
+                p_atendimento_id: atendimento_id,
+                p_data_agendamento: data_consulta,
+                p_hora_agendamento: horarioTeste,
+                p_observacoes: (observacoes || 'Agendamento via LLM Agent WhatsApp').toUpperCase(),
+                p_criado_por: 'LLM Agent WhatsApp',
+                p_force_conflict: false
+              });
                 p_telefone: telefone || null,
                 p_celular: celular,
                 p_medico_id: medico.id,
