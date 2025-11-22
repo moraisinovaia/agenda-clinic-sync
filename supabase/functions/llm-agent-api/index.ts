@@ -363,10 +363,6 @@ async function buscarProximoHorarioLivre(
   const minutoInicio = horaInicio * 60 + minInicio;
   const minutoFim = horaFim * 60 + minFim;
   
-  // 🆕 Obter intervalo configurado (padrão: 30 minutos se não especificado)
-  const intervaloMinutos = periodoConfig.intervalo_minutos || 30;
-  console.log(`📋 Intervalo configurado: ${intervaloMinutos} minutos`);
-  
   // Buscar TODOS os agendamentos do dia para esse médico
   const { data: agendamentosDia } = await supabase
     .from('agendamentos')
@@ -399,17 +395,9 @@ async function buscarProximoHorarioLivre(
     agendamentos?.map(a => a.hora_agendamento.substring(0, 5)) || []
   );
   
-  // 🆕 BUSCAR APENAS EM MÚLTIPLOS DO INTERVALO CONFIGURADO
+  // 🔄 BUSCAR MINUTO A MINUTO até encontrar horário livre
   let tentativas = 0;
-  
-  // Começar do primeiro slot válido do período
   let minutoAtual = minutoInicio;
-  
-  // Garantir que começamos em um múltiplo do intervalo
-  const resto = minutoAtual % intervaloMinutos;
-  if (resto !== 0) {
-    minutoAtual += (intervaloMinutos - resto);
-  }
   
   while (minutoAtual < minutoFim) {
     tentativas++;
@@ -418,15 +406,15 @@ async function buscarProximoHorarioLivre(
     const horarioTeste = `${String(hora).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
     
     if (!horariosOcupados.has(horarioTeste)) {
-      console.log(`✅ Horário livre encontrado: ${horarioTeste} (após ${tentativas} tentativas, intervalo: ${intervaloMinutos}min)`);
+      console.log(`✅ Horário livre encontrado: ${horarioTeste} (após ${tentativas} tentativas)`);
       return { horario: horarioTeste + ':00', tentativas };
     }
     
-    // Avançar para o próximo slot válido (múltiplo do intervalo)
-    minutoAtual += intervaloMinutos;
+    // Avançar 1 minuto
+    minutoAtual++;
   }
   
-  console.log(`❌ Nenhum horário livre encontrado após ${tentativas} tentativas (intervalo: ${intervaloMinutos}min)`);
+  console.log(`❌ Nenhum horário livre encontrado após ${tentativas} tentativas`);
   return null;
 }
 
