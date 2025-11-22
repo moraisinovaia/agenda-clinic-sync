@@ -915,15 +915,25 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
               if (servicoLocal.periodos && periodo && data_consulta) {
                 const configPeriodo = servicoLocal.periodos[periodo];
                 if (configPeriodo && configPeriodo.limite) {
-                  const { data: agendamentos, error: agendError } = await supabase
+                  // 🆕 Filtrar apenas agendamentos do período específico
+                  let query = supabase
                     .from('agendamentos')
-                    .select('id')
+                    .select('id, hora_agendamento')
                     .eq('medico_id', medico.id)
                     .eq('data_agendamento', data_consulta)
                     .eq('cliente_id', clienteId)
                     .is('excluido_em', null)
                     .is('cancelado_em', null)
                     .in('status', ['agendado', 'confirmado']);
+                  
+                  // Filtrar por horário do período
+                  if (configPeriodo.inicio && configPeriodo.fim) {
+                    query = query
+                      .gte('hora_agendamento', configPeriodo.inicio)
+                      .lt('hora_agendamento', configPeriodo.fim);
+                  }
+                  
+                  const { data: agendamentos, error: agendError } = await query;
                   
                   if (agendError) {
                     console.error('Erro ao verificar limite de vagas:', agendError);
@@ -958,8 +968,8 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
                             continue;
                           }
                           
-                          // ✅ Buscar TODOS os agendamentos para qualquer atendimento deste médico
-                          const { data: agendadosFuturos, error: errorFuturo } = await supabase
+                          // ✅ Buscar agendamentos do período específico
+                          let queryFuturos = supabase
                             .from('agendamentos')
                             .select('id, atendimento_id, hora_agendamento')
                             .eq('medico_id', medico.id)
@@ -968,6 +978,15 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
                             .is('excluido_em', null)
                             .is('cancelado_em', null)
                             .in('status', ['agendado', 'confirmado']);
+                          
+                          // Filtrar por horário do período
+                          if (configPeriodo.inicio && configPeriodo.fim) {
+                            queryFuturos = queryFuturos
+                              .gte('hora_agendamento', configPeriodo.inicio)
+                              .lt('hora_agendamento', configPeriodo.fim);
+                          }
+                          
+                          const { data: agendadosFuturos, error: errorFuturo } = await queryFuturos;
                           
                           if (errorFuturo) {
                             console.error(`❌ Erro ao buscar agendamentos para ${dataFuturaStr}:`, errorFuturo);
