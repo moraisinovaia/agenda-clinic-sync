@@ -429,10 +429,6 @@ async function buscarProximoHorarioLivre(
   console.log(`❌ Nenhum horário livre encontrado após ${tentativas} tentativas (intervalo: ${intervaloMinutos}min)`);
   return null;
 }
-  
-  console.log(`❌ Nenhum horário livre encontrado após ${tentativas} tentativas`);
-  return null;
-}
 
 // Função auxiliar para obter dia da semana (0=dom, 1=seg, ...)
 // ✅ CORRIGIDO: Forçar interpretação local da data (evitar deslocamento UTC)
