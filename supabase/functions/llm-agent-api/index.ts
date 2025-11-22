@@ -1470,6 +1470,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
             });
           }
         }
+      }
       
       // Para outros erros, manter comportamento original
       return new Response(JSON.stringify({
