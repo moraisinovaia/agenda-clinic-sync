@@ -619,36 +619,26 @@ serve(async (req) => {
 
 
 /**
- * Formata convênio para o padrão do banco de dados (Title Case)
+ * Formata convênio para o padrão do banco de dados (MAIÚSCULO)
  * Remove hífens/underscores e espaços extras
  * Exemplos:
- * - "unimed nacional" → "Unimed Nacional"
- * - "UNIMED-REGIONAL" → "Unimed Regional"
- * - "unimed 40%" → "Unimed 40%"
+ * - "unimed nacional" → "UNIMED NACIONAL"
+ * - "UNIMED-REGIONAL" → "UNIMED REGIONAL"
+ * - "unimed 40%" → "UNIMED 40%"
+ * - "Particular" → "PARTICULAR"
  */
 function formatarConvenioParaBanco(convenio: string): string {
   if (!convenio) return convenio;
   
-  // Limpar e normalizar: remover hífens/underscores, espaços extras
+  // Limpar e normalizar: remover hífens/underscores, espaços extras, converter para MAIÚSCULO
   const limpo = convenio
     .trim()
     .replace(/[-_]/g, ' ')
-    .replace(/\s+/g, ' ');
+    .replace(/\s+/g, ' ')
+    .toUpperCase(); // ✅ MAIÚSCULO para evitar problemas de case-sensitivity
   
-  // Converter para Title Case (primeira letra maiúscula, resto minúsculo)
-  const titleCase = limpo
-    .split(' ')
-    .map(palavra => {
-      // Mantém números e porcentagens como estão
-      if (/^\d+%?$/.test(palavra)) return palavra;
-      
-      // Primeira letra maiúscula, resto minúsculo
-      return palavra.charAt(0).toUpperCase() + palavra.slice(1).toLowerCase();
-    })
-    .join(' ');
-  
-  console.log(`📝 Convênio formatado: "${convenio}" → "${titleCase}"`);
-  return titleCase;
+  console.log(`📝 Convênio formatado: "${convenio}" → "${limpo}"`);
+  return limpo;
 }
 
 // Agendar consulta
