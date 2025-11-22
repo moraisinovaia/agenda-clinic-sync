@@ -2548,7 +2548,11 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       
       if (error) {
         console.error('❌ Erro ao buscar médicos:', error);
-        return errorResponse(`Erro ao buscar médicos: ${error.message}`);
+        return businessErrorResponse({
+          codigo_erro: 'ERRO_BUSCA_MEDICOS',
+          mensagem_usuario: '❌ Não foi possível buscar os médicos disponíveis no momento.\n\n📞 Por favor, tente novamente em alguns instantes ou entre em contato com a clínica.',
+          detalhes: { erro_tecnico: error.message }
+        });
       }
       
       if (!todosMedicos || todosMedicos.length === 0) {
@@ -3009,7 +3013,14 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     if (!regras) {
       console.error(`❌ Regras não encontradas para médico ${medico.nome} (ID: ${medico.id})`);
       console.error(`📋 IDs disponíveis nas BUSINESS_RULES:`, Object.keys(BUSINESS_RULES.medicos));
-      return errorResponse(`Regras de atendimento não configuradas para ${medico.nome}`);
+      return businessErrorResponse({
+        codigo_erro: 'REGRAS_NAO_CONFIGURADAS',
+        mensagem_usuario: `❌ Não foi possível verificar disponibilidade para ${medico.nome}.\n\n📞 Por favor, entre em contato com a clínica para agendar: (87) 3866-4050`,
+        detalhes: {
+          medico_id: medico.id,
+          medico_nome: medico.nome
+        }
+      });
     }
     console.log(`✅ Regras encontradas para ${regras.nome}`);
 
@@ -3202,9 +3213,15 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
           normalizado: s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
         }))
       });
-      return errorResponse(
-        `Serviço "${atendimento_nome}" não encontrado para ${medico.nome}. Serviços disponíveis: ${Object.keys(regras.servicos || {}).join(', ')}`
-      );
+      const servicosDisponiveis = Object.keys(regras.servicos || {}).join(', ');
+      return businessErrorResponse({
+        codigo_erro: 'SERVICO_NAO_ENCONTRADO',
+        mensagem_usuario: `❌ O serviço "${atendimento_nome}" não está disponível para ${medico.nome}.\n\n✅ Serviços disponíveis:\n${Object.keys(regras.servicos || {}).map(s => `   • ${s}`).join('\n')}\n\n💡 Por favor, escolha um dos serviços listados acima.`,
+        detalhes: {
+          servico_solicitado: atendimento_nome,
+          servicos_disponiveis: Object.keys(regras.servicos || {})
+        }
+      });
     }
 
     // Reutilizar/atualizar variável servico já declarada
@@ -3216,9 +3233,14 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     // Validar se encontrou o serviço
     if (!servico || !servicoKey) {
       console.error(`❌ ERRO FINAL: Serviço não encontrado após todas as tentativas`);
-      return errorResponse(
-        `Serviço "${atendimento_nome}" não encontrado para ${medico.nome}. Serviços disponíveis: ${Object.keys(regras.servicos || {}).join(', ')}`
-      );
+      return businessErrorResponse({
+        codigo_erro: 'SERVICO_NAO_ENCONTRADO',
+        mensagem_usuario: `❌ O serviço "${atendimento_nome}" não está disponível para ${medico.nome}.\n\n✅ Serviços disponíveis:\n${Object.keys(regras.servicos || {}).map(s => `   • ${s}`).join('\n')}\n\n💡 Por favor, escolha um dos serviços listados acima.`,
+        detalhes: {
+          servico_solicitado: atendimento_nome,
+          servicos_disponiveis: Object.keys(regras.servicos || {})
+        }
+      });
     }
 
     // Verificar se permite agendamento online
@@ -3441,7 +3463,16 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       }
 
       if (proximasDatas.length === 0) {
-        return errorResponse(`Não encontrei datas disponíveis para ${medico.nome} nos próximos ${dias_busca} dias. Por favor, entre em contato com a clínica.`);
+        return businessErrorResponse({
+          codigo_erro: 'SEM_VAGAS_DISPONIVEIS',
+          mensagem_usuario: `😔 Não encontrei vagas disponíveis para ${medico.nome} - ${servicoKey} nos próximos ${dias_busca} dias.\n\n📞 Sugestões:\n   • Ligue para (87) 3866-4050 para verificar outras opções\n   • Entre na fila de espera\n   • Consulte disponibilidade em outras especialidades`,
+          detalhes: {
+            medico: medico.nome,
+            servico: servicoKey,
+            dias_buscados: dias_busca,
+            periodo_solicitado: periodoPreferido || 'qualquer'
+          }
+        });
       }
 
       // 🆕 MENSAGEM CONTEXTUAL baseada na disponibilidade
@@ -3901,10 +3932,14 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       parametros_recebidos: body
     });
     
-    return errorResponse(
-      `Erro ao verificar disponibilidade: ${error?.message || 'Erro desconhecido'}. ` +
-      `Verifique os logs para mais detalhes.`
-    );
+    return businessErrorResponse({
+      codigo_erro: 'ERRO_SISTEMA',
+      mensagem_usuario: '❌ Ocorreu um erro ao verificar a disponibilidade.\n\n📞 Por favor:\n   • Tente novamente em alguns instantes\n   • Ou entre em contato: (87) 3866-4050',
+      detalhes: {
+        erro_tecnico: error?.message || 'Erro desconhecido',
+        timestamp: new Date().toISOString()
+      }
+    });
   }
 }
 
