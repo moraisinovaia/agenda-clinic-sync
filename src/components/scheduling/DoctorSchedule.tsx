@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User, Trash2, Plus, Edit, CheckCircle, Phone, RotateCcw, Printer, Settings, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User, Trash2, Plus, Edit, CheckCircle, Phone, RotateCcw, Printer, Settings, AlertTriangle, Loader2 } from 'lucide-react';
 import { 
   AlertDialog, 
   AlertDialogAction, 
@@ -175,6 +175,7 @@ export function DoctorSchedule({
   const [scheduleGenOpen, setScheduleGenOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [activeBloqueio, setActiveBloqueio] = useState<{motivo: string, data_inicio: string, data_fim: string} | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
   
   const getAppointmentsForDate = (date: Date) => {
     try {
@@ -672,10 +673,25 @@ export function DoctorSchedule({
                                         <AlertDialogFooter>
                                           <AlertDialogCancel>Não cancelar</AlertDialogCancel>
                                           <AlertDialogAction
-                                            onClick={() => onCancelAppointment(appointment.id)}
+                                            disabled={isCancelling}
+                                            onClick={async () => {
+                                              setIsCancelling(true);
+                                              try {
+                                                await onCancelAppointment(appointment.id);
+                                              } finally {
+                                                setIsCancelling(false);
+                                              }
+                                            }}
                                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                           >
-                                            Sim, cancelar
+                                            {isCancelling ? (
+                                              <>
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                Cancelando...
+                                              </>
+                                            ) : (
+                                              'Sim, cancelar'
+                                            )}
                                           </AlertDialogAction>
                                         </AlertDialogFooter>
                                       </AlertDialogContent>
