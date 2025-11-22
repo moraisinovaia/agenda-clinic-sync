@@ -1109,11 +1109,20 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
       console.log(`✅ Primeiro atendimento disponível selecionado: ${atendimentos[0].nome}`);
     }
 
-    // 🆕 SE HORA_CONSULTA FOR PERÍODO, BUSCAR HORÁRIO ESPECÍFICO AUTOMATICAMENTE
+    // 🆕 PARSEAR INTERVALO DE HORÁRIO (ex: "13:00 às 15:00" → "13:00")
     let horarioFinal = hora_consulta;
     
+    // Se vier um intervalo, extrair apenas o horário de início
+    const intervaloMatch = hora_consulta.match(/^(\d{1,2}:\d{2})\s*(?:às|as|a|-|até)\s*\d{1,2}:\d{2}$/i);
+    if (intervaloMatch) {
+      horarioFinal = intervaloMatch[1];
+      console.log(`🔄 Detectado intervalo "${hora_consulta}". Usando horário de início: ${horarioFinal}`);
+    }
+    
+    // 🆕 SE HORA_CONSULTA FOR PERÍODO, BUSCAR HORÁRIO ESPECÍFICO AUTOMATICAMENTE
+    
     // Detectar se é período ("manhã", "tarde", "noite") ao invés de horário específico
-    const isPeriodo = /^(manh[aã]|tarde|noite)$/i.test(hora_consulta);
+    const isPeriodo = /^(manh[aã]|tarde|noite)$/i.test(horarioFinal);
     
     if (isPeriodo) {
       console.log(`🔄 Detectado período "${hora_consulta}" ao invés de horário específico. Buscando primeiro horário disponível...`);
