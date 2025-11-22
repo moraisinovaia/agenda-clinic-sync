@@ -1467,13 +1467,8 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
               agendamento_id: resultadoFinal.agendamento_id,
               paciente_id: resultadoFinal.paciente_id,
               data: data_consulta,
-              horario_solicitado: hora_consulta,
-              horario_alocado: horarioAlocado,
               medico: medico.nome,
-              atendimento: atendimento_nome || 'Consulta',
-              observacao: `Horário ${hora_consulta} estava ocupado. Alocado automaticamente em ${horarioAlocado} após ${tentativas} tentativas (${nomePeriodo})`,
-              alocacao_automatica: true,
-              tentativas_realizadas: tentativas
+              atendimento: atendimento_nome || 'Consulta'
             });
           }
           
