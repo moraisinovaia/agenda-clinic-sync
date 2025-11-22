@@ -353,7 +353,7 @@ async function buscarProximoHorarioLivre(
   medicoId: string,
   dataConsulta: string,
   horarioInicial: string, // ex: "08:00:00"
-  periodoConfig: { inicio: string, fim: string, limite: number }
+  periodoConfig: { inicio: string, fim: string, limite: number, intervalo_minutos?: number }
 ): Promise<{ horario: string, tentativas: number } | null> {
   
   const [horaInicio, minInicio] = periodoConfig.inicio.split(':').map(Number);
@@ -363,52 +363,72 @@ async function buscarProximoHorarioLivre(
   const minutoInicio = horaInicio * 60 + minInicio;
   const minutoFim = horaFim * 60 + minFim;
   
+  // 🆕 Obter intervalo configurado (padrão: 30 minutos se não especificado)
+  const intervaloMinutos = periodoConfig.intervalo_minutos || 30;
+  console.log(`📋 Intervalo configurado: ${intervaloMinutos} minutos`);
+  
   // Buscar TODOS os agendamentos do dia para esse médico
-    const { data: agendamentosDia } = await supabase
-      .from('agendamentos')
-      .select('hora_agendamento')
-      .eq('medico_id', medicoId)
-      .eq('data_agendamento', dataConsulta)
-      .eq('cliente_id', clienteId)
-      .in('status', ['agendado', 'confirmado']);
+  const { data: agendamentosDia } = await supabase
+    .from('agendamentos')
+    .select('hora_agendamento')
+    .eq('medico_id', medicoId)
+    .eq('data_agendamento', dataConsulta)
+    .eq('cliente_id', clienteId)
+    .in('status', ['agendado', 'confirmado']);
 
-    // 🆕 FILTRAR APENAS AGENDAMENTOS DO PERÍODO ESPECÍFICO
-    const agendamentos = agendamentosDia?.filter(a => {
-      const [h, m] = a.hora_agendamento.split(':').map(Number);
-      const minutoAgendamento = h * 60 + m;
-      return minutoAgendamento >= minutoInicio && minutoAgendamento < minutoFim;
-    }) || [];
+  // 🆕 FILTRAR APENAS AGENDAMENTOS DO PERÍODO ESPECÍFICO
+  const agendamentos = agendamentosDia?.filter(a => {
+    const [h, m] = a.hora_agendamento.split(':').map(Number);
+    const minutoAgendamento = h * 60 + m;
+    return minutoAgendamento >= minutoInicio && minutoAgendamento < minutoFim;
+  }) || [];
 
-    console.log(`📊 Agendamentos totais do dia: ${agendamentosDia?.length || 0}`);
-    console.log(`📊 Agendamentos do período (${periodoConfig.inicio}-${periodoConfig.fim}): ${agendamentos.length}/${periodoConfig.limite}`);
+  console.log(`📊 Agendamentos totais do dia: ${agendamentosDia?.length || 0}`);
+  console.log(`📊 Agendamentos do período (${periodoConfig.inicio}-${periodoConfig.fim}): ${agendamentos.length}/${periodoConfig.limite}`);
 
-    // Verificar se já atingiu o limite de vagas DO PERÍODO
-    if (agendamentos.length >= periodoConfig.limite) {
-      console.log(`❌ Período ${periodoConfig.inicio}-${periodoConfig.fim} está lotado (${agendamentos.length}/${periodoConfig.limite})`);
-      return null;
-    }
+  // Verificar se já atingiu o limite de vagas DO PERÍODO
+  if (agendamentos.length >= periodoConfig.limite) {
+    console.log(`❌ Período ${periodoConfig.inicio}-${periodoConfig.fim} está lotado (${agendamentos.length}/${periodoConfig.limite})`);
+    return null;
+  }
 
-    console.log(`✅ Vagas disponíveis no período: ${agendamentos.length}/${periodoConfig.limite}`);
+  console.log(`✅ Vagas disponíveis no período: ${agendamentos.length}/${periodoConfig.limite}`);
   
   // Criar Set de horários ocupados para busca rápida (formato HH:MM)
   const horariosOcupados = new Set(
     agendamentos?.map(a => a.hora_agendamento.substring(0, 5)) || []
   );
   
-  // Começar do horário inicial e buscar de 1 em 1 minuto
+  // 🆕 BUSCAR APENAS EM MÚLTIPLOS DO INTERVALO CONFIGURADO
   let tentativas = 0;
   
-  for (let minuto = minutoInicio; minuto < minutoFim; minuto++) {
+  // Começar do primeiro slot válido do período
+  let minutoAtual = minutoInicio;
+  
+  // Garantir que começamos em um múltiplo do intervalo
+  const resto = minutoAtual % intervaloMinutos;
+  if (resto !== 0) {
+    minutoAtual += (intervaloMinutos - resto);
+  }
+  
+  while (minutoAtual < minutoFim) {
     tentativas++;
-    const hora = Math.floor(minuto / 60);
-    const min = minuto % 60;
+    const hora = Math.floor(minutoAtual / 60);
+    const min = minutoAtual % 60;
     const horarioTeste = `${String(hora).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
     
     if (!horariosOcupados.has(horarioTeste)) {
-      console.log(`✅ Horário livre encontrado: ${horarioTeste} (após ${tentativas} tentativas)`);
+      console.log(`✅ Horário livre encontrado: ${horarioTeste} (após ${tentativas} tentativas, intervalo: ${intervaloMinutos}min)`);
       return { horario: horarioTeste + ':00', tentativas };
     }
+    
+    // Avançar para o próximo slot válido (múltiplo do intervalo)
+    minutoAtual += intervaloMinutos;
   }
+  
+  console.log(`❌ Nenhum horário livre encontrado após ${tentativas} tentativas (intervalo: ${intervaloMinutos}min)`);
+  return null;
+}
   
   console.log(`❌ Nenhum horário livre encontrado após ${tentativas} tentativas`);
   return null;
