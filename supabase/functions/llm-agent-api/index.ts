@@ -3509,7 +3509,80 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
     }
 
     if (periodosDisponiveis.length === 0) {
-      return errorResponse(`${medico.nome} não atende ${servicoKey} na data ${data_consulta}`);
+      console.log(`❌ Nenhum período disponível para ${data_consulta}. Buscando alternativas...`);
+      
+      // 🔍 Buscar próximas datas disponíveis mantendo período preferido
+      const proximasDatas = await buscarProximasDatasDisponiveis(
+        supabase,
+        medico,
+        servicoKey,
+        servico,
+        data_consulta,
+        clienteId,
+        periodoPreferido, // ✅ Mantém período solicitado (manhã/tarde)
+        60, // Buscar nos próximos 60 dias
+        5   // Máximo 5 sugestões
+      );
+      
+      // 🎯 Montar mensagem contextualizada
+      const periodoTexto = periodoPreferido === 'manha' ? 'Manhã' : 
+                           periodoPreferido === 'tarde' ? 'Tarde' : 
+                           periodoPreferido ? periodoPreferido : '';
+      
+      let mensagem = `❌ ${medico.nome} não atende ${servicoKey}`;
+      
+      if (periodoTexto) {
+        mensagem += ` no período da ${periodoTexto}`;
+      }
+      
+      mensagem += ` na data ${data_consulta}.\n\n`;
+      
+      if (proximasDatas.length > 0) {
+        mensagem += `✅ Próximas datas disponíveis`;
+        
+        if (periodoTexto) {
+          mensagem += ` no período da ${periodoTexto}`;
+        }
+        
+        mensagem += `:\n\n`;
+        
+        proximasDatas.forEach(d => {
+          mensagem += `📅 ${d.data} (${d.dia_semana}) - ${d.periodo || ''} - ${d.vagas_disponiveis} vaga(s)\n`;
+        });
+        
+        mensagem += `\n💡 Gostaria de agendar em uma destas datas?`;
+      } else {
+        mensagem += `⚠️ Não encontramos vagas`;
+        
+        if (periodoTexto) {
+          mensagem += ` no período da ${periodoTexto}`;
+        }
+        
+        mensagem += ` nos próximos 60 dias.\n\n`;
+        mensagem += `📞 Por favor, entre em contato:\n`;
+        mensagem += `   • Telefone: (87) 3866-4050\n`;
+        mensagem += `   • Opções: Fila de espera ou outros períodos`;
+      }
+      
+      // ✅ Retornar resposta estruturada (status 200)
+      return successResponse({
+        disponivel: false,
+        motivo: 'periodo_data_nao_disponivel',
+        medico: medico.nome,
+        servico: servicoKey,
+        data_solicitada: data_consulta,
+        periodo_solicitado: periodoPreferido,
+        proximas_datas: proximasDatas,
+        message: mensagem,
+        contexto: {
+          medico_id: medico.id,
+          medico_nome: medico.nome,
+          servico: atendimento_nome,
+          data_original: data_consulta,
+          periodo_preferido: periodoPreferido,
+          total_alternativas: proximasDatas.length
+        }
+      });
     }
 
     // 🎯 RESPOSTA DIFERENCIADA POR TIPO DE ATENDIMENTO
