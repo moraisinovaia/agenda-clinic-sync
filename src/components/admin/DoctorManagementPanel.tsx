@@ -135,12 +135,12 @@ export const DoctorManagementPanel: React.FC = () => {
       if (!effectiveClinicId) return [];
       const { data, error } = await supabase
         .from('atendimentos')
-        .select('id, nome, tipo')
+        .select('id, nome, tipo, medico_id')
         .eq('cliente_id', effectiveClinicId)
         .eq('ativo', true)
         .order('nome');
       if (error) throw error;
-      return (data || []) as Atendimento[];
+      return (data || []) as (Atendimento & { medico_id?: string })[];
     },
     enabled: !!effectiveClinicId
   });
@@ -157,7 +157,8 @@ export const DoctorManagementPanel: React.FC = () => {
         p_convenios_aceitos: data.convenios_aceitos.length > 0 ? data.convenios_aceitos : null,
         p_idade_minima: data.idade_minima || 0,
         p_idade_maxima: data.idade_maxima,
-        p_observacoes: data.observacoes || null
+        p_observacoes: data.observacoes || null,
+        p_atendimentos_ids: data.atendimentos_ids.length > 0 ? data.atendimentos_ids : null
       });
       
       if (error) throw error;
@@ -193,7 +194,8 @@ export const DoctorManagementPanel: React.FC = () => {
           idade_minima: data.idade_minima,
           idade_maxima: data.idade_maxima,
           observacoes: data.observacoes
-        }
+        },
+        p_atendimentos_ids: data.atendimentos_ids.length > 0 ? data.atendimentos_ids : []
       });
       
       if (error) throw error;
@@ -249,8 +251,7 @@ export const DoctorManagementPanel: React.FC = () => {
     
     // Buscar atendimentos vinculados ao médico
     const atendimentosDoMedico = atendimentosDisponiveis?.filter(a => 
-      // Se o atendimento tem medico_id igual ao médico sendo editado
-      (a as unknown as { medico_id?: string }).medico_id === medico.id
+      a.medico_id === medico.id
     ).map(a => a.id) || [];
     
     setFormData({
