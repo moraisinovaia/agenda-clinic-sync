@@ -41,6 +41,8 @@ interface MedicoFormData {
   convenios_aceitos: string[];
   outroConvenio: string;
   atendimentos_ids: string[];
+  outroAtendimento: string;
+  outroAtendimentoTipo: string;
   idade_minima: number | null;
   idade_maxima: number | null;
   observacoes: string;
@@ -90,6 +92,8 @@ export const DoctorManagementPanel: React.FC = () => {
     convenios_aceitos: [],
     outroConvenio: '',
     atendimentos_ids: [],
+    outroAtendimento: '',
+    outroAtendimentoTipo: 'exame',
     idade_minima: null,
     idade_maxima: null,
     observacoes: '',
@@ -220,6 +224,8 @@ export const DoctorManagementPanel: React.FC = () => {
       convenios_aceitos: [],
       outroConvenio: '',
       atendimentos_ids: [],
+      outroAtendimento: '',
+      outroAtendimentoTipo: 'exame',
       idade_minima: null,
       idade_maxima: null,
       observacoes: '',
@@ -255,6 +261,8 @@ export const DoctorManagementPanel: React.FC = () => {
         : conveniosPadrao,
       outroConvenio: outroConvenioExistente,
       atendimentos_ids: atendimentosDoMedico,
+      outroAtendimento: '',
+      outroAtendimentoTipo: 'exame',
       idade_minima: medico.idade_minima,
       idade_maxima: medico.idade_maxima,
       observacoes: medico.observacoes || '',
@@ -263,7 +271,7 @@ export const DoctorManagementPanel: React.FC = () => {
     setIsDialogOpen(true);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!formData.nome.trim()) {
       toast.error('Nome do médico é obrigatório');
       return;
@@ -279,9 +287,41 @@ export const DoctorManagementPanel: React.FC = () => {
       ...(formData.outroConvenio.trim() ? [formData.outroConvenio.trim().toUpperCase()] : [])
     ];
 
+    let atendimentosIdsFinal = [...formData.atendimentos_ids];
+
+    // Se há atendimento personalizado, criar primeiro
+    if (formData.outroAtendimento.trim() && effectiveClinicId) {
+      try {
+        const { data: novoAtendimento, error: atendError } = await supabase
+          .from('atendimentos')
+          .insert({
+            cliente_id: effectiveClinicId,
+            nome: formData.outroAtendimento.trim(),
+            tipo: formData.outroAtendimentoTipo,
+            ativo: true
+          })
+          .select('id')
+          .single();
+        
+        if (atendError) {
+          toast.error('Erro ao criar atendimento personalizado: ' + atendError.message);
+          return;
+        }
+        
+        if (novoAtendimento) {
+          atendimentosIdsFinal.push(novoAtendimento.id);
+          queryClient.invalidateQueries({ queryKey: ['atendimentos-clinica'] });
+        }
+      } catch (err) {
+        toast.error('Erro ao criar atendimento personalizado');
+        return;
+      }
+    }
+
     const dataToSubmit = {
       ...formData,
-      convenios_aceitos: conveniosFinal
+      convenios_aceitos: conveniosFinal,
+      atendimentos_ids: atendimentosIdsFinal
     };
 
     if (editingDoctor) {
@@ -563,32 +603,63 @@ export const DoctorManagementPanel: React.FC = () => {
               {/* Tipos de Atendimento */}
               <div className="space-y-2">
                 <Label>Tipos de Atendimento</Label>
-                {atendimentosDisponiveis && atendimentosDisponiveis.length > 0 ? (
-                  <div className="grid grid-cols-2 gap-2 p-3 border rounded-lg max-h-48 overflow-y-auto">
-                    {atendimentosDisponiveis.map((atend) => (
-                      <div key={atend.id} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`atend-${atend.id}`}
-                          checked={formData.atendimentos_ids.includes(atend.id)}
-                          onCheckedChange={() => handleAtendimentoToggle(atend.id)}
-                        />
-                        <label 
-                          htmlFor={`atend-${atend.id}`}
-                          className="text-sm cursor-pointer"
-                        >
-                          {atend.nome}
-                          <span className="text-xs text-muted-foreground ml-1">
-                            ({atend.tipo})
-                          </span>
-                        </label>
-                      </div>
-                    ))}
+                <div className="p-3 border rounded-lg space-y-3">
+                  {atendimentosDisponiveis && atendimentosDisponiveis.length > 0 ? (
+                    <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                      {atendimentosDisponiveis.map((atend) => (
+                        <div key={atend.id} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`atend-${atend.id}`}
+                            checked={formData.atendimentos_ids.includes(atend.id)}
+                            onCheckedChange={() => handleAtendimentoToggle(atend.id)}
+                          />
+                          <label 
+                            htmlFor={`atend-${atend.id}`}
+                            className="text-sm cursor-pointer"
+                          >
+                            {atend.nome}
+                            <span className="text-xs text-muted-foreground ml-1">
+                              ({atend.tipo})
+                            </span>
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Nenhum tipo de atendimento cadastrado para esta clínica
+                    </p>
+                  )}
+                  
+                  {/* Opção para adicionar atendimento personalizado */}
+                  <div className="border-t pt-3 space-y-2">
+                    <p className="text-sm font-medium">Adicionar outro atendimento:</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <Input
+                        placeholder="Nome do atendimento..."
+                        value={formData.outroAtendimento}
+                        onChange={(e) => setFormData(prev => ({ ...prev, outroAtendimento: e.target.value }))}
+                        className="border-dashed"
+                      />
+                      <Select 
+                        value={formData.outroAtendimentoTipo}
+                        onValueChange={(value) => setFormData(prev => ({ ...prev, outroAtendimentoTipo: value }))}
+                      >
+                        <SelectTrigger className="border-dashed">
+                          <SelectValue placeholder="Tipo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="consulta">Consulta</SelectItem>
+                          <SelectItem value="exame">Exame</SelectItem>
+                          <SelectItem value="procedimento">Procedimento</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      O atendimento será criado automaticamente na clínica ao salvar
+                    </p>
                   </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground p-3 border rounded-lg border-dashed">
-                    Nenhum tipo de atendimento cadastrado para esta clínica
-                  </p>
-                )}
+                </div>
               </div>
 
               {/* Faixa etária */}
