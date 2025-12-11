@@ -44,10 +44,7 @@ export function ClinicManagementPanel() {
   const fetchClientes = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('clientes')
-        .select('*')
-        .order('nome', { ascending: true });
+      const { data, error } = await supabase.rpc('get_clientes_ativos');
 
       if (error) throw error;
       setClientes(data || []);
