@@ -1549,6 +1549,10 @@ export type Database = {
         }
         Returns: Json
       }
+      atualizar_medico: {
+        Args: { p_dados: Json; p_medico_id: string }
+        Returns: Json
+      }
       buscar_agendamentos_otimizado: {
         Args: {
           p_data_fim?: string
@@ -1709,6 +1713,18 @@ export type Database = {
         Returns: Json
       }
       criar_cliente_ipado: { Args: never; Returns: Json }
+      criar_medico: {
+        Args: {
+          p_cliente_id: string
+          p_convenios_aceitos?: string[]
+          p_especialidade: string
+          p_idade_maxima?: number
+          p_idade_minima?: number
+          p_nome: string
+          p_observacoes?: string
+        }
+        Returns: Json
+      }
       criar_perfil_admin_orfao: {
         Args: {
           p_admin_id?: string
@@ -1822,6 +1838,21 @@ export type Database = {
         }[]
       }
       get_email_by_username: { Args: { p_username: string }; Returns: string }
+      get_medicos_por_clinica: {
+        Args: { p_cliente_id: string }
+        Returns: {
+          ativo: boolean
+          convenios_aceitos: string[]
+          created_at: string
+          especialidade: string
+          horarios: Json
+          id: string
+          idade_maxima: number
+          idade_minima: number
+          nome: string
+          observacoes: string
+        }[]
+      }
       get_pending_users: {
         Args: never
         Returns: {
