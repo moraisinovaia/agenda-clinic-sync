@@ -23,6 +23,7 @@ import { DashboardActions } from '@/components/dashboard/DashboardActions';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { UserApprovalPanel } from '@/components/admin/UserApprovalPanel';
 import { ClinicManagementPanel } from '@/components/admin/ClinicManagementPanel';
+import { DoctorManagementPanel } from '@/components/admin/DoctorManagementPanel';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   LazyDashboard, 
@@ -585,15 +586,19 @@ const Index = () => {
             {/* Admin view - apenas gerenciamento de usuários */}
             {isAdmin ? (
               <Tabs defaultValue="usuarios" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 max-w-md mb-6">
+                <TabsList className="grid w-full grid-cols-3 max-w-lg mb-6">
                   <TabsTrigger value="usuarios">Gerenciar Usuários</TabsTrigger>
                   <TabsTrigger value="clinicas">Gerenciar Clínicas</TabsTrigger>
+                  <TabsTrigger value="medicos">Gerenciar Médicos</TabsTrigger>
                 </TabsList>
                 <TabsContent value="usuarios">
                   <UserApprovalPanel />
                 </TabsContent>
                 <TabsContent value="clinicas">
                   <ClinicManagementPanel />
+                </TabsContent>
+                <TabsContent value="medicos">
+                  <DoctorManagementPanel />
                 </TabsContent>
               </Tabs>
             ) : (
