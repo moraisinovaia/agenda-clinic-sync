@@ -2097,7 +2097,7 @@ export type Database = {
       verify_admin_access: { Args: { p_profile_id: string }; Returns: Json }
     }
     Enums: {
-      app_role: "admin" | "recepcionista" | "medico"
+      app_role: "admin" | "recepcionista" | "medico" | "admin_clinica"
     }
     CompositeTypes: {
       http_header: {
@@ -2241,7 +2241,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "recepcionista", "medico"],
+      app_role: ["admin", "recepcionista", "medico", "admin_clinica"],
     },
   },
 } as const
