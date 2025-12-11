@@ -1549,10 +1549,16 @@ export type Database = {
         }
         Returns: Json
       }
-      atualizar_medico: {
-        Args: { p_dados: Json; p_medico_id: string }
-        Returns: Json
-      }
+      atualizar_medico:
+        | {
+            Args: {
+              p_atendimentos_ids?: string[]
+              p_dados: Json
+              p_medico_id: string
+            }
+            Returns: Json
+          }
+        | { Args: { p_dados: Json; p_medico_id: string }; Returns: Json }
       buscar_agendamentos_otimizado: {
         Args: {
           p_data_fim?: string
@@ -1713,18 +1719,32 @@ export type Database = {
         Returns: Json
       }
       criar_cliente_ipado: { Args: never; Returns: Json }
-      criar_medico: {
-        Args: {
-          p_cliente_id: string
-          p_convenios_aceitos?: string[]
-          p_especialidade: string
-          p_idade_maxima?: number
-          p_idade_minima?: number
-          p_nome: string
-          p_observacoes?: string
-        }
-        Returns: Json
-      }
+      criar_medico:
+        | {
+            Args: {
+              p_cliente_id: string
+              p_convenios_aceitos?: string[]
+              p_especialidade: string
+              p_idade_maxima?: number
+              p_idade_minima?: number
+              p_nome: string
+              p_observacoes?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_atendimentos_ids?: string[]
+              p_cliente_id: string
+              p_convenios_aceitos?: string[]
+              p_especialidade: string
+              p_idade_maxima?: number
+              p_idade_minima?: number
+              p_nome: string
+              p_observacoes?: string
+            }
+            Returns: Json
+          }
       criar_perfil_admin_orfao: {
         Args: {
           p_admin_id?: string
