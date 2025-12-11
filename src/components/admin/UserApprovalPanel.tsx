@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Check, X, Users, Clock, CheckCircle, Trash2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Loader2, Check, X, Users, Clock, CheckCircle, Trash2, Building2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useStableAuth } from '@/hooks/useStableAuth';
@@ -30,9 +31,18 @@ interface ApprovedUser {
   data_aprovacao: string;
 }
 
+interface Cliente {
+  id: string;
+  nome: string;
+  ativo: boolean;
+  created_at: string;
+}
+
 export function UserApprovalPanel() {
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([]);
   const [approvedUsers, setApprovedUsers] = useState<ApprovedUser[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [selectedClienteId, setSelectedClienteId] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [processingUser, setProcessingUser] = useState<string | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -97,6 +107,20 @@ export function UserApprovalPanel() {
     }
   };
 
+  const fetchClientes = async () => {
+    try {
+      const { data, error } = await supabase.rpc('get_clientes_ativos');
+
+      if (error) {
+        console.error('❌ Erro ao buscar clientes:', error);
+        return;
+      }
+
+      setClientes(data || []);
+    } catch (error) {
+      console.error('❌ Erro inesperado ao buscar clientes:', error);
+    }
+  };
 
   // Usar useEffect mais estável que não causa loops
   useEffect(() => {
@@ -110,7 +134,8 @@ export function UserApprovalPanel() {
         console.log('✅ Usuário é admin aprovado, carregando dados...');
         await Promise.all([
           fetchPendingUsers(),
-          fetchApprovedUsers()
+          fetchApprovedUsers(),
+          fetchClientes()
         ]);
       } else {
         console.log('⚠️ Usuário não é admin aprovado, não carregando dados');
@@ -144,13 +169,17 @@ export function UserApprovalPanel() {
       return;
     }
 
-    console.log('🔄 Iniciando aprovação de usuário:', { userId, aprovadorUserId: profile.user_id });
+    // Obter cliente_id selecionado ou usar null para fallback automático
+    const clienteId = selectedClienteId[userId] || null;
+    
+    console.log('🔄 Iniciando aprovação de usuário:', { userId, aprovadorUserId: profile.user_id, clienteId });
     setProcessingUser(userId);
     
     try {
       const { data, error } = await supabase.rpc('aprovar_usuario', {
         p_user_id: userId,
-        p_aprovador_user_id: profile.user_id
+        p_aprovador_user_id: profile.user_id,
+        p_cliente_id: clienteId
       });
 
       console.log('📡 Resposta da função aprovar_usuario:', { data, error });
@@ -334,6 +363,7 @@ export function UserApprovalPanel() {
                     <TableHead>Email</TableHead>
                     <TableHead>Usuário</TableHead>
                     <TableHead>Função</TableHead>
+                    <TableHead>Clínica</TableHead>
                     <TableHead>Solicitado em</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
@@ -346,6 +376,34 @@ export function UserApprovalPanel() {
                       <TableCell>{user.username || '-'}</TableCell>
                       <TableCell>
                         <Badge variant="outline">{user.cargo}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Select
+                          value={selectedClienteId[user.id] || ''}
+                          onValueChange={(value) => setSelectedClienteId(prev => ({
+                            ...prev,
+                            [user.id]: value
+                          }))}
+                        >
+                          <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="Selecionar clínica">
+                              {selectedClienteId[user.id] 
+                                ? clientes.find(c => c.id === selectedClienteId[user.id])?.nome 
+                                : <span className="flex items-center gap-1 text-muted-foreground">
+                                    <Building2 className="h-3 w-3" />
+                                    Padrão (IPADO)
+                                  </span>
+                              }
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {clientes.map((cliente) => (
+                              <SelectItem key={cliente.id} value={cliente.id}>
+                                {cliente.nome}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
