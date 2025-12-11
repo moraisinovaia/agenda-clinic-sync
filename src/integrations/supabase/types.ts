@@ -1802,6 +1802,10 @@ export type Database = {
           nome: string
         }[]
       }
+      get_clinic_admin_cliente_id: {
+        Args: { _user_id: string }
+        Returns: string
+      }
       get_current_user_profile: {
         Args: never
         Returns: {
@@ -1854,6 +1858,10 @@ export type Database = {
         }[]
       }
       get_user_role_safe: { Args: { p_user_id: string }; Returns: string }
+      has_clinic_admin_access: {
+        Args: { _cliente_id: string; _user_id: string }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1992,6 +2000,7 @@ export type Database = {
         Args: { check_user_id: string }
         Returns: boolean
       }
+      is_clinic_admin: { Args: { _user_id: string }; Returns: boolean }
       is_current_user_admin: { Args: never; Returns: boolean }
       is_super_admin: { Args: never; Returns: boolean }
       listar_agendamentos_medico_dia: {
