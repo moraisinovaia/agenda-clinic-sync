@@ -29,10 +29,18 @@ interface Medico {
   created_at: string;
 }
 
+interface Atendimento {
+  id: string;
+  nome: string;
+  tipo: string;
+}
+
 interface MedicoFormData {
   nome: string;
   especialidade: string;
   convenios_aceitos: string[];
+  outroConvenio: string;
+  atendimentos_ids: string[];
   idade_minima: number | null;
   idade_maxima: number | null;
   observacoes: string;
@@ -80,6 +88,8 @@ export const DoctorManagementPanel: React.FC = () => {
     nome: '',
     especialidade: '',
     convenios_aceitos: [],
+    outroConvenio: '',
+    atendimentos_ids: [],
     idade_minima: null,
     idade_maxima: null,
     observacoes: '',
@@ -110,6 +120,23 @@ export const DoctorManagementPanel: React.FC = () => {
       });
       if (error) throw error;
       return (data || []) as Medico[];
+    },
+    enabled: !!effectiveClinicId
+  });
+
+  // Buscar atendimentos disponíveis da clínica
+  const { data: atendimentosDisponiveis } = useQuery({
+    queryKey: ['atendimentos-clinica', effectiveClinicId],
+    queryFn: async () => {
+      if (!effectiveClinicId) return [];
+      const { data, error } = await supabase
+        .from('atendimentos')
+        .select('id, nome, tipo')
+        .eq('cliente_id', effectiveClinicId)
+        .eq('ativo', true)
+        .order('nome');
+      if (error) throw error;
+      return (data || []) as Atendimento[];
     },
     enabled: !!effectiveClinicId
   });
@@ -191,6 +218,8 @@ export const DoctorManagementPanel: React.FC = () => {
       nome: '',
       especialidade: '',
       convenios_aceitos: [],
+      outroConvenio: '',
+      atendimentos_ids: [],
       idade_minima: null,
       idade_maxima: null,
       observacoes: '',
@@ -206,10 +235,26 @@ export const DoctorManagementPanel: React.FC = () => {
 
   const handleOpenEdit = (medico: Medico) => {
     setEditingDoctor(medico);
+    
+    // Separar convênios padrão dos personalizados
+    const conveniosPadrao = medico.convenios_aceitos?.filter(c => CONVENIOS_DISPONIVEIS.includes(c)) || [];
+    const conveniosPersonalizados = medico.convenios_aceitos?.filter(c => !CONVENIOS_DISPONIVEIS.includes(c)) || [];
+    const outroConvenioExistente = conveniosPersonalizados.length > 0 ? conveniosPersonalizados.join(', ') : '';
+    
+    // Buscar atendimentos vinculados ao médico
+    const atendimentosDoMedico = atendimentosDisponiveis?.filter(a => 
+      // Se o atendimento tem medico_id igual ao médico sendo editado
+      (a as unknown as { medico_id?: string }).medico_id === medico.id
+    ).map(a => a.id) || [];
+    
     setFormData({
       nome: medico.nome,
       especialidade: medico.especialidade,
-      convenios_aceitos: medico.convenios_aceitos || [],
+      convenios_aceitos: conveniosPersonalizados.length > 0 
+        ? [...conveniosPadrao, 'OUTRO'] 
+        : conveniosPadrao,
+      outroConvenio: outroConvenioExistente,
+      atendimentos_ids: atendimentosDoMedico,
       idade_minima: medico.idade_minima,
       idade_maxima: medico.idade_maxima,
       observacoes: medico.observacoes || '',
@@ -228,11 +273,31 @@ export const DoctorManagementPanel: React.FC = () => {
       return;
     }
 
+    // Processar convênios: remover "OUTRO" e adicionar o convênio personalizado
+    const conveniosFinal = [
+      ...formData.convenios_aceitos.filter(c => c !== 'OUTRO'),
+      ...(formData.outroConvenio.trim() ? [formData.outroConvenio.trim().toUpperCase()] : [])
+    ];
+
+    const dataToSubmit = {
+      ...formData,
+      convenios_aceitos: conveniosFinal
+    };
+
     if (editingDoctor) {
-      updateMutation.mutate({ medicoId: editingDoctor.id, data: formData });
+      updateMutation.mutate({ medicoId: editingDoctor.id, data: dataToSubmit });
     } else {
-      createMutation.mutate(formData);
+      createMutation.mutate(dataToSubmit);
     }
+  };
+
+  const handleAtendimentoToggle = (atendimentoId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      atendimentos_ids: prev.atendimentos_ids.includes(atendimentoId)
+        ? prev.atendimentos_ids.filter(id => id !== atendimentoId)
+        : [...prev.atendimentos_ids, atendimentoId]
+    }));
   };
 
   const handleConvenioToggle = (convenio: string) => {
@@ -478,6 +543,52 @@ export const DoctorManagementPanel: React.FC = () => {
                     </div>
                   ))}
                 </div>
+                
+                {/* Campo condicional para "Outro Convênio" */}
+                {formData.convenios_aceitos.includes('OUTRO') && (
+                  <div className="mt-2">
+                    <Input
+                      placeholder="Digite o nome do outro convênio..."
+                      value={formData.outroConvenio}
+                      onChange={(e) => setFormData(prev => ({ ...prev, outroConvenio: e.target.value }))}
+                      className="border-dashed"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      O convênio será salvo em MAIÚSCULAS
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Tipos de Atendimento */}
+              <div className="space-y-2">
+                <Label>Tipos de Atendimento</Label>
+                {atendimentosDisponiveis && atendimentosDisponiveis.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-2 p-3 border rounded-lg max-h-48 overflow-y-auto">
+                    {atendimentosDisponiveis.map((atend) => (
+                      <div key={atend.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`atend-${atend.id}`}
+                          checked={formData.atendimentos_ids.includes(atend.id)}
+                          onCheckedChange={() => handleAtendimentoToggle(atend.id)}
+                        />
+                        <label 
+                          htmlFor={`atend-${atend.id}`}
+                          className="text-sm cursor-pointer"
+                        >
+                          {atend.nome}
+                          <span className="text-xs text-muted-foreground ml-1">
+                            ({atend.tipo})
+                          </span>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground p-3 border rounded-lg border-dashed">
+                    Nenhum tipo de atendimento cadastrado para esta clínica
+                  </p>
+                )}
               </div>
 
               {/* Faixa etária */}
