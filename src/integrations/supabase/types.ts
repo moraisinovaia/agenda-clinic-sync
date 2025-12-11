@@ -1508,8 +1508,26 @@ export type Database = {
       }
     }
     Functions: {
-      aprovar_usuario: {
-        Args: { p_aprovador_user_id: string; p_user_id: string }
+      aprovar_usuario:
+        | {
+            Args: { p_aprovador_user_id: string; p_user_id: string }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_aprovador_user_id: string
+              p_cliente_id?: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+      atualizar_cliente: {
+        Args: {
+          p_admin_user_id?: string
+          p_ativo?: boolean
+          p_cliente_id: string
+          p_nome?: string
+        }
         Returns: Json
       }
       atualizar_cliente_usuario: {
@@ -1686,6 +1704,10 @@ export type Database = {
         }
         Returns: Json
       }
+      criar_cliente: {
+        Args: { p_admin_user_id?: string; p_nome: string }
+        Returns: Json
+      }
       criar_cliente_ipado: { Args: never; Returns: Json }
       criar_perfil_admin_orfao: {
         Args: {
@@ -1762,10 +1784,20 @@ export type Database = {
           schedule: string
         }[]
       }
+      get_client_stats: { Args: { p_cliente_id: string }; Returns: Json }
       get_clientes_admin: {
         Args: never
         Returns: {
           ativo: boolean
+          id: string
+          nome: string
+        }[]
+      }
+      get_clientes_ativos: {
+        Args: never
+        Returns: {
+          ativo: boolean
+          created_at: string
           id: string
           nome: string
         }[]
