@@ -22,6 +22,8 @@ import { DoctorsView } from '@/components/dashboard/DoctorsView';
 import { DashboardActions } from '@/components/dashboard/DashboardActions';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { UserApprovalPanel } from '@/components/admin/UserApprovalPanel';
+import { ClinicManagementPanel } from '@/components/admin/ClinicManagementPanel';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   LazyDashboard, 
   LazySchedulingForm, 
@@ -582,7 +584,18 @@ const Index = () => {
           <div className="space-y-6">
             {/* Admin view - apenas gerenciamento de usuários */}
             {isAdmin ? (
-              <UserApprovalPanel />
+              <Tabs defaultValue="usuarios" className="w-full">
+                <TabsList className="grid w-full grid-cols-2 max-w-md mb-6">
+                  <TabsTrigger value="usuarios">Gerenciar Usuários</TabsTrigger>
+                  <TabsTrigger value="clinicas">Gerenciar Clínicas</TabsTrigger>
+                </TabsList>
+                <TabsContent value="usuarios">
+                  <UserApprovalPanel />
+                </TabsContent>
+                <TabsContent value="clinicas">
+                  <ClinicManagementPanel />
+                </TabsContent>
+              </Tabs>
             ) : (
               // Receptionist view - dashboard completo
               <>
