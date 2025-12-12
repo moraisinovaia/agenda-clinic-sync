@@ -186,7 +186,12 @@ export default function Auth() {
     setIsLoading(true);
     
     try {
-      const { error } = await signUp(signupData.password, signupData.nome, signupData.username, signupData.email, signupData.clienteId || undefined);
+      // Aplicar trim() nos campos de texto para remover espaços extras
+      const nome = signupData.nome.trim();
+      const username = signupData.username.trim();
+      const email = signupData.email.trim().toLowerCase();
+      
+      const { error } = await signUp(signupData.password, nome, username, email, signupData.clienteId || undefined);
       
       if (error) {
         // Se houve erro no cadastro
