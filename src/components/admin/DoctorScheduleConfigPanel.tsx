@@ -99,7 +99,7 @@ export default function DoctorScheduleConfigPanel() {
 
   // Fetch clinics (admin only)
   const { data: clinicas } = useQuery({
-    queryKey: ["clinicas-horarios"],
+    queryKey: ["clientes"],
     queryFn: async () => {
       const { data, error } = await supabase.rpc("get_clientes_ativos");
       if (error) throw error;

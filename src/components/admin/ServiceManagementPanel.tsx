@@ -60,7 +60,7 @@ export function ServiceManagementPanel() {
 
   // Query: Clínicas (apenas admin global)
   const { data: clinicas = [] } = useQuery({
-    queryKey: ['clinicas-admin'],
+    queryKey: ['clientes'],
     queryFn: async () => {
       const { data, error } = await supabase.rpc('get_clientes_ativos');
       if (error) throw error;

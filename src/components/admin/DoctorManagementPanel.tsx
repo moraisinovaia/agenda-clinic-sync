@@ -105,7 +105,7 @@ export const DoctorManagementPanel: React.FC = () => {
 
   // Buscar clientes (apenas para admin global)
   const { data: clientes } = useQuery({
-    queryKey: ['clientes-for-doctors'],
+    queryKey: ['clientes'],
     queryFn: async () => {
       const { data, error } = await supabase.rpc('get_clientes_ativos');
       if (error) throw error;
