@@ -18,7 +18,11 @@ const CLINIC_INFO = {
   telefone: '(11) 4000-0000',
   email: 'contato@clinicavenus.com',
   horario_funcionamento: 'Segunda a Sexta: 08h às 19h | Sábado: 08h às 12h',
-  formas_pagamento: 'Pix, cartão ou dinheiro'
+  formas_pagamento: 'Pix, cartão ou dinheiro',
+  limite_pacientes: {
+    seg_sex: 5,
+    sabado: 4
+  }
 };
 
 // 🌎 Função para obter data E HORA atual no fuso horário de São Paulo
@@ -76,12 +80,14 @@ const BUSINESS_RULES_VENUS = {
               inicio: '14:00', 
               fim: '19:00', 
               intervalo_minutos: 30,
+              limite: 6, // 6 pacientes seg/qua
               dias_especificos: [1, 3] // seg e qua
             },
             manha_sex: { 
               inicio: '08:00', 
               fim: '12:00', 
               intervalo_minutos: 30,
+              limite: 3, // 3 pacientes sexta
               dias_especificos: [5] // sexta
             }
           },
@@ -98,12 +104,14 @@ const BUSINESS_RULES_VENUS = {
               inicio: '14:00', 
               fim: '19:00', 
               intervalo_minutos: 20,
+              limite: 6,
               dias_especificos: [1, 3]
             },
             manha_sex: { 
               inicio: '08:00', 
               fim: '12:00', 
               intervalo_minutos: 20,
+              limite: 3,
               dias_especificos: [5]
             }
           },
@@ -127,14 +135,14 @@ const BUSINESS_RULES_VENUS = {
             integral: { 
               inicio: '08:00', 
               fim: '16:00', 
-              limite: 15,
+              limite: 8, // 8 pacientes ter/qui
               dias_especificos: [2, 4], // ter e qui
               distribuicao_fichas: '08:00 às 12:00'
             },
             manha_sab: { 
               inicio: '08:00', 
               fim: '12:00', 
-              limite: 8,
+              limite: 4, // 4 pacientes sábado
               dias_especificos: [6], // sábado
               distribuicao_fichas: '08:00 às 10:00'
             }
@@ -151,14 +159,14 @@ const BUSINESS_RULES_VENUS = {
             integral: { 
               inicio: '08:00', 
               fim: '16:00', 
-              limite: 10,
+              limite: 8, // 8 pacientes ter/qui (proporcional)
               dias_especificos: [2, 4],
               distribuicao_fichas: '08:00 às 10:00'
             },
             manha_sab: { 
               inicio: '08:00', 
               fim: '12:00', 
-              limite: 5,
+              limite: 4, // 4 pacientes sábado
               dias_especificos: [6],
               distribuicao_fichas: '08:00 às 09:00'
             }
