@@ -220,6 +220,17 @@ export function UserApprovalPanel() {
       return;
     }
 
+    // Buscar email do usuário para confirmar
+    const userToApprove = pendingUsers.find(u => u.id === userId);
+    if (!userToApprove) {
+      toast({
+        title: 'Erro',
+        description: 'Usuário não encontrado na lista',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     // Obter cliente_id e role selecionados
     // Para admin da clínica, usar sempre o clinicAdminClienteId
     const clienteId = isClinicAdmin ? clinicAdminClienteId : (selectedClienteId[userId] || null);
@@ -256,9 +267,27 @@ export function UserApprovalPanel() {
         throw new Error((data as any)?.error || 'A função retornou erro sem descrição');
       }
 
+      // Confirmar email automaticamente via Edge Function
+      console.log('📧 Confirmando email automaticamente para:', userToApprove.email);
+      const { data: confirmData, error: confirmError } = await supabase.functions.invoke('user-management', {
+        body: {
+          action: 'confirm_email',
+          user_email: userToApprove.email,
+          admin_id: profile.user_id
+        }
+      });
+
+      if (confirmError) {
+        console.warn('⚠️ Erro ao confirmar email (não crítico):', confirmError);
+      } else if (!confirmData?.success) {
+        console.warn('⚠️ Falha ao confirmar email:', confirmData?.error);
+      } else {
+        console.log('✅ Email confirmado automaticamente');
+      }
+
       toast({
         title: 'Usuário aprovado',
-        description: 'O usuário foi aprovado e pode acessar o sistema',
+        description: 'O usuário foi aprovado e pode acessar o sistema imediatamente',
       });
 
       // Remover da lista local e recarregar dados
