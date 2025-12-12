@@ -1803,12 +1803,15 @@ export type Database = {
         Args: never
         Returns: {
           cargo: string
+          cliente_nome: string
           created_at: string
           data_aprovacao: string
           email: string
           id: string
           nome: string
+          role: string
           status: string
+          user_id: string
           username: string
         }[]
       }
