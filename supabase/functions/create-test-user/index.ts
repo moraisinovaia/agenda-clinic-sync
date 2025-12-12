@@ -81,26 +81,26 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log('✅ Usuário criado:', authUser.user.id);
 
-    // Criar profile aprovado
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .insert({
-        user_id: authUser.user.id,
-        nome: testNome,
-        email: testEmail,
-        username: testUsername,
-        status: 'aprovado',
-        cliente_id: clienteId,
-        ativo: true,
-        cargo: 'recepcionista',
-        data_aprovacao: new Date().toISOString()
+    // Criar profile aprovado via RPC (bypass RLS)
+    const { data: profileResult, error: profileError } = await supabase
+      .rpc('create_test_user_profile', {
+        p_user_id: authUser.user.id,
+        p_nome: testNome,
+        p_email: testEmail,
+        p_username: testUsername,
+        p_cliente_id: clienteId
       });
 
     if (profileError) {
       console.error('❌ Erro ao criar profile:', profileError);
-      // Deletar usuário se falhou criar profile
       await supabase.auth.admin.deleteUser(authUser.user.id);
       throw profileError;
+    }
+
+    if (!profileResult?.success) {
+      console.error('❌ Falha ao criar profile:', profileResult?.error);
+      await supabase.auth.admin.deleteUser(authUser.user.id);
+      throw new Error(profileResult?.error || 'Erro ao criar profile');
     }
 
     console.log('✅ Profile criado com sucesso');
