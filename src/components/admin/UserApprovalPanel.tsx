@@ -223,7 +223,7 @@ export function UserApprovalPanel() {
     // Obter cliente_id e role selecionados
     // Para admin da clínica, usar sempre o clinicAdminClienteId
     const clienteId = isClinicAdmin ? clinicAdminClienteId : (selectedClienteId[userId] || null);
-    const role = selectedRole[userId] || null;
+    const role = selectedRole[userId] || 'recepcionista';
     
     console.log('🔄 Iniciando aprovação de usuário:', { 
       userId, 
