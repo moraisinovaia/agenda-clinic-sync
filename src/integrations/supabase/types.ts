@@ -1647,6 +1647,16 @@ export type Database = {
         Args: { p_admin_id: string; p_user_email: string }
         Returns: Json
       }
+      create_test_user_profile: {
+        Args: {
+          p_cliente_id: string
+          p_email: string
+          p_nome: string
+          p_user_id: string
+          p_username: string
+        }
+        Returns: Json
+      }
       criar_agendamento_atomico: {
         Args: {
           p_agendamento_id_edicao?: string
