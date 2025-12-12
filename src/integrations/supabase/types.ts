@@ -1820,6 +1820,16 @@ export type Database = {
           username: string
         }[]
       }
+      get_approved_users_for_email_fix: {
+        Args: never
+        Returns: {
+          data_aprovacao: string
+          email: string
+          nome: string
+          status: string
+          user_id: string
+        }[]
+      }
       get_approved_users_safe: {
         Args: never
         Returns: {

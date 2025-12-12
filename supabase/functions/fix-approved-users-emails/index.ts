@@ -6,10 +6,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface FixEmailsRequest {
-  adminUserId?: string;
-}
-
 const handler = async (req: Request): Promise<Response> => {
   console.log('🔧 Fix approved users emails - Starting function');
 
@@ -30,22 +26,14 @@ const handler = async (req: Request): Promise<Response> => {
       }
     });
 
-    console.log('📊 Querying approved users with unconfirmed emails');
+    console.log('📊 Querying approved users via RPC (bypassing RLS)');
 
-    // Get all approved users with unconfirmed emails
+    // Usar RPC com SECURITY DEFINER para contornar RLS
     const { data: usersToFix, error: queryError } = await supabase
-      .from('profiles')
-      .select(`
-        user_id,
-        nome,
-        email,
-        status,
-        data_aprovacao
-      `)
-      .eq('status', 'aprovado');
+      .rpc('get_approved_users_for_email_fix');
 
     if (queryError) {
-      console.error('❌ Error querying profiles:', queryError);
+      console.error('❌ Error querying profiles via RPC:', queryError);
       throw queryError;
     }
 
@@ -71,7 +59,7 @@ const handler = async (req: Request): Promise<Response> => {
     // Check and fix each user's email confirmation
     for (const user of usersToFix) {
       try {
-        console.log(`🔍 Checking user: ${user.email}`);
+        console.log(`🔍 Checking user: ${user.email} (user_id: ${user.user_id})`);
 
         // Get user auth data
         const { data: authUser, error: authError } = await supabase.auth.admin.getUserById(user.user_id);
@@ -82,11 +70,19 @@ const handler = async (req: Request): Promise<Response> => {
           continue;
         }
 
-        if (!authUser.user?.email_confirmed_at) {
+        if (!authUser.user) {
+          console.error(`❌ Auth user not found for ${user.email}`);
+          errors.push(`${user.email}: Auth user not found`);
+          continue;
+        }
+
+        console.log(`📧 Auth user ${user.email}: email_confirmed_at = ${authUser.user.email_confirmed_at}`);
+
+        if (!authUser.user.email_confirmed_at) {
           console.log(`🔧 Fixing email confirmation for: ${user.email}`);
           
           // Update user to confirm email
-          const { error: updateError } = await supabase.auth.admin.updateUserById(
+          const { data: updateData, error: updateError } = await supabase.auth.admin.updateUserById(
             user.user_id,
             {
               email_confirm: true
@@ -97,7 +93,7 @@ const handler = async (req: Request): Promise<Response> => {
             console.error(`❌ Error updating user ${user.email}:`, updateError);
             errors.push(`${user.email}: ${updateError.message}`);
           } else {
-            console.log(`✅ Fixed email confirmation for: ${user.email}`);
+            console.log(`✅ Fixed email confirmation for: ${user.email}`, updateData);
             fixedUsers.push({
               email: user.email,
               nome: user.nome,
@@ -114,21 +110,21 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     // Log the fix operation
-    const { error: logError } = await supabase
-      .from('system_logs')
-      .insert({
-        timestamp: new Date().toISOString(),
-        level: 'info',
-        message: `Fixed email confirmations for ${fixedUsers.length} approved users`,
-        context: 'EMAIL_FIX_BATCH',
-        data: {
-          fixed_users: fixedUsers,
-          errors: errors,
-          total_processed: usersToFix.length
-        }
-      });
-
-    if (logError) {
+    try {
+      await supabase
+        .from('system_logs')
+        .insert({
+          timestamp: new Date().toISOString(),
+          level: 'info',
+          message: `Fixed email confirmations for ${fixedUsers.length} approved users`,
+          context: 'EMAIL_FIX_BATCH',
+          data: {
+            fixed_users: fixedUsers,
+            errors: errors,
+            total_processed: usersToFix.length
+          }
+        });
+    } catch (logError) {
       console.error('⚠️ Error logging operation:', logError);
     }
 
