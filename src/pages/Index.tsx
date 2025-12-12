@@ -52,11 +52,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 
 const Index = () => {
-  const { user, profile, loading: authLoading, signOut, isAdmin } = useStableAuth();
+  const { user, profile, loading: authLoading, signOut, isAdmin, isClinicAdmin, clinicAdminClienteId } = useStableAuth();
   
   // Debug log
   console.log('🏠 Index: Estado atual -', {
     isAdmin,
+    isClinicAdmin,
+    clinicAdminClienteId,
     profileStatus: profile?.status,
     userId: user?.id
   });
@@ -568,7 +570,7 @@ const Index = () => {
       <DashboardHeader
         viewMode={viewMode}
         profileName={profile?.nome}
-        profileRole={isAdmin ? 'admin' : 'user'}
+        profileRole={isAdmin ? 'admin' : isClinicAdmin ? 'admin_clinica' : 'user'}
         onBack={goBack}
         onBackToFilaEspera={goBackToFilaEspera}
         onSignOut={signOut}
@@ -585,12 +587,12 @@ const Index = () => {
       <div className="container mx-auto px-4 py-6">
         {viewMode === 'doctors' && (
           <div className="space-y-6">
-            {/* Admin view - apenas gerenciamento de usuários */}
-            {isAdmin ? (
+            {/* Admin view - gerenciamento de usuários, médicos, serviços */}
+            {(isAdmin || isClinicAdmin) ? (
               <Tabs defaultValue="usuarios" className="w-full">
-                <TabsList className="grid w-full grid-cols-5 max-w-3xl mb-6">
+                <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-5' : 'grid-cols-4'} max-w-3xl mb-6`}>
                   <TabsTrigger value="usuarios">Usuários</TabsTrigger>
-                  <TabsTrigger value="clinicas">Clínicas</TabsTrigger>
+                  {isAdmin && <TabsTrigger value="clinicas">Clínicas</TabsTrigger>}
                   <TabsTrigger value="medicos">Médicos</TabsTrigger>
                   <TabsTrigger value="servicos">Serviços</TabsTrigger>
                   <TabsTrigger value="horarios">Horários</TabsTrigger>
@@ -598,9 +600,11 @@ const Index = () => {
                 <TabsContent value="usuarios">
                   <UserApprovalPanel />
                 </TabsContent>
-                <TabsContent value="clinicas">
-                  <ClinicManagementPanel />
-                </TabsContent>
+                {isAdmin && (
+                  <TabsContent value="clinicas">
+                    <ClinicManagementPanel />
+                  </TabsContent>
+                )}
                 <TabsContent value="medicos">
                   <DoctorManagementPanel />
                 </TabsContent>

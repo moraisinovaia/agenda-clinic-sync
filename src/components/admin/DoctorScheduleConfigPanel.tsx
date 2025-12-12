@@ -72,7 +72,7 @@ const PRESETS = {
 };
 
 export default function DoctorScheduleConfigPanel() {
-  const { profile, isAdmin } = useStableAuth();
+  const { profile, isAdmin, isClinicAdmin, clinicAdminClienteId } = useStableAuth();
   const queryClient = useQueryClient();
   
   const [selectedClinicId, setSelectedClinicId] = useState<string>("");
@@ -90,14 +90,16 @@ export default function DoctorScheduleConfigPanel() {
     setScheduleConfig(initialConfig);
   }, []);
 
-  // Set clinic for non-admin users
+  // Set clinic for clinic admin users
   useEffect(() => {
-    if (!isAdmin && profile?.cliente_id) {
+    if (isClinicAdmin && clinicAdminClienteId) {
+      setSelectedClinicId(clinicAdminClienteId);
+    } else if (!isAdmin && profile?.cliente_id) {
       setSelectedClinicId(profile.cliente_id);
     }
-  }, [isAdmin, profile]);
+  }, [isAdmin, isClinicAdmin, clinicAdminClienteId, profile]);
 
-  // Fetch clinics (admin only)
+  // Fetch clinics (admin global only)
   const { data: clinicas } = useQuery({
     queryKey: ["clientes"],
     queryFn: async () => {
@@ -105,7 +107,7 @@ export default function DoctorScheduleConfigPanel() {
       if (error) throw error;
       return data || [];
     },
-    enabled: isAdmin,
+    enabled: isAdmin && !isClinicAdmin,
   });
 
   // Fetch doctors for selected clinic
@@ -305,7 +307,8 @@ export default function DoctorScheduleConfigPanel() {
       <CardContent className="space-y-6">
         {/* Seletores */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {isAdmin && (
+          {/* Seletor de clínica apenas para admin global */}
+          {isAdmin && !isClinicAdmin && (
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
                 <Building2 className="h-4 w-4" />
