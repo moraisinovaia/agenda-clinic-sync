@@ -88,3 +88,6 @@ verify_jwt = false
 
 [functions.notificar-bloqueio]
 verify_jwt = false
+
+[functions.create-test-user]
+verify_jwt = false
