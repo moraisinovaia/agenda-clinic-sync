@@ -29,7 +29,19 @@ interface ApprovedUser {
   status: string;
   created_at: string;
   data_aprovacao: string;
+  cliente_nome?: string;
+  user_id?: string;
+  role?: string;
 }
+
+type AppRole = 'recepcionista' | 'admin_clinica' | 'medico' | 'admin';
+
+const ROLE_LABELS: Record<AppRole, string> = {
+  recepcionista: 'Recepcionista',
+  admin_clinica: 'Admin da Clínica',
+  medico: 'Médico',
+  admin: 'Administrador Global'
+};
 
 interface Cliente {
   id: string;
@@ -43,6 +55,7 @@ export function UserApprovalPanel() {
   const [approvedUsers, setApprovedUsers] = useState<ApprovedUser[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [selectedClienteId, setSelectedClienteId] = useState<Record<string, string>>({});
+  const [selectedRole, setSelectedRole] = useState<Record<string, AppRole>>({});
   const [loading, setLoading] = useState(true);
   const [processingUser, setProcessingUser] = useState<string | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -169,18 +182,21 @@ export function UserApprovalPanel() {
       return;
     }
 
-    // Obter cliente_id selecionado ou usar null para fallback automático
+    // Obter cliente_id e role selecionados
     const clienteId = selectedClienteId[userId] || null;
+    const role = selectedRole[userId] || null;
     
-    console.log('🔄 Iniciando aprovação de usuário:', { userId, aprovadorUserId: profile.user_id, clienteId });
+    console.log('🔄 Iniciando aprovação de usuário:', { userId, aprovadorUserId: profile.user_id, clienteId, role });
     setProcessingUser(userId);
     
     try {
+      // @ts-ignore - p_role foi adicionado na migração mas types ainda não foram atualizados
       const { data, error } = await supabase.rpc('aprovar_usuario', {
         p_user_id: userId,
         p_aprovador_user_id: profile.user_id,
-        p_cliente_id: clienteId
-      });
+        p_cliente_id: clienteId,
+        p_role: role
+      } as any);
 
       console.log('📡 Resposta da função aprovar_usuario:', { data, error });
 
@@ -362,8 +378,8 @@ export function UserApprovalPanel() {
                     <TableHead>Nome</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Usuário</TableHead>
-                    <TableHead>Função</TableHead>
                     <TableHead>Clínica</TableHead>
+                    <TableHead>Permissão</TableHead>
                     <TableHead>Solicitado em</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
@@ -375,9 +391,6 @@ export function UserApprovalPanel() {
                       <TableCell>{user.email}</TableCell>
                       <TableCell>{user.username || '-'}</TableCell>
                       <TableCell>
-                        <Badge variant="outline">{user.cargo}</Badge>
-                      </TableCell>
-                      <TableCell>
                         <Select
                           value={selectedClienteId[user.id] || ''}
                           onValueChange={(value) => setSelectedClienteId(prev => ({
@@ -385,7 +398,7 @@ export function UserApprovalPanel() {
                             [user.id]: value
                           }))}
                         >
-                          <SelectTrigger className="w-[180px]">
+                          <SelectTrigger className="w-[160px]">
                             <SelectValue placeholder="Selecionar clínica">
                               {selectedClienteId[user.id] 
                                 ? clientes.find(c => c.id === selectedClienteId[user.id])?.nome 
@@ -402,6 +415,27 @@ export function UserApprovalPanel() {
                                 {cliente.nome}
                               </SelectItem>
                             ))}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell>
+                        <Select
+                          value={selectedRole[user.id] || 'recepcionista'}
+                          onValueChange={(value) => setSelectedRole(prev => ({
+                            ...prev,
+                            [user.id]: value as AppRole
+                          }))}
+                        >
+                          <SelectTrigger className="w-[160px]">
+                            <SelectValue>
+                              {ROLE_LABELS[selectedRole[user.id] || 'recepcionista']}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="recepcionista">Recepcionista</SelectItem>
+                            <SelectItem value="admin_clinica">Admin da Clínica</SelectItem>
+                            <SelectItem value="medico">Médico</SelectItem>
+                            {isAdmin && <SelectItem value="admin">Admin Global</SelectItem>}
                           </SelectContent>
                         </Select>
                       </TableCell>
@@ -469,7 +503,8 @@ export function UserApprovalPanel() {
                     <TableHead>Nome</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Usuário</TableHead>
-                    <TableHead>Função</TableHead>
+                    <TableHead>Clínica</TableHead>
+                    <TableHead>Permissão</TableHead>
                     <TableHead>Aprovado em</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
@@ -481,7 +516,12 @@ export function UserApprovalPanel() {
                       <TableCell>{user.email}</TableCell>
                       <TableCell>{user.username || '-'}</TableCell>
                       <TableCell>
-                        <Badge variant="outline">{user.cargo}</Badge>
+                        <Badge variant="outline">{user.cliente_nome || 'IPADO'}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={user.role === 'admin' ? 'destructive' : user.role === 'admin_clinica' ? 'default' : 'secondary'}>
+                          {ROLE_LABELS[(user.role as AppRole) || 'recepcionista']}
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         {user.data_aprovacao && new Date(user.data_aprovacao).toLocaleDateString('pt-BR', {
