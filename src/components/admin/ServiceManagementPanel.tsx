@@ -46,7 +46,7 @@ const emptyFormData: AtendimentoFormData = {
 };
 
 export function ServiceManagementPanel() {
-  const { isAdmin } = useStableAuth();
+  const { isAdmin, isClinicAdmin, clinicAdminClienteId } = useStableAuth();
   const queryClient = useQueryClient();
 
   // Estados
@@ -66,45 +66,48 @@ export function ServiceManagementPanel() {
       if (error) throw error;
       return data || [];
     },
-    enabled: isAdmin,
+    enabled: isAdmin && !isClinicAdmin,
   });
 
-  // Auto-selecionar primeira clínica
-  if (clinicas.length > 0 && !selectedClinicId) {
+  // Clinic ID efetivo: usa clinicAdminClienteId para admin de clínica, senão selectedClinicId
+  const effectiveClinicId = isClinicAdmin ? clinicAdminClienteId : selectedClinicId;
+
+  // Auto-selecionar primeira clínica (apenas para admin global)
+  if (isAdmin && !isClinicAdmin && clinicas.length > 0 && !selectedClinicId) {
     setSelectedClinicId(clinicas[0].id);
   }
 
   // Query: Atendimentos da clínica selecionada
   const { data: atendimentos = [], isLoading: loadingAtendimentos } = useQuery({
-    queryKey: ['atendimentos-admin', selectedClinicId],
+    queryKey: ['atendimentos-admin', effectiveClinicId],
     queryFn: async () => {
-      if (!selectedClinicId) return [];
+      if (!effectiveClinicId) return [];
       const { data, error } = await supabase
         .from('atendimentos')
         .select('*')
-        .eq('cliente_id', selectedClinicId)
+        .eq('cliente_id', effectiveClinicId)
         .order('nome');
       if (error) throw error;
       return data || [];
     },
-    enabled: !!selectedClinicId,
+    enabled: !!effectiveClinicId,
   });
 
   // Query: Médicos da clínica (para vínculo opcional)
   const { data: medicos = [] } = useQuery({
-    queryKey: ['medicos-admin', selectedClinicId],
+    queryKey: ['medicos-admin', effectiveClinicId],
     queryFn: async () => {
-      if (!selectedClinicId) return [];
+      if (!effectiveClinicId) return [];
       const { data, error } = await supabase
         .from('medicos')
         .select('id, nome, especialidade')
-        .eq('cliente_id', selectedClinicId)
+        .eq('cliente_id', effectiveClinicId)
         .eq('ativo', true)
         .order('nome');
       if (error) throw error;
       return data || [];
     },
-    enabled: !!selectedClinicId,
+    enabled: !!effectiveClinicId,
   });
 
   // Filtrar atendimentos
@@ -129,7 +132,7 @@ export function ServiceManagementPanel() {
   const createMutation = useMutation({
     mutationFn: async (data: AtendimentoFormData) => {
       const { error } = await supabase.from('atendimentos').insert({
-        cliente_id: selectedClinicId,
+        cliente_id: effectiveClinicId,
         nome: data.nome,
         tipo: data.tipo,
         codigo: data.codigo || null,
@@ -146,7 +149,7 @@ export function ServiceManagementPanel() {
     },
     onSuccess: () => {
       toast.success('Serviço criado com sucesso');
-      queryClient.invalidateQueries({ queryKey: ['atendimentos-admin', selectedClinicId] });
+      queryClient.invalidateQueries({ queryKey: ['atendimentos-admin', effectiveClinicId] });
       closeModal();
     },
     onError: (error: Error) => {
@@ -174,7 +177,7 @@ export function ServiceManagementPanel() {
     },
     onSuccess: () => {
       toast.success('Serviço atualizado com sucesso');
-      queryClient.invalidateQueries({ queryKey: ['atendimentos-admin', selectedClinicId] });
+      queryClient.invalidateQueries({ queryKey: ['atendimentos-admin', effectiveClinicId] });
       closeModal();
     },
     onError: (error: Error) => {
@@ -193,7 +196,7 @@ export function ServiceManagementPanel() {
     },
     onSuccess: () => {
       toast.success('Status atualizado');
-      queryClient.invalidateQueries({ queryKey: ['atendimentos-admin', selectedClinicId] });
+      queryClient.invalidateQueries({ queryKey: ['atendimentos-admin', effectiveClinicId] });
     },
     onError: (error: Error) => {
       toast.error(`Erro ao atualizar status: ${error.message}`);
@@ -258,7 +261,7 @@ export function ServiceManagementPanel() {
     return <Badge variant={variants[tipo] || 'outline'}>{tipo}</Badge>;
   };
 
-  if (!isAdmin) {
+  if (!isAdmin && !isClinicAdmin) {
     return (
       <Card>
         <CardContent className="py-8 text-center text-muted-foreground">
@@ -279,22 +282,25 @@ export function ServiceManagementPanel() {
               Gerenciamento de Serviços/Atendimentos
             </CardTitle>
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <Building2 className="h-4 w-4 text-muted-foreground" />
-                <Select value={selectedClinicId} onValueChange={setSelectedClinicId}>
-                  <SelectTrigger className="w-[200px]">
-                    <SelectValue placeholder="Selecionar clínica" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clinicas.map((clinica: any) => (
-                      <SelectItem key={clinica.id} value={clinica.id}>
-                        {clinica.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button onClick={openCreateModal} disabled={!selectedClinicId}>
+              {/* Seletor de clínica apenas para admin global */}
+              {isAdmin && !isClinicAdmin && (
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-muted-foreground" />
+                  <Select value={selectedClinicId} onValueChange={setSelectedClinicId}>
+                    <SelectTrigger className="w-[200px]">
+                      <SelectValue placeholder="Selecionar clínica" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clinicas.map((clinica: any) => (
+                        <SelectItem key={clinica.id} value={clinica.id}>
+                          {clinica.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              <Button onClick={openCreateModal} disabled={!effectiveClinicId}>
                 <Plus className="h-4 w-4 mr-2" />
                 Novo Serviço
               </Button>
@@ -351,7 +357,7 @@ export function ServiceManagementPanel() {
             <div className="py-8 text-center text-muted-foreground">Carregando...</div>
           ) : filteredAtendimentos.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground">
-              {selectedClinicId ? 'Nenhum serviço encontrado.' : 'Selecione uma clínica.'}
+              {effectiveClinicId ? 'Nenhum serviço encontrado.' : 'Selecione uma clínica.'}
             </div>
           ) : (
             <>

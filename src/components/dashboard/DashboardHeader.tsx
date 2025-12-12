@@ -45,7 +45,7 @@ export const DashboardHeader = ({
               </p>
               {profileName && (
                 <p className="text-sm text-primary font-medium">
-                  {profileRole === 'admin' ? 'Administrador' : 'Recepcionista'}: {profileName}
+                  {profileRole === 'admin' ? 'Administrador Global' : profileRole === 'admin_clinica' ? 'Admin da Clínica' : 'Recepcionista'}: {profileName}
                 </p>
               )}
             </div>
