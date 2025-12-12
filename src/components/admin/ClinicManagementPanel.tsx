@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -40,6 +41,7 @@ export function ClinicManagementPanel() {
   const [loadingStats, setLoadingStats] = useState<string | null>(null);
   const { toast } = useToast();
   const { profile, isAdmin } = useStableAuth();
+  const queryClient = useQueryClient();
 
   const fetchClientes = async () => {
     try {
@@ -121,6 +123,8 @@ export function ClinicManagementPanel() {
       setNewClienteName('');
       setShowCreateModal(false);
       fetchClientes();
+      // Invalidar cache para atualizar todos os painéis
+      queryClient.invalidateQueries({ queryKey: ['clientes'] });
     } catch (error: any) {
       toast({
         title: 'Erro',
@@ -160,6 +164,8 @@ export function ClinicManagementPanel() {
       setShowEditModal(false);
       setEditingCliente(null);
       fetchClientes();
+      // Invalidar cache para atualizar todos os painéis
+      queryClient.invalidateQueries({ queryKey: ['clientes'] });
     } catch (error: any) {
       toast({
         title: 'Erro',
