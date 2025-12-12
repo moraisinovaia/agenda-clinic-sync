@@ -1508,19 +1508,15 @@ export type Database = {
       }
     }
     Functions: {
-      aprovar_usuario:
-        | {
-            Args: { p_aprovador_user_id: string; p_user_id: string }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_aprovador_user_id: string
-              p_cliente_id?: string
-              p_user_id: string
-            }
-            Returns: Json
-          }
+      aprovar_usuario: {
+        Args: {
+          p_aprovador_user_id: string
+          p_cliente_id?: string
+          p_role?: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
       atualizar_cliente: {
         Args: {
           p_admin_user_id?: string
@@ -1559,6 +1555,15 @@ export type Database = {
             Returns: Json
           }
         | { Args: { p_dados: Json; p_medico_id: string }; Returns: Json }
+      atualizar_role_usuario: {
+        Args: {
+          p_action?: string
+          p_admin_user_id: string
+          p_new_role: string
+          p_target_user_id: string
+        }
+        Returns: Json
+      }
       buscar_agendamentos_otimizado: {
         Args: {
           p_data_fim?: string
@@ -1912,6 +1917,13 @@ export type Database = {
         }[]
       }
       get_user_role_safe: { Args: { p_user_id: string }; Returns: string }
+      get_user_roles: {
+        Args: { p_user_id: string }
+        Returns: {
+          created_at: string
+          role: Database["public"]["Enums"]["app_role"]
+        }[]
+      }
       has_clinic_admin_access: {
         Args: { _cliente_id: string; _user_id: string }
         Returns: boolean
