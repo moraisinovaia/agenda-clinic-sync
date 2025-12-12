@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
-import { RefreshCw, Plus, Pencil, Stethoscope, Users } from 'lucide-react';
+import { RefreshCw, Plus, Pencil, Stethoscope, Users, Search } from 'lucide-react';
 
 interface Medico {
   id: string;
@@ -86,6 +86,7 @@ export const DoctorManagementPanel: React.FC = () => {
   const [selectedClinicId, setSelectedClinicId] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingDoctor, setEditingDoctor] = useState<Medico | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   const [formData, setFormData] = useState<MedicoFormData>({
     nome: '',
     especialidade: '',
@@ -357,6 +358,16 @@ export const DoctorManagementPanel: React.FC = () => {
     return [...new Set([...existentes, ...ESPECIALIDADES_SUGERIDAS])].sort();
   }, [medicos]);
 
+  // Filtrar médicos pela busca
+  const medicosFiltrados = useMemo(() => {
+    if (!medicos || !searchTerm.trim()) return medicos || [];
+    const termo = searchTerm.toLowerCase().trim();
+    return medicos.filter(medico => 
+      medico.nome.toLowerCase().includes(termo) ||
+      medico.especialidade.toLowerCase().includes(termo)
+    );
+  }, [medicos, searchTerm]);
+
   // Se não é admin nem clinic_admin, não mostrar
   if (!isAdmin && !isClinicAdmin) {
     return null;
@@ -370,7 +381,9 @@ export const DoctorManagementPanel: React.FC = () => {
             <Stethoscope className="h-5 w-5 text-primary" />
             <CardTitle>Gestão de Médicos</CardTitle>
             {medicos && (
-              <Badge variant="secondary">{medicos.length} médicos</Badge>
+              <Badge variant="secondary">
+                {searchTerm ? `${medicosFiltrados.length} de ${medicos.length}` : `${medicos.length} médicos`}
+              </Badge>
             )}
           </div>
           <div className="flex gap-2">
@@ -419,6 +432,19 @@ export const DoctorManagementPanel: React.FC = () => {
           </div>
         )}
 
+        {/* Campo de pesquisa */}
+        {effectiveClinicId && medicos && medicos.length > 0 && (
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Pesquisar por nome ou especialidade..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        )}
+
         {/* Tabela de médicos */}
         {effectiveClinicId && (
           <div className="border rounded-lg overflow-hidden">
@@ -440,8 +466,8 @@ export const DoctorManagementPanel: React.FC = () => {
                       <RefreshCw className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
                     </TableCell>
                   </TableRow>
-                ) : medicos && medicos.length > 0 ? (
-                  medicos.map((medico) => (
+                ) : medicosFiltrados && medicosFiltrados.length > 0 ? (
+                  medicosFiltrados.map((medico) => (
                     <TableRow key={medico.id}>
                       <TableCell className="font-medium">{medico.nome}</TableCell>
                       <TableCell>{medico.especialidade}</TableCell>
@@ -479,6 +505,13 @@ export const DoctorManagementPanel: React.FC = () => {
                       </TableCell>
                     </TableRow>
                   ))
+                ) : searchTerm ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      Nenhum médico encontrado para "{searchTerm}"
+                    </TableCell>
+                  </TableRow>
                 ) : (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
