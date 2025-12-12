@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Check, X, Users, Clock, CheckCircle, Trash2, Building2 } from 'lucide-react';
+import { Loader2, Check, X, Users, Clock, CheckCircle, Trash2, Building2, Mail } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useStableAuth } from '@/hooks/useStableAuth';
@@ -61,6 +61,7 @@ export function UserApprovalPanel() {
   const [processingUser, setProcessingUser] = useState<string | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<ApprovedUser | null>(null);
+  const [fixingEmails, setFixingEmails] = useState(false);
   const { toast } = useToast();
   const { profile, isAdmin, isApproved, isClinicAdmin, clinicAdminClienteId } = useStableAuth();
 
@@ -386,6 +387,45 @@ export function UserApprovalPanel() {
     setUserToDelete(null);
   };
 
+  const handleFixApprovedEmails = async () => {
+    setFixingEmails(true);
+    try {
+      console.log('🔧 Iniciando correção de emails de usuários aprovados...');
+      
+      const { data, error } = await supabase.functions.invoke('fix-approved-users-emails', {
+        body: {}
+      });
+
+      console.log('📧 Resposta da correção de emails:', { data, error });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data?.success) {
+        toast({
+          title: 'Correção concluída',
+          description: `${data.fixed || 0} email(s) foram confirmados. ${data.errors || 0} erro(s).`,
+        });
+        
+        if (data.fixed_users?.length > 0) {
+          console.log('✅ Usuários corrigidos:', data.fixed_users);
+        }
+      } else {
+        throw new Error(data?.error || 'Falha na correção');
+      }
+    } catch (error: any) {
+      console.error('❌ Erro ao corrigir emails:', error);
+      toast({
+        title: 'Erro',
+        description: error.message || 'Erro ao corrigir emails',
+        variant: 'destructive',
+      });
+    } finally {
+      setFixingEmails(false);
+    }
+  };
+
   // Se não é admin ou admin da clínica aprovado, não mostrar nada
   if (!isAdmin && !isClinicAdmin) {
     return null;
@@ -411,11 +451,27 @@ export function UserApprovalPanel() {
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2">
           <Users className="h-5 w-5" />
           Gerenciamento de Usuários
         </CardTitle>
+        {isAdmin && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleFixApprovedEmails}
+            disabled={fixingEmails}
+            className="flex items-center gap-2"
+          >
+            {fixingEmails ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Mail className="h-4 w-4" />
+            )}
+            Corrigir Emails
+          </Button>
+        )}
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="pending" className="w-full">
