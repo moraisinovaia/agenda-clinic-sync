@@ -1546,6 +1546,7 @@ export type Database = {
         Returns: Json
       }
       atualizar_medico:
+        | { Args: { p_dados: Json; p_medico_id: string }; Returns: Json }
         | {
             Args: {
               p_atendimentos_ids?: string[]
@@ -1554,7 +1555,6 @@ export type Database = {
             }
             Returns: Json
           }
-        | { Args: { p_dados: Json; p_medico_id: string }; Returns: Json }
       atualizar_role_usuario: {
         Args: {
           p_action?: string
