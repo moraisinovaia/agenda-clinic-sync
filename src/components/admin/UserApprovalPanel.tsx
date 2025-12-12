@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useStableAuth } from '@/hooks/useStableAuth';
 import { DeleteUserModal } from './DeleteUserModal';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface PendingUser {
   id: string;
@@ -61,15 +62,28 @@ export function UserApprovalPanel() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<ApprovedUser | null>(null);
   const { toast } = useToast();
-  const { profile, isAdmin, isApproved } = useStableAuth();
+  const { profile, isAdmin, isApproved, isClinicAdmin, clinicAdminClienteId } = useStableAuth();
 
   const fetchPendingUsers = async () => {
     try {
-      console.log('🔍 Buscando usuários pendentes...');
+      console.log('🔍 Buscando usuários pendentes...', { isAdmin, isClinicAdmin, clinicAdminClienteId });
       
-      // Usar a função RPC corrigida
-      const { data, error } = await supabase
-        .rpc('get_pending_users_safe');
+      let data, error;
+      
+      // Admin da clínica: buscar apenas da sua clínica
+      if (isClinicAdmin && clinicAdminClienteId) {
+        console.log('🏥 Buscando usuários pendentes da clínica:', clinicAdminClienteId);
+        const result = await supabase.rpc('get_pending_users_for_clinic', {
+          p_cliente_id: clinicAdminClienteId
+        });
+        data = result.data;
+        error = result.error;
+      } else {
+        // Admin global: buscar todos
+        const result = await supabase.rpc('get_pending_users_safe');
+        data = result.data;
+        error = result.error;
+      }
 
       if (error) {
         console.error('❌ Erro ao buscar usuários pendentes:', error);
@@ -97,9 +111,24 @@ export function UserApprovalPanel() {
 
   const fetchApprovedUsers = async () => {
     try {
-      console.log('🔍 Buscando usuários aprovados...');
+      console.log('🔍 Buscando usuários aprovados...', { isAdmin, isClinicAdmin, clinicAdminClienteId });
       
-      const { data, error } = await supabase.rpc('get_approved_users_safe');
+      let data, error;
+      
+      // Admin da clínica: buscar apenas da sua clínica
+      if (isClinicAdmin && clinicAdminClienteId) {
+        console.log('🏥 Buscando usuários aprovados da clínica:', clinicAdminClienteId);
+        const result = await supabase.rpc('get_approved_users_for_clinic', {
+          p_cliente_id: clinicAdminClienteId
+        });
+        data = result.data;
+        error = result.error;
+      } else {
+        // Admin global: buscar todos
+        const result = await supabase.rpc('get_approved_users_safe');
+        data = result.data;
+        error = result.error;
+      }
 
       if (error) {
         console.error('❌ Erro ao buscar usuários aprovados:', error);
@@ -139,19 +168,28 @@ export function UserApprovalPanel() {
   useEffect(() => {
     let isMounted = true;
     
-    console.log('🔄 UserApprovalPanel useEffect - isAdmin:', isAdmin, 'isApproved:', isApproved, 'profile:', profile?.nome);
+    console.log('🔄 UserApprovalPanel useEffect - isAdmin:', isAdmin, 'isClinicAdmin:', isClinicAdmin, 'isApproved:', isApproved, 'profile:', profile?.nome);
     
     const loadData = async () => {
-      // Só admins podem ver este painel
-      if (isAdmin && isApproved) {
-        console.log('✅ Usuário é admin aprovado, carregando dados...');
-        await Promise.all([
-          fetchPendingUsers(),
-          fetchApprovedUsers(),
-          fetchClientes()
-        ]);
+      // Admins e admins da clínica podem ver este painel
+      if ((isAdmin || isClinicAdmin) && isApproved) {
+        console.log('✅ Usuário é admin/admin_clinica aprovado, carregando dados...');
+        
+        // Para admin da clínica, não precisa buscar lista de clientes
+        if (isAdmin && !isClinicAdmin) {
+          await Promise.all([
+            fetchPendingUsers(),
+            fetchApprovedUsers(),
+            fetchClientes()
+          ]);
+        } else {
+          await Promise.all([
+            fetchPendingUsers(),
+            fetchApprovedUsers()
+          ]);
+        }
       } else {
-        console.log('⚠️ Usuário não é admin aprovado, não carregando dados');
+        console.log('⚠️ Usuário não é admin/admin_clinica aprovado, não carregando dados');
       }
       
       if (isMounted) {
@@ -169,7 +207,7 @@ export function UserApprovalPanel() {
     return () => {
       isMounted = false;
     };
-  }, [isAdmin, isApproved]); // Dependências estáveis
+  }, [isAdmin, isClinicAdmin, isApproved, clinicAdminClienteId]); // Dependências estáveis
 
   const handleApproveUser = async (userId: string) => {
     if (!profile?.user_id) {
@@ -183,10 +221,18 @@ export function UserApprovalPanel() {
     }
 
     // Obter cliente_id e role selecionados
-    const clienteId = selectedClienteId[userId] || null;
+    // Para admin da clínica, usar sempre o clinicAdminClienteId
+    const clienteId = isClinicAdmin ? clinicAdminClienteId : (selectedClienteId[userId] || null);
     const role = selectedRole[userId] || null;
     
-    console.log('🔄 Iniciando aprovação de usuário:', { userId, aprovadorUserId: profile.user_id, clienteId, role });
+    console.log('🔄 Iniciando aprovação de usuário:', { 
+      userId, 
+      aprovadorUserId: profile.user_id, 
+      clienteId, 
+      role,
+      isClinicAdmin,
+      clinicAdminClienteId 
+    });
     setProcessingUser(userId);
     
     try {
@@ -311,8 +357,8 @@ export function UserApprovalPanel() {
     setUserToDelete(null);
   };
 
-  // Se não é admin aprovado, não mostrar nada
-  if (!isAdmin) {
+  // Se não é admin ou admin da clínica aprovado, não mostrar nada
+  if (!isAdmin && !isClinicAdmin) {
     return null;
   }
 
@@ -378,7 +424,8 @@ export function UserApprovalPanel() {
                     <TableHead>Nome</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Usuário</TableHead>
-                    <TableHead>Clínica</TableHead>
+                    {/* Admin global vê seletor de clínica */}
+                    {isAdmin && !isClinicAdmin && <TableHead>Clínica</TableHead>}
                     <TableHead>Permissão</TableHead>
                     <TableHead>Solicitado em</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
@@ -390,34 +437,37 @@ export function UserApprovalPanel() {
                       <TableCell className="font-medium">{user.nome}</TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>{user.username || '-'}</TableCell>
-                      <TableCell>
-                        <Select
-                          value={selectedClienteId[user.id] || ''}
-                          onValueChange={(value) => setSelectedClienteId(prev => ({
-                            ...prev,
-                            [user.id]: value
-                          }))}
-                        >
-                          <SelectTrigger className="w-[160px]">
-                            <SelectValue placeholder="Selecionar clínica">
-                              {selectedClienteId[user.id] 
-                                ? clientes.find(c => c.id === selectedClienteId[user.id])?.nome 
-                                : <span className="flex items-center gap-1 text-muted-foreground">
-                                    <Building2 className="h-3 w-3" />
-                                    Padrão (IPADO)
-                                  </span>
-                              }
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            {clientes.map((cliente) => (
-                              <SelectItem key={cliente.id} value={cliente.id}>
-                                {cliente.nome}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
+                      {/* Admin global vê seletor de clínica */}
+                      {isAdmin && !isClinicAdmin && (
+                        <TableCell>
+                          <Select
+                            value={selectedClienteId[user.id] || ''}
+                            onValueChange={(value) => setSelectedClienteId(prev => ({
+                              ...prev,
+                              [user.id]: value
+                            }))}
+                          >
+                            <SelectTrigger className="w-[160px]">
+                              <SelectValue placeholder="Selecionar clínica">
+                                {selectedClienteId[user.id] 
+                                  ? clientes.find(c => c.id === selectedClienteId[user.id])?.nome 
+                                  : <span className="flex items-center gap-1 text-muted-foreground">
+                                      <Building2 className="h-3 w-3" />
+                                      Padrão (IPADO)
+                                    </span>
+                                }
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              {clientes.map((cliente) => (
+                                <SelectItem key={cliente.id} value={cliente.id}>
+                                  {cliente.nome}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                      )}
                       <TableCell>
                         <Select
                           value={selectedRole[user.id] || 'recepcionista'}
@@ -433,9 +483,11 @@ export function UserApprovalPanel() {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="recepcionista">Recepcionista</SelectItem>
+                            {/* Admin da clínica pode promover outros a admin_clinica */}
                             <SelectItem value="admin_clinica">Admin da Clínica</SelectItem>
                             <SelectItem value="medico">Médico</SelectItem>
-                            {isAdmin && <SelectItem value="admin">Admin Global</SelectItem>}
+                            {/* Só admin global pode criar outros admins globais */}
+                            {isAdmin && !isClinicAdmin && <SelectItem value="admin">Admin Global</SelectItem>}
                           </SelectContent>
                         </Select>
                       </TableCell>

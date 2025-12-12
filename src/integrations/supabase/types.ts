@@ -1804,6 +1804,22 @@ export type Database = {
           user_name: string
         }[]
       }
+      get_approved_users_for_clinic: {
+        Args: { p_cliente_id: string }
+        Returns: {
+          cargo: string
+          cliente_nome: string
+          created_at: string
+          data_aprovacao: string
+          email: string
+          id: string
+          nome: string
+          role: string
+          status: string
+          user_id: string
+          username: string
+        }[]
+      }
       get_approved_users_safe: {
         Args: never
         Returns: {
@@ -1850,6 +1866,13 @@ export type Database = {
         Args: { _user_id: string }
         Returns: string
       }
+      get_clinicas_para_signup: {
+        Args: never
+        Returns: {
+          id: string
+          nome: string
+        }[]
+      }
       get_current_user_profile: {
         Args: never
         Returns: {
@@ -1891,6 +1914,17 @@ export type Database = {
           nome: string
           role: string
           user_id: string
+          username: string
+        }[]
+      }
+      get_pending_users_for_clinic: {
+        Args: { p_cliente_id: string }
+        Returns: {
+          cargo: string
+          created_at: string
+          email: string
+          id: string
+          nome: string
           username: string
         }[]
       }
