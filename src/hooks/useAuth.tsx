@@ -23,7 +23,7 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   signIn: (emailOrUsername: string, password: string) => Promise<{ error: any }>;
-  signUp: (password: string, nome: string, username: string, email: string) => Promise<{ error: any }>;
+  signUp: (password: string, nome: string, username: string, email: string, clienteId?: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
 }
 
@@ -246,7 +246,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
-  const signUp = async (password: string, nome: string, username: string, email: string) => {
+  const signUp = async (password: string, nome: string, username: string, email: string, clienteId?: string) => {
     try {
       // Verificar se o username já existe
       try {
@@ -290,7 +290,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         console.warn('Erro ao verificar email, continuando:', emailCheckError);
       }
 
-      console.log('Criando usuário com email fornecido:', email);
+      console.log('Criando usuário com email fornecido:', email, 'cliente_id:', clienteId);
       
       const signUpResult = await supabase.auth.signUp({
         email: email,
@@ -300,7 +300,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           data: {
             nome: nome,
             username: username,
-            role: 'recepcionista'
+            role: 'recepcionista',
+            cliente_id: clienteId || null
           }
         }
       });

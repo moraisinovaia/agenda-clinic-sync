@@ -7,7 +7,8 @@ import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, User, Lock, Mail, AtSign, AlertCircle, KeyRound, Wrench } from 'lucide-react';
+import { Loader2, User, Lock, Mail, AtSign, AlertCircle, KeyRound, Wrench, Building2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/hooks/useAuth';
 import { useRememberMe } from '@/hooks/useRememberMe';
@@ -40,8 +41,27 @@ export default function Auth() {
     email: '',
     username: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    clienteId: ''
   });
+  
+  // Lista de clínicas para o signup
+  const [clinicas, setClinicas] = useState<{id: string, nome: string}[]>([]);
+  
+  // Buscar clínicas ativas para o formulário de cadastro
+  useEffect(() => {
+    const fetchClinicas = async () => {
+      try {
+        const { data, error } = await supabase.rpc('get_clinicas_para_signup');
+        if (!error && data) {
+          setClinicas(data);
+        }
+      } catch (err) {
+        console.warn('Erro ao buscar clínicas para signup:', err);
+      }
+    };
+    fetchClinicas();
+  }, []);
 
   // Set initial remember me state and load saved credentials
   useEffect(() => {
@@ -166,7 +186,7 @@ export default function Auth() {
     setIsLoading(true);
     
     try {
-      const { error } = await signUp(signupData.password, signupData.nome, signupData.username, signupData.email);
+      const { error } = await signUp(signupData.password, signupData.nome, signupData.username, signupData.email, signupData.clienteId || undefined);
       
       if (error) {
         // Se houve erro no cadastro
@@ -184,7 +204,8 @@ export default function Auth() {
           email: '',
           username: '',
           password: '',
-          confirmPassword: ''
+          confirmPassword: '',
+          clienteId: ''
         });
       }
     } catch (error: any) {
@@ -652,7 +673,33 @@ export default function Auth() {
                    <p className="text-xs text-muted-foreground">
                      Nome único para login no sistema
                    </p>
-                 </div>
+                  </div>
+                  
+                  {/* Seletor de Clínica */}
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-clinica" className="text-sm font-medium">Clínica</Label>
+                    <Select
+                      value={signupData.clienteId}
+                      onValueChange={(value) => setSignupData(prev => ({ ...prev, clienteId: value }))}
+                    >
+                      <SelectTrigger className="w-full auth-input">
+                        <div className="flex items-center gap-2">
+                          <Building2 className="h-4 w-4 text-muted-foreground" />
+                          <SelectValue placeholder="Selecione sua clínica" />
+                        </div>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {clinicas.map((clinica) => (
+                          <SelectItem key={clinica.id} value={clinica.id}>
+                            {clinica.nome}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Selecione a clínica onde você trabalha
+                    </p>
+                  </div>
                 
                 <div className="space-y-2">
                   <Label htmlFor="signup-password" className="text-sm font-medium">Senha</Label>
