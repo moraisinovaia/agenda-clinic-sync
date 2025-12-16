@@ -663,6 +663,14 @@ const Index = () => {
             <SchedulingErrorBoundary>
               <DoctorSchedule
                 doctor={selectedDoctor}
+                doctors={doctors}
+                onDoctorChange={(doctorId) => {
+                  const newDoctor = doctors.find(d => d.id === doctorId);
+                  if (newDoctor) {
+                    setSelectedDoctor(newDoctor);
+                    setLastAppointmentDate(null);
+                  }
+                }}
                 appointments={appointments.filter(apt => apt.medico_id === selectedDoctor.id)}
                 blockedDates={blockedDates}
                 isDateBlocked={isDateBlocked}
