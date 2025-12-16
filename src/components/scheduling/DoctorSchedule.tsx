@@ -13,7 +13,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User, Trash2, Plus, Edit, CheckCircle, Phone, RotateCcw, Printer, Settings, AlertTriangle, Loader2, Check, ChevronsUpDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User, Trash2, Plus, Edit, CheckCircle, Phone, RotateCcw, Printer, Settings, AlertTriangle, Loader2, Check, ChevronsUpDown, Search, X } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { 
   AlertDialog, 
   AlertDialogAction, 
@@ -186,6 +187,45 @@ export function DoctorSchedule({
   const [isCancelling, setIsCancelling] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [isUnconfirming, setIsUnconfirming] = useState(false);
+  const [patientSearch, setPatientSearch] = useState('');
+  const [patientSearchResults, setPatientSearchResults] = useState<AppointmentWithRelations[]>([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+
+  // Função de busca de pacientes agendados
+  const searchPatients = (searchTerm: string) => {
+    if (!searchTerm || searchTerm.length < 2) {
+      setPatientSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+    
+    const normalizedSearch = searchTerm.toLowerCase().trim();
+    const today = format(new Date(), 'yyyy-MM-dd');
+    
+    // Verificar se é data de nascimento (DD/MM/AAAA)
+    const dateMatch = searchTerm.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    
+    const results = appointments.filter(apt => {
+      if (apt.status === 'cancelado' || apt.status === 'excluido') return false;
+      if (apt.data_agendamento < today) return false;
+      
+      if (dateMatch) {
+        // Busca por data de nascimento
+        const [_, day, month, year] = dateMatch;
+        const searchDate = `${year}-${month}-${day}`;
+        return apt.pacientes?.data_nascimento === searchDate;
+      } else {
+        // Busca por nome
+        return apt.pacientes?.nome_completo?.toLowerCase().includes(normalizedSearch);
+      }
+    });
+    
+    // Ordenar por data do agendamento
+    results.sort((a, b) => a.data_agendamento.localeCompare(b.data_agendamento));
+    
+    setPatientSearchResults(results.slice(0, 10)); // Limitar a 10 resultados
+    setShowSearchResults(true);
+  };
   
   const getAppointmentsForDate = (date: Date) => {
     try {
@@ -516,14 +556,85 @@ export function DoctorSchedule({
               </div>
               
               <div className="p-3 border-b bg-muted/30 print:hidden">
-                <h3 className="font-semibold text-base">
-                  Agendamentos para {format(selectedDate, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-                </h3>
-                {selectedDateAppointments.length > 0 && (
-                  <div className="mt-2 text-xs text-muted-foreground">
-                    <span>Total: {activeAppointments.length}</span>
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h3 className="font-semibold text-base">
+                      Agendamentos para {format(selectedDate, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                    </h3>
+                    {selectedDateAppointments.length > 0 && (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        <span>Total: {activeAppointments.length}</span>
+                      </div>
+                    )}
                   </div>
-                )}
+                  
+                  {/* Campo de busca de pacientes */}
+                  <div className="relative">
+                    <div className="flex items-center gap-2">
+                      <Search className="h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar paciente (nome ou nasc. DD/MM/AAAA)"
+                        value={patientSearch}
+                        onChange={(e) => {
+                          setPatientSearch(e.target.value);
+                          searchPatients(e.target.value);
+                        }}
+                        onFocus={() => patientSearch.length >= 2 && setShowSearchResults(true)}
+                        className="w-[280px] h-8"
+                      />
+                      {patientSearch && (
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8"
+                          onClick={() => {
+                            setPatientSearch('');
+                            setPatientSearchResults([]);
+                            setShowSearchResults(false);
+                          }}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                    
+                    {/* Dropdown de resultados */}
+                    {showSearchResults && (
+                      <div className="absolute top-full mt-1 right-0 w-[450px] bg-background border rounded-md shadow-lg z-50 max-h-[300px] overflow-auto">
+                        {patientSearchResults.length > 0 ? (
+                          patientSearchResults.map(apt => (
+                            <div
+                              key={apt.id}
+                              className="p-3 hover:bg-muted cursor-pointer border-b last:border-b-0"
+                              onClick={() => {
+                                const aptDate = parseISO(apt.data_agendamento);
+                                setSelectedDate(aptDate);
+                                setPatientSearch('');
+                                setShowSearchResults(false);
+                                setPatientSearchResults([]);
+                              }}
+                            >
+                              <div className="font-medium text-sm">{apt.pacientes?.nome_completo}</div>
+                              <div className="text-xs text-muted-foreground mt-1 flex items-center gap-2 flex-wrap">
+                                <span>📅 {formatDateForDisplay(apt.data_agendamento)} às {apt.hora_agendamento}</span>
+                                <span>•</span>
+                                <span>👨‍⚕️ {apt.medicos?.nome}</span>
+                                <span>•</span>
+                                <Badge className={`text-[10px] px-1 py-0 ${getStatusColor(apt.status)}`}>
+                                  {getStatusLabel(apt.status)}
+                                </Badge>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="p-4 text-center text-muted-foreground text-sm">
+                            Nenhum paciente encontrado com agendamento futuro
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
               
               {/* Banner de Bloqueio Ativo */}
