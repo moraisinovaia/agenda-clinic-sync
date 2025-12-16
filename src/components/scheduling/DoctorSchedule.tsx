@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User, Trash2, Plus, Edit, CheckCircle, Phone, RotateCcw, Printer, Settings, AlertTriangle, Loader2 } from 'lucide-react';
 import { 
   AlertDialog, 
@@ -32,6 +33,8 @@ import { toast } from 'sonner';
 
 interface DoctorScheduleProps {
   doctor: Doctor;
+  doctors?: Doctor[];
+  onDoctorChange?: (doctorId: string) => void;
   appointments: AppointmentWithRelations[];
   blockedDates?: any[];
   isDateBlocked?: (doctorId: string, date: Date) => boolean;
@@ -122,6 +125,8 @@ const safeCalculateAge = (birthDate: any): string | null => {
 
 export function DoctorSchedule({ 
   doctor, 
+  doctors = [],
+  onDoctorChange,
   appointments, 
   blockedDates = [], 
   isDateBlocked, 
@@ -388,9 +393,25 @@ export function DoctorSchedule({
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2">
                 <CalendarIcon className="h-5 w-5" />
-                Agenda - {doctor.nome}
+                Agenda - 
+                {doctors.length > 0 && onDoctorChange ? (
+                  <Select value={doctor.id} onValueChange={onDoctorChange}>
+                    <SelectTrigger className="w-auto border-none h-auto p-0 font-semibold text-lg bg-transparent shadow-none focus:ring-0 hover:bg-muted/50 px-2 rounded">
+                      <SelectValue>{doctor.nome}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent className="bg-background z-50">
+                      {doctors.map(d => (
+                        <SelectItem key={d.id} value={d.id}>
+                          {d.nome} - {d.especialidade}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <span>{doctor.nome}</span>
+                )}
               </CardTitle>
               <div className="text-sm text-muted-foreground">
                 {doctor.especialidade}
