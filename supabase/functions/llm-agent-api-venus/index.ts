@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-// v1.0.0 - LLM Agent API para Clínica Vênus
+// v2.0.0 - LLM Agent API para Clínica Vênus (compatível com llm-agent-api)
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -76,14 +76,14 @@ const BUSINESS_RULES_VENUS = {
           tipo: 'hora_marcada',
           dias_semana: [1, 3, 5], // segunda, quarta, sexta
           periodos: {
-            tarde_seg_qua: { 
+            tarde: { 
               inicio: '14:00', 
               fim: '19:00', 
               intervalo_minutos: 30,
               limite: 6, // 6 pacientes seg/qua
               dias_especificos: [1, 3] // seg e qua
             },
-            manha_sex: { 
+            manha: { 
               inicio: '08:00', 
               fim: '12:00', 
               intervalo_minutos: 30,
@@ -100,14 +100,14 @@ const BUSINESS_RULES_VENUS = {
           tipo: 'hora_marcada',
           dias_semana: [1, 3, 5],
           periodos: {
-            tarde_seg_qua: { 
+            tarde: { 
               inicio: '14:00', 
               fim: '19:00', 
               intervalo_minutos: 20,
               limite: 6,
               dias_especificos: [1, 3]
             },
-            manha_sex: { 
+            manha: { 
               inicio: '08:00', 
               fim: '12:00', 
               intervalo_minutos: 20,
@@ -139,7 +139,7 @@ const BUSINESS_RULES_VENUS = {
               limite: 8, // 8 pacientes ter/qui
               dias_especificos: [2, 4] // ter e qui
             },
-            manha_sab: { 
+            manha: { 
               inicio: '08:00', 
               fim: '12:00', 
               intervalo_minutos: 30,
@@ -163,7 +163,7 @@ const BUSINESS_RULES_VENUS = {
               limite: 8, // 8 pacientes ter/qui
               dias_especificos: [2, 4]
             },
-            manha_sab: { 
+            manha: { 
               inicio: '08:00', 
               fim: '12:00', 
               intervalo_minutos: 30,
@@ -202,6 +202,17 @@ function businessErrorResponse(data: any) {
   });
 }
 
+function errorResponse(message: string) {
+  return new Response(JSON.stringify({
+    success: false,
+    error: message,
+    timestamp: new Date().toISOString()
+  }), {
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    status: 200
+  });
+}
+
 // ============= FUNÇÕES DE NORMALIZAÇÃO =============
 
 function normalizarDataNascimento(data: string | null | undefined): string | null {
@@ -212,16 +223,87 @@ function normalizarDataNascimento(data: string | null | undefined): string | nul
     const [dia, mes, ano] = limpo.split(/[\/\-]/);
     return `${ano}-${mes}-${dia}`;
   }
+  if (/^\d{4}[\/]\d{2}[\/]\d{2}$/.test(limpo)) {
+    return limpo.replace(/\//g, '-');
+  }
+  console.warn(`⚠️ Formato de data_nascimento não reconhecido: "${data}"`);
   return null;
 }
 
 function normalizarTelefone(telefone: string | null | undefined): string | null {
   if (!telefone) return null;
-  return telefone.replace(/\D/g, '');
+  const apenasNumeros = telefone.replace(/\D/g, '');
+  if (apenasNumeros.startsWith('55') && apenasNumeros.length > 11) {
+    return apenasNumeros.substring(2);
+  }
+  return apenasNumeros;
+}
+
+function normalizarNome(nome: string | null | undefined): string | null {
+  if (!nome) return null;
+  return nome.trim().replace(/\s+/g, ' ').toUpperCase();
+}
+
+/**
+ * 🛡️ Sanitiza valores inválidos vindos do N8N/LLM
+ * Converte: "indefinido", "undefined", "null", "", "None" → undefined
+ */
+function sanitizarCampoOpcional(valor: any): any {
+  if (valor === null || valor === undefined) return undefined;
+  
+  if (typeof valor === 'string') {
+    const valorTrim = valor.trim().toLowerCase();
+    const valoresInvalidos = [
+      'indefinido', 'undefined', 'null', 'none', 
+      'n/a', 'na', '', 'empty'
+    ];
+    
+    if (valoresInvalidos.includes(valorTrim)) {
+      console.log(`🧹 Campo com valor inválido "${valor}" convertido para undefined`);
+      return undefined;
+    }
+  }
+  
+  return valor;
+}
+
+/**
+ * Mapeia dados flexivelmente de diferentes formatos de input
+ */
+function mapSchedulingData(body: any) {
+  const mapped = {
+    paciente_nome: normalizarNome(
+      body.paciente_nome || body.nome_paciente || body.nome_completo || body.patient_name
+    ),
+    data_nascimento: normalizarDataNascimento(
+      body.data_nascimento || body.paciente_nascimento || body.birth_date || body.nascimento
+    ),
+    convenio: body.convenio || body.insurance || body.plano_saude,
+    telefone: normalizarTelefone(body.telefone || body.phone || body.telefone_fixo),
+    celular: normalizarTelefone(body.celular || body.mobile || body.whatsapp || body.telefone_celular),
+    medico_nome: body.medico_nome || body.doctor_name || body.nome_medico,
+    medico_id: body.medico_id || body.doctor_id,
+    atendimento_nome: body.atendimento_nome || body.tipo_consulta || body.service_name || body.procedimento,
+    atendimento_id: body.atendimento_id,
+    data_consulta: body.data_consulta || body.data_agendamento || body.appointment_date || body.data,
+    hora_consulta: body.hora_consulta || body.hora_agendamento || body.appointment_time || body.hora,
+    observacoes: body.observacoes || body.notes || body.comments || body.obs,
+    periodo: body.periodo || body.period || body.turno
+  };
+  
+  console.log('📝 Dados normalizados:', {
+    paciente_nome: mapped.paciente_nome ? '✓' : '✗',
+    data_nascimento: mapped.data_nascimento,
+    celular: mapped.celular ? `${mapped.celular.substring(0, 4)}****` : '✗',
+    periodo: mapped.periodo
+  });
+  
+  return mapped;
 }
 
 function formatarConvenioParaBanco(convenio: string): string {
-  return convenio.toUpperCase().trim();
+  if (!convenio) return 'PARTICULAR';
+  return convenio.trim().replace(/[-_]/g, ' ').replace(/\s+/g, ' ').toUpperCase();
 }
 
 function formatarDataPorExtenso(dataISO: string): string {
@@ -229,12 +311,34 @@ function formatarDataPorExtenso(dataISO: string): string {
   return `${dia}/${mes}/${ano}`;
 }
 
+/**
+ * Classifica um horário no período correto (manhã/tarde)
+ */
+function classificarPeriodoSimples(hora: string): string {
+  const [h] = hora.split(':').map(Number);
+  return h < 12 ? 'manha' : 'tarde';
+}
+
+/**
+ * Normaliza período preferido do paciente
+ */
+function normalizarPeriodo(periodo: string | null | undefined): string | null {
+  if (!periodo) return null;
+  
+  const periodoLower = periodo.toLowerCase().trim();
+  
+  if (periodoLower.includes('manh') || periodoLower === 'morning') return 'manha';
+  if (periodoLower.includes('tard') || periodoLower === 'afternoon') return 'tarde';
+  if (periodoLower.includes('integr') || periodoLower === 'full' || periodoLower === 'qualquer') return 'integral';
+  
+  return null;
+}
+
 // ============= FUNÇÃO DE BUSCA DE MÉDICO =============
 
 async function buscarMedico(supabase: any, identificador: string) {
   const nomeNormalizado = identificador.toLowerCase().trim();
   
-  // Buscar por nome parcial
   const { data: medicos, error } = await supabase
     .from('medicos')
     .select('*')
@@ -245,7 +349,6 @@ async function buscarMedico(supabase: any, identificador: string) {
     return null;
   }
 
-  // Buscar match por nome
   for (const medico of medicos) {
     const nomeMedico = medico.nome.toLowerCase();
     if (nomeMedico.includes(nomeNormalizado) || 
@@ -261,6 +364,72 @@ async function buscarMedico(supabase: any, identificador: string) {
   return null;
 }
 
+/**
+ * Busca o próximo horário livre no período
+ */
+async function buscarProximoHorarioLivre(
+  supabase: any,
+  medicoId: string,
+  dataConsulta: string,
+  periodoConfig: { inicio: string, fim: string, limite: number, intervalo_minutos?: number }
+): Promise<{ horario: string, tentativas: number } | null> {
+  
+  const [horaInicio, minInicio] = periodoConfig.inicio.split(':').map(Number);
+  const [horaFim, minFim] = periodoConfig.fim.split(':').map(Number);
+  
+  const minutoInicio = horaInicio * 60 + minInicio;
+  const minutoFim = horaFim * 60 + minFim;
+  
+  // Buscar todos os agendamentos do dia
+  const { data: agendamentosDia } = await supabase
+    .from('agendamentos')
+    .select('hora_agendamento')
+    .eq('medico_id', medicoId)
+    .eq('data_agendamento', dataConsulta)
+    .eq('cliente_id', CLINICA_VENUS_ID)
+    .is('excluido_em', null)
+    .in('status', ['agendado', 'confirmado']);
+
+  // Filtrar apenas agendamentos do período
+  const agendamentos = agendamentosDia?.filter(a => {
+    const [h, m] = a.hora_agendamento.split(':').map(Number);
+    const minutoAgendamento = h * 60 + m;
+    return minutoAgendamento >= minutoInicio && minutoAgendamento < minutoFim;
+  }) || [];
+
+  console.log(`📊 Agendamentos do período (${periodoConfig.inicio}-${periodoConfig.fim}): ${agendamentos.length}/${periodoConfig.limite}`);
+
+  if (agendamentos.length >= periodoConfig.limite) {
+    console.log(`❌ Período lotado (${agendamentos.length}/${periodoConfig.limite})`);
+    return null;
+  }
+
+  const horariosOcupados = new Set(
+    agendamentos.map(a => a.hora_agendamento.substring(0, 5))
+  );
+  
+  const intervalo = periodoConfig.intervalo_minutos || 30;
+  let tentativas = 0;
+  let minutoAtual = minutoInicio;
+  
+  while (minutoAtual < minutoFim) {
+    tentativas++;
+    const hora = Math.floor(minutoAtual / 60);
+    const min = minutoAtual % 60;
+    const horarioTeste = `${String(hora).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+    
+    if (!horariosOcupados.has(horarioTeste)) {
+      console.log(`✅ Horário livre encontrado: ${horarioTeste} (após ${tentativas} tentativas)`);
+      return { horario: horarioTeste + ':00', tentativas };
+    }
+    
+    minutoAtual += intervalo;
+  }
+  
+  console.log(`❌ Nenhum horário livre encontrado após ${tentativas} tentativas`);
+  return null;
+}
+
 // ============= HANDLER DE DISPONIBILIDADE =============
 
 async function handleAvailability(supabase: any, body: any) {
@@ -273,7 +442,11 @@ async function handleAvailability(supabase: any, body: any) {
     quantidade_dias = 14
   } = body;
 
-  console.log('📥 [AVAILABILITY] Parâmetros:', { medico_nome, atendimento_nome, data_consulta, periodoPreferido });
+  console.log('📥 [AVAILABILITY] Parâmetros:', { medico_nome, medico_id, atendimento_nome, data_consulta, periodoPreferido });
+
+  // Normalizar período preferido
+  const periodoNormalizado = normalizarPeriodo(periodoPreferido);
+  console.log(`🕐 Período normalizado: "${periodoPreferido}" → "${periodoNormalizado}"`);
 
   // Buscar médico
   let medico;
@@ -297,7 +470,6 @@ async function handleAvailability(supabase: any, body: any) {
     });
   }
 
-  // Verificar regras de negócio do médico
   const regras = BUSINESS_RULES_VENUS.medicos[medico.id];
   if (!regras) {
     return businessErrorResponse({
@@ -307,10 +479,10 @@ async function handleAvailability(supabase: any, body: any) {
   }
 
   // Identificar serviço
-  let servicoKey = Object.keys(regras.servicos)[0]; // Default: primeiro serviço
+  let servicoKey = Object.keys(regras.servicos)[0];
   if (atendimento_nome) {
     const nomeNorm = atendimento_nome.toLowerCase();
-    for (const [key, servico] of Object.entries(regras.servicos)) {
+    for (const [key] of Object.entries(regras.servicos)) {
       if (key.toLowerCase().includes(nomeNorm) || nomeNorm.includes(key.toLowerCase().split(' ')[0])) {
         servicoKey = key;
         break;
@@ -322,21 +494,28 @@ async function handleAvailability(supabase: any, body: any) {
   const tipoAtendimento = servico.tipo;
   const dataAtual = getDataAtualBrasil();
 
-  // Buscar próximas datas disponíveis
-  const proximasDatas = [];
-  let dataBase = data_consulta || dataAtual;
-  let diasBuscados = 0;
+  // Busca expandida: começa com 14 dias, expande para 45 se não encontrar
+  const proximasDatas: any[] = [];
+  let diasBusca = quantidade_dias;
+  let expandiuBusca = false;
 
-  while (proximasDatas.length < 5 && diasBuscados < quantidade_dias) {
-    const [ano, mes, dia] = dataBase.split('-').map(Number);
-    const dataObj = new Date(ano, mes - 1, dia);
-    dataObj.setDate(dataObj.getDate() + (diasBuscados === 0 && !data_consulta ? 0 : diasBuscados));
+  const buscarDatas = async (maxDias: number) => {
+    const resultados: any[] = [];
+    let dataBase = data_consulta || dataAtual;
     
-    const dataStr = dataObj.toISOString().split('T')[0];
-    const diaSemana = dataObj.getDay();
-    
-    // Verificar se o médico atende neste dia
-    if (servico.dias_semana.includes(diaSemana)) {
+    for (let diasBuscados = 0; diasBuscados < maxDias && resultados.length < 5; diasBuscados++) {
+      const [ano, mes, dia] = dataBase.split('-').map(Number);
+      const dataObj = new Date(ano, mes - 1, dia);
+      dataObj.setDate(dataObj.getDate() + diasBuscados);
+      
+      // Não buscar datas passadas
+      const dataStr = dataObj.toISOString().split('T')[0];
+      if (dataStr < dataAtual) continue;
+      
+      const diaSemana = dataObj.getDay();
+      
+      if (!servico.dias_semana.includes(diaSemana)) continue;
+
       // Verificar bloqueios
       const { data: bloqueios } = await supabase
         .from('bloqueios_agenda')
@@ -347,52 +526,98 @@ async function handleAvailability(supabase: any, body: any) {
         .lte('data_inicio', dataStr)
         .gte('data_fim', dataStr);
 
-      if (!bloqueios || bloqueios.length === 0) {
-        // Verificar vagas disponíveis
-        for (const [periodo, config] of Object.entries(servico.periodos)) {
-          if ((config as any).dias_especificos && !(config as any).dias_especificos.includes(diaSemana)) {
+      if (bloqueios && bloqueios.length > 0) continue;
+
+      // Verificar vagas em cada período
+      for (const [periodo, config] of Object.entries(servico.periodos)) {
+        const configTyped = config as any;
+        
+        // Verificar dias específicos do período
+        if (configTyped.dias_especificos && !configTyped.dias_especificos.includes(diaSemana)) {
+          continue;
+        }
+
+        // Filtrar por período preferido
+        if (periodoNormalizado && periodoNormalizado !== 'integral') {
+          const periodoAtual = periodo.includes('manha') || periodo === 'manha' ? 'manha' : 
+                              periodo.includes('tarde') || periodo === 'tarde' ? 'tarde' : 'integral';
+          if (periodoNormalizado !== periodoAtual && periodoAtual !== 'integral') {
             continue;
           }
+        }
 
-          // Contar agendamentos existentes
-          const { count } = await supabase
-            .from('agendamentos')
-            .select('*', { count: 'exact', head: true })
-            .eq('medico_id', medico.id)
-            .eq('data_agendamento', dataStr)
-            .eq('cliente_id', CLINICA_VENUS_ID)
-            .is('excluido_em', null)
-            .in('status', ['agendado', 'confirmado']);
+        // Contar agendamentos do período
+        const [hInicio, mInicio] = configTyped.inicio.split(':').map(Number);
+        const [hFim, mFim] = configTyped.fim.split(':').map(Number);
+        const minutoInicio = hInicio * 60 + mInicio;
+        const minutoFim = hFim * 60 + mFim;
 
-          const limite = (config as any).limite || 20;
-          const vagasDisponiveis = limite - (count || 0);
+        const { data: agendamentosDia } = await supabase
+          .from('agendamentos')
+          .select('hora_agendamento')
+          .eq('medico_id', medico.id)
+          .eq('data_agendamento', dataStr)
+          .eq('cliente_id', CLINICA_VENUS_ID)
+          .is('excluido_em', null)
+          .in('status', ['agendado', 'confirmado']);
 
-          if (vagasDisponiveis > 0) {
-            proximasDatas.push({
-              data: formatarDataPorExtenso(dataStr),
-              data_iso: dataStr,
-              dia_semana: diasNomes[diaSemana],
-              periodo: periodo.includes('manha') ? 'Manhã' : (periodo.includes('tarde') ? 'Tarde' : 'Integral'),
-              horario_distribuicao: (config as any).distribuicao_fichas || `${(config as any).inicio} às ${(config as any).fim}`,
-              vagas_disponiveis: vagasDisponiveis,
-              tipo_atendimento: tipoAtendimento
-            });
-            break;
-          }
+        const agendamentosPeriodo = agendamentosDia?.filter(a => {
+          const [h, m] = a.hora_agendamento.split(':').map(Number);
+          const minutoAgendamento = h * 60 + m;
+          return minutoAgendamento >= minutoInicio && minutoAgendamento < minutoFim;
+        }) || [];
+
+        const limite = configTyped.limite || 20;
+        const vagasDisponiveis = limite - agendamentosPeriodo.length;
+
+        if (vagasDisponiveis > 0) {
+          // Determinar nome do período para exibição
+          let nomePeriodo = 'Integral';
+          if (periodo.includes('manha') || periodo === 'manha') nomePeriodo = 'Manhã';
+          else if (periodo.includes('tarde') || periodo === 'tarde') nomePeriodo = 'Tarde';
+
+          resultados.push({
+            data: formatarDataPorExtenso(dataStr),
+            data_iso: dataStr,
+            dia_semana: diasNomes[diaSemana],
+            periodo: nomePeriodo,
+            periodo_key: periodo,
+            horario_inicio: configTyped.inicio,
+            horario_fim: configTyped.fim,
+            horario_distribuicao: `${configTyped.inicio} às ${configTyped.fim}`,
+            vagas_disponiveis: vagasDisponiveis,
+            vagas_total: limite,
+            tipo_atendimento: tipoAtendimento
+          });
+          break; // Apenas um período por dia
         }
       }
     }
     
-    diasBuscados++;
-    dataBase = dataAtual;
+    return resultados;
+  };
+
+  // Primeira busca
+  proximasDatas.push(...await buscarDatas(diasBusca));
+
+  // Se não encontrou e não expandiu, expandir para 45 dias
+  if (proximasDatas.length === 0 && diasBusca < 45) {
+    console.log('🔄 Expandindo busca de 14 para 45 dias...');
+    expandiuBusca = true;
+    diasBusca = 45;
+    proximasDatas.push(...await buscarDatas(diasBusca));
   }
 
   if (proximasDatas.length === 0) {
     return businessErrorResponse({
       codigo_erro: 'SEM_DISPONIBILIDADE',
-      mensagem_usuario: `Não encontramos vagas para ${regras.nome} nos próximos ${quantidade_dias} dias.\n\n📞 Entre em contato: ${CLINIC_INFO.whatsapp}`
+      mensagem_usuario: `Não encontramos vagas para ${regras.nome} nos próximos ${diasBusca} dias.\n\n📞 Entre em contato: ${CLINIC_INFO.whatsapp}`,
+      busca_expandida: expandiuBusca
     });
   }
+
+  // Determinar se há baixa disponibilidade
+  const baixaDisponibilidade = proximasDatas.length <= 3;
 
   // Montar mensagem
   let mensagem = `✅ ${regras.nome} - ${servicoKey}\n\n`;
@@ -400,12 +625,16 @@ async function handleAvailability(supabase: any, body: any) {
   
   proximasDatas.forEach((d: any) => {
     mensagem += `• ${d.dia_semana}, ${d.data}\n`;
-    mensagem += `  Período: ${d.horario_distribuicao}\n`;
+    mensagem += `  Período: ${d.periodo} (${d.horario_distribuicao})\n`;
     mensagem += `  Vagas: ${d.vagas_disponiveis}\n\n`;
   });
 
-  if (tipoAtendimento === 'ordem_chegada') {
-    mensagem += `⚠️ ORDEM DE CHEGADA: Compareça no horário indicado para pegar ficha.\n`;
+  if (baixaDisponibilidade) {
+    mensagem += `⚠️ POUCAS VAGAS disponíveis. Recomendamos agendar logo!\n\n`;
+  }
+
+  if (tipoAtendimento === 'hora_marcada') {
+    mensagem += `📋 HORA MARCADA: Você receberá um horário específico.\n`;
   }
 
   if (servico.valor) {
@@ -422,9 +651,14 @@ async function handleAvailability(supabase: any, body: any) {
     disponivel: true,
     tipo_agendamento: tipoAtendimento,
     medico: regras.nome,
+    medico_id: medico.id,
     especialidade: regras.especialidade,
     servico: servicoKey,
     proximas_datas: proximasDatas,
+    total_datas_encontradas: proximasDatas.length,
+    baixa_disponibilidade: baixaDisponibilidade,
+    busca_expandida: expandiuBusca,
+    periodo_filtrado: periodoNormalizado,
     valor: servico.valor,
     convenios_aceitos: servico.convenios_aceitos,
     mensagem_whatsapp: mensagem,
@@ -435,28 +669,60 @@ async function handleAvailability(supabase: any, body: any) {
 // ============= HANDLER DE AGENDAMENTO =============
 
 async function handleSchedule(supabase: any, body: any) {
-  const {
-    paciente_nome,
-    data_nascimento,
-    convenio,
-    telefone,
-    celular,
-    medico_nome,
+  console.log('📥 [SCHEDULE] Dados recebidos:', JSON.stringify(body, null, 2));
+
+  // Sanitização automática
+  const sanitizeValue = (value: any): any => {
+    if (typeof value === 'string' && value.startsWith('=')) {
+      const cleaned = value.substring(1);
+      console.log(`🧹 Sanitizado: "${value}" → "${cleaned}"`);
+      return cleaned;
+    }
+    return value;
+  };
+  
+  const sanitizedBody = Object.fromEntries(
+    Object.entries(body).map(([key, value]) => [key, sanitizeValue(value)])
+  );
+  
+  const robustSanitizedBody = {
+    ...sanitizedBody,
+    data_nascimento: sanitizarCampoOpcional(sanitizedBody.data_nascimento),
+    telefone: sanitizarCampoOpcional(sanitizedBody.telefone),
+    celular: sanitizarCampoOpcional(sanitizedBody.celular)
+  };
+  
+  const mappedData = mapSchedulingData(robustSanitizedBody);
+  console.log('🔄 Dados mapeados:', JSON.stringify(mappedData, null, 2));
+  
+  const { 
+    paciente_nome, 
+    data_nascimento, 
+    convenio, 
+    telefone, 
+    celular, 
+    medico_nome, 
     medico_id,
     atendimento_nome,
-    atendimento_id,
-    data_consulta,
-    hora_consulta,
-    observacoes
-  } = body;
+    atendimento_id: inputAtendimentoId,
+    data_consulta, 
+    hora_consulta, 
+    observacoes,
+    periodo
+  } = mappedData;
 
-  console.log('📥 [SCHEDULE] Parâmetros:', { paciente_nome, medico_nome, data_consulta, hora_consulta });
-
-  // Validações básicas
-  if (!paciente_nome) {
+  // Validar campos obrigatórios
+  if (!paciente_nome || !celular || (!medico_nome && !medico_id) || !data_consulta) {
+    const missingFields: string[] = [];
+    if (!paciente_nome) missingFields.push('paciente_nome');
+    if (!celular) missingFields.push('celular');
+    if (!medico_nome && !medico_id) missingFields.push('medico_nome ou medico_id');
+    if (!data_consulta) missingFields.push('data_consulta');
+    
     return businessErrorResponse({
       codigo_erro: 'DADOS_INCOMPLETOS',
-      mensagem_usuario: 'Nome do paciente é obrigatório.'
+      mensagem_usuario: `❌ Faltam informações obrigatórias:\n\n${missingFields.map(f => `• ${f}`).join('\n')}\n\n💡 Por favor, forneça todos os dados necessários.`,
+      detalhes: { campos_faltando: missingFields }
     });
   }
 
@@ -481,13 +747,16 @@ async function handleSchedule(supabase: any, body: any) {
     });
   }
 
+  // Buscar regras do médico
+  const regras = BUSINESS_RULES_VENUS.medicos[medico.id];
+  
   // Buscar atendimento
   let atendimento;
-  if (atendimento_id) {
+  if (inputAtendimentoId) {
     const { data } = await supabase
       .from('atendimentos')
       .select('*')
-      .eq('id', atendimento_id)
+      .eq('id', inputAtendimentoId)
       .eq('cliente_id', CLINICA_VENUS_ID)
       .single();
     atendimento = data;
@@ -501,7 +770,6 @@ async function handleSchedule(supabase: any, body: any) {
       .single();
     atendimento = data;
   } else {
-    // Pegar primeiro atendimento do médico
     const { data } = await supabase
       .from('atendimentos')
       .select('*')
@@ -520,19 +788,85 @@ async function handleSchedule(supabase: any, body: any) {
     });
   }
 
+  // Determinar horário final
+  let horarioFinal = hora_consulta;
+  
+  // Se não tem horário ou é um período (manhã/tarde), buscar primeiro horário disponível
+  if (!hora_consulta || normalizarPeriodo(hora_consulta)) {
+    const periodoNormalizado = normalizarPeriodo(hora_consulta || periodo) || 'integral';
+    console.log(`🕐 Buscando horário disponível para período: ${periodoNormalizado}`);
+    
+    if (regras) {
+      const servicoKey = Object.keys(regras.servicos).find(s => 
+        s.toLowerCase().includes((atendimento_nome || '').toLowerCase()) ||
+        (atendimento_nome || '').toLowerCase().includes(s.toLowerCase())
+      ) || Object.keys(regras.servicos)[0];
+      
+      const servico = regras.servicos[servicoKey];
+      const diaSemana = getDiaSemana(data_consulta);
+      
+      // Encontrar período válido para o dia
+      for (const [periodoKey, config] of Object.entries(servico.periodos)) {
+        const configTyped = config as any;
+        
+        // Verificar se o período atende no dia da semana
+        if (configTyped.dias_especificos && !configTyped.dias_especificos.includes(diaSemana)) {
+          continue;
+        }
+        
+        // Filtrar por período preferido
+        if (periodoNormalizado !== 'integral') {
+          const periodoAtual = periodoKey.includes('manha') || periodoKey === 'manha' ? 'manha' : 
+                              periodoKey.includes('tarde') || periodoKey === 'tarde' ? 'tarde' : 'integral';
+          if (periodoNormalizado !== periodoAtual && periodoAtual !== 'integral') {
+            continue;
+          }
+        }
+        
+        // Buscar próximo horário livre
+        const resultado = await buscarProximoHorarioLivre(supabase, medico.id, data_consulta, configTyped);
+        
+        if (resultado) {
+          horarioFinal = resultado.horario;
+          console.log(`✅ Horário encontrado: ${horarioFinal}`);
+          break;
+        }
+      }
+      
+      if (!horarioFinal || horarioFinal === hora_consulta) {
+        return businessErrorResponse({
+          codigo_erro: 'SEM_HORARIO_DISPONIVEL',
+          mensagem_usuario: `❌ Não há horários disponíveis para ${medico.nome} em ${formatarDataPorExtenso(data_consulta)}.\n\n💡 Por favor, consulte a disponibilidade para ver outras datas.`
+        });
+      }
+    } else {
+      // Sem regras, usar horário padrão
+      horarioFinal = '08:00:00';
+    }
+  }
+  
+  // Garantir formato correto do horário
+  if (horarioFinal && !horarioFinal.includes(':')) {
+    horarioFinal = horarioFinal + ':00:00';
+  } else if (horarioFinal && horarioFinal.length === 5) {
+    horarioFinal = horarioFinal + ':00';
+  }
+
+  console.log(`📅 Criando agendamento: ${paciente_nome} com ${medico.nome} em ${data_consulta} às ${horarioFinal}`);
+
   // Chamar RPC de agendamento
   const { data: resultado, error } = await supabase.rpc('criar_agendamento_atomico_externo', {
     p_cliente_id: CLINICA_VENUS_ID,
-    p_nome_completo: paciente_nome.toUpperCase().trim(),
-    p_data_nascimento: normalizarDataNascimento(data_nascimento) || '1990-01-01',
+    p_nome_completo: paciente_nome,
+    p_data_nascimento: data_nascimento || '1990-01-01',
     p_convenio: formatarConvenioParaBanco(convenio || 'PARTICULAR'),
-    p_telefone: normalizarTelefone(telefone) || '',
-    p_celular: normalizarTelefone(celular) || normalizarTelefone(telefone) || '',
+    p_telefone: telefone || '',
+    p_celular: celular,
     p_medico_id: medico.id,
     p_atendimento_id: atendimento.id,
     p_data_agendamento: data_consulta,
-    p_hora_agendamento: hora_consulta || '08:00:00',
-    p_observacoes: observacoes || '',
+    p_hora_agendamento: horarioFinal,
+    p_observacoes: observacoes || 'Agendamento via WhatsApp Bot Venus',
     p_criado_por: 'whatsapp_bot_venus'
   });
 
@@ -545,34 +879,73 @@ async function handleSchedule(supabase: any, body: any) {
   }
 
   if (!resultado?.success) {
+    // Se for conflito, tentar encontrar outro horário
+    if (resultado?.error === 'CONFLICT') {
+      console.log('🔄 Conflito detectado, buscando outro horário...');
+      
+      if (regras) {
+        const servicoKey = Object.keys(regras.servicos)[0];
+        const servico = regras.servicos[servicoKey];
+        
+        for (const [, config] of Object.entries(servico.periodos)) {
+          const configTyped = config as any;
+          const resultado2 = await buscarProximoHorarioLivre(supabase, medico.id, data_consulta, configTyped);
+          
+          if (resultado2) {
+            // Tentar novamente com o novo horário
+            const { data: resultado3, error: error3 } = await supabase.rpc('criar_agendamento_atomico_externo', {
+              p_cliente_id: CLINICA_VENUS_ID,
+              p_nome_completo: paciente_nome,
+              p_data_nascimento: data_nascimento || '1990-01-01',
+              p_convenio: formatarConvenioParaBanco(convenio || 'PARTICULAR'),
+              p_telefone: telefone || '',
+              p_celular: celular,
+              p_medico_id: medico.id,
+              p_atendimento_id: atendimento.id,
+              p_data_agendamento: data_consulta,
+              p_hora_agendamento: resultado2.horario,
+              p_observacoes: observacoes || 'Agendamento via WhatsApp Bot Venus',
+              p_criado_por: 'whatsapp_bot_venus'
+            });
+            
+            if (!error3 && resultado3?.success) {
+              horarioFinal = resultado2.horario;
+              return montarRespostaSucesso(resultado3, paciente_nome, medico, atendimento, data_consulta, horarioFinal, regras);
+            }
+          }
+        }
+      }
+    }
+    
     return businessErrorResponse({
       codigo_erro: resultado?.error || 'ERRO_AGENDAMENTO',
       mensagem_usuario: resultado?.message || `Erro ao criar agendamento. Entre em contato: ${CLINIC_INFO.whatsapp}`
     });
   }
 
-  // Montar mensagem de sucesso
-  const regras = BUSINESS_RULES_VENUS.medicos[medico.id];
+  return montarRespostaSucesso(resultado, paciente_nome, medico, atendimento, data_consulta, horarioFinal, regras);
+}
+
+function montarRespostaSucesso(resultado: any, paciente_nome: string, medico: any, atendimento: any, data_consulta: string, horarioFinal: string, regras: any) {
   const tipoAtendimento = regras?.tipo_agendamento || 'hora_marcada';
 
   let mensagem = `✅ AGENDAMENTO CONFIRMADO!\n\n`;
-  mensagem += `👤 Paciente: ${paciente_nome.toUpperCase()}\n`;
+  mensagem += `👤 Paciente: ${paciente_nome}\n`;
   mensagem += `👨‍⚕️ Médico: ${medico.nome}\n`;
   mensagem += `📋 Atendimento: ${atendimento.nome}\n`;
   mensagem += `📅 Data: ${formatarDataPorExtenso(data_consulta)}\n`;
-  
-  if (tipoAtendimento === 'hora_marcada') {
-    mensagem += `⏰ Horário: ${hora_consulta}\n`;
-  } else {
-    mensagem += `⏰ Chegue no período indicado para pegar ficha\n`;
-  }
-
+  mensagem += `⏰ Horário: ${horarioFinal.substring(0, 5)}\n`;
   mensagem += `\n📍 Local: ${CLINIC_INFO.endereco}\n`;
   mensagem += `📞 Contato: ${CLINIC_INFO.whatsapp}\n`;
 
   return successResponse({
     agendamento_id: resultado.agendamento_id,
     paciente_id: resultado.paciente_id,
+    data: data_consulta,
+    hora: horarioFinal,
+    medico: medico.nome,
+    atendimento: atendimento.nome,
+    tipo_agendamento: tipoAtendimento,
     mensagem_whatsapp: mensagem,
     message: mensagem
   });
@@ -581,11 +954,11 @@ async function handleSchedule(supabase: any, body: any) {
 // ============= HANDLER DE VERIFICAR PACIENTE =============
 
 async function handleCheckPatient(supabase: any, body: any) {
-  const { paciente_nome, data_nascimento, celular } = body;
+  const mappedData = mapSchedulingData(body);
+  const { paciente_nome, celular } = mappedData;
 
-  console.log('📥 [CHECK-PATIENT] Parâmetros:', { paciente_nome, data_nascimento, celular });
+  console.log('📥 [CHECK-PATIENT] Parâmetros:', { paciente_nome, celular });
 
-  // Buscar agendamentos do paciente
   let query = supabase
     .from('agendamentos')
     .select(`
@@ -603,8 +976,7 @@ async function handleCheckPatient(supabase: any, body: any) {
     query = query.ilike('pacientes.nome_completo', `%${paciente_nome}%`);
   }
   if (celular) {
-    const celularNorm = normalizarTelefone(celular);
-    query = query.ilike('pacientes.celular', `%${celularNorm}%`);
+    query = query.ilike('pacientes.celular', `%${celular}%`);
   }
 
   const { data: agendamentos, error } = await query;
@@ -620,6 +992,7 @@ async function handleCheckPatient(supabase: any, body: any) {
   if (!agendamentos || agendamentos.length === 0) {
     return successResponse({
       encontrado: false,
+      agendamentos: [],
       mensagem_whatsapp: `Não encontrei agendamentos para este paciente na Clínica Vênus.\n\n📞 Para agendar: ${CLINIC_INFO.whatsapp}`,
       message: 'Nenhum agendamento encontrado'
     });
@@ -628,7 +1001,7 @@ async function handleCheckPatient(supabase: any, body: any) {
   let mensagem = `📋 Agendamentos encontrados:\n\n`;
   agendamentos.forEach((ag: any, i: number) => {
     mensagem += `${i + 1}. ${ag.medicos?.nome || 'Médico'}\n`;
-    mensagem += `   📅 ${formatarDataPorExtenso(ag.data_agendamento)} às ${ag.hora_agendamento}\n`;
+    mensagem += `   📅 ${formatarDataPorExtenso(ag.data_agendamento)} às ${ag.hora_agendamento.substring(0, 5)}\n`;
     mensagem += `   📋 ${ag.atendimentos?.nome || 'Consulta'}\n`;
     mensagem += `   ✅ Status: ${ag.status === 'confirmado' ? 'Confirmado' : 'Agendado'}\n\n`;
   });
@@ -637,13 +1010,16 @@ async function handleCheckPatient(supabase: any, body: any) {
 
   return successResponse({
     encontrado: true,
+    total: agendamentos.length,
     agendamentos: agendamentos.map((ag: any) => ({
       id: ag.id,
       data: ag.data_agendamento,
       hora: ag.hora_agendamento,
       medico: ag.medicos?.nome,
+      medico_id: ag.medico_id,
       atendimento: ag.atendimentos?.nome,
-      status: ag.status
+      status: ag.status,
+      paciente_nome: ag.pacientes?.nome_completo
     })),
     mensagem_whatsapp: mensagem,
     message: mensagem
@@ -653,13 +1029,14 @@ async function handleCheckPatient(supabase: any, body: any) {
 // ============= HANDLER DE CANCELAMENTO =============
 
 async function handleCancel(supabase: any, body: any) {
-  const { agendamento_id, paciente_nome, celular, motivo } = body;
+  const { agendamento_id } = body;
+  const mappedData = mapSchedulingData(body);
+  const { paciente_nome, celular } = mappedData;
 
-  console.log('📥 [CANCEL] Parâmetros:', { agendamento_id, paciente_nome });
+  console.log('📥 [CANCEL] Parâmetros:', { agendamento_id, paciente_nome, celular });
 
   let agendamentoId = agendamento_id;
 
-  // Se não tem ID, buscar pelo paciente
   if (!agendamentoId && (paciente_nome || celular)) {
     let query = supabase
       .from('agendamentos')
@@ -674,7 +1051,7 @@ async function handleCancel(supabase: any, body: any) {
       query = query.ilike('pacientes.nome_completo', `%${paciente_nome}%`);
     }
     if (celular) {
-      query = query.ilike('pacientes.celular', `%${normalizarTelefone(celular)}%`);
+      query = query.ilike('pacientes.celular', `%${celular}%`);
     }
 
     const { data } = await query;
@@ -690,7 +1067,6 @@ async function handleCancel(supabase: any, body: any) {
     });
   }
 
-  // Cancelar via RPC
   const { data: resultado, error } = await supabase.rpc('cancelar_agendamento_soft', {
     p_agendamento_id: agendamentoId,
     p_cancelado_por: 'whatsapp_bot_venus'
@@ -713,9 +1089,11 @@ async function handleCancel(supabase: any, body: any) {
 // ============= HANDLER DE CONFIRMAÇÃO =============
 
 async function handleConfirm(supabase: any, body: any) {
-  const { agendamento_id, paciente_nome, celular } = body;
+  const { agendamento_id } = body;
+  const mappedData = mapSchedulingData(body);
+  const { paciente_nome, celular } = mappedData;
 
-  console.log('📥 [CONFIRM] Parâmetros:', { agendamento_id, paciente_nome });
+  console.log('📥 [CONFIRM] Parâmetros:', { agendamento_id, paciente_nome, celular });
 
   let agendamentoId = agendamento_id;
 
@@ -733,7 +1111,7 @@ async function handleConfirm(supabase: any, body: any) {
       query = query.ilike('pacientes.nome_completo', `%${paciente_nome}%`);
     }
     if (celular) {
-      query = query.ilike('pacientes.celular', `%${normalizarTelefone(celular)}%`);
+      query = query.ilike('pacientes.celular', `%${celular}%`);
     }
 
     const { data } = await query;
@@ -765,6 +1143,235 @@ async function handleConfirm(supabase: any, body: any) {
     agendamento_id: agendamentoId,
     mensagem_whatsapp: `✅ Presença confirmada!\n\nAguardamos você na data marcada.\n\n📍 ${CLINIC_INFO.endereco}`,
     message: 'Agendamento confirmado'
+  });
+}
+
+// ============= HANDLER DE REAGENDAMENTO =============
+
+async function handleReschedule(supabase: any, body: any) {
+  const { agendamento_id, nova_data, novo_horario } = body;
+  const mappedData = mapSchedulingData(body);
+  const { paciente_nome, celular, data_consulta, hora_consulta } = mappedData;
+
+  console.log('📥 [RESCHEDULE] Parâmetros:', { agendamento_id, nova_data, novo_horario, paciente_nome });
+
+  // Determinar nova data e horário
+  const dataFinal = nova_data || data_consulta;
+  const horarioFinal = novo_horario || hora_consulta;
+
+  if (!dataFinal) {
+    return businessErrorResponse({
+      codigo_erro: 'DATA_OBRIGATORIA',
+      mensagem_usuario: 'Por favor, informe a nova data desejada para o reagendamento.'
+    });
+  }
+
+  // Buscar agendamento original
+  let agendamentoId = agendamento_id;
+
+  if (!agendamentoId && (paciente_nome || celular)) {
+    let query = supabase
+      .from('agendamentos')
+      .select('id, medico_id, atendimento_id, paciente_id, pacientes!inner(nome_completo, celular, convenio, data_nascimento)')
+      .eq('cliente_id', CLINICA_VENUS_ID)
+      .is('excluido_em', null)
+      .in('status', ['agendado', 'confirmado'])
+      .order('data_agendamento', { ascending: true })
+      .limit(1);
+
+    if (paciente_nome) {
+      query = query.ilike('pacientes.nome_completo', `%${paciente_nome}%`);
+    }
+    if (celular) {
+      query = query.ilike('pacientes.celular', `%${celular}%`);
+    }
+
+    const { data } = await query;
+    if (data && data.length > 0) {
+      agendamentoId = data[0].id;
+    }
+  }
+
+  if (!agendamentoId) {
+    return businessErrorResponse({
+      codigo_erro: 'AGENDAMENTO_NAO_ENCONTRADO',
+      mensagem_usuario: `Não encontrei agendamento para reagendar.\n\n📞 Entre em contato: ${CLINIC_INFO.whatsapp}`
+    });
+  }
+
+  // Buscar dados do agendamento original
+  const { data: agendamentoOriginal, error: erroOriginal } = await supabase
+    .from('agendamentos')
+    .select(`
+      *,
+      pacientes(nome_completo, data_nascimento, celular, telefone, convenio),
+      medicos(id, nome),
+      atendimentos(id, nome)
+    `)
+    .eq('id', agendamentoId)
+    .single();
+
+  if (erroOriginal || !agendamentoOriginal) {
+    return businessErrorResponse({
+      codigo_erro: 'AGENDAMENTO_NAO_ENCONTRADO',
+      mensagem_usuario: `Não foi possível encontrar os dados do agendamento original.\n\n📞 Entre em contato: ${CLINIC_INFO.whatsapp}`
+    });
+  }
+
+  // Cancelar o agendamento original
+  const { error: erroCancelamento } = await supabase.rpc('cancelar_agendamento_soft', {
+    p_agendamento_id: agendamentoId,
+    p_cancelado_por: 'whatsapp_bot_venus (reagendamento)'
+  });
+
+  if (erroCancelamento) {
+    console.error('❌ Erro ao cancelar agendamento original:', erroCancelamento);
+    return businessErrorResponse({
+      codigo_erro: 'ERRO_CANCELAMENTO',
+      mensagem_usuario: `Não foi possível cancelar o agendamento original para reagendar.\n\n📞 Entre em contato: ${CLINIC_INFO.whatsapp}`
+    });
+  }
+
+  // Criar novo agendamento com a nova data/horário
+  const novoBody = {
+    paciente_nome: agendamentoOriginal.pacientes?.nome_completo,
+    data_nascimento: agendamentoOriginal.pacientes?.data_nascimento,
+    convenio: agendamentoOriginal.pacientes?.convenio,
+    telefone: agendamentoOriginal.pacientes?.telefone,
+    celular: agendamentoOriginal.pacientes?.celular,
+    medico_id: agendamentoOriginal.medico_id,
+    atendimento_id: agendamentoOriginal.atendimento_id,
+    data_consulta: dataFinal,
+    hora_consulta: horarioFinal,
+    observacoes: `Reagendamento do agendamento ${agendamentoId}`
+  };
+
+  return await handleSchedule(supabase, novoBody);
+}
+
+// ============= HANDLER DE BUSCA DE PACIENTES =============
+
+async function handlePatientSearch(supabase: any, body: any) {
+  const mappedData = mapSchedulingData(body);
+  const { paciente_nome, celular } = mappedData;
+
+  console.log('📥 [PATIENT-SEARCH] Parâmetros:', { paciente_nome, celular });
+
+  if (!paciente_nome && !celular) {
+    return businessErrorResponse({
+      codigo_erro: 'PARAMETRO_OBRIGATORIO',
+      mensagem_usuario: 'Informe o nome ou telefone do paciente para buscar.'
+    });
+  }
+
+  let query = supabase
+    .from('pacientes')
+    .select('id, nome_completo, data_nascimento, celular, telefone, convenio')
+    .eq('cliente_id', CLINICA_VENUS_ID);
+
+  if (paciente_nome) {
+    query = query.ilike('nome_completo', `%${paciente_nome}%`);
+  }
+  if (celular) {
+    query = query.ilike('celular', `%${celular}%`);
+  }
+
+  const { data: pacientes, error } = await query.limit(10);
+
+  if (error) {
+    return businessErrorResponse({
+      codigo_erro: 'ERRO_BUSCA',
+      mensagem_usuario: `Erro ao buscar pacientes. Entre em contato: ${CLINIC_INFO.whatsapp}`
+    });
+  }
+
+  if (!pacientes || pacientes.length === 0) {
+    return successResponse({
+      encontrado: false,
+      pacientes: [],
+      message: 'Nenhum paciente encontrado com os dados informados.'
+    });
+  }
+
+  return successResponse({
+    encontrado: true,
+    total: pacientes.length,
+    pacientes: pacientes.map((p: any) => ({
+      id: p.id,
+      nome: p.nome_completo,
+      data_nascimento: p.data_nascimento,
+      celular: p.celular,
+      telefone: p.telefone,
+      convenio: p.convenio
+    })),
+    message: `Encontrado(s) ${pacientes.length} paciente(s).`
+  });
+}
+
+// ============= HANDLER DE LISTAR AGENDAMENTOS =============
+
+async function handleListAppointments(supabase: any, body: any) {
+  const { medico_id, medico_nome, data_inicio, data_fim, status: statusFiltro } = body;
+
+  console.log('📥 [LIST-APPOINTMENTS] Parâmetros:', { medico_nome, data_inicio, data_fim });
+
+  let query = supabase
+    .from('agendamentos')
+    .select(`
+      *,
+      pacientes(nome_completo, celular, convenio),
+      medicos(nome, especialidade),
+      atendimentos(nome)
+    `)
+    .eq('cliente_id', CLINICA_VENUS_ID)
+    .is('excluido_em', null)
+    .order('data_agendamento', { ascending: true })
+    .order('hora_agendamento', { ascending: true });
+
+  if (medico_id) {
+    query = query.eq('medico_id', medico_id);
+  } else if (medico_nome) {
+    const medico = await buscarMedico(supabase, medico_nome);
+    if (medico) {
+      query = query.eq('medico_id', medico.id);
+    }
+  }
+
+  if (data_inicio) {
+    query = query.gte('data_agendamento', data_inicio);
+  }
+  if (data_fim) {
+    query = query.lte('data_agendamento', data_fim);
+  }
+  if (statusFiltro) {
+    query = query.eq('status', statusFiltro);
+  } else {
+    query = query.in('status', ['agendado', 'confirmado']);
+  }
+
+  const { data: agendamentos, error } = await query.limit(50);
+
+  if (error) {
+    return businessErrorResponse({
+      codigo_erro: 'ERRO_BUSCA',
+      mensagem_usuario: `Erro ao listar agendamentos. Entre em contato: ${CLINIC_INFO.whatsapp}`
+    });
+  }
+
+  return successResponse({
+    total: agendamentos?.length || 0,
+    agendamentos: agendamentos?.map((ag: any) => ({
+      id: ag.id,
+      data: ag.data_agendamento,
+      hora: ag.hora_agendamento,
+      status: ag.status,
+      paciente: ag.pacientes?.nome_completo,
+      paciente_celular: ag.pacientes?.celular,
+      medico: ag.medicos?.nome,
+      atendimento: ag.atendimentos?.nome,
+      convenio: ag.pacientes?.convenio
+    })) || [],
+    message: `Encontrado(s) ${agendamentos?.length || 0} agendamento(s).`
   });
 }
 
@@ -807,7 +1414,8 @@ async function handleListDoctors(supabase: any) {
       id: m.id,
       nome: m.nome,
       especialidade: m.especialidade,
-      convenios: m.convenios_aceitos
+      convenios: m.convenios_aceitos,
+      tipo_agendamento: BUSINESS_RULES_VENUS.medicos[m.id]?.tipo_agendamento || 'hora_marcada'
     })),
     mensagem_whatsapp: mensagem,
     message: mensagem
@@ -826,7 +1434,7 @@ serve(async (req) => {
     const pathSegments = url.pathname.split('/').filter(Boolean);
     const action = pathSegments[pathSegments.length - 1];
 
-    console.log(`\n🏥 [CLÍNICA VÊNUS] Ação: ${action}`);
+    console.log(`\n🏥 [CLÍNICA VÊNUS v2.0] Ação: ${action}`);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -850,6 +1458,15 @@ serve(async (req) => {
       case 'confirm':
         return await handleConfirm(supabase, body);
       
+      case 'reschedule':
+        return await handleReschedule(supabase, body);
+      
+      case 'patient-search':
+        return await handlePatientSearch(supabase, body);
+      
+      case 'list-appointments':
+        return await handleListAppointments(supabase, body);
+      
       case 'list-doctors':
       case 'doctors':
         return await handleListDoctors(supabase);
@@ -863,7 +1480,7 @@ serve(async (req) => {
       default:
         return businessErrorResponse({
           codigo_erro: 'ACAO_INVALIDA',
-          mensagem_usuario: `Ação "${action}" não reconhecida.\n\nAções disponíveis:\n• availability - Verificar disponibilidade\n• schedule - Agendar consulta\n• check-patient - Verificar agendamentos\n• cancel - Cancelar agendamento\n• confirm - Confirmar presença\n• list-doctors - Listar médicos\n• clinic-info - Informações da clínica`
+          mensagem_usuario: `Ação "${action}" não reconhecida.\n\nAções disponíveis:\n• availability - Verificar disponibilidade\n• schedule - Agendar consulta\n• check-patient - Verificar agendamentos\n• cancel - Cancelar agendamento\n• confirm - Confirmar presença\n• reschedule - Reagendar consulta\n• patient-search - Buscar pacientes\n• list-appointments - Listar agendamentos\n• list-doctors - Listar médicos\n• clinic-info - Informações da clínica`
         });
     }
 
