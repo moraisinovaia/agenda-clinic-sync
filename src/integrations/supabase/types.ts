@@ -1908,19 +1908,7 @@ export type Database = {
           username: string
         }[]
       }
-      get_email_by_username:
-        | {
-            Args: { p_username: string }
-            Returns: {
-              error: true
-            } & "Could not choose the best candidate function between: public.get_email_by_username(p_username => text), public.get_email_by_username(p_username => varchar). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
-          }
-        | {
-            Args: { p_username: string }
-            Returns: {
-              error: true
-            } & "Could not choose the best candidate function between: public.get_email_by_username(p_username => text), public.get_email_by_username(p_username => varchar). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
-          }
+      get_email_by_username: { Args: { p_username: string }; Returns: string }
       get_medicos_por_clinica: {
         Args: { p_cliente_id: string }
         Returns: {
