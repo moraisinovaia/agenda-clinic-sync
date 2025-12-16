@@ -1908,7 +1908,19 @@ export type Database = {
           username: string
         }[]
       }
-      get_email_by_username: { Args: { p_username: string }; Returns: string }
+      get_email_by_username:
+        | {
+            Args: { p_username: string }
+            Returns: {
+              error: true
+            } & "Could not choose the best candidate function between: public.get_email_by_username(p_username => text), public.get_email_by_username(p_username => varchar). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
+          }
+        | {
+            Args: { p_username: string }
+            Returns: {
+              error: true
+            } & "Could not choose the best candidate function between: public.get_email_by_username(p_username => text), public.get_email_by_username(p_username => varchar). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
+          }
       get_medicos_por_clinica: {
         Args: { p_cliente_id: string }
         Returns: {
@@ -2113,6 +2125,17 @@ export type Database = {
       http_set_curlopt: {
         Args: { curlopt: string; value: string }
         Returns: boolean
+      }
+      insert_audit_log: {
+        Args: {
+          p_action: string
+          p_changed_fields?: string[]
+          p_new_values?: Json
+          p_old_values?: Json
+          p_record_id: string
+          p_table_name: string
+        }
+        Returns: string
       }
       is_admin_safe: { Args: never; Returns: boolean }
       is_admin_user: { Args: never; Returns: boolean }
