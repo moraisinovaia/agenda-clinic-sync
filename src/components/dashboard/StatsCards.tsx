@@ -22,9 +22,11 @@ export const StatsCards = ({ doctors, appointments }: StatsCardsProps) => {
     totalAppointments: appointments.length
   });
   
-  // Filtrar apenas agendamentos válidos (não cancelados nem excluídos) para estatísticas
+  // Filtrar apenas agendamentos válidos (não cancelados nem excluídos) E com data futura para estatísticas
   const validAppointments = appointments.filter(apt => 
-    apt.status !== 'cancelado' && apt.status !== 'excluido'
+    apt.status !== 'cancelado' && 
+    apt.status !== 'excluido' &&
+    apt.data_agendamento >= today
   );
   
   const totalAppointments = validAppointments.length;
