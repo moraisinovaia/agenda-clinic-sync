@@ -3,6 +3,7 @@ import { format, addDays, startOfWeek, isSameDay, parse, startOfDay, differenceI
 import { ptBR } from 'date-fns/locale';
 import { formatInTimeZone } from 'date-fns-tz';
 import { BRAZIL_TIMEZONE } from '@/utils/timezone';
+import { cn } from '@/lib/utils';
 import { Doctor, AppointmentWithRelations, Atendimento } from '@/types/scheduling';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -10,8 +11,9 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User, Trash2, Plus, Edit, CheckCircle, Phone, RotateCcw, Printer, Settings, AlertTriangle, Loader2 } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User, Trash2, Plus, Edit, CheckCircle, Phone, RotateCcw, Printer, Settings, AlertTriangle, Loader2, Check, ChevronsUpDown } from 'lucide-react';
 import { 
   AlertDialog, 
   AlertDialogAction, 
@@ -177,6 +179,7 @@ export function DoctorSchedule({
   
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'schedule' | 'report'>('schedule');
+  const [doctorSelectOpen, setDoctorSelectOpen] = useState(false);
   const [scheduleGenOpen, setScheduleGenOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [activeBloqueio, setActiveBloqueio] = useState<{motivo: string, data_inicio: string, data_fim: string} | null>(null);
@@ -397,18 +400,37 @@ export function DoctorSchedule({
                 <CalendarIcon className="h-5 w-5" />
                 Agenda - 
                 {doctors.length > 0 && onDoctorChange ? (
-                  <Select value={doctor.id} onValueChange={onDoctorChange}>
-                    <SelectTrigger className="w-auto border-none h-auto p-0 font-semibold text-lg bg-transparent shadow-none focus:ring-0 hover:bg-muted/50 px-2 rounded">
-                      <SelectValue>{doctor.nome}</SelectValue>
-                    </SelectTrigger>
-                    <SelectContent className="bg-background z-50">
-                      {doctors.map(d => (
-                        <SelectItem key={d.id} value={d.id}>
-                          {d.nome} - {d.especialidade}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={doctorSelectOpen} onOpenChange={setDoctorSelectOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="ghost" className="h-auto p-0 font-semibold text-lg hover:bg-muted/50 px-2">
+                        {doctor.nome}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[400px] p-0 bg-background z-50" align="start">
+                      <Command>
+                        <CommandInput placeholder="Buscar médico..." />
+                        <CommandList>
+                          <CommandEmpty>Nenhum médico encontrado.</CommandEmpty>
+                          <CommandGroup>
+                            {doctors.map(d => (
+                              <CommandItem
+                                key={d.id}
+                                value={`${d.nome} ${d.especialidade}`}
+                                onSelect={() => {
+                                  onDoctorChange?.(d.id);
+                                  setDoctorSelectOpen(false);
+                                }}
+                              >
+                                <Check className={cn("mr-2 h-4 w-4", doctor.id === d.id ? "opacity-100" : "opacity-0")} />
+                                {d.nome} - {d.especialidade}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 ) : (
                   <span>{doctor.nome}</span>
                 )}
