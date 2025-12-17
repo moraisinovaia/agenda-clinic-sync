@@ -166,6 +166,28 @@ All colors MUST be HSL.
     }
   }
 
+  @keyframes fade-in {
+    0% {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slide-in {
+    0% {
+      opacity: 0;
+      transform: translateX(-10px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
   /* Hover effects */
   .hover-lift {
     transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -207,9 +229,6 @@ All colors MUST be HSL.
     }
   }
   
-  .animate-scale-in {
-    animation: scale-in 0.2s ease-out;
-  }
   
   .animate-bounce-gentle {
     animation: bounce-gentle 0.6s ease-out;
