@@ -159,8 +159,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           // ❌ REMOVIDO: else if (pageData.length < pageSize) - Causava parada prematura
           
           // ⚡ FASE 1.2: Reduzir limite de 5 para 2 páginas (era 5)
-          if (currentPage >= 2) {
-            console.warn('⚠️ Limite: 2 páginas (2000 registros)');
+          if (currentPage >= 4) {
+            console.warn('⚠️ Limite: 4 páginas (4000 registros)');
             hasMore = false;
           }
         }
