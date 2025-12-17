@@ -1,35 +1,190 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-// v2.0.1 - Correção definitiva do bug de convênio (Title Case)
+// v3.0.0 - Configurações dinâmicas via banco de dados
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// 🚨 MIGRAÇÃO DE SISTEMA - Data mínima para agendamentos
-const MINIMUM_BOOKING_DATE = '2026-01-01';
-const MIGRATION_PHONE = '(87) 3866-4050';
-const MIGRATION_MESSAGES = {
+// ============= SISTEMA DE CACHE EM MEMÓRIA =============
+interface CacheData {
+  clinicConfig: {
+    data_minima_agendamento: string;
+    telefone: string;
+    whatsapp: string;
+    dias_busca_inicial: number;
+    dias_busca_expandida: number;
+    mensagem_bloqueio_padrao: string;
+  };
+  businessRules: Record<string, any>;
+  mensagens: Array<{ id: string; tipo: string; medico_id: string | null; mensagem: string }>;
+  lastUpdated: number;
+}
+
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
+let globalCache: Record<string, CacheData> = {};
+
+// Valores default (fallback)
+const DEFAULT_CONFIG = {
+  data_minima_agendamento: '2026-01-01',
+  telefone: '(87) 3866-4050',
+  whatsapp: '(87) 3866-4050',
+  dias_busca_inicial: 14,
+  dias_busca_expandida: 45,
+  mensagem_bloqueio_padrao: 'Entre em contato com a clínica.'
+};
+
+// ✅ Variáveis dinâmicas (serão populadas do cache)
+let MINIMUM_BOOKING_DATE = DEFAULT_CONFIG.data_minima_agendamento;
+let MIGRATION_PHONE = DEFAULT_CONFIG.telefone;
+let CACHED_MENSAGENS: CacheData['mensagens'] = [];
+let MIGRATION_MESSAGES = {
   date_blocked: `Agendamentos disponíveis a partir de janeiro/2026. Para datas anteriores, entre em contato pelo telefone: ${MIGRATION_PHONE}`,
   old_appointments: `Não encontrei agendamentos no sistema novo. Se sua consulta é anterior a janeiro/2026, os dados estão no sistema anterior. Entre em contato: ${MIGRATION_PHONE}`,
   no_availability: `Não há vagas disponíveis antes de janeiro/2026. Para consultas anteriores a esta data, ligue: ${MIGRATION_PHONE}`
 };
 
 /**
+ * Carrega dados do banco de dados e popula o cache
+ */
+async function loadClinicData(supabase: any, clienteId: string): Promise<CacheData> {
+  const now = Date.now();
+  
+  // Verificar se cache ainda é válido
+  if (globalCache[clienteId] && (now - globalCache[clienteId].lastUpdated) < CACHE_TTL_MS) {
+    console.log('📦 [CACHE] Usando dados do cache (válido por mais ' + 
+      Math.round((CACHE_TTL_MS - (now - globalCache[clienteId].lastUpdated)) / 1000) + 's)');
+    return globalCache[clienteId];
+  }
+  
+  console.log('🔄 [CACHE] Atualizando dados do banco de dados...');
+  
+  try {
+    // Buscar dados em paralelo
+    const [configResult, rulesResult, mensagensResult] = await Promise.all([
+      supabase.rpc('get_llm_clinic_config', { p_cliente_id: clienteId }),
+      supabase.rpc('get_llm_business_rules', { p_cliente_id: clienteId }),
+      supabase.rpc('get_llm_mensagens', { p_cliente_id: clienteId })
+    ]);
+    
+    // Processar configuração da clínica
+    const dbConfig = configResult.data?.[0];
+    const clinicConfig = {
+      data_minima_agendamento: dbConfig?.data_minima_agendamento || DEFAULT_CONFIG.data_minima_agendamento,
+      telefone: dbConfig?.telefone || DEFAULT_CONFIG.telefone,
+      whatsapp: dbConfig?.whatsapp || DEFAULT_CONFIG.whatsapp,
+      dias_busca_inicial: dbConfig?.dias_busca_inicial || DEFAULT_CONFIG.dias_busca_inicial,
+      dias_busca_expandida: dbConfig?.dias_busca_expandida || DEFAULT_CONFIG.dias_busca_expandida,
+      mensagem_bloqueio_padrao: dbConfig?.mensagem_bloqueio_padrao || DEFAULT_CONFIG.mensagem_bloqueio_padrao
+    };
+    
+    // Processar regras de negócio (transformar em objeto por medico_id)
+    const businessRules: Record<string, any> = {};
+    for (const rule of rulesResult.data || []) {
+      // O config já contém nome, tipo_agendamento, servicos, etc.
+      businessRules[rule.medico_id] = {
+        ...rule.config,
+        nome: rule.medico_nome // Garantir que o nome do médico esteja presente
+      };
+    }
+    
+    // Processar mensagens
+    const mensagens = mensagensResult.data || [];
+    
+    // Atualizar cache
+    globalCache[clienteId] = {
+      clinicConfig,
+      businessRules,
+      mensagens,
+      lastUpdated: now
+    };
+    
+    // Atualizar variáveis globais
+    MINIMUM_BOOKING_DATE = clinicConfig.data_minima_agendamento;
+    MIGRATION_PHONE = clinicConfig.telefone;
+    CACHED_MENSAGENS = mensagens;
+    MIGRATION_MESSAGES = {
+      date_blocked: `Agendamentos disponíveis a partir de janeiro/2026. Para datas anteriores, entre em contato pelo telefone: ${MIGRATION_PHONE}`,
+      old_appointments: `Não encontrei agendamentos no sistema novo. Se sua consulta é anterior a janeiro/2026, os dados estão no sistema anterior. Entre em contato: ${MIGRATION_PHONE}`,
+      no_availability: `Não há vagas disponíveis antes de janeiro/2026. Para consultas anteriores a esta data, ligue: ${MIGRATION_PHONE}`
+    };
+    
+    console.log(`✅ [CACHE] Atualizado: ${Object.keys(businessRules).length} médicos, ${mensagens.length} mensagens`);
+    console.log(`📅 [CACHE] Data mínima: ${MINIMUM_BOOKING_DATE} | Telefone: ${MIGRATION_PHONE}`);
+    
+    return globalCache[clienteId];
+    
+  } catch (error) {
+    console.error('❌ [CACHE] Erro ao carregar dados do banco:', error);
+    
+    // Se já tem cache (mesmo expirado), usar como fallback
+    if (globalCache[clienteId]) {
+      console.log('⚠️ [CACHE] Usando cache expirado como fallback');
+      return globalCache[clienteId];
+    }
+    
+    // Retornar dados default
+    console.log('⚠️ [CACHE] Usando configuração default');
+    return {
+      clinicConfig: DEFAULT_CONFIG,
+      businessRules: {},
+      mensagens: [],
+      lastUpdated: now
+    };
+  }
+}
+
+/**
+ * Busca mensagem personalizada do cache
+ */
+function getCachedMessage(tipo: string, medicoId?: string): string | null {
+  // 1. Buscar mensagem específica do médico
+  if (medicoId) {
+    const msgMedico = CACHED_MENSAGENS.find(m => 
+      m.medico_id === medicoId && m.tipo === tipo
+    );
+    if (msgMedico) return msgMedico.mensagem;
+  }
+  
+  // 2. Buscar mensagem global (sem médico)
+  const msgGlobal = CACHED_MENSAGENS.find(m => 
+    !m.medico_id && m.tipo === tipo
+  );
+  if (msgGlobal) return msgGlobal.mensagem;
+  
+  return null;
+}
+
+/**
  * Gera mensagem de bloqueio de migração personalizada por médico
+ * ✅ v3.0 - Agora usa mensagens do banco de dados via cache
  * @param medicoNome - Nome do médico (ex: "Dra. Adriana Carla de Sena")
+ * @param medicoId - ID do médico (opcional, para busca mais precisa)
  * @returns Mensagem personalizada ou genérica
  */
-function getMigrationBlockMessage(medicoNome?: string): string {
-  // Normalizar nome do médico (remover acentos, minúsculas, apenas palavras-chave)
+function getMigrationBlockMessage(medicoNome?: string, medicoId?: string): string {
+  // 1. Tentar buscar mensagem do cache (banco de dados)
+  const msgCache = getCachedMessage('bloqueio_agenda', medicoId || undefined);
+  if (msgCache) {
+    console.log(`📝 [CACHE] Mensagem de bloqueio encontrada para médico ${medicoId || medicoNome}`);
+    return msgCache;
+  }
+  
+  // 2. Tentar mensagem global de data bloqueada
+  const msgGlobal = getCachedMessage('data_bloqueada');
+  if (msgGlobal) {
+    console.log(`📝 [CACHE] Usando mensagem global de data bloqueada`);
+    return msgGlobal;
+  }
+  
+  // 3. Fallback: lógica hardcoded (compatibilidade com dados antigos)
   const nomeNormalizado = medicoNome
     ?.toLowerCase()
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+    .replace(/[\u0300-\u036f]/g, '')
     .trim() || '';
 
-  // Detectar se é Dr. Marcelo (várias variações possíveis)
   const isDrMarcelo = 
     nomeNormalizado.includes('marcelo') ||
     nomeNormalizado.includes('dr. marcelo') ||
@@ -39,7 +194,6 @@ function getMigrationBlockMessage(medicoNome?: string): string {
     return `Para tentar encaixe antes é apenas com a secretária Jeniffe ou Luh no WhatsApp: 87981126744`;
   }
 
-  // Detectar se é Dra. Adriana (várias variações possíveis)
   const isDraAdriana = 
     nomeNormalizado.includes('adriana') || 
     nomeNormalizado.includes('adriana carla') ||
@@ -50,7 +204,7 @@ function getMigrationBlockMessage(medicoNome?: string): string {
     return `O(a) paciente pode tentar um encaixe com a Dra. Adriana por ligação normal nesse mesmo número ${MIGRATION_PHONE} (não atendemos ligação via whatsapp), de segunda a sexta-feira, às 10:00h, ou nas terças e quartas-feiras, às 14:30h`;
   }
 
-  // Mensagem genérica para outros médicos
+  // Mensagem genérica
   return `Agendamentos disponíveis a partir de janeiro/2026. Para datas anteriores, entre em contato pelo telefone: ${MIGRATION_PHONE}`;
 }
 
@@ -114,8 +268,14 @@ function classificarPeriodoAgendamento(
 }
 
 // Regras de negócio para agendamento via LLM Agent (N8N/WhatsApp)
+// ✅ v3.0 - Agora carregado dinamicamente do banco de dados
 // Sistema web NÃO usa essas regras - funciona sem restrições
-const BUSINESS_RULES = {
+let BUSINESS_RULES: { medicos: Record<string, any> } = {
+  medicos: {}
+};
+
+// Fallback hardcoded (usado apenas se banco não tiver dados)
+const FALLBACK_BUSINESS_RULES = {
   medicos: {
     // Dr. Marcelo D'Carli - Cardiologista - ORDEM DE CHEGADA
     '1e110923-50df-46ff-a57a-29d88e372900': {
@@ -125,19 +285,19 @@ const BUSINESS_RULES = {
         'Consulta Cardiológica': {
           permite_online: true,
           tipo: 'ordem_chegada',
-          dias_semana: [1, 2, 3, 4, 5], // seg-sex
+          dias_semana: [1, 2, 3, 4, 5],
           periodos: {
             manha: { inicio: '07:00', fim: '12:00', limite: 9, atendimento_inicio: '07:45', distribuicao_fichas: '07:00 às 09:30' },
-            tarde: { inicio: '13:00', fim: '17:00', limite: 9, dias_especificos: [1, 3], atendimento_inicio: '13:45', distribuicao_fichas: '13:00 às 15:00' } // seg e qua
+            tarde: { inicio: '13:00', fim: '17:00', limite: 9, dias_especificos: [1, 3], atendimento_inicio: '13:45', distribuicao_fichas: '13:00 às 15:00' }
           }
         },
         'Teste Ergométrico': {
           permite_online: true,
           tipo: 'ordem_chegada',
-          dias_semana: [2, 3, 4], // ter, qua, qui
+          dias_semana: [2, 3, 4],
           periodos: {
-            manha: { inicio: '07:00', fim: '12:00', limite: 9, dias_especificos: [3], atendimento_inicio: '07:45', distribuicao_fichas: '07:00 às 09:30' }, // qua
-            tarde: { inicio: '13:00', fim: '17:00', limite: 9, dias_especificos: [2, 4], atendimento_inicio: '13:45', distribuicao_fichas: '13:00 às 15:00' } // ter e qui
+            manha: { inicio: '07:00', fim: '12:00', limite: 9, dias_especificos: [3], atendimento_inicio: '07:45', distribuicao_fichas: '07:00 às 09:30' },
+            tarde: { inicio: '13:00', fim: '17:00', limite: 9, dias_especificos: [2, 4], atendimento_inicio: '13:45', distribuicao_fichas: '13:00 às 15:00' }
           }
         },
         'ECG': {
@@ -146,7 +306,6 @@ const BUSINESS_RULES = {
         }
       }
     },
-    
     // Dra. Adriana Carla de Sena - Endocrinologista - ORDEM DE CHEGADA
     '32d30887-b876-4502-bf04-e55d7fb55b50': {
       nome: 'DRA. ADRIANA CARLA DE SENA',
@@ -156,7 +315,7 @@ const BUSINESS_RULES = {
         'Consulta Endocrinológica': {
           permite_online: true,
           tipo: 'ordem_chegada',
-          dias_semana: [1, 2, 3, 4, 5], // Segunda a sexta
+          dias_semana: [1, 2, 3, 4, 5],
           periodos: {
             manha: { inicio: '08:00', fim: '10:00', limite: 9, atendimento_inicio: '08:45', distribuicao_fichas: '08:00 às 10:00' },
             tarde: { inicio: '13:00', fim: '15:00', limite: 9, dias_especificos: [2, 3], atendimento_inicio: '14:45', distribuicao_fichas: '13:00 às 15:00' }
@@ -164,8 +323,7 @@ const BUSINESS_RULES = {
         }
       }
     },
-    
-    // Dr. Pedro Francisco - Clínico Geral (Consulta e Retorno) - ORDEM DE CHEGADA
+    // Dr. Pedro Francisco - Clínico Geral
     '66e9310d-34cd-4005-8937-74e87125dc03': {
       nome: 'DR. PEDRO FRANCISCO',
       tipo_agendamento: 'ordem_chegada',
@@ -173,39 +331,24 @@ const BUSINESS_RULES = {
         'Consulta': {
           permite_online: true,
           tipo: 'ordem_chegada',
-          dias_semana: [2, 4], // terça e quinta
+          dias_semana: [2, 4],
           periodos: {
-            manha: { 
-              inicio: '09:30', 
-              fim: '10:00', 
-              limite: 4, 
-              atendimento_inicio: null, // Começa quando termina os exames
-              distribuicao_fichas: '09:30 às 10:00',
-              observacao: 'O Dr. começa a atender quando termina os exames'
-            }
+            manha: { inicio: '09:30', fim: '10:00', limite: 4, atendimento_inicio: null, distribuicao_fichas: '09:30 às 10:00', observacao: 'O Dr. começa a atender quando termina os exames' }
           },
           convenios_aceitos: ['UNIMED NACIONAL', 'UNIMED REGIONAL', 'UNIMED 40%', 'UNIMED 20%', 'UNIMED INTERCAMBIO', 'MEDPREV']
         },
         'Retorno': {
           permite_online: true,
           tipo: 'ordem_chegada',
-          dias_semana: [2, 4], // terça e quinta
+          dias_semana: [2, 4],
           periodos: {
-            manha: { 
-              inicio: '09:30', 
-              fim: '10:00', 
-              limite: 4,
-              atendimento_inicio: null,
-              distribuicao_fichas: '09:30 às 10:00',
-              observacao: 'O Dr. começa a atender quando termina os exames'
-            }
+            manha: { inicio: '09:30', fim: '10:00', limite: 4, atendimento_inicio: null, distribuicao_fichas: '09:30 às 10:00', observacao: 'O Dr. começa a atender quando termina os exames' }
           },
           convenios_aceitos: ['UNIMED NACIONAL', 'UNIMED REGIONAL', 'UNIMED 40%', 'UNIMED 20%', 'UNIMED INTERCAMBIO', 'MEDPREV']
         }
       }
     },
-    
-    // Dr. Alessandro Dias - Cardiologista (Ecocardiograma) - ORDEM DE CHEGADA
+    // Dr. Alessandro Dias - Cardiologista
     'c192e08e-e216-4c22-99bf-b5992ce05e17': {
       nome: 'DR. ALESSANDRO DIAS',
       tipo_agendamento: 'ordem_chegada',
@@ -213,15 +356,9 @@ const BUSINESS_RULES = {
         'Ecocardiograma': {
           permite_online: true,
           tipo: 'ordem_chegada',
-          dias_semana: [1], // apenas segunda
+          dias_semana: [1],
           periodos: {
-            manha: { 
-              inicio: '08:00', 
-              fim: '09:00', 
-              limite: 10, 
-              atendimento_inicio: '08:00', 
-              distribuicao_fichas: '08:00 às 09:00' 
-            }
+            manha: { inicio: '08:00', fim: '09:00', limite: 10, atendimento_inicio: '08:00', distribuicao_fichas: '08:00 às 09:00' }
           },
           convenios_aceitos: ['UNIMED NACIONAL', 'UNIMED REGIONAL', 'UNIMED 40%', 'UNIMED 20%', 'UNIMED INTERCAMBIO', 'MEDPREV']
         },
@@ -582,10 +719,23 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // 🔑 Buscar cliente_id do IPADO
-  // Cliente ID fixo do IPADO (sistema single-tenant)
-  const CLIENTE_ID = '2bfb98b5-ae41-4f96-8ba7-acc797c22054';
-  console.log('🏥 Sistema configurado para cliente IPADO:', CLIENTE_ID);
+    // 🔑 Cliente ID fixo do IPADO (sistema single-tenant)
+    const CLIENTE_ID = '2bfb98b5-ae41-4f96-8ba7-acc797c22054';
+    console.log('🏥 Sistema configurado para cliente IPADO:', CLIENTE_ID);
+
+    // ✅ v3.0 - Carregar configurações do banco de dados com cache
+    const cacheData = await loadClinicData(supabase, CLIENTE_ID);
+    
+    // Mesclar regras do banco com fallback hardcoded
+    if (Object.keys(cacheData.businessRules).length > 0) {
+      // Usar dados do banco
+      BUSINESS_RULES.medicos = cacheData.businessRules;
+      console.log(`📋 [CACHE] Usando ${Object.keys(BUSINESS_RULES.medicos).length} regras do banco de dados`);
+    } else {
+      // Fallback para dados hardcoded
+      BUSINESS_RULES.medicos = FALLBACK_BUSINESS_RULES.medicos;
+      console.log(`⚠️ [CACHE] Usando regras hardcoded (fallback)`);
+    }
 
     const url = new URL(req.url);
     const method = req.method;
