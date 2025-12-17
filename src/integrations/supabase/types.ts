@@ -1643,6 +1643,60 @@ export type Database = {
         }
         Relationships: []
       }
+      temp_atendimento_mapping: {
+        Row: {
+          endogastro_atendimento_id: string
+          endogastro_nome: string
+          id: number
+          mapped: boolean | null
+          principal_atendimento_id: string | null
+          principal_nome: string | null
+        }
+        Insert: {
+          endogastro_atendimento_id: string
+          endogastro_nome: string
+          id?: number
+          mapped?: boolean | null
+          principal_atendimento_id?: string | null
+          principal_nome?: string | null
+        }
+        Update: {
+          endogastro_atendimento_id?: string
+          endogastro_nome?: string
+          id?: number
+          mapped?: boolean | null
+          principal_atendimento_id?: string | null
+          principal_nome?: string | null
+        }
+        Relationships: []
+      }
+      temp_medico_mapping: {
+        Row: {
+          endogastro_medico_id: string
+          endogastro_nome: string
+          id: number
+          mapped: boolean | null
+          principal_medico_id: string | null
+          principal_nome: string | null
+        }
+        Insert: {
+          endogastro_medico_id: string
+          endogastro_nome: string
+          id?: number
+          mapped?: boolean | null
+          principal_medico_id?: string | null
+          principal_nome?: string | null
+        }
+        Update: {
+          endogastro_medico_id?: string
+          endogastro_nome?: string
+          id?: number
+          mapped?: boolean | null
+          principal_medico_id?: string | null
+          principal_nome?: string | null
+        }
+        Relationships: []
+      }
       temp_medicos_backup: {
         Row: {
           ativo: boolean | null
