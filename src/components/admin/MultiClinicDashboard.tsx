@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { 
   Building2, 
@@ -13,7 +14,10 @@ import {
   RefreshCw,
   TrendingUp,
   Activity,
-  AlertCircle
+  AlertCircle,
+  LayoutGrid,
+  BarChart3,
+  Shield
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -32,20 +36,13 @@ import {
 } from 'recharts';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-
-interface ClinicStats {
-  id: string;
-  nome: string;
-  ativo: boolean;
-  created_at: string;
-  doctors_count: number;
-  patients_count: number;
-  total_appointments: number;
-  future_appointments: number;
-  today_appointments: number;
-  users_count: number;
-  last_7_days_appointments: Array<{ date: string; count: number }>;
-}
+import { ClinicHealthData, calculateHealthScore, useMultiClinicHealthScores } from '@/hooks/useClinicHealthScore';
+import { 
+  SmartAlertsCenter, 
+  EnhancedClinicCard, 
+  ClinicHealthScoreGauge,
+  OnboardingChecklist 
+} from './clinic-health';
 
 interface DashboardData {
   summary: {
@@ -56,7 +53,7 @@ interface DashboardData {
     total_users: number;
     total_future_appointments: number;
   };
-  clinics: ClinicStats[];
+  clinics: ClinicHealthData[];
   timestamp: string;
 }
 
@@ -81,21 +78,55 @@ export function MultiClinicDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [selectedClinic, setSelectedClinic] = useState<ClinicHealthData | null>(null);
+  const [activeTab, setActiveTab] = useState('overview');
 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const { data: result, error: rpcError } = await supabase.rpc('get_all_clinics_stats');
+      // Fetch clinic stats and extended config data in parallel
+      const [statsResult, llmConfigResult, businessRulesResult] = await Promise.all([
+        supabase.rpc('get_all_clinics_stats'),
+        supabase.from('llm_clinic_config').select('cliente_id, telefone, whatsapp, endereco'),
+        supabase.from('business_rules').select('cliente_id').eq('ativo', true)
+      ]);
 
-      if (rpcError) {
-        console.error('Erro ao buscar estatísticas:', rpcError);
-        setError(rpcError.message);
+      if (statsResult.error) {
+        console.error('Erro ao buscar estatísticas:', statsResult.error);
+        setError(statsResult.error.message);
         return;
       }
 
-      setData(result as unknown as DashboardData);
+      const dashboardData = statsResult.data as unknown as DashboardData;
+      
+      // Enhance clinics with config data
+      if (dashboardData?.clinics) {
+        const llmConfigs = new Map(
+          (llmConfigResult.data || []).map(c => [c.cliente_id, c])
+        );
+        const clinicsWithRules = new Set(
+          (businessRulesResult.data || []).map(r => r.cliente_id)
+        );
+
+        dashboardData.clinics = dashboardData.clinics.map(clinic => {
+          const llmConfig = llmConfigs.get(clinic.id);
+          return {
+            ...clinic,
+            has_llm_config: !!llmConfig,
+            has_business_rules: clinicsWithRules.has(clinic.id),
+            has_contact_info: !!(llmConfig?.telefone || llmConfig?.whatsapp),
+            telefone: llmConfig?.telefone,
+            whatsapp: llmConfig?.whatsapp,
+            endereco: llmConfig?.endereco,
+            has_services: clinic.doctors_count > 0, // Simplified check
+            has_schedule_config: clinic.doctors_count > 0 // Simplified check
+          };
+        });
+      }
+
+      setData(dashboardData);
       setLastUpdate(new Date());
     } catch (err) {
       console.error('Erro:', err);
@@ -118,21 +149,24 @@ export function MultiClinicDashboard() {
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  const getHealthStatus = (clinic: ClinicStats) => {
-    if (clinic.doctors_count === 0) return { status: 'warning', label: 'Sem médicos' };
-    if (clinic.patients_count === 0) return { status: 'warning', label: 'Sem pacientes' };
-    if (clinic.future_appointments === 0) return { status: 'info', label: 'Sem agendamentos' };
-    return { status: 'success', label: 'Ativo' };
-  };
-
-  const getHealthColor = (status: string) => {
-    switch (status) {
-      case 'success': return 'bg-green-500/10 text-green-600 border-green-500/20';
-      case 'warning': return 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20';
-      case 'info': return 'bg-blue-500/10 text-blue-600 border-blue-500/20';
-      default: return 'bg-muted text-muted-foreground';
-    }
-  };
+  // Calculate overall health metrics
+  const healthMetrics = useMemo(() => {
+    if (!data?.clinics?.length) return null;
+    
+    const healthScores = data.clinics.map(c => calculateHealthScore(c));
+    const avgScore = Math.round(
+      healthScores.reduce((sum, h) => sum + h.score, 0) / healthScores.length
+    );
+    const healthyCount = healthScores.filter(h => h.score >= 75).length;
+    const criticalCount = healthScores.filter(h => h.criticalIssues.length > 0).length;
+    
+    return {
+      avgScore,
+      healthyCount,
+      criticalCount,
+      totalClinics: data.clinics.length
+    };
+  }, [data]);
 
   // Preparar dados para gráficos
   const appointmentsChartData = data?.clinics?.map(clinic => ({
@@ -163,6 +197,14 @@ export function MultiClinicDashboard() {
         return aggregated;
       }) || []
     : [];
+
+  const handleNavigateToClinic = (clinicId: string, action?: string) => {
+    const clinic = data?.clinics?.find(c => c.id === clinicId);
+    if (clinic) {
+      setSelectedClinic(clinic);
+      setActiveTab('onboarding');
+    }
+  };
 
   if (loading && !data) {
     return (
@@ -220,15 +262,37 @@ export function MultiClinicDashboard() {
         </div>
       </div>
 
-      {/* Cards de Resumo Geral */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      {/* Cards de Resumo Geral com Health Score */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+        <Card className="col-span-1">
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2">
+              <Shield className="h-4 w-4 text-primary" />
+              <span className="text-xs text-muted-foreground">Health Score</span>
+            </div>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-2xl font-bold" style={{ color: healthMetrics?.avgScore && healthMetrics.avgScore >= 75 ? '#10B981' : healthMetrics?.avgScore && healthMetrics.avgScore >= 50 ? '#F59E0B' : '#EF4444' }}>
+                {healthMetrics?.avgScore || 0}
+              </p>
+              <span className="text-xs text-muted-foreground">/ 100</span>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardContent className="pt-4">
             <div className="flex items-center gap-2">
               <Building2 className="h-4 w-4 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">Clínicas Ativas</span>
+              <span className="text-xs text-muted-foreground">Clínicas</span>
             </div>
-            <p className="text-2xl font-bold mt-1">{data?.summary.total_clinics || 0}</p>
+            <div className="flex items-baseline gap-1 mt-1">
+              <p className="text-2xl font-bold">{data?.summary.total_clinics || 0}</p>
+              {healthMetrics && (
+                <span className="text-xs text-green-500">
+                  ({healthMetrics.healthyCount} saudável)
+                </span>
+              )}
+            </div>
           </CardContent>
         </Card>
 
@@ -287,191 +351,253 @@ export function MultiClinicDashboard() {
         </Card>
       </div>
 
-      {/* Cards por Clínica */}
-      <div>
-        <h3 className="text-lg font-semibold mb-4">Estatísticas por Clínica</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {data?.clinics?.map((clinic) => {
-            const health = getHealthStatus(clinic);
-            return (
-              <Card key={clinic.id} className="hover:shadow-md transition-shadow">
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base font-semibold truncate">
-                      {clinic.nome}
-                    </CardTitle>
-                    <Badge variant="outline" className={getHealthColor(health.status)}>
-                      {health.label}
-                    </Badge>
+      {/* Main Content Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="overview" className="gap-2">
+            <LayoutGrid className="h-4 w-4" />
+            Visão Geral
+          </TabsTrigger>
+          <TabsTrigger value="analytics" className="gap-2">
+            <BarChart3 className="h-4 w-4" />
+            Analytics
+          </TabsTrigger>
+          <TabsTrigger value="onboarding" className="gap-2">
+            <Shield className="h-4 w-4" />
+            Health & Onboarding
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-6 mt-6">
+          {/* Smart Alerts */}
+          {data?.clinics && (
+            <SmartAlertsCenter 
+              clinics={data.clinics} 
+              onNavigateToClinic={handleNavigateToClinic}
+              maxAlerts={6}
+            />
+          )}
+
+          {/* Enhanced Clinic Cards */}
+          <div>
+            <h3 className="text-lg font-semibold mb-4">Clínicas</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {data?.clinics?.map((clinic) => (
+                <EnhancedClinicCard
+                  key={clinic.id}
+                  clinic={clinic}
+                  onManage={() => setSelectedClinic(clinic)}
+                  onConfigureLLM={() => {
+                    setSelectedClinic(clinic);
+                    setActiveTab('onboarding');
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="analytics" className="space-y-6 mt-6">
+          {/* Gráficos */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Gráfico de Barras - Agendamentos por Clínica */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4" />
+                  Agendamentos por Clínica
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {appointmentsChartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={appointmentsChartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis 
+                        dataKey="name" 
+                        tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                      />
+                      <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: 'hsl(var(--card))', 
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px'
+                        }}
+                      />
+                      <Legend />
+                      <Bar dataKey="agendamentos" name="Total" fill={BAR_COLORS.total} radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="futuros" name="Futuros" fill={BAR_COLORS.futuros} radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="hoje" name="Hoje" fill={BAR_COLORS.hoje} radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-[280px] flex items-center justify-center text-muted-foreground">
+                    Sem dados para exibir
                   </div>
-                  <CardDescription className="text-xs">
-                    Desde {format(parseISO(clinic.created_at), 'dd/MM/yyyy', { locale: ptBR })}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Médicos</span>
-                      <p className="font-semibold">{clinic.doctors_count}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Pacientes</span>
-                      <p className="font-semibold">{clinic.patients_count.toLocaleString('pt-BR')}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Ag. Futuros</span>
-                      <p className="font-semibold">{clinic.future_appointments.toLocaleString('pt-BR')}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Ag. Hoje</span>
-                      <p className="font-semibold text-primary">{clinic.today_appointments}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Ag. Total</span>
-                      <p className="font-semibold">{clinic.total_appointments.toLocaleString('pt-BR')}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Usuários</span>
-                      <p className="font-semibold">{clinic.users_count}</p>
-                    </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Gráfico de Pizza - Distribuição de Pacientes */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Distribuição de Pacientes
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {patientsDistribution.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <PieChart>
+                      <Pie
+                        data={patientsDistribution}
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={100}
+                        dataKey="value"
+                        label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                        labelLine={true}
+                      >
+                        {patientsDistribution.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.fill} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: 'hsl(var(--card))', 
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px'
+                        }}
+                        formatter={(value: number) => value.toLocaleString('pt-BR')}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-[280px] flex items-center justify-center text-muted-foreground">
+                    Sem dados para exibir
                   </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      </div>
+                )}
+              </CardContent>
+            </Card>
 
-      {/* Gráficos */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Gráfico de Barras - Agendamentos por Clínica */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <TrendingUp className="h-4 w-4" />
-              Agendamentos por Clínica
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {appointmentsChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={appointmentsChartData}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis 
-                    dataKey="name" 
-                    tick={{ fontSize: 11 }}
-                    className="text-muted-foreground"
-                  />
-                  <YAxis tick={{ fontSize: 11 }} className="text-muted-foreground" />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))', 
-                      border: '1px solid hsl(var(--border))' 
-                    }}
-                  />
-                  <Legend />
-                  <Bar dataKey="agendamentos" name="Total" fill={BAR_COLORS.total} radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="futuros" name="Futuros" fill={BAR_COLORS.futuros} radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="hoje" name="Hoje" fill={BAR_COLORS.hoje} radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[280px] flex items-center justify-center text-muted-foreground">
-                Sem dados para exibir
-              </div>
-            )}
-          </CardContent>
-        </Card>
+            {/* Gráfico de Linha - Tendência 7 dias */}
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  Tendência de Agendamentos (Últimos 7 dias)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {trendData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={trendData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis 
+                        dataKey="date" 
+                        tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                      />
+                      <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: 'hsl(var(--card))', 
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px'
+                        }}
+                      />
+                      <Legend />
+                      {data?.clinics?.map((clinic, index) => (
+                        <Line
+                          key={clinic.id}
+                          type="monotone"
+                          dataKey={clinic.nome}
+                          stroke={CHART_COLORS[index % CHART_COLORS.length]}
+                          strokeWidth={2}
+                          dot={{ r: 4 }}
+                          activeDot={{ r: 6 }}
+                        />
+                      ))}
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                    Sem dados para exibir
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
 
-        {/* Gráfico de Pizza - Distribuição de Pacientes */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              Distribuição de Pacientes
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {patientsDistribution.length > 0 ? (
-              <ResponsiveContainer width="100%" height={280}>
-                <PieChart>
-                  <Pie
-                    data={patientsDistribution}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={100}
-                    dataKey="value"
-                    label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                    labelLine={true}
-                  >
-                    {patientsDistribution.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.fill} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))', 
-                      border: '1px solid hsl(var(--border))' 
-                    }}
-                    formatter={(value: number) => value.toLocaleString('pt-BR')}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[280px] flex items-center justify-center text-muted-foreground">
-                Sem dados para exibir
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <TabsContent value="onboarding" className="mt-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Health Scores Overview */}
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Shield className="h-4 w-4" />
+                  Health Score por Clínica
+                </CardTitle>
+                <CardDescription>
+                  Visão geral da saúde de configuração de cada clínica
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                  {data?.clinics?.map(clinic => {
+                    const health = calculateHealthScore(clinic);
+                    return (
+                      <div 
+                        key={clinic.id}
+                        className="flex flex-col items-center gap-2 p-4 rounded-lg bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => setSelectedClinic(clinic)}
+                      >
+                        <ClinicHealthScoreGauge health={health} size="md" />
+                        <span className="text-sm font-medium text-center truncate w-full">
+                          {clinic.nome}
+                        </span>
+                        <Badge variant="outline" className="text-xs">
+                          {health.criticalIssues.length > 0 
+                            ? `${health.criticalIssues.length} crítico`
+                            : health.warnings.length > 0
+                            ? `${health.warnings.length} avisos`
+                            : 'OK'}
+                        </Badge>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
 
-        {/* Gráfico de Linha - Tendência 7 dias */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              Tendência de Agendamentos (Últimos 7 dias)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {trendData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={trendData}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis 
-                    dataKey="date" 
-                    tick={{ fontSize: 11 }}
-                    className="text-muted-foreground"
-                  />
-                  <YAxis tick={{ fontSize: 11 }} className="text-muted-foreground" />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))', 
-                      border: '1px solid hsl(var(--border))' 
-                    }}
-                  />
-                  <Legend />
-                  {data?.clinics?.map((clinic, index) => (
-                    <Line
-                      key={clinic.id}
-                      type="monotone"
-                      dataKey={clinic.nome}
-                      stroke={CHART_COLORS[index % CHART_COLORS.length]}
-                      strokeWidth={2}
-                      dot={{ r: 4 }}
-                      activeDot={{ r: 6 }}
-                    />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                Sem dados para exibir
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+            {/* Selected Clinic Onboarding or Instructions */}
+            <div>
+              {selectedClinic ? (
+                <OnboardingChecklist 
+                  clinic={selectedClinic}
+                  onNavigateToAction={(action) => {
+                    console.log('Navigate to:', action, 'for clinic:', selectedClinic.id);
+                    // Here you would integrate with your navigation/routing
+                  }}
+                />
+              ) : (
+                <Card>
+                  <CardContent className="py-8">
+                    <div className="flex flex-col items-center text-center gap-3">
+                      <Shield className="h-12 w-12 text-muted-foreground/50" />
+                      <p className="text-sm text-muted-foreground">
+                        Selecione uma clínica para ver o checklist de onboarding
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
