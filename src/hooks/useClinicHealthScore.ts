@@ -31,6 +31,12 @@ export interface ClinicHealthData {
   whatsapp?: string;
   telefone?: string;
   endereco?: string;
+  // Real data metrics
+  services_count?: number;
+  schedule_count?: number;
+  last_7_days_count?: number;
+  last_30_days_count?: number;
+  is_active_recently?: boolean;
 }
 
 export interface HealthScoreResult {
@@ -59,10 +65,12 @@ export function calculateHealthScore(clinic: ClinicHealthData): HealthScoreResul
     {
       id: 'has_services',
       label: 'Serviços configurados',
-      description: 'Atendimentos/exames cadastrados',
+      description: clinic.services_count !== undefined 
+        ? `${clinic.services_count} serviços ativos` 
+        : 'Atendimentos/exames cadastrados',
       category: 'config',
       weight: 10,
-      passed: clinic.has_services !== false,
+      passed: (clinic.services_count ?? 0) > 0 || clinic.has_services !== false,
       severity: 'critical'
     },
     {
@@ -155,10 +163,23 @@ export function calculateHealthScore(clinic: ClinicHealthData): HealthScoreResul
     {
       id: 'has_schedule_config',
       label: 'Horários configurados',
-      description: 'Configuração de horários dos médicos',
+      description: clinic.schedule_count !== undefined 
+        ? `${clinic.schedule_count} configurações ativas` 
+        : 'Configuração de horários dos médicos',
       category: 'operational',
       weight: 5,
-      passed: clinic.has_schedule_config !== false,
+      passed: (clinic.schedule_count ?? 0) > 0 || clinic.has_schedule_config !== false,
+      severity: 'warning'
+    },
+    {
+      id: 'has_recent_activity',
+      label: 'Atividade recente',
+      description: clinic.last_7_days_count !== undefined 
+        ? `${clinic.last_7_days_count} agendamentos nos últimos 7 dias` 
+        : 'Agendamentos nos últimos 7 dias',
+      category: 'operational',
+      weight: 5,
+      passed: (clinic.last_7_days_count ?? 0) > 0 || clinic.is_active_recently === true,
       severity: 'warning'
     }
   ];
