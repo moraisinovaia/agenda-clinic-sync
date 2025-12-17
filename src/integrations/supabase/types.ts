@@ -322,6 +322,108 @@ export type Database = {
           },
         ]
       }
+      business_rules: {
+        Row: {
+          ativo: boolean | null
+          cliente_id: string
+          config: Json
+          created_at: string | null
+          id: string
+          medico_id: string
+          updated_at: string | null
+          version: number | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          cliente_id: string
+          config: Json
+          created_at?: string | null
+          id?: string
+          medico_id: string
+          updated_at?: string | null
+          version?: number | null
+        }
+        Update: {
+          ativo?: boolean | null
+          cliente_id?: string
+          config?: Json
+          created_at?: string | null
+          id?: string
+          medico_id?: string
+          updated_at?: string | null
+          version?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_rules_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_rules_medico_id_fkey"
+            columns: ["medico_id"]
+            isOneToOne: false
+            referencedRelation: "medicos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      business_rules_audit: {
+        Row: {
+          business_rule_id: string | null
+          changed_at: string | null
+          changed_by: string | null
+          changed_by_name: string | null
+          cliente_id: string | null
+          id: string
+          ip_address: unknown
+          motivo: string | null
+          new_config: Json | null
+          old_config: Json | null
+        }
+        Insert: {
+          business_rule_id?: string | null
+          changed_at?: string | null
+          changed_by?: string | null
+          changed_by_name?: string | null
+          cliente_id?: string | null
+          id?: string
+          ip_address?: unknown
+          motivo?: string | null
+          new_config?: Json | null
+          old_config?: Json | null
+        }
+        Update: {
+          business_rule_id?: string | null
+          changed_at?: string | null
+          changed_by?: string | null
+          changed_by_name?: string | null
+          cliente_id?: string | null
+          id?: string
+          ip_address?: unknown
+          motivo?: string | null
+          new_config?: Json | null
+          old_config?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_rules_audit_business_rule_id_fkey"
+            columns: ["business_rule_id"]
+            isOneToOne: false
+            referencedRelation: "business_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_rules_audit_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clientes: {
         Row: {
           ativo: boolean | null
@@ -1006,6 +1108,107 @@ export type Database = {
           },
           {
             foreignKeyName: "horarios_vazios_medico_id_fkey"
+            columns: ["medico_id"]
+            isOneToOne: false
+            referencedRelation: "medicos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      llm_clinic_config: {
+        Row: {
+          ativo: boolean | null
+          cliente_id: string
+          created_at: string | null
+          data_minima_agendamento: string | null
+          dias_busca_expandida: number | null
+          dias_busca_inicial: number | null
+          endereco: string | null
+          id: string
+          mensagem_bloqueio_padrao: string | null
+          nome_clinica: string
+          telefone: string | null
+          updated_at: string | null
+          whatsapp: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          cliente_id: string
+          created_at?: string | null
+          data_minima_agendamento?: string | null
+          dias_busca_expandida?: number | null
+          dias_busca_inicial?: number | null
+          endereco?: string | null
+          id?: string
+          mensagem_bloqueio_padrao?: string | null
+          nome_clinica: string
+          telefone?: string | null
+          updated_at?: string | null
+          whatsapp?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          cliente_id?: string
+          created_at?: string | null
+          data_minima_agendamento?: string | null
+          dias_busca_expandida?: number | null
+          dias_busca_inicial?: number | null
+          endereco?: string | null
+          id?: string
+          mensagem_bloqueio_padrao?: string | null
+          nome_clinica?: string
+          telefone?: string | null
+          updated_at?: string | null
+          whatsapp?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "llm_clinic_config_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: true
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      llm_mensagens: {
+        Row: {
+          ativo: boolean | null
+          cliente_id: string
+          created_at: string | null
+          id: string
+          medico_id: string | null
+          mensagem: string
+          tipo: string
+        }
+        Insert: {
+          ativo?: boolean | null
+          cliente_id: string
+          created_at?: string | null
+          id?: string
+          medico_id?: string | null
+          mensagem: string
+          tipo: string
+        }
+        Update: {
+          ativo?: boolean | null
+          cliente_id?: string
+          created_at?: string | null
+          id?: string
+          medico_id?: string | null
+          mensagem?: string
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "llm_mensagens_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "llm_mensagens_medico_id_fkey"
             columns: ["medico_id"]
             isOneToOne: false
             referencedRelation: "medicos"
@@ -1866,6 +2069,17 @@ export type Database = {
           schedule: string
         }[]
       }
+      get_business_rules_by_cliente: {
+        Args: { p_cliente_id: string }
+        Returns: {
+          ativo: boolean
+          config: Json
+          id: string
+          medico_id: string
+          medico_nome: string
+          version: number
+        }[]
+      }
       get_client_stats: { Args: { p_cliente_id: string }; Returns: Json }
       get_clientes_admin: {
         Args: never
@@ -1911,6 +2125,29 @@ export type Database = {
         }[]
       }
       get_email_by_username: { Args: { p_username: string }; Returns: string }
+      get_llm_clinic_config: {
+        Args: { p_cliente_id: string }
+        Returns: {
+          data_minima_agendamento: string
+          dias_busca_expandida: number
+          dias_busca_inicial: number
+          endereco: string
+          id: string
+          mensagem_bloqueio_padrao: string
+          nome_clinica: string
+          telefone: string
+          whatsapp: string
+        }[]
+      }
+      get_llm_mensagens: {
+        Args: { p_cliente_id: string; p_medico_id?: string; p_tipo?: string }
+        Returns: {
+          id: string
+          medico_id: string
+          mensagem: string
+          tipo: string
+        }[]
+      }
       get_medicos_por_clinica: {
         Args: { p_cliente_id: string }
         Returns: {
