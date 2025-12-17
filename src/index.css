@@ -141,11 +141,70 @@ All colors MUST be HSL.
   }
   
   .animate-fade-in {
-    animation: fade-in 0.3s ease-out;
+    animation: fade-in 0.3s ease-out forwards;
+    opacity: 0;
   }
   
   .animate-fade-in-slow {
-    animation: fade-in 0.6s ease-out;
+    animation: fade-in 0.6s ease-out forwards;
+    opacity: 0;
+  }
+
+  .animate-scale-in {
+    animation: scale-in 0.4s ease-out forwards;
+    opacity: 0;
+  }
+  
+  @keyframes scale-in {
+    0% {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  /* Hover effects */
+  .hover-lift {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-elegant);
+  }
+
+  /* Print styles for dashboard */
+  @media print {
+    body {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    
+    .print\\:hidden {
+      display: none !important;
+    }
+    
+    .print\\:block {
+      display: block !important;
+    }
+    
+    .print\\:break-before-page {
+      break-before: page;
+    }
+    
+    .print\\:col-span-1 {
+      grid-column: span 1 / span 1 !important;
+    }
+    
+    .print\\:space-y-4 > :not([hidden]) ~ :not([hidden]) {
+      margin-top: 1rem;
+    }
+    
+    .print\\:grid-cols-1 {
+      grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+    }
   }
   
   .animate-scale-in {
