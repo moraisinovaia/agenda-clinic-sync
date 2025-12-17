@@ -1620,6 +1620,7 @@ export type Database = {
         }[]
       }
       bytea_to_text: { Args: { data: string }; Returns: string }
+      can_access_patient_data: { Args: never; Returns: boolean }
       cancelar_agendamento_soft: {
         Args: {
           p_agendamento_id: string
