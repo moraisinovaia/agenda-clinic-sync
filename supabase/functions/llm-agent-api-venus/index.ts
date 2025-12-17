@@ -133,30 +133,30 @@ const BUSINESS_RULES_VENUS = {
       }
     },
     
-    // Dra. Gabriela Batista - Gastroenterologista - HORA MARCADA
+    // Dra. Gabriela Batista - Gastroenterologista - ORDEM DE CHEGADA
     '4361d620-4c9b-4602-aab1-e835cc63c8a2': {
       nome: 'DRA. GABRIELA BATISTA',
       especialidade: 'Gastroenterologista',
-      tipo_agendamento: 'hora_marcada',
+      tipo_agendamento: 'ordem_chegada',
       idade_minima: 15, // Atende apenas pacientes com 15+ anos
       servicos: {
         'Consulta Gastroenterológica': {
           permite_online: true,
-          tipo: 'hora_marcada',
+          tipo: 'ordem_chegada',
           dias_semana: [2, 4, 6], // terça, quinta, sábado
           periodos: {
             integral: { 
               inicio: '08:00', 
               fim: '16:00', 
-              intervalo_minutos: 30,
-              limite: 8, // 8 pacientes ter/qui
+              limite: 6,
+              distribuicao_fichas: '08:00 às 16:00',
               dias_especificos: [2, 4] // ter e qui
             },
             manha: { 
               inicio: '08:00', 
               fim: '12:00', 
-              intervalo_minutos: 30,
-              limite: 4, // 4 pacientes sábado
+              limite: 6,
+              distribuicao_fichas: '08:00 às 12:00',
               dias_especificos: [6] // sábado
             }
           },
@@ -166,21 +166,21 @@ const BUSINESS_RULES_VENUS = {
         },
         'Endoscopia Digestiva Alta': {
           permite_online: true,
-          tipo: 'hora_marcada',
+          tipo: 'ordem_chegada',
           dias_semana: [2, 4, 6],
           periodos: {
             integral: { 
               inicio: '08:00', 
               fim: '16:00', 
-              intervalo_minutos: 30,
-              limite: 8, // 8 pacientes ter/qui
+              limite: 6,
+              distribuicao_fichas: '08:00 às 16:00',
               dias_especificos: [2, 4]
             },
             manha: { 
               inicio: '08:00', 
               fim: '12:00', 
-              intervalo_minutos: 30,
-              limite: 4, // 4 pacientes sábado
+              limite: 6,
+              distribuicao_fichas: '08:00 às 12:00',
               dias_especificos: [6]
             }
           },
