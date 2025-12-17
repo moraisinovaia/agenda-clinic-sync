@@ -60,13 +60,21 @@ interface DashboardData {
   timestamp: string;
 }
 
+// Cores vibrantes e distintas para os gráficos
 const CHART_COLORS = [
-  'hsl(var(--chart-1))',
-  'hsl(var(--chart-2))',
-  'hsl(var(--chart-3))',
-  'hsl(var(--chart-4))',
-  'hsl(var(--chart-5))',
+  '#3B82F6', // Azul
+  '#10B981', // Verde
+  '#F59E0B', // Laranja
+  '#8B5CF6', // Roxo
+  '#EC4899', // Rosa
+  '#06B6D4', // Ciano
 ];
+
+const BAR_COLORS = {
+  total: '#3B82F6',    // Azul
+  futuros: '#10B981',  // Verde  
+  hoje: '#F59E0B',     // Laranja
+};
 
 export function MultiClinicDashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -362,9 +370,9 @@ export function MultiClinicDashboard() {
                     }}
                   />
                   <Legend />
-                  <Bar dataKey="agendamentos" name="Total" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="futuros" name="Futuros" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="hoje" name="Hoje" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="agendamentos" name="Total" fill={BAR_COLORS.total} radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="futuros" name="Futuros" fill={BAR_COLORS.futuros} radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="hoje" name="Hoje" fill={BAR_COLORS.hoje} radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
