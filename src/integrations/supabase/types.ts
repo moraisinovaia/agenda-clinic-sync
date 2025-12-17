@@ -464,28 +464,37 @@ export type Database = {
           ativo: boolean | null
           configuracoes: Json | null
           created_at: string | null
+          endereco: string | null
           id: string
           logo_url: string | null
           nome: string
+          telefone: string | null
           updated_at: string | null
+          whatsapp: string | null
         }
         Insert: {
           ativo?: boolean | null
           configuracoes?: Json | null
           created_at?: string | null
+          endereco?: string | null
           id?: string
           logo_url?: string | null
           nome: string
+          telefone?: string | null
           updated_at?: string | null
+          whatsapp?: string | null
         }
         Update: {
           ativo?: boolean | null
           configuracoes?: Json | null
           created_at?: string | null
+          endereco?: string | null
           id?: string
           logo_url?: string | null
           nome?: string
+          telefone?: string | null
           updated_at?: string | null
+          whatsapp?: string | null
         }
         Relationships: []
       }
@@ -1398,7 +1407,11 @@ export type Database = {
           p_admin_user_id?: string
           p_ativo?: boolean
           p_cliente_id: string
+          p_endereco?: string
+          p_logo_url?: string
           p_nome?: string
+          p_telefone?: string
+          p_whatsapp?: string
         }
         Returns: Json
       }
@@ -1758,6 +1771,7 @@ export type Database = {
         }[]
       }
       get_client_stats: { Args: { p_cliente_id: string }; Returns: Json }
+      get_cliente_completo: { Args: { p_cliente_id: string }; Returns: Json }
       get_clientes_admin: {
         Args: never
         Returns: {
@@ -1771,8 +1785,12 @@ export type Database = {
         Returns: {
           ativo: boolean
           created_at: string
+          endereco: string
           id: string
+          logo_url: string
           nome: string
+          telefone: string
+          whatsapp: string
         }[]
       }
       get_clinic_admin_cliente_id: {
@@ -2127,6 +2145,20 @@ export type Database = {
       }
       search_doctor_by_name_llm: {
         Args: { p_cliente_id: string; p_nome_busca: string }
+        Returns: Json
+      }
+      sincronizar_cliente_llm: {
+        Args: {
+          p_cliente_id: string
+          p_data_minima_agendamento?: string
+          p_dias_busca_expandida?: number
+          p_dias_busca_inicial?: number
+          p_endereco?: string
+          p_mensagem_bloqueio_padrao?: string
+          p_nome_clinica?: string
+          p_telefone?: string
+          p_whatsapp?: string
+        }
         Returns: Json
       }
       test_whatsapp_edge_function: {
