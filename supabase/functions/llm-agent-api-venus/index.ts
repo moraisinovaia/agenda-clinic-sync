@@ -62,6 +62,18 @@ function getDiaSemana(data: string): number {
 
 const diasNomes = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 
+// Função auxiliar para calcular idade
+function calcularIdade(dataNascimento: string): number {
+  const hoje = new Date();
+  const nascimento = new Date(dataNascimento);
+  let idade = hoje.getFullYear() - nascimento.getFullYear();
+  const mes = hoje.getMonth() - nascimento.getMonth();
+  if (mes < 0 || (mes === 0 && hoje.getDate() < nascimento.getDate())) {
+    idade--;
+  }
+  return idade;
+}
+
 // Regras de negócio para Clínica Vênus
 const BUSINESS_RULES_VENUS = {
   medicos: {
@@ -126,6 +138,7 @@ const BUSINESS_RULES_VENUS = {
       nome: 'DRA. GABRIELA BATISTA',
       especialidade: 'Gastroenterologista',
       tipo_agendamento: 'hora_marcada',
+      idade_minima: 15, // Atende apenas pacientes com 15+ anos
       servicos: {
         'Consulta Gastroenterológica': {
           permite_online: true,
@@ -749,6 +762,24 @@ async function handleSchedule(supabase: any, body: any) {
 
   // Buscar regras do médico
   const regras = BUSINESS_RULES_VENUS.medicos[medico.id];
+
+  // Validar idade mínima (se configurada)
+  if (regras?.idade_minima && data_nascimento) {
+    const idade = calcularIdade(data_nascimento);
+    if (idade < regras.idade_minima) {
+      console.log(`❌ Idade incompatível: ${idade} anos < ${regras.idade_minima} anos mínimo`);
+      return businessErrorResponse({
+        codigo_erro: 'IDADE_INCOMPATIVEL',
+        mensagem_usuario: `❌ ${regras.nome} atende apenas pacientes com ${regras.idade_minima}+ anos.\n\n📋 Idade informada: ${idade} anos\n\n💡 Por favor, consulte outro profissional adequado para a faixa etária.`,
+        detalhes: {
+          medico: regras.nome,
+          idade_minima: regras.idade_minima,
+          idade_paciente: idade
+        }
+      });
+    }
+    console.log(`✅ Validação de idade OK: ${idade} anos >= ${regras.idade_minima} anos`);
+  }
   
   // Buscar atendimento
   let atendimento;
