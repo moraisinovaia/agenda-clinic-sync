@@ -89,8 +89,12 @@ export function EnhancedClinicCard({
                   <p className="text-xs text-muted-foreground">
                     {health.passedCount} de {health.totalCount} verificações passaram
                   </p>
+                  <div className="text-xs space-y-1 border-t pt-2">
+                    <p>{clinic.services_count ?? 0} serviços • {clinic.schedule_count ?? 0} horários config.</p>
+                    <p>{clinic.future_appointments} futuros • {clinic.last_30_days_count ?? 0} em 30 dias</p>
+                  </div>
                   {health.criticalIssues.length > 0 && (
-                    <div className="text-xs text-destructive">
+                    <div className="text-xs text-destructive border-t pt-2">
                       Problemas críticos: {health.criticalIssues.map(i => i.label).join(', ')}
                     </div>
                   )}
@@ -143,8 +147,12 @@ export function EnhancedClinicCard({
 
         {/* Additional stats row */}
         <div className="flex items-center justify-between text-xs text-muted-foreground mb-3 px-1">
-          <span>{clinic.future_appointments.toLocaleString('pt-BR')} agend. futuros</span>
-          <span>{clinic.users_count} usuário{clinic.users_count !== 1 ? 's' : ''}</span>
+          <span>{clinic.services_count ?? 0} serviço{(clinic.services_count ?? 0) !== 1 ? 's' : ''}</span>
+          <span className={cn(
+            (clinic.last_7_days_count ?? 0) > 0 ? 'text-green-600' : 'text-muted-foreground'
+          )}>
+            {clinic.last_7_days_count ?? 0} agend. 7d
+          </span>
         </div>
 
         {/* Action Buttons */}

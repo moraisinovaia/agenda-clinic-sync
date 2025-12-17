@@ -1797,6 +1797,14 @@ export type Database = {
         Args: { _user_id: string }
         Returns: string
       }
+      get_clinic_recent_activity: {
+        Args: never
+        Returns: {
+          agendamentos_30_dias: number
+          agendamentos_7_dias: number
+          cliente_id: string
+        }[]
+      }
       get_clinicas_para_signup: {
         Args: never
         Returns: {

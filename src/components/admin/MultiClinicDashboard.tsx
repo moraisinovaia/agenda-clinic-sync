@@ -87,10 +87,20 @@ export function MultiClinicDashboard() {
       setError(null);
 
       // Fetch clinic stats and extended config data in parallel
-      const [statsResult, llmConfigResult, businessRulesResult] = await Promise.all([
+      const [
+        statsResult, 
+        llmConfigResult, 
+        businessRulesResult,
+        atendimentosResult,
+        horariosResult,
+        atividadeResult
+      ] = await Promise.all([
         supabase.rpc('get_all_clinics_stats'),
         supabase.from('llm_clinic_config').select('cliente_id, telefone, whatsapp, endereco'),
-        supabase.from('business_rules').select('cliente_id').eq('ativo', true)
+        supabase.from('business_rules').select('cliente_id').eq('ativo', true),
+        supabase.from('atendimentos').select('cliente_id').eq('ativo', true),
+        supabase.from('horarios_configuracao').select('cliente_id').eq('ativo', true),
+        supabase.rpc('get_clinic_recent_activity')
       ]);
 
       if (statsResult.error) {
@@ -110,8 +120,33 @@ export function MultiClinicDashboard() {
           (businessRulesResult.data || []).map(r => r.cliente_id)
         );
 
+        // Count atendimentos per clinic
+        const atendimentosMap = new Map<string, number>();
+        (atendimentosResult.data || []).forEach(a => {
+          atendimentosMap.set(a.cliente_id, (atendimentosMap.get(a.cliente_id) || 0) + 1);
+        });
+
+        // Count horarios per clinic
+        const horariosMap = new Map<string, number>();
+        (horariosResult.data || []).forEach(h => {
+          horariosMap.set(h.cliente_id, (horariosMap.get(h.cliente_id) || 0) + 1);
+        });
+
+        // Map activity data
+        const atividadeMap = new Map<string, { agendamentos_7_dias: number; agendamentos_30_dias: number }>();
+        (atividadeResult.data || []).forEach((a: any) => {
+          atividadeMap.set(a.cliente_id, {
+            agendamentos_7_dias: Number(a.agendamentos_7_dias) || 0,
+            agendamentos_30_dias: Number(a.agendamentos_30_dias) || 0
+          });
+        });
+
         dashboardData.clinics = dashboardData.clinics.map(clinic => {
           const llmConfig = llmConfigs.get(clinic.id);
+          const servicesCount = atendimentosMap.get(clinic.id) || 0;
+          const horariosCount = horariosMap.get(clinic.id) || 0;
+          const atividade = atividadeMap.get(clinic.id);
+          
           return {
             ...clinic,
             has_llm_config: !!llmConfig,
@@ -120,8 +155,15 @@ export function MultiClinicDashboard() {
             telefone: llmConfig?.telefone,
             whatsapp: llmConfig?.whatsapp,
             endereco: llmConfig?.endereco,
-            has_services: clinic.doctors_count > 0, // Simplified check
-            has_schedule_config: clinic.doctors_count > 0 // Simplified check
+            // Real data checks
+            has_services: servicesCount > 0,
+            services_count: servicesCount,
+            has_schedule_config: horariosCount > 0 || clinic.doctors_count > 0,
+            schedule_count: horariosCount,
+            // Activity metrics
+            last_7_days_count: atividade?.agendamentos_7_dias || 0,
+            last_30_days_count: atividade?.agendamentos_30_dias || 0,
+            is_active_recently: (atividade?.agendamentos_7_dias || 0) > 0
           };
         });
       }
