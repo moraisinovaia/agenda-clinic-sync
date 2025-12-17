@@ -229,6 +229,7 @@ export type Database = {
           action: string
           audit_timestamp: string
           changed_fields: string[] | null
+          cliente_id: string | null
           created_at: string
           id: string
           ip_address: unknown
@@ -244,6 +245,7 @@ export type Database = {
           action: string
           audit_timestamp?: string
           changed_fields?: string[] | null
+          cliente_id?: string | null
           created_at?: string
           id?: string
           ip_address?: unknown
@@ -259,6 +261,7 @@ export type Database = {
           action?: string
           audit_timestamp?: string
           changed_fields?: string[] | null
+          cliente_id?: string | null
           created_at?: string
           id?: string
           ip_address?: unknown
@@ -270,7 +273,15 @@ export type Database = {
           user_agent?: string | null
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       backup_migracao_endogastro: {
         Row: {
@@ -681,6 +692,7 @@ export type Database = {
       fila_notificacoes: {
         Row: {
           canal_notificacao: string | null
+          cliente_id: string | null
           created_at: string
           data_agendamento: string
           fila_id: string
@@ -693,6 +705,7 @@ export type Database = {
         }
         Insert: {
           canal_notificacao?: string | null
+          cliente_id?: string | null
           created_at?: string
           data_agendamento: string
           fila_id: string
@@ -705,6 +718,7 @@ export type Database = {
         }
         Update: {
           canal_notificacao?: string | null
+          cliente_id?: string | null
           created_at?: string
           data_agendamento?: string
           fila_id?: string
@@ -716,6 +730,13 @@ export type Database = {
           tempo_limite?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "fila_notificacoes_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "fk_notif_fila"
             columns: ["fila_id"]
