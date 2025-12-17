@@ -2129,14 +2129,6 @@ export type Database = {
         }[]
       }
       get_email_by_username: { Args: { p_username: string }; Returns: string }
-      get_llm_business_rules: {
-        Args: { p_cliente_id: string }
-        Returns: {
-          config: Json
-          medico_id: string
-          medico_nome: string
-        }[]
-      }
       get_llm_clinic_config: {
         Args: { p_cliente_id: string }
         Returns: {

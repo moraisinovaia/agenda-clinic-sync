@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-// v3.0.0 - LLM Agent API para Clínica Vênus com configurações dinâmicas
+// v2.0.0 - LLM Agent API para Clínica Vênus (compatível com llm-agent-api)
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -10,28 +10,8 @@ const corsHeaders = {
 // 🏥 ID da Clínica Vênus
 const CLINICA_VENUS_ID = '20747f3c-8fa1-4f7e-8817-a55a8a6c8e0a';
 
-// ============= SISTEMA DE CACHE EM MEMÓRIA =============
-interface CacheData {
-  clinicConfig: {
-    data_minima_agendamento: string;
-    telefone: string;
-    whatsapp: string;
-    endereco: string;
-    nome_clinica: string;
-    dias_busca_inicial: number;
-    dias_busca_expandida: number;
-    mensagem_bloqueio_padrao: string;
-  };
-  businessRules: Record<string, any>;
-  mensagens: Array<{ id: string; tipo: string; medico_id: string | null; mensagem: string }>;
-  lastUpdated: number;
-}
-
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
-let globalCache: CacheData | null = null;
-
-// 📞 Valores default (fallback)
-const DEFAULT_CLINIC_INFO = {
+// 📞 Contatos da Clínica Vênus
+const CLINIC_INFO = {
   nome: 'Clínica Vênus',
   endereco: 'Rua das Orquídeas, 210 – Centro, Cidade Vênus – SP',
   whatsapp: '(11) 90000-0000',
@@ -45,271 +25,160 @@ const DEFAULT_CLINIC_INFO = {
   }
 };
 
-// Variável dinâmica para informações da clínica
-let CLINIC_INFO = { ...DEFAULT_CLINIC_INFO };
-
-// Variável dinâmica para regras de negócio (populada pelo cache)
-let BUSINESS_RULES_DYNAMIC: Record<string, any> = {};
-
-// Variável para mensagens personalizadas
-let CACHED_MENSAGENS: CacheData['mensagens'] = [];
-
-// Regras de negócio FALLBACK (usado apenas se banco não tiver dados)
-const BUSINESS_RULES_FALLBACK = {
-  // Dr. João Silva - Cardiologista - HORA MARCADA
-  '25440cf9-7832-4034-9e2a-9d8ee9b4d12d': {
-    nome: 'DR. JOÃO SILVA',
-    especialidade: 'Cardiologista',
-    tipo_agendamento: 'hora_marcada',
-    servicos: {
-      'Consulta Cardiológica': {
-        permite_online: true,
-        tipo: 'hora_marcada',
-        dias_semana: [1, 3, 5],
-        periodos: {
-          tarde: { 
-            inicio: '14:00', 
-            fim: '19:00', 
-            intervalo_minutos: 30,
-            limite: 6,
-            dias_especificos: [1, 3]
-          },
-          manha: { 
-            inicio: '08:00', 
-            fim: '12:00', 
-            intervalo_minutos: 30,
-            limite: 3,
-            dias_especificos: [5]
-          }
-        },
-        valor: 300.00,
-        retorno_gratuito_dias: 30,
-        convenios_aceitos: ['PARTICULAR', 'UNIMED 40%', 'UNIMED 20%', 'UNIMED REGIONAL', 'UNIMED INTERCAMBIO', 'UNIMED NACIONAL']
-      },
-      'Eletrocardiograma': {
-        permite_online: true,
-        tipo: 'hora_marcada',
-        dias_semana: [1, 3, 5],
-        periodos: {
-          tarde: { 
-            inicio: '14:00', 
-            fim: '19:00', 
-            intervalo_minutos: 20,
-            limite: 6,
-            dias_especificos: [1, 3]
-          },
-          manha: { 
-            inicio: '08:00', 
-            fim: '12:00', 
-            intervalo_minutos: 20,
-            limite: 3,
-            dias_especificos: [5]
-          }
-        },
-        valor: 150.00,
-        convenios_aceitos: ['PARTICULAR', 'UNIMED 40%', 'UNIMED 20%', 'UNIMED REGIONAL', 'UNIMED INTERCAMBIO', 'UNIMED NACIONAL']
-      }
-    }
-  },
+// 🌎 Função para obter data E HORA atual no fuso horário de São Paulo
+function getDataHoraAtualBrasil() {
+  const agora = new Date();
+  const brasilTime = agora.toLocaleString('pt-BR', { 
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
   
-  // Dra. Gabriela Batista - Gastroenterologista - ORDEM DE CHEGADA
-  '4361d620-4c9b-4602-aab1-e835cc63c8a2': {
-    nome: 'DRA. GABRIELA BATISTA',
-    especialidade: 'Gastroenterologista',
-    tipo_agendamento: 'ordem_chegada',
-    idade_minima: 15,
-    servicos: {
-      'Consulta Gastroenterológica': {
-        permite_online: true,
-        tipo: 'ordem_chegada',
-        dias_semana: [2, 4, 6],
-        periodos: {
-          integral: { 
-            inicio: '08:00', 
-            fim: '16:00', 
-            limite: 6,
-            distribuicao_fichas: '08:00 às 16:00',
-            dias_especificos: [2, 4]
+  const [data, hora] = brasilTime.split(', ');
+  const [dia, mes, ano] = data.split('/');
+  const [horaNum, minutoNum] = hora.split(':').map(Number);
+  
+  return {
+    data: `${ano}-${mes}-${dia}`,
+    hora: horaNum,
+    minuto: minutoNum,
+    horarioEmMinutos: horaNum * 60 + minutoNum
+  };
+}
+
+function getDataAtualBrasil(): string {
+  return getDataHoraAtualBrasil().data;
+}
+
+// Função auxiliar para obter dia da semana (0=dom, 1=seg, ...)
+function getDiaSemana(data: string): number {
+  const [ano, mes, dia] = data.split('-').map(Number);
+  return new Date(ano, mes - 1, dia).getDay();
+}
+
+const diasNomes = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+
+// Regras de negócio para Clínica Vênus
+const BUSINESS_RULES_VENUS = {
+  medicos: {
+    // Dr. João Silva - Cardiologista - HORA MARCADA
+    '25440cf9-7832-4034-9e2a-9d8ee9b4d12d': {
+      nome: 'DR. JOÃO SILVA',
+      especialidade: 'Cardiologista',
+      tipo_agendamento: 'hora_marcada',
+      servicos: {
+        'Consulta Cardiológica': {
+          permite_online: true,
+          tipo: 'hora_marcada',
+          dias_semana: [1, 3, 5], // segunda, quarta, sexta
+          periodos: {
+            tarde: { 
+              inicio: '14:00', 
+              fim: '19:00', 
+              intervalo_minutos: 30,
+              limite: 6, // 6 pacientes seg/qua
+              dias_especificos: [1, 3] // seg e qua
+            },
+            manha: { 
+              inicio: '08:00', 
+              fim: '12:00', 
+              intervalo_minutos: 30,
+              limite: 3, // 3 pacientes sexta
+              dias_especificos: [5] // sexta
+            }
           },
-          manha: { 
-            inicio: '08:00', 
-            fim: '12:00', 
-            limite: 6,
-            distribuicao_fichas: '08:00 às 12:00',
-            dias_especificos: [6]
-          }
+          valor: 300.00,
+          retorno_gratuito_dias: 30,
+          convenios_aceitos: ['PARTICULAR', 'UNIMED 40%', 'UNIMED 20%', 'UNIMED REGIONAL', 'UNIMED INTERCAMBIO', 'UNIMED NACIONAL']
         },
-        valor: 280.00,
-        retorno_gratuito_dias: 20,
-        convenios_aceitos: ['PARTICULAR', 'UNIMED 40%', 'UNIMED 20%', 'UNIMED REGIONAL', 'UNIMED INTERCAMBIO', 'UNIMED NACIONAL']
-      },
-      'Endoscopia Digestiva Alta': {
-        permite_online: true,
-        tipo: 'ordem_chegada',
-        dias_semana: [2, 4, 6],
-        periodos: {
-          integral: { 
-            inicio: '08:00', 
-            fim: '16:00', 
-            limite: 6,
-            distribuicao_fichas: '08:00 às 16:00',
-            dias_especificos: [2, 4]
+        'Eletrocardiograma': {
+          permite_online: true,
+          tipo: 'hora_marcada',
+          dias_semana: [1, 3, 5],
+          periodos: {
+            tarde: { 
+              inicio: '14:00', 
+              fim: '19:00', 
+              intervalo_minutos: 20,
+              limite: 6,
+              dias_especificos: [1, 3]
+            },
+            manha: { 
+              inicio: '08:00', 
+              fim: '12:00', 
+              intervalo_minutos: 20,
+              limite: 3,
+              dias_especificos: [5]
+            }
           },
-          manha: { 
-            inicio: '08:00', 
-            fim: '12:00', 
-            limite: 6,
-            distribuicao_fichas: '08:00 às 12:00',
-            dias_especificos: [6]
-          }
+          valor: 150.00,
+          convenios_aceitos: ['PARTICULAR', 'UNIMED 40%', 'UNIMED 20%', 'UNIMED REGIONAL', 'UNIMED INTERCAMBIO', 'UNIMED NACIONAL']
+        }
+      }
+    },
+    
+    // Dra. Gabriela Batista - Gastroenterologista - HORA MARCADA
+    '4361d620-4c9b-4602-aab1-e835cc63c8a2': {
+      nome: 'DRA. GABRIELA BATISTA',
+      especialidade: 'Gastroenterologista',
+      tipo_agendamento: 'hora_marcada',
+      servicos: {
+        'Consulta Gastroenterológica': {
+          permite_online: true,
+          tipo: 'hora_marcada',
+          dias_semana: [2, 4, 6], // terça, quinta, sábado
+          periodos: {
+            integral: { 
+              inicio: '08:00', 
+              fim: '16:00', 
+              intervalo_minutos: 30,
+              limite: 8, // 8 pacientes ter/qui
+              dias_especificos: [2, 4] // ter e qui
+            },
+            manha: { 
+              inicio: '08:00', 
+              fim: '12:00', 
+              intervalo_minutos: 30,
+              limite: 4, // 4 pacientes sábado
+              dias_especificos: [6] // sábado
+            }
+          },
+          valor: 280.00,
+          retorno_gratuito_dias: 20,
+          convenios_aceitos: ['PARTICULAR', 'UNIMED 40%', 'UNIMED 20%', 'UNIMED REGIONAL', 'UNIMED INTERCAMBIO', 'UNIMED NACIONAL']
         },
-        valor: 500.00,
-        convenios_aceitos: ['PARTICULAR', 'UNIMED 40%', 'UNIMED 20%', 'UNIMED REGIONAL', 'UNIMED INTERCAMBIO', 'UNIMED NACIONAL'],
-        requer_preparo: true
+        'Endoscopia Digestiva Alta': {
+          permite_online: true,
+          tipo: 'hora_marcada',
+          dias_semana: [2, 4, 6],
+          periodos: {
+            integral: { 
+              inicio: '08:00', 
+              fim: '16:00', 
+              intervalo_minutos: 30,
+              limite: 8, // 8 pacientes ter/qui
+              dias_especificos: [2, 4]
+            },
+            manha: { 
+              inicio: '08:00', 
+              fim: '12:00', 
+              intervalo_minutos: 30,
+              limite: 4, // 4 pacientes sábado
+              dias_especificos: [6]
+            }
+          },
+          valor: 500.00,
+          convenios_aceitos: ['PARTICULAR', 'UNIMED 40%', 'UNIMED 20%', 'UNIMED REGIONAL', 'UNIMED INTERCAMBIO', 'UNIMED NACIONAL'],
+          requer_preparo: true
+        }
       }
     }
   }
 };
-
-/**
- * Carrega dados do banco de dados e popula o cache
- */
-async function loadClinicData(supabase: any): Promise<CacheData> {
-  const now = Date.now();
-  
-  // Verificar se cache ainda é válido
-  if (globalCache && (now - globalCache.lastUpdated) < CACHE_TTL_MS) {
-    console.log('📦 [CACHE] Usando dados do cache (válido por mais ' + 
-      Math.round((CACHE_TTL_MS - (now - globalCache.lastUpdated)) / 1000) + 's)');
-    return globalCache;
-  }
-  
-  console.log('🔄 [CACHE] Atualizando dados do banco de dados...');
-  
-  try {
-    // Buscar dados em paralelo
-    const [configResult, rulesResult, mensagensResult] = await Promise.all([
-      supabase.rpc('get_llm_clinic_config', { p_cliente_id: CLINICA_VENUS_ID }),
-      supabase.rpc('get_llm_business_rules', { p_cliente_id: CLINICA_VENUS_ID }),
-      supabase.rpc('get_llm_mensagens', { p_cliente_id: CLINICA_VENUS_ID })
-    ]);
-    
-    // Processar configuração da clínica
-    const dbConfig = configResult.data?.[0];
-    const clinicConfig = {
-      data_minima_agendamento: dbConfig?.data_minima_agendamento || '',
-      telefone: dbConfig?.telefone || DEFAULT_CLINIC_INFO.telefone,
-      whatsapp: dbConfig?.whatsapp || DEFAULT_CLINIC_INFO.whatsapp,
-      endereco: dbConfig?.endereco || DEFAULT_CLINIC_INFO.endereco,
-      nome_clinica: dbConfig?.nome_clinica || DEFAULT_CLINIC_INFO.nome,
-      dias_busca_inicial: dbConfig?.dias_busca_inicial || 14,
-      dias_busca_expandida: dbConfig?.dias_busca_expandida || 45,
-      mensagem_bloqueio_padrao: dbConfig?.mensagem_bloqueio_padrao || 'Entre em contato com a clínica.'
-    };
-    
-    // Atualizar CLINIC_INFO com dados do banco
-    CLINIC_INFO = {
-      ...DEFAULT_CLINIC_INFO,
-      nome: clinicConfig.nome_clinica,
-      endereco: clinicConfig.endereco,
-      telefone: clinicConfig.telefone,
-      whatsapp: clinicConfig.whatsapp
-    };
-    
-    // Processar regras de negócio (transformar em objeto por medico_id)
-    const businessRules: Record<string, any> = {};
-    for (const rule of rulesResult.data || []) {
-      // O config já contém nome, tipo_agendamento, servicos, etc.
-      businessRules[rule.medico_id] = {
-        ...rule.config,
-        nome: rule.medico_nome || rule.config?.nome // Garantir que o nome do médico esteja presente
-      };
-    }
-    
-    // Se não encontrou regras no banco, usar fallback
-    if (Object.keys(businessRules).length === 0) {
-      console.log('⚠️ [CACHE] Nenhuma regra no banco, usando fallback hardcoded');
-      Object.assign(businessRules, BUSINESS_RULES_FALLBACK);
-    }
-    
-    // Atualizar variável dinâmica
-    BUSINESS_RULES_DYNAMIC = businessRules;
-    
-    // Processar mensagens
-    const mensagens = mensagensResult.data || [];
-    CACHED_MENSAGENS = mensagens;
-    
-    // Atualizar cache
-    globalCache = {
-      clinicConfig,
-      businessRules,
-      mensagens,
-      lastUpdated: now
-    };
-    
-    console.log(`✅ [CACHE] Atualizado: ${Object.keys(businessRules).length} médicos, ${mensagens.length} mensagens`);
-    console.log(`📍 [CACHE] Clínica: ${CLINIC_INFO.nome} | WhatsApp: ${CLINIC_INFO.whatsapp}`);
-    
-    return globalCache;
-    
-  } catch (error) {
-    console.error('❌ [CACHE] Erro ao carregar dados do banco:', error);
-    
-    // Se já tem cache (mesmo expirado), usar como fallback
-    if (globalCache) {
-      console.log('⚠️ [CACHE] Usando cache expirado como fallback');
-      return globalCache;
-    }
-    
-    // Retornar dados default
-    console.log('⚠️ [CACHE] Usando configuração fallback hardcoded');
-    BUSINESS_RULES_DYNAMIC = BUSINESS_RULES_FALLBACK;
-    
-    return {
-      clinicConfig: {
-        data_minima_agendamento: '',
-        telefone: DEFAULT_CLINIC_INFO.telefone,
-        whatsapp: DEFAULT_CLINIC_INFO.whatsapp,
-        endereco: DEFAULT_CLINIC_INFO.endereco,
-        nome_clinica: DEFAULT_CLINIC_INFO.nome,
-        dias_busca_inicial: 14,
-        dias_busca_expandida: 45,
-        mensagem_bloqueio_padrao: 'Entre em contato com a clínica.'
-      },
-      businessRules: BUSINESS_RULES_FALLBACK,
-      mensagens: [],
-      lastUpdated: now
-    };
-  }
-}
-
-/**
- * Busca mensagem personalizada do cache
- */
-function getCachedMessage(tipo: string, medicoId?: string): string | null {
-  // 1. Buscar mensagem específica do médico
-  if (medicoId) {
-    const msgMedico = CACHED_MENSAGENS.find(m => 
-      m.medico_id === medicoId && m.tipo === tipo
-    );
-    if (msgMedico) return msgMedico.mensagem;
-  }
-  
-  // 2. Buscar mensagem global (sem médico)
-  const msgGlobal = CACHED_MENSAGENS.find(m => 
-    !m.medico_id && m.tipo === tipo
-  );
-  if (msgGlobal) return msgGlobal.mensagem;
-  
-  return null;
-}
-
-/**
- * Retorna as regras de negócio do médico (dinâmicas ou fallback)
- */
-function getMedicoRules(medicoId: string): any {
-  return BUSINESS_RULES_DYNAMIC[medicoId] || BUSINESS_RULES_FALLBACK[medicoId] || null;
-}
 
 // ============= FUNÇÕES DE RESPOSTA =============
 
@@ -601,7 +470,7 @@ async function handleAvailability(supabase: any, body: any) {
     });
   }
 
-  const regras = getMedicoRules(medico.id);
+  const regras = BUSINESS_RULES_VENUS.medicos[medico.id];
   if (!regras) {
     return businessErrorResponse({
       codigo_erro: 'MEDICO_SEM_REGRAS',
@@ -879,25 +748,7 @@ async function handleSchedule(supabase: any, body: any) {
   }
 
   // Buscar regras do médico
-  const regras = getMedicoRules(medico.id);
-
-  // Validar idade mínima (se configurada)
-  if (regras?.idade_minima && data_nascimento) {
-    const idade = calcularIdade(data_nascimento);
-    if (idade < regras.idade_minima) {
-      console.log(`❌ Idade incompatível: ${idade} anos < ${regras.idade_minima} anos mínimo`);
-      return businessErrorResponse({
-        codigo_erro: 'IDADE_INCOMPATIVEL',
-        mensagem_usuario: `❌ ${regras.nome} atende apenas pacientes com ${regras.idade_minima}+ anos.\n\n📋 Idade informada: ${idade} anos\n\n💡 Por favor, consulte outro profissional adequado para a faixa etária.`,
-        detalhes: {
-          medico: regras.nome,
-          idade_minima: regras.idade_minima,
-          idade_paciente: idade
-        }
-      });
-    }
-    console.log(`✅ Validação de idade OK: ${idade} anos >= ${regras.idade_minima} anos`);
-  }
+  const regras = BUSINESS_RULES_VENUS.medicos[medico.id];
   
   // Buscar atendimento
   let atendimento;
@@ -1543,7 +1394,7 @@ async function handleListDoctors(supabase: any) {
   let mensagem = `👨‍⚕️ MÉDICOS DA CLÍNICA VÊNUS:\n\n`;
   
   medicos?.forEach((m: any) => {
-    const regras = getMedicoRules(m.id);
+    const regras = BUSINESS_RULES_VENUS.medicos[m.id];
     mensagem += `• ${m.nome}\n`;
     mensagem += `  ${m.especialidade}\n`;
     if (regras) {
@@ -1564,7 +1415,7 @@ async function handleListDoctors(supabase: any) {
       nome: m.nome,
       especialidade: m.especialidade,
       convenios: m.convenios_aceitos,
-      tipo_agendamento: getMedicoRules(m.id)?.tipo_agendamento || 'hora_marcada'
+      tipo_agendamento: BUSINESS_RULES_VENUS.medicos[m.id]?.tipo_agendamento || 'hora_marcada'
     })),
     mensagem_whatsapp: mensagem,
     message: mensagem
@@ -1583,14 +1434,11 @@ serve(async (req) => {
     const pathSegments = url.pathname.split('/').filter(Boolean);
     const action = pathSegments[pathSegments.length - 1];
 
-    console.log(`\n🏥 [CLÍNICA VÊNUS v3.0] Ação: ${action}`);
+    console.log(`\n🏥 [CLÍNICA VÊNUS v2.0] Ação: ${action}`);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
-
-    // 🔄 Carregar configurações dinâmicas do banco de dados
-    await loadClinicData(supabase);
 
     const body = req.method === 'POST' ? await req.json() : {};
 
