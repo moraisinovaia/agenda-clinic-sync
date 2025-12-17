@@ -59,12 +59,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     
     fetchPromiseRef.current = measureApiCall(async () => {
       try {
-        // ⚡ FASE 1.1: Reduzir de 3 para 1 mês (era -3)
-        const threeMonthsAgo = new Date();
-        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 1);
-        const dateFilter = threeMonthsAgo.toISOString().split('T')[0];
-        
-        console.log('📅 [FILTRO] Buscando desde:', dateFilter);
+        // 🔥 SEM FILTRO DE DATA - Carregar TODOS os agendamentos
+        console.log('📅 [FILTRO] Buscando TODOS os agendamentos (sem filtro de data)');
         
         // 🔥 PAGINAÇÃO MANUAL - Buscar em blocos de 1000
         let allAppointments: any[] = [];
@@ -105,7 +101,6 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
                 )
               `, { count: 'exact' })
             .is('excluido_em', null)
-            .gte('data_agendamento', dateFilter)
             .order('data_agendamento', { ascending: false })
             .order('hora_agendamento', { ascending: false })
             .range(start, end);
@@ -158,9 +153,9 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           }
           // ❌ REMOVIDO: else if (pageData.length < pageSize) - Causava parada prematura
           
-          // ⚡ FASE 1.2: Reduzir limite de 5 para 2 páginas (era 5)
-          if (currentPage >= 2) {
-            console.warn('⚠️ Limite: 2 páginas (2000 registros)');
+          // ✅ Aumentado para 10 páginas (10.000 registros) para garantir todos os dados
+          if (currentPage >= 10) {
+            console.warn('⚠️ Limite: 10 páginas (10.000 registros)');
             hasMore = false;
           }
         }
