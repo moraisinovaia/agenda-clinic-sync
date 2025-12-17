@@ -272,6 +272,30 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_migracao_endogastro: {
+        Row: {
+          created_at: string | null
+          dados: Json
+          id: string
+          tabela_origem: string
+          total_registros: number
+        }
+        Insert: {
+          created_at?: string | null
+          dados: Json
+          id?: string
+          tabela_origem: string
+          total_registros: number
+        }
+        Update: {
+          created_at?: string | null
+          dados?: Json
+          id?: string
+          tabela_origem?: string
+          total_registros?: number
+        }
+        Relationships: []
+      }
       bloqueios_agenda: {
         Row: {
           cliente_id: string
