@@ -26,6 +26,7 @@ import { ClinicManagementPanel } from '@/components/admin/ClinicManagementPanel'
 import { DoctorManagementPanel } from '@/components/admin/DoctorManagementPanel';
 import { ServiceManagementPanel } from '@/components/admin/ServiceManagementPanel';
 import DoctorScheduleConfigPanel from '@/components/admin/DoctorScheduleConfigPanel';
+import { MultiClinicDashboard } from '@/components/admin/MultiClinicDashboard';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   LazyDashboard, 
@@ -590,13 +591,19 @@ const Index = () => {
             {/* Admin view - gerenciamento de usuários, médicos, serviços */}
             {(isAdmin || isClinicAdmin) ? (
               <Tabs defaultValue="usuarios" className="w-full">
-                <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-5' : 'grid-cols-4'} max-w-3xl mb-6`}>
+                <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-6' : 'grid-cols-4'} max-w-4xl mb-6`}>
+                  {isAdmin && <TabsTrigger value="dashboard">Dashboard</TabsTrigger>}
                   <TabsTrigger value="usuarios">Usuários</TabsTrigger>
                   {isAdmin && <TabsTrigger value="clinicas">Clínicas</TabsTrigger>}
                   <TabsTrigger value="medicos">Médicos</TabsTrigger>
                   <TabsTrigger value="servicos">Serviços</TabsTrigger>
                   <TabsTrigger value="horarios">Horários</TabsTrigger>
                 </TabsList>
+                {isAdmin && (
+                  <TabsContent value="dashboard">
+                    <MultiClinicDashboard />
+                  </TabsContent>
+                )}
                 <TabsContent value="usuarios">
                   <UserApprovalPanel />
                 </TabsContent>
