@@ -2069,6 +2069,10 @@ export type Database = {
           schedule: string
         }[]
       }
+      get_business_rule_for_doctor: {
+        Args: { p_cliente_id: string; p_medico_id: string }
+        Returns: Json
+      }
       get_business_rules_by_cliente: {
         Args: { p_cliente_id: string }
         Returns: {
@@ -2162,6 +2166,10 @@ export type Database = {
           nome: string
           observacoes: string
         }[]
+      }
+      get_mensagem_personalizada: {
+        Args: { p_cliente_id: string; p_medico_id?: string; p_tipo: string }
+        Returns: string
       }
       get_pending_users: {
         Args: never
@@ -2387,6 +2395,10 @@ export type Database = {
           user_id: string
         }[]
       }
+      load_llm_config_for_clinic: {
+        Args: { p_cliente_id: string }
+        Returns: Json
+      }
       log_access_audit: {
         Args: { p_action: string; p_details?: Json; p_resource: string }
         Returns: undefined
@@ -2432,6 +2444,10 @@ export type Database = {
         Args: { p_aprovador_user_id: string; p_user_id: string }
         Returns: Json
       }
+      search_doctor_by_name_llm: {
+        Args: { p_cliente_id: string; p_nome_busca: string }
+        Returns: Json
+      }
       test_whatsapp_edge_function: {
         Args: {
           p_atendimento?: string
@@ -2446,6 +2462,10 @@ export type Database = {
       text_to_bytea: { Args: { data: string }; Returns: string }
       toggle_backup_cron: { Args: { enable_cron: boolean }; Returns: boolean }
       update_client_metrics: { Args: never; Returns: undefined }
+      upsert_business_rule: {
+        Args: { p_cliente_id: string; p_config: Json; p_medico_id: string }
+        Returns: Json
+      }
       urlencode:
         | { Args: { data: Json }; Returns: string }
         | {
