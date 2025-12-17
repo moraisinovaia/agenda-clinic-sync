@@ -4,7 +4,15 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+import { useStableAuth } from '@/hooks/useStableAuth';
 import { 
   Building2, 
   Users, 
@@ -17,7 +25,12 @@ import {
   AlertCircle,
   LayoutGrid,
   BarChart3,
-  Shield
+  Shield,
+  Phone,
+  MapPin,
+  MessageSquare,
+  Loader2,
+  Save
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -73,6 +86,18 @@ const BAR_COLORS = {
   hoje: '#F59E0B',     // Laranja
 };
 
+interface EditFormData {
+  nome: string;
+  telefone: string;
+  whatsapp: string;
+  endereco: string;
+  ativo: boolean;
+  data_minima_agendamento: string;
+  dias_busca_inicial: number;
+  dias_busca_expandida: number;
+  mensagem_bloqueio_padrao: string;
+}
+
 export function MultiClinicDashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -80,6 +105,22 @@ export function MultiClinicDashboard() {
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [selectedClinic, setSelectedClinic] = useState<ClinicHealthData | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
+  const [showManageModal, setShowManageModal] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editFormData, setEditFormData] = useState<EditFormData>({
+    nome: '',
+    telefone: '',
+    whatsapp: '',
+    endereco: '',
+    ativo: true,
+    data_minima_agendamento: '',
+    dias_busca_inicial: 14,
+    dias_busca_expandida: 45,
+    mensagem_bloqueio_padrao: ''
+  });
+  
+  const { toast } = useToast();
+  const { profile } = useStableAuth();
 
   const fetchData = useCallback(async () => {
     try {
@@ -245,6 +286,91 @@ export function MultiClinicDashboard() {
     if (clinic) {
       setSelectedClinic(clinic);
       setActiveTab('onboarding');
+    }
+  };
+
+  const handleOpenManageModal = async (clinic: ClinicHealthData) => {
+    setSelectedClinic(clinic);
+    setEditFormData({
+      nome: clinic.nome,
+      telefone: clinic.telefone || '',
+      whatsapp: clinic.whatsapp || '',
+      endereco: clinic.endereco || '',
+      ativo: clinic.ativo !== false,
+      data_minima_agendamento: '',
+      dias_busca_inicial: 14,
+      dias_busca_expandida: 45,
+      mensagem_bloqueio_padrao: ''
+    });
+    
+    // Fetch LLM config
+    const { data: llmConfig } = await supabase
+      .from('llm_clinic_config')
+      .select('*')
+      .eq('cliente_id', clinic.id)
+      .maybeSingle();
+    
+    if (llmConfig) {
+      setEditFormData(prev => ({
+        ...prev,
+        data_minima_agendamento: llmConfig.data_minima_agendamento || '',
+        dias_busca_inicial: llmConfig.dias_busca_inicial || 14,
+        dias_busca_expandida: llmConfig.dias_busca_expandida || 45,
+        mensagem_bloqueio_padrao: llmConfig.mensagem_bloqueio_padrao || ''
+      }));
+    }
+    
+    setShowManageModal(true);
+  };
+
+  const handleSaveClinic = async () => {
+    if (!selectedClinic) return;
+    
+    setSaving(true);
+    try {
+      // Update basic clinic data
+      const { error: updateError } = await supabase.rpc('atualizar_cliente', {
+        p_cliente_id: selectedClinic.id,
+        p_nome: editFormData.nome,
+        p_ativo: editFormData.ativo,
+        p_telefone: editFormData.telefone || null,
+        p_whatsapp: editFormData.whatsapp || null,
+        p_endereco: editFormData.endereco || null,
+        p_admin_user_id: profile?.user_id
+      });
+
+      if (updateError) throw updateError;
+
+      // Sync LLM config
+      const { error: llmError } = await supabase.rpc('sincronizar_cliente_llm', {
+        p_cliente_id: selectedClinic.id,
+        p_nome_clinica: editFormData.nome,
+        p_telefone: editFormData.telefone || null,
+        p_whatsapp: editFormData.whatsapp || null,
+        p_endereco: editFormData.endereco || null,
+        p_data_minima_agendamento: editFormData.data_minima_agendamento || null,
+        p_dias_busca_inicial: editFormData.dias_busca_inicial,
+        p_dias_busca_expandida: editFormData.dias_busca_expandida,
+        p_mensagem_bloqueio_padrao: editFormData.mensagem_bloqueio_padrao || null
+      });
+
+      if (llmError) console.error('Erro ao sincronizar LLM config:', llmError);
+
+      toast({
+        title: 'Sucesso',
+        description: 'Clínica atualizada com sucesso',
+      });
+
+      setShowManageModal(false);
+      fetchData();
+    } catch (error: any) {
+      toast({
+        title: 'Erro',
+        description: error.message || 'Erro ao atualizar clínica',
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -428,7 +554,7 @@ export function MultiClinicDashboard() {
                 <EnhancedClinicCard
                   key={clinic.id}
                   clinic={clinic}
-                  onManage={() => setSelectedClinic(clinic)}
+                  onManage={() => handleOpenManageModal(clinic)}
                   onConfigureLLM={() => {
                     setSelectedClinic(clinic);
                     setActiveTab('onboarding');
@@ -640,6 +766,162 @@ export function MultiClinicDashboard() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Modal de Gerenciamento */}
+      <Dialog open={showManageModal} onOpenChange={setShowManageModal}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5" />
+              Gerenciar {selectedClinic?.nome}
+            </DialogTitle>
+            <DialogDescription>
+              Edite os dados da clínica e configurações da API LLM
+            </DialogDescription>
+          </DialogHeader>
+
+          <Tabs defaultValue="basic" className="mt-4">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="basic">Dados Básicos</TabsTrigger>
+              <TabsTrigger value="llm">Config LLM</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="basic" className="space-y-4 mt-4">
+              <div className="space-y-2">
+                <Label htmlFor="nome">Nome da Clínica</Label>
+                <Input
+                  id="nome"
+                  value={editFormData.nome}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, nome: e.target.value }))}
+                  placeholder="Nome da clínica"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="telefone" className="flex items-center gap-1">
+                    <Phone className="h-3 w-3" />
+                    Telefone
+                  </Label>
+                  <Input
+                    id="telefone"
+                    value={editFormData.telefone}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, telefone: e.target.value }))}
+                    placeholder="(XX) XXXX-XXXX"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="whatsapp" className="flex items-center gap-1">
+                    <MessageSquare className="h-3 w-3" />
+                    WhatsApp
+                  </Label>
+                  <Input
+                    id="whatsapp"
+                    value={editFormData.whatsapp}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, whatsapp: e.target.value }))}
+                    placeholder="(XX) XXXXX-XXXX"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="endereco" className="flex items-center gap-1">
+                  <MapPin className="h-3 w-3" />
+                  Endereço
+                </Label>
+                <Textarea
+                  id="endereco"
+                  value={editFormData.endereco}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, endereco: e.target.value }))}
+                  placeholder="Endereço completo"
+                  rows={2}
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="ativo"
+                  checked={editFormData.ativo}
+                  onCheckedChange={(checked) => setEditFormData(prev => ({ ...prev, ativo: checked }))}
+                />
+                <Label htmlFor="ativo">Clínica ativa</Label>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="llm" className="space-y-4 mt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="dias_busca_inicial">Dias Busca Inicial</Label>
+                  <Input
+                    id="dias_busca_inicial"
+                    type="number"
+                    value={editFormData.dias_busca_inicial}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, dias_busca_inicial: parseInt(e.target.value) || 14 }))}
+                    min={1}
+                    max={90}
+                  />
+                  <p className="text-xs text-muted-foreground">Período inicial para buscar horários</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="dias_busca_expandida">Dias Busca Expandida</Label>
+                  <Input
+                    id="dias_busca_expandida"
+                    type="number"
+                    value={editFormData.dias_busca_expandida}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, dias_busca_expandida: parseInt(e.target.value) || 45 }))}
+                    min={1}
+                    max={180}
+                  />
+                  <p className="text-xs text-muted-foreground">Período expandido se não houver vagas</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="data_minima">Data Mínima de Agendamento</Label>
+                <Input
+                  id="data_minima"
+                  type="date"
+                  value={editFormData.data_minima_agendamento}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, data_minima_agendamento: e.target.value }))}
+                />
+                <p className="text-xs text-muted-foreground">Data mínima para aceitar agendamentos (deixe vazio para usar hoje)</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="mensagem_bloqueio">Mensagem de Bloqueio Padrão</Label>
+                <Textarea
+                  id="mensagem_bloqueio"
+                  value={editFormData.mensagem_bloqueio_padrao}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, mensagem_bloqueio_padrao: e.target.value }))}
+                  placeholder="Mensagem exibida quando a agenda está bloqueada..."
+                  rows={3}
+                />
+              </div>
+            </TabsContent>
+          </Tabs>
+
+          <Separator className="my-4" />
+
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setShowManageModal(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveClinic} disabled={saving}>
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Salvar
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
