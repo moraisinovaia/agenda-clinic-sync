@@ -1814,6 +1814,7 @@ export type Database = {
           user_name: string
         }[]
       }
+      get_all_clinics_stats: { Args: never; Returns: Json }
       get_approved_users_for_clinic: {
         Args: { p_cliente_id: string }
         Returns: {
