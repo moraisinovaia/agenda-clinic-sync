@@ -2834,7 +2834,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
     }
     
     // 🔍 BUSCAR REGRAS DE NEGÓCIO E CONFIGURAÇÃO DO SERVIÇO (declarar uma única vez)
-    let regras = getMedicoRules(dynamicConfig, medico.id, BUSINESS_RULES.medicos[medico.id]);
+    let regras = getMedicoRules(config, medico.id, BUSINESS_RULES.medicos[medico.id]);
     let servicoKey = Object.keys(regras?.servicos || {}).find(s => 
       s.toLowerCase().includes(atendimento_nome.toLowerCase()) ||
       atendimento_nome.toLowerCase().includes(s.toLowerCase())
@@ -3240,7 +3240,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
 
     // Buscar regras de negócio (reutilizar se já existe)
     console.log(`🔍 Buscando regras para médico ID: ${medico.id}, Nome: ${medico.nome}`);
-    if (!regras) regras = BUSINESS_RULES.medicos[medico.id];
+    if (!regras) regras = getMedicoRules(config, medico.id, BUSINESS_RULES.medicos[medico.id]);
     if (!regras) {
       console.error(`❌ Regras não encontradas para médico ${medico.nome} (ID: ${medico.id})`);
       console.error(`📋 IDs disponíveis nas BUSINESS_RULES:`, Object.keys(BUSINESS_RULES.medicos));
