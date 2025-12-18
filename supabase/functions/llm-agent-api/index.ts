@@ -4075,6 +4075,112 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         // Verificar disponibilidade para esta data
         const periodosDisponiveis = [];
         
+        // 🔧 CORREÇÃO: Serviços sem periodos próprios (ex: ligadura_hemorroidas) que compartilham limite
+        // Usar lógica especial para verificar vagas via limites compartilhados
+        const servicoSemPeriodos = !servico.periodos || Object.keys(servico.periodos).length === 0;
+        const compartilhaLimite = servico.compartilha_limite_com;
+        const ehHoraMarcada = (servico.tipo_agendamento === 'hora_marcada' || servico.tipo === 'procedimento');
+        
+        if (servicoSemPeriodos && compartilhaLimite) {
+          console.log(`🔄 [SERVIÇO SEM PERIODOS] ${servicoKey} compartilha limite com ${compartilhaLimite}`);
+          
+          // Buscar atendimento_id para o cálculo de sublimite
+          let atendimentoId: string | null = null;
+          if (!servico.atendimento_id) {
+            const { data: atendData } = await supabase
+              .from('atendimentos')
+              .select('id')
+              .eq('medico_id', medico.id)
+              .eq('cliente_id', clienteId)
+              .eq('ativo', true)
+              .ilike('nome', `%${servicoKey.replace(/_/g, '%')}%`)
+              .maybeSingle();
+            atendimentoId = atendData?.id || null;
+          } else {
+            atendimentoId = servico.atendimento_id;
+          }
+          
+          // Calcular vagas disponíveis considerando pool compartilhado e sublimite
+          const servicoConfigComAtendId = { ...servico, atendimento_id: atendimentoId };
+          const vagasDisponiveis = await calcularVagasDisponiveisComLimites(
+            supabase,
+            medico.id,
+            clienteId,
+            dataFormatada,
+            servicoConfigComAtendId,
+            regras
+          );
+          
+          console.log(`📊 [LIMITE COMPARTILHADO] ${servicoKey} em ${dataFormatada}: ${vagasDisponiveis} vagas`);
+          
+          if (vagasDisponiveis > 0) {
+            // Para hora_marcada, verificar horários vazios disponíveis
+            if (ehHoraMarcada) {
+              // Buscar horários vazios para esta data
+              const { data: horariosVazios, error: horariosError } = await supabase
+                .from('horarios_vazios')
+                .select('hora')
+                .eq('medico_id', medico.id)
+                .eq('cliente_id', clienteId)
+                .eq('data', dataFormatada)
+                .eq('status', 'disponivel')
+                .order('hora', { ascending: true });
+              
+              if (!horariosError && horariosVazios && horariosVazios.length > 0) {
+                // Filtrar horários já ocupados
+                const { data: agendamentosExistentes } = await supabase
+                  .from('agendamentos')
+                  .select('hora_agendamento')
+                  .eq('medico_id', medico.id)
+                  .eq('data_agendamento', dataFormatada)
+                  .eq('cliente_id', clienteId)
+                  .is('excluido_em', null)
+                  .in('status', ['agendado', 'confirmado']);
+                
+                const horariosOcupados = new Set(agendamentosExistentes?.map(a => a.hora_agendamento) || []);
+                const horariosLivres = horariosVazios.filter(h => {
+                  const horaFormatada = h.hora.includes(':') ? h.hora : `${h.hora}:00:00`;
+                  return !horariosOcupados.has(horaFormatada);
+                });
+                
+                if (horariosLivres.length > 0) {
+                  // Classificar o período (manhã/tarde) baseado no primeiro horário
+                  const primeiroHorario = horariosLivres[0].hora;
+                  const [horaH] = primeiroHorario.split(':').map(Number);
+                  const periodoNome = horaH < 12 ? 'Manhã' : 'Tarde';
+                  
+                  periodosDisponiveis.push({
+                    periodo: periodoNome,
+                    horario_distribuicao: `${horariosLivres.length} horário(s) específico(s) disponível(is)`,
+                    vagas_disponiveis: Math.min(vagasDisponiveis, horariosLivres.length),
+                    total_vagas: servico.limite_proprio || vagasDisponiveis,
+                    horarios: horariosLivres.map(h => h.hora)
+                  });
+                  
+                  console.log(`✅ [HORA MARCADA] ${horariosLivres.length} horários disponíveis para ${servicoKey} em ${dataFormatada}`);
+                }
+              } else {
+                console.log(`⚠️ [HORA MARCADA] Nenhum horário vazio encontrado para ${dataFormatada}`);
+              }
+            } else {
+              // Ordem de chegada - apenas adicionar período genérico
+              periodosDisponiveis.push({
+                periodo: 'Disponível',
+                horario_distribuicao: 'Conforme disponibilidade',
+                vagas_disponiveis: vagasDisponiveis,
+                total_vagas: servico.limite_proprio || vagasDisponiveis
+              });
+            }
+          }
+        } else if (servicoSemPeriodos) {
+          // Serviço sem periodos e sem limite compartilhado - erro de configuração
+          console.error(`❌ [ERRO CONFIG] Serviço ${servicoKey} não tem periodos nem compartilha limite`);
+          datasSemVagas++;
+          continue;
+        }
+        
+        // 🔧 Loop normal para serviços COM periodos definidos
+        if (servico.periodos && Object.keys(servico.periodos).length > 0) {
         for (const [periodo, config] of Object.entries(servico.periodos)) {
           // 🆕 FILTRAR POR PERÍODO PREFERIDO
           if (periodoPreferido === 'tarde' && periodo === 'manha') {
@@ -4156,6 +4262,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
             });
           }
         }
+        } // 🔧 Fecha o if (servico.periodos && Object.keys(servico.periodos).length > 0)
 
         // Se encontrou períodos disponíveis nesta data, adicionar
         if (periodosDisponiveis.length > 0) {
@@ -4336,6 +4443,105 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
     // Contar agendamentos existentes para cada período
     const periodosDisponiveis = [];
     
+    // 🔧 CORREÇÃO: Serviços sem periodos próprios (ex: ligadura_hemorroidas) que compartilham limite
+    const servicoSemPeriodosFluxo3 = !servico.periodos || Object.keys(servico.periodos).length === 0;
+    const compartilhaLimiteFluxo3 = servico.compartilha_limite_com;
+    const ehHoraMarcadaFluxo3 = (servico.tipo_agendamento === 'hora_marcada' || servico.tipo === 'procedimento');
+    
+    if (servicoSemPeriodosFluxo3 && compartilhaLimiteFluxo3 && data_consulta) {
+      console.log(`🔄 [FLUXO 3 - SEM PERIODOS] ${servicoKey} compartilha limite com ${compartilhaLimiteFluxo3}`);
+      
+      // Buscar atendimento_id para cálculo do sublimite
+      let atendimentoIdFluxo3: string | null = null;
+      if (!servico.atendimento_id) {
+        const { data: atendData } = await supabase
+          .from('atendimentos')
+          .select('id')
+          .eq('medico_id', medico.id)
+          .eq('cliente_id', clienteId)
+          .eq('ativo', true)
+          .ilike('nome', `%${servicoKey.replace(/_/g, '%')}%`)
+          .maybeSingle();
+        atendimentoIdFluxo3 = atendData?.id || null;
+      } else {
+        atendimentoIdFluxo3 = servico.atendimento_id;
+      }
+      
+      // Calcular vagas disponíveis
+      const servicoConfigFluxo3 = { ...servico, atendimento_id: atendimentoIdFluxo3 };
+      const vagasDisponiveisFluxo3 = await calcularVagasDisponiveisComLimites(
+        supabase,
+        medico.id,
+        clienteId,
+        data_consulta,
+        servicoConfigFluxo3,
+        regras
+      );
+      
+      console.log(`📊 [FLUXO 3 - LIMITE COMPARTILHADO] ${servicoKey} em ${data_consulta}: ${vagasDisponiveisFluxo3} vagas`);
+      
+      if (vagasDisponiveisFluxo3 > 0) {
+        if (ehHoraMarcadaFluxo3) {
+          // Buscar horários vazios para esta data
+          const { data: horariosVaziosFluxo3 } = await supabase
+            .from('horarios_vazios')
+            .select('hora')
+            .eq('medico_id', medico.id)
+            .eq('cliente_id', clienteId)
+            .eq('data', data_consulta)
+            .eq('status', 'disponivel')
+            .order('hora', { ascending: true });
+          
+          if (horariosVaziosFluxo3 && horariosVaziosFluxo3.length > 0) {
+            // Filtrar horários ocupados
+            const { data: agendamentosFluxo3 } = await supabase
+              .from('agendamentos')
+              .select('hora_agendamento')
+              .eq('medico_id', medico.id)
+              .eq('data_agendamento', data_consulta)
+              .eq('cliente_id', clienteId)
+              .is('excluido_em', null)
+              .in('status', ['agendado', 'confirmado']);
+            
+            const horariosOcupadosFluxo3 = new Set(agendamentosFluxo3?.map(a => a.hora_agendamento) || []);
+            const horariosLivresFluxo3 = horariosVaziosFluxo3.filter(h => {
+              const horaFormatada = h.hora.includes(':') ? h.hora : `${h.hora}:00:00`;
+              return !horariosOcupadosFluxo3.has(horaFormatada);
+            });
+            
+            if (horariosLivresFluxo3.length > 0) {
+              const [horaH] = horariosLivresFluxo3[0].hora.split(':').map(Number);
+              const periodoNome = horaH < 12 ? 'Manhã' : 'Tarde';
+              
+              periodosDisponiveis.push({
+                periodo: periodoNome,
+                disponivel: true,
+                hora_inicio: horariosLivresFluxo3[0].hora,
+                hora_fim: horariosLivresFluxo3[horariosLivresFluxo3.length - 1].hora,
+                horario_distribuicao: `${horariosLivresFluxo3.length} horário(s) específico(s)`,
+                vagas_disponiveis: Math.min(vagasDisponiveisFluxo3, horariosLivresFluxo3.length),
+                total_vagas: servico.limite_proprio || vagasDisponiveisFluxo3,
+                intervalo_minutos: 30,
+                horarios: horariosLivresFluxo3.map(h => h.hora)
+              });
+              
+              console.log(`✅ [FLUXO 3 - HORA MARCADA] ${horariosLivresFluxo3.length} horários disponíveis`);
+            }
+          }
+        } else {
+          periodosDisponiveis.push({
+            periodo: 'Disponível',
+            disponivel: true,
+            horario_distribuicao: 'Conforme disponibilidade',
+            vagas_disponiveis: vagasDisponiveisFluxo3,
+            total_vagas: servico.limite_proprio || vagasDisponiveisFluxo3
+          });
+        }
+      }
+    }
+    
+    // 🔧 Loop normal para serviços COM periodos definidos
+    if (servico.periodos && Object.keys(servico.periodos).length > 0) {
     for (const [periodo, config] of Object.entries(servico.periodos)) {
       // 🆕 FILTRAR POR PERÍODO PREFERIDO
       if (periodoPreferido === 'tarde' && periodo === 'manha') {
@@ -4410,6 +4616,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         intervalo_minutos: (config as any).intervalo_minutos
       });
     }
+    } // 🔧 Fecha o if (servico.periodos && Object.keys(servico.periodos).length > 0)
 
     if (periodosDisponiveis.length === 0) {
       console.log(`❌ Nenhum período disponível para ${data_consulta}. Buscando alternativas...`);
