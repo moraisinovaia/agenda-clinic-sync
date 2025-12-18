@@ -3307,17 +3307,43 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
     
     const atendimentoNormalizado = normalizarParaMatch(atendimento_nome);
     
-    let servicoKey = Object.keys(regras?.servicos || {}).find(s => {
+    // 🔍 MATCHING MELHORADO: Priorizar match exato antes de parcial
+    const servicosKeys = Object.keys(regras?.servicos || {});
+    
+    // 1. Primeiro tentar match exato
+    let servicoKey = servicosKeys.find(s => {
       const keyNormalizada = normalizarParaMatch(s);
-      // Também verificar o campo 'nome' dentro do serviço
       const nomeServico = regras?.servicos[s]?.nome;
       const nomeNormalizado = nomeServico ? normalizarParaMatch(nomeServico) : '';
       
-      return keyNormalizada.includes(atendimentoNormalizado) ||
-             atendimentoNormalizado.includes(keyNormalizada) ||
-             nomeNormalizado.includes(atendimentoNormalizado) ||
-             atendimentoNormalizado.includes(nomeNormalizado);
+      // Match exato (prioridade alta)
+      return keyNormalizada === atendimentoNormalizado ||
+             nomeNormalizado === atendimentoNormalizado;
     });
+    
+    // 2. Se não encontrou exato, tentar match parcial (mas preferir o que mais se aproxima)
+    if (!servicoKey) {
+      // Ordenar por similaridade: quem tiver mais caracteres em comum vence
+      const matchesParciais = servicosKeys.map(s => {
+        const keyNormalizada = normalizarParaMatch(s);
+        const nomeServico = regras?.servicos[s]?.nome;
+        const nomeNormalizado = nomeServico ? normalizarParaMatch(nomeServico) : '';
+        
+        // Calcular score: match exato = 100, contains = tamanho do match
+        let score = 0;
+        if (keyNormalizada.includes(atendimentoNormalizado)) score = atendimentoNormalizado.length;
+        if (atendimentoNormalizado.includes(keyNormalizada)) score = Math.max(score, keyNormalizada.length);
+        if (nomeNormalizado.includes(atendimentoNormalizado)) score = Math.max(score, atendimentoNormalizado.length);
+        if (atendimentoNormalizado.includes(nomeNormalizado) && nomeNormalizado) score = Math.max(score, nomeNormalizado.length);
+        
+        return { key: s, score };
+      }).filter(m => m.score > 0).sort((a, b) => b.score - a.score);
+      
+      if (matchesParciais.length > 0) {
+        servicoKey = matchesParciais[0].key;
+        console.log(`🔍 Match parcial selecionado: "${servicoKey}" (score: ${matchesParciais[0].score})`);
+      }
+    }
     let servico = servicoKey ? regras.servicos[servicoKey] : null;
     
     // Não retornar erro ainda - busca melhorada será feita depois se necessário
