@@ -2084,6 +2084,15 @@ export type Database = {
         }
         Returns: string
       }
+      insert_llm_mensagem: {
+        Args: {
+          p_cliente_id: string
+          p_medico_id: string
+          p_mensagem: string
+          p_tipo: string
+        }
+        Returns: Json
+      }
       is_admin_safe: { Args: never; Returns: boolean }
       is_admin_user: { Args: never; Returns: boolean }
       is_admin_with_user_id: {
@@ -2187,6 +2196,10 @@ export type Database = {
       }
       text_to_bytea: { Args: { data: string }; Returns: string }
       toggle_backup_cron: { Args: { enable_cron: boolean }; Returns: boolean }
+      update_business_rules_config: {
+        Args: { p_config: Json; p_medico_id: string }
+        Returns: Json
+      }
       update_client_metrics: { Args: never; Returns: undefined }
       upsert_business_rule: {
         Args: { p_cliente_id: string; p_config: Json; p_medico_id: string }
