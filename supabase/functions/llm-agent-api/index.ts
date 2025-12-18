@@ -1354,10 +1354,32 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
         // 2. Validar serviço específico
         if (atendimento_nome) {
           try {
-            const servicoKeyValidacao = Object.keys(regras.servicos).find(s => 
-              s.toLowerCase().includes(atendimento_nome.toLowerCase()) ||
-              atendimento_nome.toLowerCase().includes(s.toLowerCase())
-            );
+            // 🔧 CORREÇÃO: Normalizar nomes para matching correto
+            // "Ligadura de Hemorroidas" → "ligadurahemorrodas" = "ligadura_hemorroidas"
+            const normalizarNome = (texto: string): string => 
+              texto.toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')  // Remove acentos
+                .replace(/\b(de|da|do|das|dos)\b/g, '') // Remove preposições conectivas
+                .replace(/[_\-\s]+/g, '')         // Remove underscores, hífens, espaços
+                .replace(/oi/g, 'o')              // hemorroidas → hemorrodos (normaliza variações)
+                .replace(/ai/g, 'a');             // variações comuns
+            
+            const atendimentoNorm = normalizarNome(atendimento_nome);
+            const servicoChaves = Object.keys(regras.servicos);
+            console.log(`🔍 [handleSchedule] Buscando serviço: "${atendimento_nome}" → normalizado: "${atendimentoNorm}"`);
+            console.log(`🔍 [handleSchedule] Chaves normalizadas: [${servicoChaves.map(s => `${s}→${normalizarNome(s)}`).join(', ')}]`);
+            
+            const servicoKeyValidacao = Object.keys(regras.servicos).find(s => {
+              const servicoNorm = normalizarNome(s);
+              const match = servicoNorm.includes(atendimentoNorm) || 
+                           atendimentoNorm.includes(servicoNorm) ||
+                           servicoNorm === atendimentoNorm;
+              if (match) {
+                console.log(`✅ [handleSchedule] Match encontrado: "${s}" (${servicoNorm}) ← "${atendimento_nome}" (${atendimentoNorm})`);
+              }
+              return match;
+            });
             
             if (servicoKeyValidacao) {
               const servicoLocal = regras.servicos[servicoKeyValidacao];
