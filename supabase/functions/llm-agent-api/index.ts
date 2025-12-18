@@ -1335,12 +1335,18 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
         console.log(`✅ regras.servicos válido, contém ${Object.keys(regras.servicos).length} serviço(s)`);
         
         // 1. Validar idade mínima
-        if (regras.idade_minima) {
+        if (regras.idade_minima && regras.idade_minima > 0) {
           const idade = calcularIdade(data_nascimento);
           if (idade < regras.idade_minima) {
+            // 🆕 Usar mensagem personalizada se configurada
+            const mensagemIdadeMinima = regras.mensagem_idade_minima ||
+              `❌ ${regras.nome} atende apenas pacientes com ${regras.idade_minima}+ anos.\n\n📋 Idade informada: ${idade} anos\n\n💡 Por favor, consulte outro profissional adequado para a faixa etária.`;
+            
+            console.log(`🚫 [IDADE] Paciente com ${idade} anos bloqueado (mínimo: ${regras.idade_minima})`);
+            
             return businessErrorResponse({
               codigo_erro: 'IDADE_INCOMPATIVEL',
-              mensagem_usuario: `❌ ${regras.nome} atende apenas pacientes com ${regras.idade_minima}+ anos.\n\n📋 Idade informada: ${idade} anos\n\n💡 Por favor, consulte outro profissional adequado para a faixa etária.`,
+              mensagem_usuario: mensagemIdadeMinima,
               detalhes: {
                 medico: regras.nome,
                 idade_minima: regras.idade_minima,
@@ -1348,7 +1354,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
               }
             });
           }
-          console.log(`✅ Validação de idade OK: ${idade} anos`);
+          console.log(`✅ Validação de idade OK: ${idade} anos (mínimo: ${regras.idade_minima})`);
         }
         
         // 2. Validar serviço específico
@@ -3472,6 +3478,12 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
 
       console.log(`📅 Ponto de partida da busca: ${dataInicial} ${data_consulta ? '(fornecida pelo usuário)' : '(data atual)'}`);
       
+      // 🆕 VERIFICAR ORDEM_CHEGADA_CONFIG: Se médico tem config especial para ordem de chegada
+      const ordemChegadaConfig = regras?.ordem_chegada_config;
+      if (ordemChegadaConfig) {
+        console.log('🎫 [ORDEM_CHEGADA_CONFIG] Config especial detectada:', ordemChegadaConfig);
+      }
+      
       // 🎫 LÓGICA PARA ORDEM DE CHEGADA (todos os médicos)
       console.log('🎫 Buscando períodos disponíveis (ordem de chegada)...');
       
@@ -3554,12 +3566,19 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
             const disponiveis = manha.limite - ocupadas;
             
             if (disponiveis > 0) {
+              // 🆕 USAR ordem_chegada_config se disponível
+              const horarioDistribuicao = ordemChegadaConfig 
+                ? `${ordemChegadaConfig.hora_chegada_inicio} às ${ordemChegadaConfig.hora_chegada_fim}` 
+                : (manha.distribuicao_fichas || `${manha.inicio} às ${manha.fim}`);
+              
               periodosDisponiveis.push({
                 periodo: 'Manhã',
-                horario_distribuicao: manha.distribuicao_fichas || `${manha.inicio} às ${manha.fim}`,
+                horario_distribuicao: horarioDistribuicao,
                 vagas_disponiveis: disponiveis,
                 limite_total: manha.limite,
-                tipo: 'ordem_chegada'
+                tipo: regras?.tipo_agendamento || 'ordem_chegada',
+                mensagem_ordem_chegada: ordemChegadaConfig?.mensagem || null,
+                hora_atendimento_inicio: ordemChegadaConfig?.hora_atendimento_inicio || null
               });
             }
           }
@@ -3587,12 +3606,19 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
             const disponiveis = tarde.limite - ocupadas;
             
             if (disponiveis > 0) {
+              // 🆕 USAR ordem_chegada_config se disponível
+              const horarioDistribuicao = ordemChegadaConfig 
+                ? `${ordemChegadaConfig.hora_chegada_inicio} às ${ordemChegadaConfig.hora_chegada_fim}` 
+                : (tarde.distribuicao_fichas || `${tarde.inicio} às ${tarde.fim}`);
+              
               periodosDisponiveis.push({
                 periodo: 'Tarde',
-                horario_distribuicao: tarde.distribuicao_fichas || `${tarde.inicio} às ${tarde.fim}`,
+                horario_distribuicao: horarioDistribuicao,
                 vagas_disponiveis: disponiveis,
                 limite_total: tarde.limite,
-                tipo: 'ordem_chegada'
+                tipo: regras?.tipo_agendamento || 'ordem_chegada',
+                mensagem_ordem_chegada: ordemChegadaConfig?.mensagem || null,
+                hora_atendimento_inicio: ordemChegadaConfig?.hora_atendimento_inicio || null
               });
             }
           }
