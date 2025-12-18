@@ -1111,7 +1111,26 @@ serve(async (req) => {
 
     if (method === 'POST') {
       const body = await req.json();
-      const action = pathParts[1]; // /llm-agent-api/{action}
+      const rawAction = pathParts[1]; // /llm-agent-api/{action}
+      
+      // 🇧🇷 MAPEAMENTO PORTUGUÊS → INGLÊS (aceita ambos os formatos)
+      const actionMap: Record<string, string> = {
+        'agendar': 'schedule',
+        'verificar-paciente': 'check-patient',
+        'remarcar': 'reschedule',
+        'cancelar': 'cancel',
+        'confirmar': 'confirm',
+        'disponibilidade': 'availability',
+        'pesquisa-pacientes': 'patient-search',
+        'lista-consultas': 'list-appointments',
+        'lista-medicos': 'list-doctors',
+        'info-clinica': 'clinic-info'
+      };
+      const action = actionMap[rawAction] || rawAction;
+      
+      if (actionMap[rawAction]) {
+        console.log(`🔄 [I18N] Action mapeada: ${rawAction} → ${action}`);
+      }
 
       // 🔑 MULTI-CLIENTE: Aceita cliente_id do body (usado por proxies como llm-agent-api-venus)
       // Fallback para IPADO se não especificado (compatibilidade retroativa)
@@ -1158,7 +1177,7 @@ serve(async (req) => {
         case 'clinic-info':
           return await handleClinicInfo(supabase, body, CLIENTE_ID, dynamicConfig);
         default:
-          return errorResponse('Ação não reconhecida. Ações disponíveis: schedule, check-patient, reschedule, cancel, confirm, availability, patient-search, list-appointments, list-doctors, clinic-info');
+          return errorResponse('Ação não reconhecida. Ações disponíveis: schedule/agendar, check-patient/verificar-paciente, reschedule/remarcar, cancel/cancelar, confirm/confirmar, availability/disponibilidade, patient-search/pesquisa-pacientes, list-appointments/lista-consultas, list-doctors/lista-medicos, clinic-info/info-clinica');
       }
     }
 
