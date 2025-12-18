@@ -40,7 +40,7 @@ interface ConfigCache {
 }
 
 const CONFIG_CACHE: Map<string, ConfigCache> = new Map();
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
+const CACHE_TTL_MS = 1 * 60 * 1000; // 1 minuto - alterações aplicam em no máximo 60 segundos
 
 function isCacheValid(clienteId: string): boolean {
   const cached = CONFIG_CACHE.get(clienteId);
