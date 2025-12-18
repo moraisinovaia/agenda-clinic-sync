@@ -1,28 +1,240 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-// v2.0.1 - Correção definitiva do bug de convênio (Title Case)
+// v3.0.0 - Sistema Dinâmico com carregamento de configurações do banco
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// 🚨 MIGRAÇÃO DE SISTEMA - Data mínima para agendamentos
-const MINIMUM_BOOKING_DATE = '2026-01-01';
-const MIGRATION_PHONE = '(87) 3866-4050';
-const MIGRATION_MESSAGES = {
-  date_blocked: `Agendamentos disponíveis a partir de janeiro/2026. Para datas anteriores, entre em contato pelo telefone: ${MIGRATION_PHONE}`,
-  old_appointments: `Não encontrei agendamentos no sistema novo. Se sua consulta é anterior a janeiro/2026, os dados estão no sistema anterior. Entre em contato: ${MIGRATION_PHONE}`,
-  no_availability: `Não há vagas disponíveis antes de janeiro/2026. Para consultas anteriores a esta data, ligue: ${MIGRATION_PHONE}`
+// ============= SISTEMA DE CACHE E CONFIGURAÇÃO DINÂMICA =============
+
+interface DynamicConfig {
+  clinic_info: {
+    nome_clinica: string;
+    telefone: string;
+    whatsapp: string;
+    endereco: string;
+    data_minima_agendamento: string;
+    dias_busca_inicial: number;
+    dias_busca_expandida: number;
+    mensagem_bloqueio_padrao: string;
+  } | null;
+  business_rules: Record<string, {
+    medico_id: string;
+    medico_nome: string;
+    config: any;
+  }>;
+  mensagens: Array<{
+    id: string;
+    tipo: string;
+    medico_id: string | null;
+    mensagem: string;
+  }>;
+  loadedAt: number;
+}
+
+interface ConfigCache {
+  data: DynamicConfig;
+  clienteId: string;
+}
+
+const CONFIG_CACHE: Map<string, ConfigCache> = new Map();
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
+
+function isCacheValid(clienteId: string): boolean {
+  const cached = CONFIG_CACHE.get(clienteId);
+  if (!cached) return false;
+  return Date.now() - cached.data.loadedAt < CACHE_TTL_MS;
+}
+
+/**
+ * Carrega configuração dinâmica do banco de dados via RPC
+ * Retorna null se falhar (fallback para valores hardcoded)
+ */
+async function loadDynamicConfig(supabase: any, clienteId: string): Promise<DynamicConfig | null> {
+  // Verificar cache primeiro
+  if (isCacheValid(clienteId)) {
+    console.log('📦 [CACHE] Usando configuração do cache');
+    return CONFIG_CACHE.get(clienteId)!.data;
+  }
+  
+  try {
+    console.log(`🔄 [CONFIG] Carregando configuração dinâmica para cliente ${clienteId}...`);
+    
+    // Carregar do banco via RPC
+    const { data, error } = await supabase.rpc('load_llm_config_for_clinic', {
+      p_cliente_id: clienteId
+    });
+    
+    if (error) {
+      console.warn('⚠️ [CONFIG] Erro ao carregar config do banco:', error.message);
+      return null;
+    }
+    
+    if (!data?.success) {
+      console.warn('⚠️ [CONFIG] RPC retornou sucesso=false:', data?.error);
+      return null;
+    }
+    
+    // Transformar business_rules de array para objeto indexado por medico_id
+    const businessRulesMap: Record<string, any> = {};
+    if (data.business_rules && Array.isArray(data.business_rules)) {
+      for (const rule of data.business_rules) {
+        businessRulesMap[rule.medico_id] = rule;
+      }
+    }
+    
+    const dynamicConfig: DynamicConfig = {
+      clinic_info: data.clinic_info || null,
+      business_rules: businessRulesMap,
+      mensagens: data.mensagens || [],
+      loadedAt: Date.now()
+    };
+    
+    // Atualizar cache
+    CONFIG_CACHE.set(clienteId, {
+      data: dynamicConfig,
+      clienteId
+    });
+    
+    console.log(`✅ [CONFIG] Configuração carregada do banco:`, {
+      tem_clinic_info: !!dynamicConfig.clinic_info,
+      total_business_rules: Object.keys(dynamicConfig.business_rules).length,
+      total_mensagens: dynamicConfig.mensagens.length,
+      data_minima: dynamicConfig.clinic_info?.data_minima_agendamento || 'N/A'
+    });
+    
+    return dynamicConfig;
+    
+  } catch (err: any) {
+    console.error('❌ [CONFIG] Erro crítico ao carregar config:', err.message);
+    return null;
+  }
+}
+
+// ============= FUNÇÕES HELPER PARA VALORES DINÂMICOS =============
+
+// 🚨 VALORES HARDCODED (fallback quando banco não disponível)
+const FALLBACK_MINIMUM_BOOKING_DATE = '2026-01-01';
+const FALLBACK_PHONE = '(87) 3866-4050';
+const FALLBACK_DIAS_BUSCA_INICIAL = 14;
+const FALLBACK_DIAS_BUSCA_EXPANDIDA = 45;
+const FALLBACK_MESSAGES = {
+  date_blocked: `Agendamentos disponíveis a partir de janeiro/2026. Para datas anteriores, entre em contato pelo telefone: ${FALLBACK_PHONE}`,
+  old_appointments: `Não encontrei agendamentos no sistema novo. Se sua consulta é anterior a janeiro/2026, os dados estão no sistema anterior. Entre em contato: ${FALLBACK_PHONE}`,
+  no_availability: `Não há vagas disponíveis antes de janeiro/2026. Para consultas anteriores a esta data, ligue: ${FALLBACK_PHONE}`
 };
 
 /**
+ * Retorna data mínima de agendamento (dinâmica ou fallback)
+ */
+function getMinimumBookingDate(config: DynamicConfig | null): string {
+  return config?.clinic_info?.data_minima_agendamento || FALLBACK_MINIMUM_BOOKING_DATE;
+}
+
+/**
+ * Retorna telefone da clínica (dinâmico ou fallback)
+ */
+function getClinicPhone(config: DynamicConfig | null): string {
+  return config?.clinic_info?.telefone || FALLBACK_PHONE;
+}
+
+/**
+ * Retorna dias de busca inicial (dinâmico ou fallback)
+ */
+function getDiasBuscaInicial(config: DynamicConfig | null): number {
+  return config?.clinic_info?.dias_busca_inicial || FALLBACK_DIAS_BUSCA_INICIAL;
+}
+
+/**
+ * Retorna dias de busca expandida (dinâmico ou fallback)
+ */
+function getDiasBuscaExpandida(config: DynamicConfig | null): number {
+  return config?.clinic_info?.dias_busca_expandida || FALLBACK_DIAS_BUSCA_EXPANDIDA;
+}
+
+/**
+ * Retorna regras de negócio do médico (dinâmica ou hardcoded)
+ */
+function getMedicoRules(config: DynamicConfig | null, medicoId: string, hardcodedRules: any): any {
+  // 1. Tentar config dinâmica primeiro
+  const dynamicRule = config?.business_rules?.[medicoId]?.config;
+  if (dynamicRule) {
+    console.log(`📋 [RULES] Usando regras DINÂMICAS para médico ${medicoId}`);
+    return dynamicRule;
+  }
+  
+  // 2. Fallback para hardcoded
+  if (hardcodedRules) {
+    console.log(`📋 [RULES] Usando regras HARDCODED para médico ${medicoId}`);
+  }
+  return hardcodedRules;
+}
+
+/**
+ * Busca mensagem personalizada do banco de dados
+ * @param tipo - Tipo da mensagem (bloqueio, confirmacao, sem_vaga, etc)
+ * @param medicoId - ID do médico (opcional, para mensagens específicas)
+ * @returns Mensagem personalizada ou null
+ */
+function getMensagemPersonalizada(
+  config: DynamicConfig | null,
+  tipo: string,
+  medicoId?: string
+): string | null {
+  if (!config?.mensagens || config.mensagens.length === 0) {
+    return null;
+  }
+  
+  // 1. Buscar mensagem específica do médico
+  if (medicoId) {
+    const msgMedico = config.mensagens.find(
+      m => m.tipo === tipo && m.medico_id === medicoId
+    );
+    if (msgMedico) {
+      console.log(`📝 [MSG] Usando mensagem personalizada do médico para tipo "${tipo}"`);
+      return msgMedico.mensagem;
+    }
+  }
+  
+  // 2. Buscar mensagem global (medico_id = null)
+  const msgGlobal = config.mensagens.find(
+    m => m.tipo === tipo && !m.medico_id
+  );
+  if (msgGlobal) {
+    console.log(`📝 [MSG] Usando mensagem global para tipo "${tipo}"`);
+    return msgGlobal.mensagem;
+  }
+  
+  return null;
+}
+
+/**
  * Gera mensagem de bloqueio de migração personalizada por médico
- * @param medicoNome - Nome do médico (ex: "Dra. Adriana Carla de Sena")
+ * ATUALIZADO: Agora busca mensagens dinâmicas do banco primeiro
+ * @param config - Configuração dinâmica (pode ser null)
+ * @param medicoId - ID do médico (para mensagens específicas)
+ * @param medicoNome - Nome do médico (para fallback hardcoded)
  * @returns Mensagem personalizada ou genérica
  */
-function getMigrationBlockMessage(medicoNome?: string): string {
-  // Normalizar nome do médico (remover acentos, minúsculas, apenas palavras-chave)
+function getMigrationBlockMessage(
+  config: DynamicConfig | null,
+  medicoId?: string,
+  medicoNome?: string
+): string {
+  // 1. TENTAR MENSAGEM PERSONALIZADA DO BANCO
+  const msgPersonalizada = getMensagemPersonalizada(config, 'bloqueio_agenda', medicoId);
+  if (msgPersonalizada) {
+    return msgPersonalizada;
+  }
+  
+  // 2. TENTAR MENSAGEM PADRÃO DA CLÍNICA DO BANCO
+  if (config?.clinic_info?.mensagem_bloqueio_padrao) {
+    return config.clinic_info.mensagem_bloqueio_padrao;
+  }
+  
+  // 3. FALLBACK HARDCODED POR MÉDICO
   const nomeNormalizado = medicoNome
     ?.toLowerCase()
     .normalize('NFD')
@@ -47,11 +259,13 @@ function getMigrationBlockMessage(medicoNome?: string): string {
     nomeNormalizado.includes('dra adriana');
 
   if (isDraAdriana) {
-    return `O(a) paciente pode tentar um encaixe com a Dra. Adriana por ligação normal nesse mesmo número ${MIGRATION_PHONE} (não atendemos ligação via whatsapp), de segunda a sexta-feira, às 10:00h, ou nas terças e quartas-feiras, às 14:30h`;
+    const phone = getClinicPhone(config);
+    return `O(a) paciente pode tentar um encaixe com a Dra. Adriana por ligação normal nesse mesmo número ${phone} (não atendemos ligação via whatsapp), de segunda a sexta-feira, às 10:00h, ou nas terças e quartas-feiras, às 14:30h`;
   }
 
   // Mensagem genérica para outros médicos
-  return `Agendamentos disponíveis a partir de janeiro/2026. Para datas anteriores, entre em contato pelo telefone: ${MIGRATION_PHONE}`;
+  const phone = getClinicPhone(config);
+  return `Agendamentos disponíveis a partir de janeiro/2026. Para datas anteriores, entre em contato pelo telefone: ${phone}`;
 }
 
 // 🌎 Função para obter data E HORA atual no fuso horário de São Paulo
@@ -583,9 +797,12 @@ serve(async (req) => {
     );
 
     // 🔑 Buscar cliente_id do IPADO
-  // Cliente ID fixo do IPADO (sistema single-tenant)
-  const CLIENTE_ID = '2bfb98b5-ae41-4f96-8ba7-acc797c22054';
-  console.log('🏥 Sistema configurado para cliente IPADO:', CLIENTE_ID);
+    // Cliente ID fixo do IPADO (sistema single-tenant)
+    const CLIENTE_ID = '2bfb98b5-ae41-4f96-8ba7-acc797c22054';
+    console.log('🏥 Sistema configurado para cliente IPADO:', CLIENTE_ID);
+
+    // 🆕 CARREGAR CONFIGURAÇÃO DINÂMICA DO BANCO
+    const dynamicConfig = await loadDynamicConfig(supabase, CLIENTE_ID);
 
     const url = new URL(req.url);
     const method = req.method;
@@ -599,21 +816,21 @@ serve(async (req) => {
 
       switch (action) {
         case 'schedule':
-          return await handleSchedule(supabase, body, CLIENTE_ID);
+          return await handleSchedule(supabase, body, CLIENTE_ID, dynamicConfig);
         case 'check-patient':
-          return await handleCheckPatient(supabase, body, CLIENTE_ID);
+          return await handleCheckPatient(supabase, body, CLIENTE_ID, dynamicConfig);
         case 'reschedule':
-          return await handleReschedule(supabase, body, CLIENTE_ID);
+          return await handleReschedule(supabase, body, CLIENTE_ID, dynamicConfig);
         case 'cancel':
-          return await handleCancel(supabase, body, CLIENTE_ID);
+          return await handleCancel(supabase, body, CLIENTE_ID, dynamicConfig);
         case 'confirm':
-          return await handleConfirm(supabase, body, CLIENTE_ID);
+          return await handleConfirm(supabase, body, CLIENTE_ID, dynamicConfig);
         case 'availability':
-          return await handleAvailability(supabase, body, CLIENTE_ID);
+          return await handleAvailability(supabase, body, CLIENTE_ID, dynamicConfig);
         case 'patient-search':
-          return await handlePatientSearch(supabase, body, CLIENTE_ID);
+          return await handlePatientSearch(supabase, body, CLIENTE_ID, dynamicConfig);
         case 'list-appointments':
-          return await handleListAppointments(supabase, body, CLIENTE_ID);
+          return await handleListAppointments(supabase, body, CLIENTE_ID, dynamicConfig);
         default:
           return errorResponse('Ação não reconhecida. Ações disponíveis: schedule, check-patient, reschedule, cancel, availability, patient-search, list-appointments');
       }
@@ -652,7 +869,7 @@ function formatarConvenioParaBanco(convenio: string): string {
 }
 
 // Agendar consulta
-async function handleSchedule(supabase: any, body: any, clienteId: string) {
+async function handleSchedule(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
     console.log('📥 Dados recebidos na API:', JSON.stringify(body, null, 2));
     
@@ -820,15 +1037,16 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
               const servicoLocal = regras.servicos[servicoKeyValidacao];
               console.log(`🔍 Validando serviço: ${servicoKeyValidacao}`);
               
-              // ⚠️ MIGRAÇÃO: Bloquear agendamentos antes de janeiro/2026
-              if (data_consulta && data_consulta < MINIMUM_BOOKING_DATE) {
+              // ⚠️ MIGRAÇÃO: Bloquear agendamentos antes da data mínima
+              const minBookingDate = getMinimumBookingDate(config);
+              if (data_consulta && data_consulta < minBookingDate) {
                 console.log(`🚫 Tentativa de agendar antes da data mínima: ${data_consulta}`);
                 return new Response(JSON.stringify({
                   success: false,
                   error: 'DATA_BLOQUEADA',
-                  message: getMigrationBlockMessage(medico_nome),
+                  message: getMigrationBlockMessage(config, medico_id, medico_nome),
                   data_solicitada: data_consulta,
-                  data_minima: MINIMUM_BOOKING_DATE,
+                  data_minima: minBookingDate,
                   timestamp: new Date().toISOString()
                 }), {
                   status: 200,
@@ -957,8 +1175,9 @@ async function handleSchedule(supabase: any, body: any, clienteId: string) {
                           }
                           
                           // Verificar se está dentro do período permitido
-                          if (dataFuturaStr < MINIMUM_BOOKING_DATE) {
-                            console.log(`⏭️  Pulando ${dataFuturaStr} (antes da data mínima ${MINIMUM_BOOKING_DATE})`);
+                          const minDate = getMinimumBookingDate(config);
+                          if (dataFuturaStr < minDate) {
+                            console.log(`⏭️  Pulando ${dataFuturaStr} (antes da data mínima ${minDate})`);
                             continue;
                           }
                           
@@ -1661,7 +1880,7 @@ function consolidatePatients(patients: any[], lastConvenios: Record<string, stri
 }
 
 // Listar agendamentos de um médico em uma data específica
-async function handleListAppointments(supabase: any, body: any, clienteId: string) {
+async function handleListAppointments(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
     const { medico_nome, data } = body;
 
@@ -1751,7 +1970,7 @@ async function handleListAppointments(supabase: any, body: any, clienteId: strin
 }
 
 // Verificar se paciente tem consultas agendadas
-async function handleCheckPatient(supabase: any, body: any, clienteId: string) {
+async function handleCheckPatient(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
     // Sanitizar dados de busca
     const celularRaw = sanitizarCampoOpcional(body.celular);
@@ -1987,7 +2206,7 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string) {
 }
 
 // Remarcar consulta
-async function handleReschedule(supabase: any, body: any, clienteId: string) {
+async function handleReschedule(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
     console.log('🔄 Iniciando remarcação de consulta');
     console.log('📥 Dados recebidos:', JSON.stringify(body, null, 2));
@@ -2060,15 +2279,16 @@ async function handleReschedule(supabase: any, body: any, clienteId: string) {
       return errorResponse('Não é possível remarcar consulta cancelada');
     }
 
-    // ⚠️ MIGRAÇÃO: Bloquear remarcações antes de janeiro/2026
-    if (nova_data < MINIMUM_BOOKING_DATE) {
+    // ⚠️ MIGRAÇÃO: Bloquear remarcações antes da data mínima
+    const minBookingDate = getMinimumBookingDate(config);
+    if (nova_data < minBookingDate) {
       console.log(`🚫 Tentativa de remarcar para antes da data mínima: ${nova_data}`);
       return new Response(JSON.stringify({
         success: false,
         error: 'DATA_BLOQUEADA',
-        message: getMigrationBlockMessage(agendamento.medicos?.nome),
+        message: getMigrationBlockMessage(config, agendamento.medico_id, agendamento.medicos?.nome),
         data_solicitada: nova_data,
-        data_minima: MINIMUM_BOOKING_DATE,
+        data_minima: minBookingDate,
         timestamp: new Date().toISOString()
       }), {
         status: 200,
@@ -2175,7 +2395,7 @@ async function handleReschedule(supabase: any, body: any, clienteId: string) {
 }
 
 // Cancelar consulta
-async function handleCancel(supabase: any, body: any, clienteId: string) {
+async function handleCancel(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
     const { agendamento_id, motivo } = body;
 
@@ -2241,7 +2461,7 @@ async function handleCancel(supabase: any, body: any, clienteId: string) {
 }
 
 // Confirmar consulta
-async function handleConfirm(supabase: any, body: any, clienteId: string) {
+async function handleConfirm(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
     const { agendamento_id, observacoes } = body;
 
@@ -2342,7 +2562,7 @@ async function handleConfirm(supabase: any, body: any, clienteId: string) {
 }
 
 // Verificar disponibilidade de horários
-async function handleAvailability(supabase: any, body: any, clienteId: string) {
+async function handleAvailability(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
     console.log('📅 [RAW] Dados recebidos do N8N:', JSON.stringify(body, null, 2));
     
@@ -2454,15 +2674,16 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
       const hoje = new Date(dataAtual + 'T00:00:00');
       
       // ⚠️ MIGRAÇÃO: Ajustar data mínima e continuar busca
-      if (data_consulta < MINIMUM_BOOKING_DATE) {
-        console.log(`🚫 Data solicitada (${data_consulta}) é anterior à data mínima (${MINIMUM_BOOKING_DATE})`);
-        console.log(`📅 Ajustando para buscar a partir de: ${MINIMUM_BOOKING_DATE}`);
+      const minBookingDate = getMinimumBookingDate(config);
+      if (data_consulta < minBookingDate) {
+        console.log(`🚫 Data solicitada (${data_consulta}) é anterior à data mínima (${minBookingDate})`);
+        console.log(`📅 Ajustando para buscar a partir de: ${minBookingDate}`);
         
         // Salvar mensagem especial mas continuar o fluxo para buscar datas disponíveis
-        mensagemEspecial = getMigrationBlockMessage(medico_nome);
+        mensagemEspecial = getMigrationBlockMessage(config, medico_id, medico_nome);
         
         // Ajustar a data para iniciar a busca a partir da data mínima
-        data_consulta = MINIMUM_BOOKING_DATE;
+        data_consulta = minBookingDate;
       }
       
       // Calcular diferença em dias entre data solicitada e hoje
@@ -2813,7 +3034,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
               .eq('cliente_id', clienteId)
               .gte('hora_agendamento', manha.inicio)
               .lte('hora_agendamento', manha.fim)
-              .gte('data_agendamento', MINIMUM_BOOKING_DATE)
+              .gte('data_agendamento', getMinimumBookingDate(config))
               .is('excluido_em', null)
               .in('status', ['agendado', 'confirmado']);
             
@@ -2846,7 +3067,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
               .eq('cliente_id', clienteId)
               .gte('hora_agendamento', tarde.inicio)
               .lte('hora_agendamento', tarde.fim)
-              .gte('data_agendamento', MINIMUM_BOOKING_DATE)
+              .gte('data_agendamento', getMinimumBookingDate(config))
               .is('excluido_em', null)
               .in('status', ['agendado', 'confirmado']);
             
@@ -3004,7 +3225,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
         tipo_atendimento: 'ordem_chegada',
         proximas_datas: proximasDatas,
         data_solicitada: data_consulta_original || data_consulta,
-        data_minima: mensagemEspecial ? MINIMUM_BOOKING_DATE : undefined,
+        data_minima: mensagemEspecial ? getMinimumBookingDate(config) : undefined,
         observacao: mensagemEspecial ? 'Sistema em migração - sugestões a partir de janeiro/2026' : undefined,
         contexto: {
           medico_id: medico.id,
@@ -3954,7 +4175,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string) {
 }
 
 // Buscar pacientes
-async function handlePatientSearch(supabase: any, body: any, clienteId: string) {
+async function handlePatientSearch(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
     const { busca, tipo } = body;
 
@@ -4030,7 +4251,8 @@ async function buscarProximasDatasComPeriodo(
   periodo: 'manha' | 'tarde' | 'noite',
   dataInicial: string,
   clienteId: string,
-  quantidade: number = 5
+  quantidade: number = 5,
+  config: DynamicConfig | null = null
 ) {
   const datasEncontradas = [];
   const periodoMap = {
@@ -4057,8 +4279,9 @@ async function buscarProximasDatasComPeriodo(
     const dataCheckStr = dataCheck.toISOString().split('T')[0];
     const diaSemanaNum = dataCheck.getDay();
     
-    // Verificar se data é válida (>= MINIMUM_BOOKING_DATE)
-    if (dataCheckStr < MINIMUM_BOOKING_DATE) {
+    // Verificar se data é válida (>= data mínima)
+    const minBookingDate = getMinimumBookingDate(config);
+    if (dataCheckStr < minBookingDate) {
       continue;
     }
     
@@ -4076,7 +4299,7 @@ async function buscarProximasDatasComPeriodo(
       .eq('cliente_id', clienteId)
       .gte('hora_agendamento', configPeriodo.inicio)
       .lte('hora_agendamento', configPeriodo.fim)
-      .gte('data_agendamento', MINIMUM_BOOKING_DATE)
+      .gte('data_agendamento', getMinimumBookingDate(config))
       .is('excluido_em', null)
       .in('status', ['agendado', 'confirmado']);
     
