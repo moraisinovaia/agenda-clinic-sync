@@ -1705,17 +1705,27 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
           
           // Verificar se conseguiu alocar
           if (horarioAlocado && resultadoFinal) {
-            // Gerar mensagem personalizada
-            const isDraAdriana = medico.id === '32d30887-b876-4502-bf04-e55d7fb55b50';
-            let mensagem = `Consulta agendada com sucesso para ${paciente_nome}`;
+            // 🆕 Usar mensagens dinâmicas do banco
+            let mensagem = `✅ Consulta agendada com sucesso para ${paciente_nome}`;
             
-            if (isDraAdriana) {
-              const mensagemPeriodo = nomePeriodo === 'manhã'
-                ? 'Das 08:00 às 10:00 para fazer a ficha. A Dra. começa a atender às 08:45'
-                : 'Das 13:00 às 15:00 para fazer a ficha. A Dra. começa a atender às 14:45';
-              
-              mensagem = `Agendada! ${mensagemPeriodo}, por ordem de chegada. Caso o plano Unimed seja coparticipação ou particular, recebemos apenas em espécie. Posso ajudar em algo mais?`;
+            // Buscar mensagem de confirmação personalizada
+            const msgConfirmacao = getMensagemPersonalizada(config, 'confirmacao_agendamento', medico.id);
+            const msgPagamento = getMensagemPersonalizada(config, 'pagamento', medico.id);
+            
+            if (msgConfirmacao) {
+              mensagem = msgConfirmacao;
+            } else {
+              // Mensagem padrão genérica
+              const dataFormatada = new Date(data_consulta + 'T00:00:00').toLocaleDateString('pt-BR');
+              mensagem = `✅ Agendada para ${dataFormatada} por ordem de chegada.`;
             }
+            
+            // Adicionar mensagem de pagamento se existir
+            if (msgPagamento) {
+              mensagem += `\n\n💰 ${msgPagamento}`;
+            }
+            
+            mensagem += `\n\nPosso ajudar em algo mais?`;
             
             return successResponse({
               message: mensagem,
@@ -1807,37 +1817,47 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
 
     console.log('✅ Agendamento criado com sucesso:', result);
 
-    // Mensagem personalizada para Dra. Adriana
-    let mensagem = `Consulta agendada com sucesso para ${paciente_nome}`;
-
-    const isDraAdriana = medico.id === '32d30887-b876-4502-bf04-e55d7fb55b50';
-
-    if (isDraAdriana) {
-      // Formatar data e hora explicitamente
-      const dataFormatada = new Date(data_consulta + 'T00:00:00').toLocaleDateString('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      });
-      
-      const horaFormatada = horarioFinal.substring(0, 5); // "08:00:00" → "08:00"
-      const [hora] = horarioFinal.split(':').map(Number);
-      
-      let mensagemPeriodo = '';
-      if (hora >= 7 && hora < 12) {
-        // Manhã: 07:00-12:00
-        mensagemPeriodo = `📅 ${dataFormatada} às ${horaFormatada}\n\n⏰ Das 08:00 às 10:00 para fazer a ficha. A Dra. começa a atender às 08:45`;
-      } else if (hora >= 13 && hora < 18) {
-        // Tarde: 13:00-18:00
-        mensagemPeriodo = `📅 ${dataFormatada} às ${horaFormatada}\n\n⏰ Das 13:00 às 15:00 para fazer a ficha. A Dra. começa a atender às 14:45`;
-      } else {
-        // Fallback com hora sempre visível
-        mensagemPeriodo = `📅 ${dataFormatada} às ${horaFormatada}\n\n⏰ Compareça no horário marcado. A Dra. atende por ordem de chegada`;
-      }
-      
-      mensagem = `✅ Agendada! ${mensagemPeriodo}, por ordem de chegada.\n\n💰 Caso o plano Unimed seja coparticipação ou particular, recebemos apenas em espécie.\n\nPosso ajudar em algo mais?`;
-      console.log(`💬 Mensagem personalizada Dra. Adriana (${dataFormatada} às ${horaFormatada})`);
+    // 🆕 Usar mensagens dinâmicas do banco em vez de hardcoded
+    const dataFormatada = new Date(data_consulta + 'T00:00:00').toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+    
+    const horaFormatada = horarioFinal.substring(0, 5); // "08:00:00" → "08:00"
+    const [hora] = horarioFinal.split(':').map(Number);
+    
+    // Buscar mensagens personalizadas do banco
+    const msgConfirmacao = getMensagemPersonalizada(config, 'confirmacao_agendamento', medico.id);
+    const msgPagamento = getMensagemPersonalizada(config, 'pagamento', medico.id);
+    
+    let mensagem = '';
+    
+    if (msgConfirmacao) {
+      // Usar mensagem personalizada do banco
+      mensagem = `✅ ${msgConfirmacao}`;
+    } else {
+      // Mensagem padrão genérica
+      mensagem = `✅ Consulta agendada com sucesso para ${paciente_nome} em ${dataFormatada}.`;
     }
+    
+    // Adicionar informação de período baseado na hora
+    let periodoInfo = '';
+    if (hora >= 7 && hora < 12) {
+      periodoInfo = 'manhã';
+    } else if (hora >= 13 && hora < 18) {
+      periodoInfo = 'tarde';
+    }
+    
+    // Adicionar mensagem de pagamento se existir
+    if (msgPagamento) {
+      mensagem += `\n\n💰 ${msgPagamento}`;
+    }
+    
+    mensagem += `\n\nPosso ajudar em algo mais?`;
+    
+    console.log(`💬 Mensagem de confirmação: ${msgConfirmacao ? 'personalizada do banco' : 'genérica'}`);
+    console.log(`💬 Mensagem de pagamento: ${msgPagamento ? 'personalizada do banco' : 'não configurada'}`);
 
     return successResponse({
       message: mensagem,

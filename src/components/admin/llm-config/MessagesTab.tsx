@@ -22,6 +22,7 @@ interface MessagesTabProps {
 const TIPOS_MENSAGEM = [
   { value: 'bloqueio_agenda', label: 'Bloqueio de Agenda' },
   { value: 'confirmacao_agendamento', label: 'Confirmação de Agendamento' },
+  { value: 'pagamento', label: 'Informações de Pagamento' },
   { value: 'data_bloqueada', label: 'Data Bloqueada' },
   { value: 'sem_disponibilidade', label: 'Sem Disponibilidade' },
   { value: 'agendamentos_antigos', label: 'Agendamentos Antigos' },
