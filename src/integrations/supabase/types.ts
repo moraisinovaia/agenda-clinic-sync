@@ -765,6 +765,7 @@ export type Database = {
           hora_inicio: string
           id: string
           intervalo_minutos: number | null
+          limite_pacientes: number | null
           medico_id: string
           periodo: string
           updated_at: string | null
@@ -778,6 +779,7 @@ export type Database = {
           hora_inicio: string
           id?: string
           intervalo_minutos?: number | null
+          limite_pacientes?: number | null
           medico_id: string
           periodo: string
           updated_at?: string | null
@@ -791,6 +793,7 @@ export type Database = {
           hora_inicio?: string
           id?: string
           intervalo_minutos?: number | null
+          limite_pacientes?: number | null
           medico_id?: string
           periodo?: string
           updated_at?: string | null

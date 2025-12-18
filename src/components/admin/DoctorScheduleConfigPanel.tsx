@@ -9,8 +9,9 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
-import { Clock, Calendar, Save, RotateCcw, Loader2, Building2, User } from "lucide-react";
+import { Clock, Calendar, Save, RotateCcw, Loader2, Building2, User, Users } from "lucide-react";
 
 interface HorarioConfig {
   id?: string;
@@ -20,12 +21,20 @@ interface HorarioConfig {
   hora_fim: string;
   intervalo_minutos: number;
   ativo: boolean;
+  limite_pacientes?: number | null;
+}
+
+interface PeriodoConfig {
+  ativo: boolean;
+  hora_inicio: string;
+  hora_fim: string;
+  limite_pacientes: number | null;
 }
 
 interface DayConfig {
-  manha: { ativo: boolean; hora_inicio: string; hora_fim: string };
-  tarde: { ativo: boolean; hora_inicio: string; hora_fim: string };
-  noite: { ativo: boolean; hora_inicio: string; hora_fim: string };
+  manha: PeriodoConfig;
+  tarde: PeriodoConfig;
+  noite: PeriodoConfig;
 }
 
 const DIAS_SEMANA = [
@@ -47,9 +56,9 @@ const INTERVALOS = [
 ];
 
 const DEFAULT_DAY_CONFIG: DayConfig = {
-  manha: { ativo: false, hora_inicio: "08:00", hora_fim: "12:00" },
-  tarde: { ativo: false, hora_inicio: "13:00", hora_fim: "18:00" },
-  noite: { ativo: false, hora_inicio: "18:00", hora_fim: "21:00" },
+  manha: { ativo: false, hora_inicio: "08:00", hora_fim: "12:00", limite_pacientes: null },
+  tarde: { ativo: false, hora_inicio: "13:00", hora_fim: "18:00", limite_pacientes: null },
+  noite: { ativo: false, hora_inicio: "18:00", hora_fim: "21:00", limite_pacientes: null },
 };
 
 const PRESETS = {
@@ -156,6 +165,7 @@ export default function DoctorScheduleConfigPanel() {
             ativo: config.ativo ?? true,
             hora_inicio: config.hora_inicio,
             hora_fim: config.hora_fim,
+            limite_pacientes: config.limite_pacientes ?? null,
           };
         }
         if (config.intervalo_minutos) {
@@ -207,6 +217,7 @@ export default function DoctorScheduleConfigPanel() {
               hora_fim: periodoConfig.hora_fim,
               intervalo_minutos: intervaloMinutos,
               ativo: true,
+              limite_pacientes: periodoConfig.limite_pacientes,
             });
           }
         });
@@ -255,17 +266,20 @@ export default function DoctorScheduleConfigPanel() {
         manha: { 
           ativo: isActiveDay && preset.config.manha, 
           hora_inicio: "08:00", 
-          hora_fim: "12:00" 
+          hora_fim: "12:00",
+          limite_pacientes: null
         },
         tarde: { 
           ativo: isActiveDay && preset.config.tarde, 
           hora_inicio: "13:00", 
-          hora_fim: "18:00" 
+          hora_fim: "18:00",
+          limite_pacientes: null
         },
         noite: { 
           ativo: isActiveDay && preset.config.noite, 
           hora_inicio: "18:00", 
-          hora_fim: "21:00" 
+          hora_fim: "21:00",
+          limite_pacientes: null
         },
       };
     });
@@ -423,21 +437,49 @@ export default function DoctorScheduleConfigPanel() {
                             onCheckedChange={(checked) => handlePeriodoChange(dia.value, periodo, 'ativo', checked)}
                           />
                           {scheduleConfig[dia.value]?.[periodo]?.ativo && (
-                            <div className="flex items-center gap-1 text-sm">
-                              <Input
-                                type="time"
-                                value={scheduleConfig[dia.value]?.[periodo]?.hora_inicio ?? ""}
-                                onChange={(e) => handlePeriodoChange(dia.value, periodo, 'hora_inicio', e.target.value)}
-                                className="w-24 h-8 text-xs"
-                              />
-                              <span>-</span>
-                              <Input
-                                type="time"
-                                value={scheduleConfig[dia.value]?.[periodo]?.hora_fim ?? ""}
-                                onChange={(e) => handlePeriodoChange(dia.value, periodo, 'hora_fim', e.target.value)}
-                                className="w-24 h-8 text-xs"
-                              />
-                            </div>
+                            <>
+                              <div className="flex items-center gap-1 text-sm">
+                                <Input
+                                  type="time"
+                                  value={scheduleConfig[dia.value]?.[periodo]?.hora_inicio ?? ""}
+                                  onChange={(e) => handlePeriodoChange(dia.value, periodo, 'hora_inicio', e.target.value)}
+                                  className="w-24 h-8 text-xs"
+                                />
+                                <span>-</span>
+                                <Input
+                                  type="time"
+                                  value={scheduleConfig[dia.value]?.[periodo]?.hora_fim ?? ""}
+                                  onChange={(e) => handlePeriodoChange(dia.value, periodo, 'hora_fim', e.target.value)}
+                                  className="w-24 h-8 text-xs"
+                                />
+                              </div>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className="flex items-center gap-1">
+                                      <Users className="h-3 w-3 text-muted-foreground" />
+                                      <Input
+                                        type="number"
+                                        min="1"
+                                        max="50"
+                                        placeholder="∞"
+                                        value={scheduleConfig[dia.value]?.[periodo]?.limite_pacientes ?? ""}
+                                        onChange={(e) => handlePeriodoChange(
+                                          dia.value, 
+                                          periodo, 
+                                          'limite_pacientes', 
+                                          e.target.value ? parseInt(e.target.value) : null
+                                        )}
+                                        className="w-16 h-7 text-xs text-center"
+                                      />
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Limite de pacientes (deixe vazio para ilimitado)</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </>
                           )}
                         </div>
                       </td>
