@@ -30,6 +30,8 @@ const TIPOS_MENSAGEM = [
   { value: 'erro_generico', label: 'Erro Genérico' },
   { value: 'ordem_chegada', label: 'Ordem de Chegada' },
   { value: 'hora_marcada', label: 'Hora Marcada' },
+  { value: 'encaixe', label: 'Encaixe / Urgência' },
+  { value: 'servico_nao_agendavel', label: 'Serviço Não Agendável Online' },
 ];
 
 export function MessagesTab({ mensagens, medicos, saving, onSave, onDelete }: MessagesTabProps) {
