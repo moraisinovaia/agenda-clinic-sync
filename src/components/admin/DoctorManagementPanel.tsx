@@ -47,6 +47,9 @@ interface MedicoFormData {
   idade_maxima: number | null;
   observacoes: string;
   ativo: boolean;
+  // Campos LLM
+  tipo_agendamento: 'ordem_chegada' | 'hora_marcada';
+  permite_agendamento_online: boolean;
 }
 
 const CONVENIOS_DISPONIVEIS = [
@@ -98,7 +101,9 @@ export const DoctorManagementPanel: React.FC = () => {
     idade_minima: null,
     idade_maxima: null,
     observacoes: '',
-    ativo: true
+    ativo: true,
+    tipo_agendamento: 'ordem_chegada',
+    permite_agendamento_online: true
   });
 
   // Para admin_clinica, usar seu cliente_id automaticamente
@@ -194,7 +199,11 @@ export const DoctorManagementPanel: React.FC = () => {
           convenios_aceitos: data.convenios_aceitos,
           idade_minima: data.idade_minima,
           idade_maxima: data.idade_maxima,
-          observacoes: data.observacoes
+          observacoes: data.observacoes,
+          horarios: {
+            tipo_agendamento: data.tipo_agendamento,
+            permite_agendamento_online: data.permite_agendamento_online
+          }
         },
         p_atendimentos_ids: data.atendimentos_ids.length > 0 ? data.atendimentos_ids : []
       });
@@ -232,7 +241,9 @@ export const DoctorManagementPanel: React.FC = () => {
       idade_minima: null,
       idade_maxima: null,
       observacoes: '',
-      ativo: true
+      ativo: true,
+      tipo_agendamento: 'ordem_chegada',
+      permite_agendamento_online: true
     });
     setEditingDoctor(null);
   };
@@ -268,7 +279,9 @@ export const DoctorManagementPanel: React.FC = () => {
       idade_minima: medico.idade_minima,
       idade_maxima: medico.idade_maxima,
       observacoes: medico.observacoes || '',
-      ativo: medico.ativo
+      ativo: medico.ativo,
+      tipo_agendamento: (medico.horarios?.tipo_agendamento as 'ordem_chegada' | 'hora_marcada') || 'ordem_chegada',
+      permite_agendamento_online: medico.horarios?.permite_agendamento_online !== false
     });
     setIsDialogOpen(true);
   };
@@ -454,7 +467,7 @@ export const DoctorManagementPanel: React.FC = () => {
                   <TableHead>Nome</TableHead>
                   <TableHead>Especialidade</TableHead>
                   <TableHead>Convênios</TableHead>
-                  <TableHead>Idade</TableHead>
+                  <TableHead>Agendamento</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
@@ -467,44 +480,51 @@ export const DoctorManagementPanel: React.FC = () => {
                     </TableCell>
                   </TableRow>
                 ) : medicosFiltrados && medicosFiltrados.length > 0 ? (
-                  medicosFiltrados.map((medico) => (
-                    <TableRow key={medico.id}>
-                      <TableCell className="font-medium">{medico.nome}</TableCell>
-                      <TableCell>{medico.especialidade}</TableCell>
-                      <TableCell>
-                        {medico.convenios_aceitos?.length ? (
-                          <Badge variant="outline">
-                            {medico.convenios_aceitos.length} aceitos
+                  medicosFiltrados.map((medico) => {
+                    const tipoAgendamento = (medico.horarios?.tipo_agendamento as string) || 'ordem_chegada';
+                    const permiteOnline = medico.horarios?.permite_agendamento_online !== false;
+                    return (
+                      <TableRow key={medico.id}>
+                        <TableCell className="font-medium">{medico.nome}</TableCell>
+                        <TableCell>{medico.especialidade}</TableCell>
+                        <TableCell>
+                          {medico.convenios_aceitos?.length ? (
+                            <Badge variant="outline">
+                              {medico.convenios_aceitos.length} aceitos
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-1">
+                            <Badge variant="secondary" className="text-xs w-fit">
+                              {tipoAgendamento === 'hora_marcada' ? 'Hora Marcada' : 'Ordem Chegada'}
+                            </Badge>
+                            {permiteOnline && (
+                              <Badge variant="outline" className="text-xs w-fit text-green-600 border-green-300">
+                                Online
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={medico.ativo ? 'default' : 'secondary'}>
+                            {medico.ativo ? 'Ativo' : 'Inativo'}
                           </Badge>
-                        ) : (
-                          <span className="text-muted-foreground text-sm">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {medico.idade_minima !== null || medico.idade_maxima !== null ? (
-                          <span className="text-sm">
-                            {medico.idade_minima ?? 0} - {medico.idade_maxima ?? '∞'}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground text-sm">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={medico.ativo ? 'default' : 'secondary'}>
-                          {medico.ativo ? 'Ativo' : 'Inativo'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleOpenEdit(medico)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleOpenEdit(medico)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 ) : searchTerm ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
@@ -596,6 +616,56 @@ export const DoctorManagementPanel: React.FC = () => {
                   />
                 </div>
               )}
+
+              {/* Configuração LLM / Agendamento Online */}
+              <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-xs">LLM API</Badge>
+                  <span className="text-sm font-medium">Configuração de Agendamento</span>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="tipo_agendamento">Tipo de Agendamento</Label>
+                    <Select 
+                      value={formData.tipo_agendamento} 
+                      onValueChange={(value: 'ordem_chegada' | 'hora_marcada') => 
+                        setFormData(prev => ({ ...prev, tipo_agendamento: value }))
+                      }
+                    >
+                      <SelectTrigger id="tipo_agendamento">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ordem_chegada">Ordem de Chegada</SelectItem>
+                        <SelectItem value="hora_marcada">Hora Marcada</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Define como os horários são distribuídos para pacientes
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="permite_agendamento_online">Agendamento Online</Label>
+                    <div className="flex items-center justify-between p-3 border rounded-md">
+                      <span className="text-sm">
+                        {formData.permite_agendamento_online ? 'Habilitado' : 'Desabilitado'}
+                      </span>
+                      <Switch
+                        id="permite_agendamento_online"
+                        checked={formData.permite_agendamento_online}
+                        onCheckedChange={(checked) => 
+                          setFormData(prev => ({ ...prev, permite_agendamento_online: checked }))
+                        }
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Permite agendamentos via WhatsApp/Bot
+                    </p>
+                  </div>
+                </div>
+              </div>
 
               {/* Convênios */}
               <div className="space-y-2">
