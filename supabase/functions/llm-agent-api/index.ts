@@ -77,13 +77,20 @@ async function loadDynamicConfig(supabase: any, clienteId: string): Promise<Dyna
       return null;
     }
     
-    // Transformar business_rules de array para objeto indexado por medico_id
-    const businessRulesMap: Record<string, any> = {};
-    if (data.business_rules && Array.isArray(data.business_rules)) {
-      for (const rule of data.business_rules) {
-        businessRulesMap[rule.medico_id] = rule;
+    // Transformar business_rules para objeto indexado por medico_id (suporta array ou objeto)
+    let businessRulesMap: Record<string, any> = {};
+    if (data.business_rules) {
+      if (Array.isArray(data.business_rules)) {
+        // Formato array (compatibilidade)
+        for (const rule of data.business_rules) {
+          businessRulesMap[rule.medico_id] = rule;
+        }
+      } else if (typeof data.business_rules === 'object') {
+        // Formato objeto indexado por medico_id (formato atual da RPC)
+        businessRulesMap = data.business_rules;
       }
     }
+    console.log(`📋 [CONFIG] business_rules carregadas: ${Object.keys(businessRulesMap).length} médicos`);
     
     const dynamicConfig: DynamicConfig = {
       clinic_info: data.clinic_info || null,
