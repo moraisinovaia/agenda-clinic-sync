@@ -991,7 +991,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
 
     console.log('🔍 Buscando regras de negócio...');
     // ===== VALIDAÇÕES DE REGRAS DE NEGÓCIO (APENAS PARA N8N) =====
-    const regras = BUSINESS_RULES.medicos[medico.id];
+    const regras = getMedicoRules(config, medico.id, BUSINESS_RULES.medicos[medico.id]);
     console.log(`📋 Regras encontradas para médico ID ${medico.id}: ${regras ? 'SIM' : 'NÃO'}`);
     
     if (regras) {
@@ -2834,7 +2834,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
     }
     
     // 🔍 BUSCAR REGRAS DE NEGÓCIO E CONFIGURAÇÃO DO SERVIÇO (declarar uma única vez)
-    let regras = BUSINESS_RULES.medicos[medico.id];
+    let regras = getMedicoRules(dynamicConfig, medico.id, BUSINESS_RULES.medicos[medico.id]);
     let servicoKey = Object.keys(regras?.servicos || {}).find(s => 
       s.toLowerCase().includes(atendimento_nome.toLowerCase()) ||
       atendimento_nome.toLowerCase().includes(s.toLowerCase())
