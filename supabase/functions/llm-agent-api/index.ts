@@ -1380,8 +1380,9 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
                 });
               }
               
-              // 2.1 Verificar se permite agendamento online
-              if (!servicoLocal.permite_online) {
+              // 2.1 Verificar se permite agendamento online (aceita ambos os formatos)
+              const permiteOnline = servicoLocal.permite_online || servicoLocal.permite_agendamento_online;
+              if (!permiteOnline) {
                 console.log(`❌ Serviço ${servicoKeyValidacao} não permite agendamento online`);
                 return businessErrorResponse({
                   codigo_erro: 'SERVICO_NAO_DISPONIVEL_ONLINE',
@@ -3963,8 +3964,9 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       });
     }
 
-    // Verificar se permite agendamento online
-    if (!servico.permite_online) {
+    // Verificar se permite agendamento online (aceita ambos os formatos)
+    const permiteOnlineCheck = servico.permite_online || servico.permite_agendamento_online;
+    if (!permiteOnlineCheck) {
       console.log(`ℹ️ Serviço ${servicoKey} não permite agendamento online`);
       
       // 1. Tentar mensagem personalizada do banco (llm_mensagens) - prioridade mais alta
