@@ -803,23 +803,38 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // 🔑 Buscar cliente_id do IPADO
-    // Cliente ID fixo do IPADO (sistema single-tenant)
-    const CLIENTE_ID = '2bfb98b5-ae41-4f96-8ba7-acc797c22054';
-    console.log('🏥 Sistema configurado para cliente IPADO:', CLIENTE_ID);
-
-    // 🆕 CARREGAR CONFIGURAÇÃO DINÂMICA DO BANCO
-    const dynamicConfig = await loadDynamicConfig(supabase, CLIENTE_ID);
-
     const url = new URL(req.url);
     const method = req.method;
     const pathParts = url.pathname.split('/').filter(Boolean);
     
-    console.log(`🤖 LLM Agent API Call: ${method} ${url.pathname}`);
+    console.log(`🤖 LLM Agent API v3.1.0 Call: ${method} ${url.pathname}`);
 
     if (method === 'POST') {
       const body = await req.json();
       const action = pathParts[1]; // /llm-agent-api/{action}
+
+      // 🔑 MULTI-CLIENTE: Aceita cliente_id do body (usado por proxies como llm-agent-api-venus)
+      // Fallback para IPADO se não especificado (compatibilidade retroativa)
+      const IPADO_CLIENT_ID = '2bfb98b5-ae41-4f96-8ba7-acc797c22054';
+      const CLIENTE_ID = body.cliente_id || IPADO_CLIENT_ID;
+      
+      // Identificar origem da requisição
+      const isProxy = !!body.cliente_id;
+      const clienteNome = CLIENTE_ID === IPADO_CLIENT_ID ? 'IPADO' : 
+                          CLIENTE_ID === '20747f3c-8fa1-4f7e-8817-a55a8a6c8e0a' ? 'Clínica Vênus' :
+                          CLIENTE_ID === '39e120b4-5fb7-4d6f-9f91-a598a5bbd253' ? 'ENDOGASTRO' : 
+                          'Cliente Externo';
+      
+      console.log(`🏥 Cliente: ${clienteNome} (${CLIENTE_ID})${isProxy ? ' [via proxy]' : ''}`);
+
+      // 🆕 CARREGAR CONFIGURAÇÃO DINÂMICA DO BANCO
+      const dynamicConfig = await loadDynamicConfig(supabase, CLIENTE_ID);
+      
+      if (dynamicConfig?.clinic_info) {
+        console.log(`✅ Config carregada: ${dynamicConfig.clinic_info.nome_clinica || clienteNome}`);
+      } else {
+        console.log(`⚠️ Usando configuração hardcoded para ${clienteNome}`);
+      }
 
       switch (action) {
         case 'schedule':
@@ -838,8 +853,12 @@ serve(async (req) => {
           return await handlePatientSearch(supabase, body, CLIENTE_ID, dynamicConfig);
         case 'list-appointments':
           return await handleListAppointments(supabase, body, CLIENTE_ID, dynamicConfig);
+        case 'list-doctors':
+          return await handleListDoctors(supabase, body, CLIENTE_ID, dynamicConfig);
+        case 'clinic-info':
+          return await handleClinicInfo(supabase, body, CLIENTE_ID, dynamicConfig);
         default:
-          return errorResponse('Ação não reconhecida. Ações disponíveis: schedule, check-patient, reschedule, cancel, availability, patient-search, list-appointments');
+          return errorResponse('Ação não reconhecida. Ações disponíveis: schedule, check-patient, reschedule, cancel, confirm, availability, patient-search, list-appointments, list-doctors, clinic-info');
       }
     }
 
@@ -4345,6 +4364,136 @@ async function buscarProximasDatasComPeriodo(
   
   console.log(`📊 Total de datas encontradas com ${periodo}: ${datasEncontradas.length}`);
   return datasEncontradas;
+}
+
+// ============= HANDLER: LISTAR MÉDICOS =============
+
+async function handleListDoctors(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
+  try {
+    console.log('📥 [LIST-DOCTORS] Buscando médicos para cliente:', clienteId);
+    
+    const { data: medicos, error } = await supabase
+      .from('medicos')
+      .select('id, nome, especialidade, convenios_aceitos, horarios, ativo')
+      .eq('cliente_id', clienteId)
+      .eq('ativo', true)
+      .order('nome');
+
+    if (error) {
+      console.error('❌ Erro ao buscar médicos:', error);
+      return errorResponse(`Erro ao buscar médicos: ${error.message}`);
+    }
+
+    // Enriquecer com business_rules se disponíveis
+    const medicosEnriquecidos = medicos?.map((medico: any) => {
+      const rules = config?.business_rules?.[medico.id]?.config;
+      return {
+        id: medico.id,
+        nome: medico.nome,
+        especialidade: medico.especialidade || rules?.especialidade,
+        convenios_aceitos: medico.convenios_aceitos,
+        tipo_agendamento: rules?.tipo_agendamento || 'hora_marcada',
+        servicos: rules?.servicos ? Object.keys(rules.servicos) : [],
+        ativo: medico.ativo
+      };
+    }) || [];
+
+    console.log(`✅ [LIST-DOCTORS] ${medicosEnriquecidos.length} médico(s) encontrado(s)`);
+
+    return successResponse({
+      message: `${medicosEnriquecidos.length} médico(s) disponível(is)`,
+      medicos: medicosEnriquecidos,
+      total: medicosEnriquecidos.length,
+      cliente_id: clienteId
+    });
+
+  } catch (error: any) {
+    console.error('❌ [LIST-DOCTORS] Erro:', error);
+    return errorResponse(`Erro ao listar médicos: ${error?.message || 'Erro desconhecido'}`);
+  }
+}
+
+// ============= HANDLER: INFORMAÇÕES DA CLÍNICA =============
+
+async function handleClinicInfo(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
+  try {
+    console.log('📥 [CLINIC-INFO] Buscando informações da clínica:', clienteId);
+
+    // Usar principalmente a config dinâmica (llm_clinic_config)
+    // Isso evita problemas de RLS com a tabela clientes
+    if (config?.clinic_info) {
+      const clinicInfo = {
+        id: clienteId,
+        nome: config.clinic_info.nome_clinica || 'Clínica',
+        telefone: config.clinic_info.telefone,
+        whatsapp: config.clinic_info.whatsapp,
+        endereco: config.clinic_info.endereco,
+        data_minima_agendamento: config.clinic_info.data_minima_agendamento || getMinimumBookingDate(config),
+        dias_busca_inicial: config.clinic_info.dias_busca_inicial || getDiasBuscaInicial(config),
+        dias_busca_expandida: config.clinic_info.dias_busca_expandida || getDiasBuscaExpandida(config)
+      };
+
+      console.log(`✅ [CLINIC-INFO] Informações retornadas (via config): ${clinicInfo.nome}`);
+
+      return successResponse({
+        message: `Informações da clínica ${clinicInfo.nome}`,
+        clinica: clinicInfo,
+        cliente_id: clienteId,
+        fonte: 'llm_clinic_config'
+      });
+    }
+
+    // Fallback: tentar buscar da tabela clientes
+    console.log('⚠️ [CLINIC-INFO] Config não disponível, tentando tabela clientes...');
+    
+    const { data: cliente, error } = await supabase
+      .from('clientes')
+      .select('id, nome, telefone, whatsapp, endereco')
+      .eq('id', clienteId)
+      .single();
+
+    if (error) {
+      console.warn('⚠️ Erro ao buscar cliente (retornando dados mínimos):', error.message);
+      // Retornar dados mínimos em vez de erro
+      return successResponse({
+        message: 'Informações básicas da clínica',
+        clinica: {
+          id: clienteId,
+          nome: 'Clínica',
+          telefone: getClinicPhone(config),
+          data_minima_agendamento: getMinimumBookingDate(config),
+          dias_busca_inicial: getDiasBuscaInicial(config),
+          dias_busca_expandida: getDiasBuscaExpandida(config)
+        },
+        cliente_id: clienteId,
+        fonte: 'fallback'
+      });
+    }
+
+    const clinicInfo = {
+      id: cliente?.id || clienteId,
+      nome: cliente?.nome || 'Clínica',
+      telefone: cliente?.telefone,
+      whatsapp: cliente?.whatsapp,
+      endereco: cliente?.endereco,
+      data_minima_agendamento: getMinimumBookingDate(config),
+      dias_busca_inicial: getDiasBuscaInicial(config),
+      dias_busca_expandida: getDiasBuscaExpandida(config)
+    };
+
+    console.log(`✅ [CLINIC-INFO] Informações retornadas (via clientes): ${clinicInfo.nome}`);
+
+    return successResponse({
+      message: `Informações da clínica ${clinicInfo.nome}`,
+      clinica: clinicInfo,
+      cliente_id: clienteId,
+      fonte: 'clientes'
+    });
+
+  } catch (error: any) {
+    console.error('❌ [CLINIC-INFO] Erro:', error);
+    return errorResponse(`Erro ao buscar informações da clínica: ${error?.message || 'Erro desconhecido'}`);
+  }
 }
 
 // Funções auxiliares
