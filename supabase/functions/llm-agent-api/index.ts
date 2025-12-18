@@ -3503,11 +3503,23 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
     // Verificar se permite agendamento online
     if (!servico.permite_online) {
       console.log(`ℹ️ Serviço ${servicoKey} não permite agendamento online`);
+      
+      // 1. Tentar mensagem personalizada do banco (llm_mensagens) - prioridade mais alta
+      const mensagemDinamica = getMensagemPersonalizada(config, 'servico_nao_agendavel', medico.id);
+      
+      // 2. Fallback para mensagem do business_rules (servico.mensagem)
+      // 3. Fallback para mensagem genérica
+      const mensagemFinal = mensagemDinamica 
+        || servico.mensagem 
+        || 'Este serviço não pode ser agendado online. Por favor, entre em contato com a clínica.';
+      
+      console.log(`📝 Mensagem servico_nao_agendavel: ${mensagemDinamica ? 'dinâmica do banco' : servico.mensagem ? 'do business_rules' : 'genérica'}`);
+      
       return successResponse({
         permite_online: false,
         medico: medico.nome,
         servico: servicoKey,
-        message: servico.mensagem || 'Este serviço não pode ser agendado online.'
+        message: mensagemFinal
       });
     }
 
