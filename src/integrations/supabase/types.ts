@@ -1522,6 +1522,7 @@ export type Database = {
         Returns: Json
       }
       check_security_health: { Args: never; Returns: Json }
+      classify_period: { Args: { hora_inicio: string }; Returns: string }
       cleanup_expired_backups: { Args: never; Returns: undefined }
       cleanup_expired_horarios_vazios: { Args: never; Returns: undefined }
       cleanup_expired_slots: { Args: never; Returns: undefined }
@@ -1663,6 +1664,7 @@ export type Database = {
         Returns: Json
       }
       criar_usuario_teste_ipado: { Args: never; Returns: Json }
+      day_name_to_number: { Args: { day_name: string }; Returns: number }
       debug_user_access: { Args: never; Returns: Json }
       desconfirmar_agendamento: {
         Args: {
