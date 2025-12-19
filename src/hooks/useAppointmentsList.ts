@@ -8,9 +8,9 @@ import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 import { useDebounce } from '@/hooks/useDebounce';
 import { logger } from '@/utils/logger';
 
-// 🚨 OTIMIZAÇÃO FASE 2: Cache movido para dentro do hook (local por instância)
+// 🚨 OTIMIZAÇÃO FASE 7: Cache reduzido para ambiente multi-recepcionista + LLM
 // Removido singleton global para evitar memory leaks e data duplication
-const CACHE_DURATION = 15000; // ⚡ FASE 6: 15 segundos - crítico para ambiente multi-recepcionista
+const CACHE_DURATION = 5000; // ⚡ FASE 7: 5 segundos - crítico para LLM appointments aparecerem rápido
 
 // 🔄 QUERY DIRETA: Versão Otimizada 2025-10-27-17:00 - Solução definitiva com índices
 export function useAppointmentsList(itemsPerPage: number = 20) {
@@ -31,10 +31,9 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   // ⚡ OTIMIZAÇÃO: Cache de perfil de usuário para evitar RPC repetidos
   const userProfileRef = useRef<{ nome: string; user_id: string } | null>(null);
   
-  // 🔥 Ref para último timestamp conhecido (para detectar novos agendamentos)
+  // 🔥 Refs para detectar mudanças no polling
   const lastKnownTimestampRef = useRef<string | null>(null);
-  
-  // ✅ CORREÇÃO: Ref para último ID conhecido (evita closure stale)
+  const lastKnownCountRef = useRef<number | null>(null); // ✅ v7: count-based detection
   const lastKnownIdRef = useRef<string | null>(null);
   
   // 🔥 Estado local para appointments
@@ -311,12 +310,13 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
 
 
   // 🔄 Invalidar cache local quando necessário
+  // ✅ CORREÇÃO v6: NÃO zerar lastKnownTimestampRef - isso quebrava a detecção de mudanças!
   const invalidateCache = useCallback(() => {
-    console.log('🗑️ Invalidando cache local COMPLETAMENTE');
+    console.log('🗑️ Invalidando cache local (mantendo refs de polling)');
     fetchPromiseRef.current = null;
     fetchTimestampRef.current = 0;
-    lastKnownTimestampRef.current = null;
-    // ✅ NÃO zerar lastKnownIdRef aqui - deixar para polling detectar mudança
+    // ❌ REMOVIDO: lastKnownTimestampRef.current = null; // Isso quebrava o polling!
+    // ❌ REMOVIDO: lastKnownCountRef.current = null; // Manter para comparação
   }, []);
 
   const forceRefetch = useCallback(() => {
@@ -446,45 +446,68 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     }, 500); // ⚡ FASE 2: Reduzido de 3000ms para 500ms
   }, [refetch]);
 
-  // ✅ FASE 6: Verificar QUALQUER mudança por updated_at (não só novos por ID)
+  // ✅ FASE 7: Verificar mudanças por TIMESTAMP + COUNT (mais robusto para LLM appointments)
   const checkForNewAppointments = useCallback(async () => {
     try {
-      const { data: latestAppointment } = await supabase
+      // 🔥 OTIMIZAÇÃO: Buscar timestamp E count em uma única query
+      const { data: latestData, count } = await supabase
         .from('agendamentos')
-        .select('id, updated_at')  // ✅ CORREÇÃO: usar updated_at ao invés de created_at
+        .select('id, updated_at, created_at', { count: 'exact' })
         .is('excluido_em', null)
-        .order('updated_at', { ascending: false })  // ✅ CORREÇÃO: ordenar por updated_at
+        .order('updated_at', { ascending: false })
         .limit(1);
       
-      if (latestAppointment && latestAppointment.length > 0) {
-        const latestTimestamp = latestAppointment[0].updated_at;
+      if (latestData && latestData.length > 0 && count !== null) {
+        const latestTimestamp = latestData[0].updated_at;
+        const latestCreatedAt = latestData[0].created_at;
         
-        // ✅ CORREÇÃO: Comparar TIMESTAMP ao invés de ID (detecta confirmações/cancelamentos)
-        const hasChanges = latestTimestamp !== lastKnownTimestampRef.current;
+        // ✅ CORREÇÃO v7: Detectar mudanças por TIMESTAMP OU COUNT
+        const hasTimestampChange = latestTimestamp !== lastKnownTimestampRef.current;
+        const hasCountChange = lastKnownCountRef.current !== null && count !== lastKnownCountRef.current;
+        const hasChanges = hasTimestampChange || hasCountChange;
         
+        // ✅ Debug detalhado para diagnóstico
         if (hasChanges && lastKnownTimestampRef.current !== null) {
-          console.log('🆕 [POLLING] Mudança detectada!', { 
-            newTimestamp: latestTimestamp, 
-            previousTimestamp: lastKnownTimestampRef.current
+          console.log('🆕 [POLLING v7] MUDANÇA DETECTADA!', { 
+            tipoMudanca: hasCountChange ? 'NOVO AGENDAMENTO' : 'ATUALIZAÇÃO',
+            newTimestamp: latestTimestamp,
+            newCreatedAt: latestCreatedAt,
+            previousTimestamp: lastKnownTimestampRef.current,
+            newCount: count,
+            previousCount: lastKnownCountRef.current,
+            diff: count - (lastKnownCountRef.current || 0)
           });
+          
+          // ✅ Atualizar refs ANTES do refetch
           lastKnownTimestampRef.current = latestTimestamp;
-          invalidateCache();
+          lastKnownCountRef.current = count;
+          
+          // ✅ Invalidar cache e refetch
+          fetchPromiseRef.current = null;
+          fetchTimestampRef.current = 0;
+          
           await refetch();
           return true;
         }
         
-        // ✅ Atualizar ref na primeira execução
+        // ✅ Atualizar refs na primeira execução (silencioso)
         if (lastKnownTimestampRef.current === null) {
           lastKnownTimestampRef.current = latestTimestamp;
-          console.log('📌 [POLLING] Timestamp inicial registrado:', latestTimestamp);
+          lastKnownCountRef.current = count;
+          console.log('📌 [POLLING v7] Valores iniciais registrados:', { 
+            timestamp: latestTimestamp, 
+            count: count 
+          });
+        } else if (lastKnownCountRef.current === null) {
+          lastKnownCountRef.current = count;
         }
       }
       return false;
     } catch (err) {
-      console.warn('⚠️ [POLLING] Erro ao verificar mudanças:', err);
+      console.warn('⚠️ [POLLING v7] Erro ao verificar mudanças:', err);
       return false;
     }
-  }, [invalidateCache, refetch]);
+  }, [refetch]);
 
   // Realtime updates com debounce e suporte a polling
   // ✅ CORRIGIDO: Removido update otimista que causava "paciente não encontrado"
