@@ -10,7 +10,7 @@ import { logger } from '@/utils/logger';
 
 // 🚨 OTIMIZAÇÃO FASE 2: Cache movido para dentro do hook (local por instância)
 // Removido singleton global para evitar memory leaks e data duplication
-const CACHE_DURATION = 60000; // ⚡ FASE 5: 1 minuto (era 2 minutos) - mais responsivo para LLM
+const CACHE_DURATION = 15000; // ⚡ FASE 6: 15 segundos - crítico para ambiente multi-recepcionista
 
 // 🔄 QUERY DIRETA: Versão Otimizada 2025-10-27-17:00 - Solução definitiva com índices
 export function useAppointmentsList(itemsPerPage: number = 20) {
@@ -446,47 +446,45 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     }, 500); // ⚡ FASE 2: Reduzido de 3000ms para 500ms
   }, [refetch]);
 
-  // ✅ FASE 5: Verificar novos agendamentos por ID (usando ref para evitar closure stale)
+  // ✅ FASE 6: Verificar QUALQUER mudança por updated_at (não só novos por ID)
   const checkForNewAppointments = useCallback(async () => {
     try {
       const { data: latestAppointment } = await supabase
         .from('agendamentos')
-        .select('id, created_at')
+        .select('id, updated_at')  // ✅ CORREÇÃO: usar updated_at ao invés de created_at
         .is('excluido_em', null)
-        .order('created_at', { ascending: false })
+        .order('updated_at', { ascending: false })  // ✅ CORREÇÃO: ordenar por updated_at
         .limit(1);
       
       if (latestAppointment && latestAppointment.length > 0) {
-        const latestTimestamp = latestAppointment[0].created_at;
-        const latestId = latestAppointment[0].id;
+        const latestTimestamp = latestAppointment[0].updated_at;
         
-        // ✅ CORREÇÃO: Comparar com ref, não com state (evita closure stale)
-        const isNewAppointment = latestId !== lastKnownIdRef.current;
+        // ✅ CORREÇÃO: Comparar TIMESTAMP ao invés de ID (detecta confirmações/cancelamentos)
+        const hasChanges = latestTimestamp !== lastKnownTimestampRef.current;
         
-        if (isNewAppointment && lastKnownIdRef.current !== null) {
-          console.log('🆕 [POLLING] Novo agendamento detectado!', { 
-            newId: latestId.substring(0, 8), 
-            previousId: lastKnownIdRef.current?.substring(0, 8),
-            timestamp: latestTimestamp 
+        if (hasChanges && lastKnownTimestampRef.current !== null) {
+          console.log('🆕 [POLLING] Mudança detectada!', { 
+            newTimestamp: latestTimestamp, 
+            previousTimestamp: lastKnownTimestampRef.current
           });
-          lastKnownIdRef.current = latestId;
+          lastKnownTimestampRef.current = latestTimestamp;
           invalidateCache();
           await refetch();
           return true;
         }
         
         // ✅ Atualizar ref na primeira execução
-        if (lastKnownIdRef.current === null) {
-          lastKnownIdRef.current = latestId;
-          console.log('📌 [POLLING] ID inicial registrado:', latestId.substring(0, 8));
+        if (lastKnownTimestampRef.current === null) {
+          lastKnownTimestampRef.current = latestTimestamp;
+          console.log('📌 [POLLING] Timestamp inicial registrado:', latestTimestamp);
         }
       }
       return false;
     } catch (err) {
-      console.warn('⚠️ [POLLING] Erro ao verificar novos agendamentos:', err);
+      console.warn('⚠️ [POLLING] Erro ao verificar mudanças:', err);
       return false;
     }
-  }, [invalidateCache, refetch]); // ✅ Removido 'appointments' das deps
+  }, [invalidateCache, refetch]);
 
   // Realtime updates com debounce e suporte a polling
   // ✅ CORRIGIDO: Removido update otimista que causava "paciente não encontrado"

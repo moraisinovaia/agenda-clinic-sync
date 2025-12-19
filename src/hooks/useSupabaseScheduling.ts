@@ -28,13 +28,14 @@ export function useSupabaseScheduling() {
       const result = await appointmentCreation.createAppointment(formData, editingAppointmentId, forceConflict);
       console.log('✨ useSupabaseScheduling: Resultado recebido:', result);
       
-      // ✅ Se há sucesso (mesmo que não explícito), invalidar cache
+      // ✅ FASE 6: Se há sucesso, invalidar cache E forçar refetch IMEDIATO
       if (result && result.success !== false) {
-        // Invalidar cache imediatamente - o realtime fará o resto
+        // Invalidar cache imediatamente
         appointmentsList.invalidateCache?.();
         
-        // Aguardar um pouco para o realtime processar
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // ✅ CORREÇÃO: Forçar refetch IMEDIATO (não esperar polling)
+        await appointmentsList.refetch?.();
+        console.log('✅ [SCHEDULING] Refetch imediato executado após criar agendamento');
       }
       
       return result;
