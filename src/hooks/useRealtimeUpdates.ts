@@ -237,19 +237,26 @@ class RealtimeManager {
     console.log(`⏳ [SINGLETON v${this.VERSION}] Reconectando ${table} (${currentRetries + 1}/${this.MAX_RETRY_ATTEMPTS}) em ${delay}ms`);
     
     setTimeout(() => {
-      this.removeChannel(table);
+      // ✅ CORREÇÃO: Preservar subscribers durante reconexão
+      this.removeChannel(table, true);
       this.createChannel(table);
       this.isReconnecting.set(table, false);
+      // ✅ NÃO parar polling aqui - só para quando conexão estabilizar
     }, delay);
   }
 
-  private removeChannel(table: string) {
+  // ✅ CORRIGIDO: Aceita flag para preservar subscribers durante reconexão
+  private removeChannel(table: string, preserveSubscribers = false) {
     const channel = this.channels.get(table);
     if (channel) {
-      console.log(`🔌 [SINGLETON] Removendo canal ${table}`);
+      console.log(`🔌 [SINGLETON] Removendo canal ${table} (preserveSubscribers: ${preserveSubscribers})`);
       supabase.removeChannel(channel);
       this.channels.delete(table);
-      this.subscribers.delete(table);
+      
+      // ✅ Só deletar subscribers se for cleanup final, não durante reconexão
+      if (!preserveSubscribers) {
+        this.subscribers.delete(table);
+      }
     }
   }
 
