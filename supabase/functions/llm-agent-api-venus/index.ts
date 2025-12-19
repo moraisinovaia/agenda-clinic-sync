@@ -61,6 +61,13 @@ serve(async (req) => {
         if (body && typeof body === 'object') {
           console.log(`📥 [VENUS PROXY] Keys do body original:`, Object.keys(body));
         }
+        
+        // ✅ Normalizar body se for array (n8n às vezes envia [{...}] ao invés de {...})
+        if (Array.isArray(body) && body.length > 0) {
+          console.log('⚠️ [VENUS PROXY] Body recebido como array, extraindo primeiro elemento');
+          body = body[0];
+          console.log(`📥 [VENUS PROXY] Body após normalização:`, JSON.stringify(body));
+        }
       } catch (e) {
         console.log(`⚠️ [VENUS PROXY] Body vazio ou inválido:`, e.message);
         body = {};
@@ -74,6 +81,7 @@ serve(async (req) => {
     };
 
     console.log(`📦 [VENUS PROXY] Body enriquecido com cliente_id: ${CLINICA_VENUS_ID}`);
+    console.log(`📤 [VENUS PROXY] Body enriquecido completo:`, JSON.stringify(enrichedBody));
     console.log(`📡 [VENUS PROXY] Chamando API principal: ${MAIN_API_URL}/${action}`);
 
     // Construir URL da API principal
