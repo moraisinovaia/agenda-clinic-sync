@@ -619,6 +619,57 @@ function getDataAtualBrasil(): string {
 }
 
 /**
+ * 🚫 VALIDAÇÃO DE DATA/HORA FUTURA
+ * Valida se a data/hora do agendamento é no futuro (timezone São Paulo)
+ * @param dataAgendamento - Data no formato YYYY-MM-DD
+ * @param horaAgendamento - Hora no formato HH:MM ou HH:MM:SS (opcional)
+ * @returns { valido: boolean, erro?: string, dataMinima?: string, horaMinima?: string }
+ */
+function validarDataHoraFutura(
+  dataAgendamento: string, 
+  horaAgendamento?: string
+): { valido: boolean; erro?: 'DATA_PASSADA' | 'HORARIO_PASSADO'; dataMinima?: string; horaMinima?: string } {
+  const { data: dataAtual, hora: horaAtual, minuto: minutoAtual } = getDataHoraAtualBrasil();
+  
+  // Validar data
+  if (dataAgendamento < dataAtual) {
+    console.log(`🚫 [VALIDAÇÃO] Data ${dataAgendamento} está no passado (hoje: ${dataAtual})`);
+    return {
+      valido: false,
+      erro: 'DATA_PASSADA',
+      dataMinima: dataAtual
+    };
+  }
+  
+  // Se for hoje, validar horário (mínimo 1h de antecedência)
+  if (dataAgendamento === dataAtual && horaAgendamento) {
+    const [horaAg, minAg] = horaAgendamento.split(':').map(Number);
+    const minutosTotaisAgendamento = horaAg * 60 + (minAg || 0);
+    const minutosTotaisAtual = horaAtual * 60 + minutoAtual;
+    
+    // Mínimo 60 minutos de antecedência
+    const ANTECEDENCIA_MINUTOS = 60;
+    if (minutosTotaisAgendamento < minutosTotaisAtual + ANTECEDENCIA_MINUTOS) {
+      const minutosTotaisMinimos = minutosTotaisAtual + ANTECEDENCIA_MINUTOS;
+      const horaMinima = Math.floor(minutosTotaisMinimos / 60);
+      const minutoMinimo = minutosTotaisMinimos % 60;
+      const horaMinFormatada = `${horaMinima.toString().padStart(2, '0')}:${minutoMinimo.toString().padStart(2, '0')}`;
+      
+      console.log(`🚫 [VALIDAÇÃO] Horário ${horaAgendamento} muito próximo. Mínimo: ${horaMinFormatada}`);
+      return {
+        valido: false,
+        erro: 'HORARIO_PASSADO',
+        dataMinima: dataAtual,
+        horaMinima: horaMinFormatada
+      };
+    }
+  }
+  
+  console.log(`✅ [VALIDAÇÃO] Data/hora ${dataAgendamento} ${horaAgendamento || ''} OK (futura)`);
+  return { valido: true };
+}
+
+/**
  * Classifica um horário de agendamento no período correto (manhã/tarde)
  * considerando margem de tolerância para ordem de chegada
  */
@@ -1307,6 +1358,35 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
           campos_faltando: missingFields
         }
       });
+    }
+
+    // 🚫 VALIDAR: Data/hora não pode ser no passado
+    const validacaoDataSchedule = validarDataHoraFutura(data_consulta, hora_consulta);
+    if (!validacaoDataSchedule.valido) {
+      const { data: dataAtualBrasil } = getDataHoraAtualBrasil();
+      
+      if (validacaoDataSchedule.erro === 'DATA_PASSADA') {
+        return businessErrorResponse({
+          codigo_erro: 'DATA_PASSADA',
+          mensagem_usuario: `❌ Não é possível agendar para ${formatarDataPorExtenso(data_consulta)} pois essa data já passou.\n\n📅 A data de hoje é ${formatarDataPorExtenso(dataAtualBrasil)}.\n\n💡 Por favor, escolha uma data a partir de hoje.`,
+          detalhes: { 
+            data_solicitada: data_consulta,
+            data_atual: dataAtualBrasil
+          }
+        });
+      }
+      
+      if (validacaoDataSchedule.erro === 'HORARIO_PASSADO') {
+        return businessErrorResponse({
+          codigo_erro: 'HORARIO_PASSADO',
+          mensagem_usuario: `❌ Não é possível agendar para ${hora_consulta} hoje pois esse horário já passou ou está muito próximo.\n\n⏰ Horário mínimo para agendamento hoje: ${validacaoDataSchedule.horaMinima}\n\n💡 Escolha um horário posterior ou agende para outro dia.`,
+          detalhes: { 
+            data_solicitada: data_consulta,
+            hora_solicitada: hora_consulta,
+            hora_minima: validacaoDataSchedule.horaMinima
+          }
+        });
+      }
     }
 
     // 🗓️ Calcular dia da semana (necessário para validações)
@@ -2802,6 +2882,24 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
       return errorResponse('Não é possível remarcar consulta cancelada');
     }
 
+    // 🚫 VALIDAR: Nova data/hora não pode ser no passado
+    const validacaoDataReschedule = validarDataHoraFutura(nova_data, nova_hora);
+    if (!validacaoDataReschedule.valido) {
+      const { data: dataAtualBrasil } = getDataHoraAtualBrasil();
+      
+      return businessErrorResponse({
+        codigo_erro: validacaoDataReschedule.erro,
+        mensagem_usuario: validacaoDataReschedule.erro === 'DATA_PASSADA' 
+          ? `❌ Não é possível remarcar para ${formatarDataPorExtenso(nova_data)} pois essa data já passou.\n\n📅 A data de hoje é ${formatarDataPorExtenso(dataAtualBrasil)}.\n\n💡 Por favor, escolha uma data futura.`
+          : `❌ Não é possível remarcar para ${nova_hora} hoje pois esse horário já passou ou está muito próximo.\n\n⏰ Horário mínimo: ${validacaoDataReschedule.horaMinima}\n\n💡 Escolha um horário posterior ou remarque para outro dia.`,
+        detalhes: { 
+          nova_data,
+          nova_hora,
+          data_atual: dataAtualBrasil
+        }
+      });
+    }
+
     // ⚠️ MIGRAÇÃO: Bloquear remarcações antes da data mínima
     const minBookingDate = getMinimumBookingDate(config);
     if (nova_data < minBookingDate) {
@@ -3206,23 +3304,22 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       // Calcular diferença em dias entre data solicitada e hoje
       const diferencaDias = Math.floor((hoje.getTime() - dataConsulta.getTime()) / (1000 * 60 * 60 * 24));
       
-      if (dataConsulta < hoje && diferencaDias > 90) {
-        // Só ajusta se for REALMENTE passado (mais de 90 dias no passado)
-        // Isso evita ajustar datas futuras que o usuário especificou explicitamente
+      // 🚫 CORREÇÃO: Bloquear TODAS as datas passadas (não apenas >90 dias)
+      if (dataConsulta < hoje) {
+        console.log(`🚫 Data solicitada (${data_consulta}) está no passado (${diferencaDias} dias). Ajustando...`);
+        
+        // Se for horário noturno, começar de amanhã
         if (horaAtual >= 18) {
           const amanha = new Date(dataAtual + 'T00:00:00');
           amanha.setDate(amanha.getDate() + 1);
           data_consulta = amanha.toISOString().split('T')[0];
-          console.log(`⚠️ Data muito antiga detectada (${diferencaDias} dias no passado) E horário noturno (${horaAtual}h). Ajustando para AMANHÃ: ${data_consulta}`);
+          console.log(`🌙 Horário noturno (${horaAtual}h). Buscando a partir de AMANHÃ: ${data_consulta}`);
         } else {
           data_consulta = dataAtual;
-          console.log(`⚠️ Data muito antiga detectada (${diferencaDias} dias no passado). Ajustando para HOJE: ${data_consulta}`);
+          console.log(`📅 Ajustado para HOJE: ${data_consulta}`);
         }
-      } else if (dataConsulta >= hoje) {
-        console.log(`📅 Ponto de partida da busca: ${data_consulta} (data futura fornecida pelo usuário)`);
       } else {
-        // Data está no passado mas há menos de 90 dias - respeitar a escolha do usuário
-        console.log(`⚠️ Data ${diferencaDias} dias no passado, mas será respeitada como ponto de partida (${data_consulta})`);
+        console.log(`📅 Ponto de partida da busca: ${data_consulta} (data futura fornecida pelo usuário)`);
       }
     }
     
