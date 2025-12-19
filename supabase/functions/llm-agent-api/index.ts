@@ -1315,23 +1315,60 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
       console.log(`✅ Médico encontrado por ID: ${medico.nome}`);
     } else {
       console.log(`🔍 Buscando médico por nome: ${medico_nome}`);
-      const { data, error } = await supabase
+      
+      // Buscar TODOS os médicos ativos do cliente (mesma lógica do handleAvailability)
+      const { data: todosMedicos, error: medicosError } = await supabase
         .from('medicos')
         .select('id, nome, ativo')
-        .ilike('nome', `%${medico_nome}%`)
         .eq('cliente_id', clienteId)
-        .eq('ativo', true)
-        .single();
+        .eq('ativo', true);
       
-      medico = data;
-      if (error || !medico) {
+      if (medicosError || !todosMedicos || todosMedicos.length === 0) {
+        console.error(`❌ Erro ao buscar médicos:`, medicosError);
         return businessErrorResponse({
-          codigo_erro: 'MEDICO_NAO_ENCONTRADO',
-          mensagem_usuario: `❌ Médico "${medico_nome}" não foi encontrado ou está inativo.\n\n💡 Verifique o nome do médico ou entre em contato com a clínica para confirmar a disponibilidade.`,
-          detalhes: { medico_nome }
+          codigo_erro: 'ERRO_BUSCA_MEDICOS',
+          mensagem_usuario: '❌ Não foi possível buscar médicos disponíveis.',
+          detalhes: { erro: medicosError?.message }
         });
       }
-      console.log(`✅ Médico encontrado por nome: ${medico.nome}`);
+      
+      console.log(`📋 Total de médicos ativos encontrados: ${todosMedicos.length}`);
+      console.log(`📋 Médicos disponíveis: ${todosMedicos.map(m => m.nome).join(', ')}`);
+      
+      // Normalizar nome para busca (remover acentos, pontuação, espaços extras)
+      const normalizarNomeMedico = (texto: string): string => 
+        texto.toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+          .replace(/[.,\-']/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+      
+      const nomeNormalizado = normalizarNomeMedico(medico_nome);
+      console.log(`🔍 Nome normalizado para busca: "${nomeNormalizado}"`);
+      
+      // Matching inteligente - buscar médico que contém o nome normalizado
+      const medicosEncontrados = todosMedicos.filter(m => {
+        const nomeCompletoNormalizado = normalizarNomeMedico(m.nome);
+        const match = nomeCompletoNormalizado.includes(nomeNormalizado) || 
+                     nomeNormalizado.includes(nomeCompletoNormalizado);
+        if (match) {
+          console.log(`✅ Match encontrado: "${m.nome}" ↔ "${medico_nome}"`);
+        }
+        return match;
+      });
+      
+      if (medicosEncontrados.length === 0) {
+        console.log(`❌ Nenhum médico encontrado para: "${medico_nome}"`);
+        const sugestoes = todosMedicos.map(m => m.nome).slice(0, 10);
+        return businessErrorResponse({
+          codigo_erro: 'MEDICO_NAO_ENCONTRADO',
+          mensagem_usuario: `❌ Médico "${medico_nome}" não encontrado.\n\n✅ Médicos disponíveis:\n${sugestoes.map(m => `   • ${m}`).join('\n')}`,
+          detalhes: { medico_solicitado: medico_nome, medicos_disponiveis: sugestoes }
+        });
+      }
+      
+      medico = medicosEncontrados[0];
+      console.log(`✅ Médico encontrado por nome inteligente: "${medico_nome}" → "${medico.nome}" (ID: ${medico.id})`);
     }
 
     console.log('🔍 Buscando regras de negócio...');
