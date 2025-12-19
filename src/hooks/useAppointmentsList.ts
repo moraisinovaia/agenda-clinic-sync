@@ -303,11 +303,15 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     }
   }, [fetchAppointments]);
 
+  // 🔥 Ref para último timestamp conhecido (para detectar novos agendamentos)
+  const lastKnownTimestampRef = useRef<string | null>(null);
+  
   // 🔄 Invalidar cache local quando necessário
   const invalidateCache = useCallback(() => {
-    console.log('🗑️ Invalidando cache local');
+    console.log('🗑️ Invalidando cache local COMPLETAMENTE');
     fetchPromiseRef.current = null;
     fetchTimestampRef.current = 0;
+    lastKnownTimestampRef.current = null; // ✅ CORRIGIDO: Zerar timestamp também
   }, []);
 
   const forceRefetch = useCallback(() => {
@@ -469,10 +473,11 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   }, [appointments, invalidateCache, refetch]);
 
   // Realtime updates com debounce e suporte a polling
+  // ✅ CORRIGIDO: Removido update otimista que causava "paciente não encontrado"
   useRealtimeUpdates({
     table: 'agendamentos',
     onInsert: (payload) => {
-      // ✅ NOVO: Se é polling, verificar novos agendamentos por timestamp
+      // ✅ Se é polling, verificar novos agendamentos por timestamp
       if (payload?._polling || payload?._forceRefresh) {
         console.log('🔄 [POLLING] Verificando novos agendamentos via timestamp...');
         checkForNewAppointments();
@@ -484,19 +489,19 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         return;
       }
       
-      // ⚡ FASE 3: Update Local Otimista (aparece instantaneamente)
-      const newAppointment = payload.new as AppointmentWithRelations;
-      if (newAppointment && newAppointment.id) {
-        setAppointments(prev => [newAppointment, ...prev]);
-        console.log('⚡ [REALTIME-INSTANT] Novo agendamento inserido localmente');
-      }
+      // ❌ REMOVIDO: Update otimista causava "Paciente não encontrado"
+      // O payload do Realtime NÃO contém os JOINs (pacientes, medicos, atendimentos)
+      // Isso causava exibição de dados incompletos seguido de "sumiço" após refetch
       
-      // Refetch completo em background após 3s para garantir dados corretos
+      // ✅ CORRIGIDO: Apenas invalidar cache e refetch imediato com dados COMPLETOS
+      console.log('🆕 [REALTIME] Novo agendamento detectado, refetch imediato...');
+      invalidateCache();
+      
+      // ⚡ Refetch em 500ms para garantir dados completos com relacionamentos
       setTimeout(() => {
-        console.log('🔄 [BACKGROUND] Refetch completo após insert...');
-        invalidateCache();
+        console.log('🔄 [REALTIME] Refetch completo com dados relacionados...');
         refetch();
-      }, 3000);
+      }, 500);
     },
     onUpdate: (payload) => {
       if (payload?._polling) return; // Polling trata apenas inserts
