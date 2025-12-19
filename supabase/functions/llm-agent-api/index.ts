@@ -748,7 +748,7 @@ const BUSINESS_RULES = {
         },
         'Consulta Cardiológica': {
           permite_online: false,
-          mensagem: 'Consultas devem ser agendadas por ligação: (87) 3866-4050'
+          mensagem: 'Consultas devem ser agendadas por ligação' // Telefone será injetado dinamicamente
         }
       }
     }
@@ -801,9 +801,9 @@ function montarMensagemConsulta(
 /**
  * Formata consulta com contexto de regras de negócio (períodos, ordem de chegada, etc)
  */
-function formatarConsultaComContexto(agendamento: any): any {
-  // 1. Buscar regras do médico em BUSINESS_RULES.medicos
-  const regras = BUSINESS_RULES.medicos[agendamento.medico_id];
+function formatarConsultaComContexto(agendamento: any, config: DynamicConfig | null): any {
+  // 1. Buscar regras do médico (dinâmico primeiro, fallback para hardcoded)
+  const regras = getMedicoRules(config, agendamento.medico_id, BUSINESS_RULES.medicos[agendamento.medico_id]);
   
   // 2. Se não tem regras, retornar formato simples
   if (!regras) {
@@ -1918,8 +1918,8 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
         .replace(/tarde/g, 'tarde')
         .replace(/noite/g, 'noite');
       
-      // Buscar regras do médico
-      const regras = BUSINESS_RULES.medicos[medico.id];
+      // Buscar regras do médico (dinâmico primeiro, fallback hardcoded)
+      const regras = getMedicoRules(config, medico.id, BUSINESS_RULES.medicos[medico.id]);
       
       if (regras && regras.servicos) {
         // Encontrar serviço
@@ -2083,8 +2083,8 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
         let periodoConfig = null;
         let nomePeriodo = '';
         
-        // Buscar regras do médico
-        const regrasMedico = BUSINESS_RULES.medicos[medico.id];
+        // Buscar regras do médico (dinâmico primeiro, fallback hardcoded)
+        const regrasMedico = getMedicoRules(config, medico.id, BUSINESS_RULES.medicos[medico.id]);
         if (regrasMedico) {
           const servicoKey = Object.keys(regrasMedico.servicos)[0];
           const servico = regrasMedico.servicos[servicoKey];
@@ -2689,8 +2689,8 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string, c
         observacoes: a.observacoes
       };
       
-      // ✅ Aplicar formatação contextual com regras de negócio
-      return formatarConsultaComContexto(consultaBase);
+      // ✅ Aplicar formatação contextual com regras de negócio (passando config dinâmica)
+      return formatarConsultaComContexto(consultaBase, config);
     });
 
     // Construir mensagem geral com todas as consultas formatadas
@@ -3798,7 +3798,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       if (proximasDatas.length === 0) {
         const mensagemSemVagas = 
           `😔 Não encontrei vagas disponíveis para ${medico.nome} nos próximos 45 dias.\n\n` +
-          `📞 Por favor, ligue para (87) 3866-4050 para:\n` +
+          `📞 Por favor, ligue para ${getClinicPhone(config)} para:\n` +
           `• Entrar na fila de espera\n` +
           `• Verificar outras opções\n` +
           `• Consultar disponibilidade futura`;
@@ -3850,7 +3850,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       console.error(`📋 IDs disponíveis nas BUSINESS_RULES:`, Object.keys(BUSINESS_RULES.medicos));
       return businessErrorResponse({
         codigo_erro: 'REGRAS_NAO_CONFIGURADAS',
-        mensagem_usuario: `❌ Não foi possível verificar disponibilidade para ${medico.nome}.\n\n📞 Por favor, entre em contato com a clínica para agendar: (87) 3866-4050`,
+        mensagem_usuario: `❌ Não foi possível verificar disponibilidade para ${medico.nome}.\n\n📞 Por favor, entre em contato com a clínica para agendar: ${getClinicPhone(config)}`,
         detalhes: {
           medico_id: medico.id,
           medico_nome: medico.nome
@@ -4459,7 +4459,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       if (proximasDatas.length === 0) {
         return businessErrorResponse({
           codigo_erro: 'SEM_VAGAS_DISPONIVEIS',
-          mensagem_usuario: `😔 Não encontrei vagas disponíveis para ${medico.nome} - ${servicoKey} nos próximos ${dias_busca} dias.\n\n📞 Sugestões:\n   • Ligue para (87) 3866-4050 para verificar outras opções\n   • Entre na fila de espera\n   • Consulte disponibilidade em outras especialidades`,
+          mensagem_usuario: `😔 Não encontrei vagas disponíveis para ${medico.nome} - ${servicoKey} nos próximos ${dias_busca} dias.\n\n📞 Sugestões:\n   • Ligue para ${getClinicPhone(config)} para verificar outras opções\n   • Entre na fila de espera\n   • Consulte disponibilidade em outras especialidades`,
           detalhes: {
             medico: medico.nome,
             servico: servicoKey,
@@ -4823,7 +4823,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         
         mensagem += ` nos próximos 60 dias.\n\n`;
         mensagem += `📞 Por favor, entre em contato:\n`;
-        mensagem += `   • Telefone: (87) 3866-4050\n`;
+        mensagem += `   • Telefone: ${getClinicPhone(config)}\n`;
         mensagem += `   • Opções: Fila de espera ou outros períodos`;
       }
       
@@ -5028,7 +5028,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
     
     return businessErrorResponse({
       codigo_erro: 'ERRO_SISTEMA',
-      mensagem_usuario: '❌ Ocorreu um erro ao verificar a disponibilidade.\n\n📞 Por favor:\n   • Tente novamente em alguns instantes\n   • Ou entre em contato: (87) 3866-4050',
+      mensagem_usuario: `❌ Ocorreu um erro ao verificar a disponibilidade.\n\n📞 Por favor:\n   • Tente novamente em alguns instantes\n   • Ou entre em contato: ${getClinicPhone(config)}`,
       detalhes: {
         erro_tecnico: error?.message || 'Erro desconhecido',
         timestamp: new Date().toISOString()
