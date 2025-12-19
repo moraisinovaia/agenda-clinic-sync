@@ -5385,13 +5385,16 @@ function businessErrorResponse(config: {
   });
 }
 
-function errorResponse(message: string, status = 400) {
+function errorResponse(message: string, codigoErro = 'ERRO_GENERICO') {
   return new Response(JSON.stringify({
     success: false,
+    codigo_erro: codigoErro,
     error: message,
+    mensagem_usuario: message,
+    mensagem_whatsapp: message,
     timestamp: new Date().toISOString()
   }), {
-    status,
+    status: 200, // ✅ Sempre 200 para n8n/agente processar JSON
     headers: { ...corsHeaders, 'Content-Type': 'application/json' }
   });
 }
