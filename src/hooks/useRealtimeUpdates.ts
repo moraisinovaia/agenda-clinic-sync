@@ -8,7 +8,7 @@ interface RealtimeConfig {
   onDelete?: (payload: any) => void;
 }
 
-// 🎯 SINGLETON GLOBAL: Gerenciador único de conexões realtime v4.0
+// 🎯 SINGLETON GLOBAL: Gerenciador único de conexões realtime v5.0 - POLLING HÍBRIDO IMEDIATO
 class RealtimeManager {
   private channels = new Map<string, any>();
   private subscribers = new Map<string, Map<symbol, RealtimeConfig>>();
@@ -17,41 +17,85 @@ class RealtimeManager {
   private connectionTime = new Map<string, number>();
   private isRealtimeDisabled = new Map<string, boolean>();
   private pollingIntervals = new Map<string, NodeJS.Timeout>();
-  private lastKnownTimestamp = new Map<string, string>(); // ✅ NOVO: Último timestamp conhecido
-  private readonly VERSION = '4.0.0'; // ✅ Versão 4.0 com polling melhorado
+  private hybridPollingActive = new Map<string, boolean>(); // ✅ NOVO: Polling híbrido ativo
+  private readonly VERSION = '5.0.0'; // ✅ Versão 5.0 com polling híbrido imediato
   private readonly MAX_RETRY_ATTEMPTS = 20;
   private readonly RETRY_COOLDOWN = 5 * 60 * 1000;
-  private readonly MIN_CONNECTION_TIME = 30000;
+  private readonly MIN_CONNECTION_TIME = 10000; // ✅ REDUZIDO: 10 segundos (era 30s)
   private readonly STABLE_CONNECTION_RESET = 5 * 60 * 1000;
   
-  // ✅ NOVO: Intervalos de polling por tabela (agendamentos = 5s, outros = 15s)
+  // ✅ Intervalos de polling por tabela (agendamentos = 5s, outros = 15s)
   private readonly POLLING_INTERVALS: Record<string, number> = {
     'agendamentos': 5000,  // 5 segundos para agendamentos (crítico)
     'default': 15000       // 15 segundos para outras tabelas
   };
 
   constructor() {
-    // ✅ NOVO: Limpar estado de desabilitação ao inicializar (permite reconexão após reload)
+    // ✅ Limpar estado ao inicializar
     this.isRealtimeDisabled.clear();
     this.retryCount.clear();
-    console.log(`🎯 [SINGLETON v${this.VERSION}] RealtimeManager inicializado (estado limpo)`);
+    this.hybridPollingActive.clear();
+    console.log(`🎯 [SINGLETON v${this.VERSION}] RealtimeManager inicializado (polling híbrido ativo)`);
   }
 
-  // ✅ NOVO: Método para forçar reset do Realtime
+  // ✅ Método para forçar reset do Realtime
   resetRealtime(table?: string) {
     if (table) {
       this.isRealtimeDisabled.delete(table);
       this.retryCount.delete(table);
+      this.stopHybridPolling(table);
       console.log(`🔄 [RESET] Realtime resetado para ${table}`);
     } else {
       this.isRealtimeDisabled.clear();
       this.retryCount.clear();
+      this.pollingIntervals.forEach((_, key) => this.stopHybridPolling(key));
       console.log(`🔄 [RESET] Realtime resetado para todas as tabelas`);
     }
   }
 
   private getPollingInterval(table: string): number {
     return this.POLLING_INTERVALS[table] || this.POLLING_INTERVALS['default'];
+  }
+
+  // ✅ NOVO: Iniciar polling híbrido IMEDIATAMENTE
+  private startHybridPolling(table: string) {
+    if (this.pollingIntervals.has(table)) {
+      console.log(`⚡ [HYBRID] Polling já ativo para ${table}`);
+      return;
+    }
+    
+    const interval = this.getPollingInterval(table);
+    console.log(`⚡ [HYBRID v${this.VERSION}] ATIVANDO POLLING IMEDIATO para ${table} (${interval/1000}s)`);
+    this.hybridPollingActive.set(table, true);
+    
+    // ✅ Executar imediatamente na primeira vez
+    this.notifySubscribers(table, 'onInsert', { 
+      _polling: true, 
+      _forceRefresh: true, 
+      new: null 
+    });
+    
+    const pollingId = setInterval(() => {
+      console.log(`🔄 [HYBRID] Polling ${table}...`);
+      this.notifySubscribers(table, 'onInsert', { 
+        _polling: true, 
+        _forceRefresh: true, 
+        new: null 
+      });
+    }, interval);
+    
+    this.pollingIntervals.set(table, pollingId);
+  }
+
+  // ✅ NOVO: Parar polling híbrido
+  private stopHybridPolling(table: string) {
+    const interval = this.pollingIntervals.get(table);
+    if (interval) {
+      clearInterval(interval);
+      this.pollingIntervals.delete(table);
+      this.hybridPollingActive.delete(table);
+      console.log(`⏹️ [HYBRID] Polling parado para ${table}`);
+    }
   }
 
   subscribe(table: string, config: RealtimeConfig): () => void {
@@ -62,39 +106,17 @@ class RealtimeManager {
     }
     this.subscribers.get(table)!.set(subscriberId, config);
 
-    // ✅ MELHORADO: Polling mais inteligente quando Realtime está desabilitado
+    // ✅ Se Realtime completamente desabilitado, usar apenas polling
     if (this.isRealtimeDisabled.get(table)) {
-      const pollingInterval = this.getPollingInterval(table);
-      console.warn(`⚠️ [SINGLETON v${this.VERSION}] Realtime desabilitado para ${table}, usando POLLING ATIVO (${pollingInterval/1000}s)`);
-      
-      if (!this.pollingIntervals.has(table)) {
-        console.log(`🔄 [POLLING v${this.VERSION}] Iniciando polling para ${table} (refetch a cada ${pollingInterval/1000}s)`);
-        
-        const interval = setInterval(async () => {
-          console.log(`🔄 [POLLING v${this.VERSION}] Verificando atualizações para ${table}...`);
-          
-          // ✅ NOVO: Notificar com flag especial para forçar invalidação de cache
-          this.notifySubscribers(table, 'onInsert', { 
-            _polling: true,
-            _forceRefresh: true,
-            new: null 
-          });
-        }, pollingInterval);
-        
-        this.pollingIntervals.set(table, interval);
-      }
+      console.warn(`⚠️ [SINGLETON v${this.VERSION}] Realtime desabilitado para ${table}, usando POLLING`);
+      this.startHybridPolling(table);
 
       return () => {
         const tableSubscribers = this.subscribers.get(table);
         if (tableSubscribers) {
           tableSubscribers.delete(subscriberId);
-          
           if (tableSubscribers.size === 0) {
-            const interval = this.pollingIntervals.get(table);
-            if (interval) {
-              clearInterval(interval);
-              this.pollingIntervals.delete(table);
-            }
+            this.stopHybridPolling(table);
           }
         }
       };
@@ -111,9 +133,9 @@ class RealtimeManager {
       if (tableSubscribers) {
         tableSubscribers.delete(subscriberId);
         
-        // Se não há mais subscribers, fechar canal
         if (tableSubscribers.size === 0) {
           this.removeChannel(table);
+          this.stopHybridPolling(table);
         }
       }
     };
@@ -122,7 +144,6 @@ class RealtimeManager {
   private createChannel(table: string) {
     console.log(`🔌 [SINGLETON] Criando canal único para ${table}`);
     
-    // ✅ FASE 1: Marcar timestamp da conexão
     this.connectionTime.set(table, Date.now());
     
     const channel = supabase
@@ -147,15 +168,20 @@ class RealtimeManager {
           console.log(`✅ [SINGLETON v${this.VERSION}] Realtime conectado para ${table}`);
           this.isReconnecting.set(table, false);
           
-          // ✅ Agendar reset de contador após período estável
+          // ✅ NOVO: Parar polling híbrido quando conexão estabilizar
           setTimeout(() => {
             const connTime = this.connectionTime.get(table) || 0;
             const duration = Date.now() - connTime;
             if (duration >= this.STABLE_CONNECTION_RESET) {
               const previousRetries = this.retryCount.get(table) || 0;
               if (previousRetries > 0) {
-                console.log(`✅ [SINGLETON v${this.VERSION}] Conexão ${table} estável por ${Math.floor(duration/1000)}s - resetando contador de ${previousRetries} para 0`);
+                console.log(`✅ [SINGLETON v${this.VERSION}] Conexão ${table} estável - resetando contador`);
                 this.retryCount.set(table, 0);
+              }
+              // ✅ Parar polling quando conexão está estável
+              if (this.hybridPollingActive.get(table)) {
+                console.log(`✅ [HYBRID] Conexão estável, desativando polling para ${table}`);
+                this.stopHybridPolling(table);
               }
             }
           }, this.STABLE_CONNECTION_RESET);
@@ -172,37 +198,35 @@ class RealtimeManager {
   }
 
   private handleReconnect(table: string) {
-    // ✅ FASE 1: Prevenir reconexões simultâneas
     if (this.isReconnecting.get(table)) {
       console.log(`⚠️ [SINGLETON] Reconexão já em andamento para ${table}`);
       return;
     }
 
-    // ✅ Verificar se a conexão foi muito curta (instável)
     const connTime = this.connectionTime.get(table) || 0;
     const duration = Date.now() - connTime;
     
-    if (duration > this.MIN_CONNECTION_TIME) {
-      console.log(`✅ [SINGLETON v${this.VERSION}] Conexão ${table} durou ${Math.floor(duration/1000)}s - conexão estável, resetando contador`);
-      this.retryCount.set(table, 0); // ✅ SÓ resetar se conexão foi estável
-      return; // Conexão foi longa o suficiente, não reconectar
+    // ✅ NOVO: Ativar polling híbrido IMEDIATAMENTE se conexão foi instável
+    if (duration < this.MIN_CONNECTION_TIME) {
+      console.warn(`⚠️ [SINGLETON v${this.VERSION}] Conexão instável para ${table} (${Math.floor(duration/1000)}s < ${this.MIN_CONNECTION_TIME/1000}s)`);
+      
+      // ⚡ ATIVAR POLLING HÍBRIDO IMEDIATAMENTE (não esperar 20 tentativas!)
+      if (!this.hybridPollingActive.get(table)) {
+        this.startHybridPolling(table);
+      }
+    } else {
+      console.log(`✅ [SINGLETON v${this.VERSION}] Conexão ${table} durou ${Math.floor(duration/1000)}s - estável`);
+      this.retryCount.set(table, 0);
+      return;
     }
-
-    console.warn(`⚠️ [SINGLETON v${this.VERSION}] Conexão instável detectada para ${table} (durou apenas ${Math.floor(duration/1000)}s, mínimo ${this.MIN_CONNECTION_TIME/1000}s)`);
 
     const currentRetries = this.retryCount.get(table) || 0;
     
-    // ✅ FASE 3: Se atingiu limite, desabilitar Realtime e usar polling
+    // ✅ Se atingiu limite, desabilitar Realtime completamente
     if (currentRetries >= this.MAX_RETRY_ATTEMPTS) {
-      console.error(`❌ [SINGLETON v${this.VERSION}] Limite de ${this.MAX_RETRY_ATTEMPTS} tentativas atingido para ${table}.`);
-      console.warn(`⚠️ [SINGLETON v${this.VERSION}] DESABILITANDO REALTIME e ATIVANDO POLLING (refetch a cada 15s)`);
+      console.error(`❌ [SINGLETON v${this.VERSION}] Limite de tentativas para ${table} - desabilitando Realtime`);
       this.isRealtimeDisabled.set(table, true);
       this.removeChannel(table);
-      
-      // Notificar subscribers para ativar polling
-      this.notifySubscribers(table, 'onUpdate', { 
-        message: 'Realtime desabilitado, usando polling automático'
-      });
       return;
     }
     
