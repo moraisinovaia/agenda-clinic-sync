@@ -2536,12 +2536,13 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string, c
     // Se não encontrou NENHUM paciente com esses dados, é caso de migração
     if (!pacientesEncontrados || pacientesEncontrados.length === 0) {
       console.log('❌ Paciente não encontrado no sistema novo - possível caso de migração');
+      const clinicPhone = getClinicPhone(config);
       return successResponse({
         encontrado: false,
         consultas: [],
-        message: FALLBACK_MESSAGES.old_appointments,
+        message: `Não encontrei agendamentos no sistema novo. Se sua consulta é anterior a janeiro/2026, os dados estão no sistema anterior. Entre em contato: ${clinicPhone}`,
         observacao: 'Sistema em migração - dados anteriores a janeiro/2026 não disponíveis',
-        contato: FALLBACK_PHONE,
+        contato: clinicPhone,
         total: 0
       });
     }
