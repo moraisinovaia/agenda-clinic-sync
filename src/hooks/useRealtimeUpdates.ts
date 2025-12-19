@@ -8,7 +8,7 @@ interface RealtimeConfig {
   onDelete?: (payload: any) => void;
 }
 
-// 🎯 SINGLETON GLOBAL: Gerenciador único de conexões realtime v5.0 - POLLING HÍBRIDO IMEDIATO
+// 🎯 SINGLETON GLOBAL: Gerenciador único de conexões realtime v5.1 - POLLING HÍBRIDO CONTÍNUO
 class RealtimeManager {
   private channels = new Map<string, any>();
   private subscribers = new Map<string, Map<symbol, RealtimeConfig>>();
@@ -17,8 +17,8 @@ class RealtimeManager {
   private connectionTime = new Map<string, number>();
   private isRealtimeDisabled = new Map<string, boolean>();
   private pollingIntervals = new Map<string, NodeJS.Timeout>();
-  private hybridPollingActive = new Map<string, boolean>(); // ✅ NOVO: Polling híbrido ativo
-  private readonly VERSION = '5.0.0'; // ✅ Versão 5.0 com polling híbrido imediato
+  private hybridPollingActive = new Map<string, boolean>(); // ✅ Polling híbrido ativo
+  private readonly VERSION = '5.1.0'; // ✅ Versão 5.1 com polling contínuo (nunca para no cleanup)
   private readonly MAX_RETRY_ATTEMPTS = 20;
   private readonly RETRY_COOLDOWN = 5 * 60 * 1000;
   private readonly MIN_CONNECTION_TIME = 10000; // ✅ REDUZIDO: 10 segundos (era 30s)
@@ -115,9 +115,8 @@ class RealtimeManager {
         const tableSubscribers = this.subscribers.get(table);
         if (tableSubscribers) {
           tableSubscribers.delete(subscriberId);
-          if (tableSubscribers.size === 0) {
-            this.stopHybridPolling(table);
-          }
+          // ✅ CORREÇÃO v5.1: NUNCA parar polling no cleanup (mesmo quando Realtime desabilitado)
+          console.log(`⚡ [HYBRID] Mantendo polling ativo para ${table} (cleanup isRealtimeDisabled)`);
         }
       };
     }
@@ -135,16 +134,34 @@ class RealtimeManager {
         
         if (tableSubscribers.size === 0) {
           this.removeChannel(table);
-          this.stopHybridPolling(table);
+          // ✅ CORREÇÃO v5.1: NUNCA parar polling no cleanup
+          // Polling só para quando conexão está estável por 5 minutos
+          console.log(`⚡ [HYBRID] Mantendo polling ativo para ${table} (cleanup sem stop)`);
         }
       }
     };
+  }
+  
+  // ✅ NOVO: Método público para forçar início do polling híbrido
+  public startHybridPollingPublic(table: string) {
+    this.startHybridPolling(table);
+  }
+  
+  // ✅ NOVO: Método público para parar polling híbrido
+  public stopHybridPollingPublic(table: string) {
+    this.stopHybridPolling(table);
   }
 
   private createChannel(table: string) {
     console.log(`🔌 [SINGLETON] Criando canal único para ${table}`);
     
     this.connectionTime.set(table, Date.now());
+    
+    // ✅ CORREÇÃO: Iniciar polling híbrido SEMPRE ao criar canal (modo seguro)
+    if (!this.hybridPollingActive.get(table)) {
+      console.log(`⚡ [HYBRID] Ativando polling preventivo para ${table}`);
+      this.startHybridPolling(table);
+    }
     
     const channel = supabase
       .channel(`realtime-${table}`)
