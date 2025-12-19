@@ -54,7 +54,15 @@ serve(async (req) => {
     if (req.method === 'POST') {
       try {
         body = await req.json();
+        // 🔍 DEBUG: Mostrar body original do n8n ANTES de qualquer modificação
+        console.log(`📥 [VENUS PROXY] Body ORIGINAL do n8n (raw):`, JSON.stringify(body));
+        console.log(`📥 [VENUS PROXY] Tipo do body:`, typeof body);
+        console.log(`📥 [VENUS PROXY] É array?:`, Array.isArray(body));
+        if (body && typeof body === 'object') {
+          console.log(`📥 [VENUS PROXY] Keys do body original:`, Object.keys(body));
+        }
       } catch (e) {
+        console.log(`⚠️ [VENUS PROXY] Body vazio ou inválido:`, e.message);
         body = {};
       }
     }
