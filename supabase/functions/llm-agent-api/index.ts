@@ -1451,17 +1451,11 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
               const minBookingDate = getMinimumBookingDate(config);
               if (data_consulta && data_consulta < minBookingDate) {
                 console.log(`🚫 Tentativa de agendar antes da data mínima: ${data_consulta}`);
-                return new Response(JSON.stringify({
-                  success: false,
-                  error: 'DATA_BLOQUEADA',
-                  message: getMigrationBlockMessage(config, medico_id, medico_nome),
-                  data_solicitada: data_consulta,
-                  data_minima: minBookingDate,
-                  timestamp: new Date().toISOString()
-                }), {
-                  status: 200,
-                  headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-                });
+              return businessErrorResponse({
+                codigo_erro: 'DATA_BLOQUEADA',
+                mensagem_usuario: getMigrationBlockMessage(config, medico_id, medico_nome),
+                detalhes: { data_solicitada: data_consulta, data_minima: minBookingDate }
+              });
               }
               
               // 2.1 Verificar se permite agendamento online (aceita ambos os formatos)
@@ -2164,14 +2158,10 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
             
             // Outro tipo de erro (idade, convênio, etc.) - parar o loop
             console.error(`⚠️ Erro não-conflito em ${horarioTeste}:`, tentativaResult?.error);
-            return new Response(JSON.stringify({
-              success: false,
-              error: tentativaResult?.error || 'UNKNOWN_ERROR',
-              message: tentativaResult?.message || `Erro ao tentar agendar: ${tentativaResult?.error}`,
-              timestamp: new Date().toISOString()
-            }), {
-              status: 200,
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            return businessErrorResponse({
+              codigo_erro: tentativaResult?.error || 'ERRO_DESCONHECIDO',
+              mensagem_usuario: tentativaResult?.message || `Erro ao tentar agendar: ${tentativaResult?.error}`,
+              detalhes: { horario: horarioTeste }
             });
           }
           
@@ -2235,29 +2225,23 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
           if (vagasDisponiveis <= 0) {
             // Período realmente lotado
             console.log(`❌ Período ${nomePeriodo} está completamente lotado`);
-            return new Response(JSON.stringify({
-              success: false,
-              error: 'PERIOD_FULL',
-              message: `O período da ${nomePeriodo} está com todas as vagas ocupadas (${vagasOcupadas}/${periodoConfig.limite}). Por favor, escolha outro período ou outro dia.`,
+            return businessErrorResponse({
+              codigo_erro: 'PERIODO_LOTADO',
+              mensagem_usuario: `O período da ${nomePeriodo} está com todas as vagas ocupadas (${vagasOcupadas}/${periodoConfig.limite}). Por favor, escolha outro período ou outro dia.`,
               detalhes: {
                 periodo: nomePeriodo,
                 vagas_ocupadas: vagasOcupadas,
                 vagas_total: periodoConfig.limite,
                 data_solicitada: data_consulta,
                 tentativas_realizadas: tentativas
-              },
-              timestamp: new Date().toISOString()
-            }), {
-              status: 200,
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+              }
             });
           } else {
             // Tem vagas mas nenhum minuto passou na função atômica
             console.log(`⚠️ Período tem ${vagasDisponiveis} vaga(s) mas nenhum horário foi aceito pelo banco após ${tentativas} tentativas`);
-            return new Response(JSON.stringify({
-              success: false,
-              error: 'ALLOCATION_FAILED',
-              message: `Não foi possível encontrar um horário disponível no período da ${nomePeriodo}. Foram testados ${tentativas} minutos, mas todos apresentaram conflitos. Por favor, tente outro período ou entre em contato.`,
+            return businessErrorResponse({
+              codigo_erro: 'ALOCACAO_FALHOU',
+              mensagem_usuario: `Não foi possível encontrar um horário disponível no período da ${nomePeriodo}. Foram testados ${tentativas} minutos, mas todos apresentaram conflitos. Por favor, tente outro período ou entre em contato.`,
               detalhes: {
                 periodo: nomePeriodo,
                 vagas_disponiveis: vagasDisponiveis,
@@ -2266,25 +2250,14 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
                 data_solicitada: data_consulta,
                 tentativas_realizadas: tentativas,
                 sugestao: 'O sistema pode estar com alta demanda ou há restrições específicas. Tente outro período.'
-              },
-              timestamp: new Date().toISOString()
-            }), {
-              status: 200,
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+              }
             });
           }
         }
       }
       
       // Para outros erros, manter comportamento original
-      return new Response(JSON.stringify({
-        success: false,
-        error: result?.error || result?.message || 'Erro desconhecido',
-        timestamp: new Date().toISOString()
-      }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      return errorResponse(result?.error || result?.message || 'Erro desconhecido', 'ERRO_AGENDAMENTO');
     }
 
     console.log('✅ Agendamento criado com sucesso:', result);
@@ -2801,16 +2774,10 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
     const minBookingDate = getMinimumBookingDate(config);
     if (nova_data < minBookingDate) {
       console.log(`🚫 Tentativa de remarcar para antes da data mínima: ${nova_data}`);
-      return new Response(JSON.stringify({
-        success: false,
-        error: 'DATA_BLOQUEADA',
-        message: getMigrationBlockMessage(config, agendamento.medico_id, agendamento.medicos?.nome),
-        data_solicitada: nova_data,
-        data_minima: minBookingDate,
-        timestamp: new Date().toISOString()
-      }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    return businessErrorResponse({
+        codigo_erro: 'DATA_BLOQUEADA',
+        mensagem_usuario: getMigrationBlockMessage(config, agendamento.medico_id, agendamento.medicos?.nome),
+        detalhes: { data_solicitada: nova_data, data_minima: minBookingDate }
       });
     }
 
