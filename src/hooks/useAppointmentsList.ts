@@ -10,7 +10,7 @@ import { logger } from '@/utils/logger';
 
 // 🚨 OTIMIZAÇÃO FASE 2: Cache movido para dentro do hook (local por instância)
 // Removido singleton global para evitar memory leaks e data duplication
-const CACHE_DURATION = 120000; // ⚡ FASE 4: 2 minutos (era 30s)
+const CACHE_DURATION = 60000; // ⚡ FASE 5: 1 minuto (era 2 minutos) - mais responsivo para LLM
 
 // 🔄 QUERY DIRETA: Versão Otimizada 2025-10-27-17:00 - Solução definitiva com índices
 export function useAppointmentsList(itemsPerPage: number = 20) {
@@ -437,10 +437,48 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     }, 500); // ⚡ FASE 2: Reduzido de 3000ms para 500ms
   }, [refetch]);
 
-  // Realtime updates com debounce
+  // ✅ FASE 5: Verificar novos agendamentos por timestamp (para detectar agendamentos via LLM)
+  const checkForNewAppointments = useCallback(async () => {
+    try {
+      const { data: latestAppointment } = await supabase
+        .from('agendamentos')
+        .select('id, created_at')
+        .is('excluido_em', null)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      
+      if (latestAppointment && latestAppointment.length > 0) {
+        const latestTimestamp = latestAppointment[0].created_at;
+        const latestId = latestAppointment[0].id;
+        
+        // Verificar se já temos este agendamento localmente
+        const existsLocally = appointments.some(apt => apt.id === latestId);
+        
+        if (!existsLocally) {
+          console.log('🆕 [POLLING] Novo agendamento detectado via API!', { id: latestId.substring(0, 8), timestamp: latestTimestamp });
+          invalidateCache();
+          await refetch();
+          return true;
+        }
+      }
+      return false;
+    } catch (err) {
+      console.warn('⚠️ [POLLING] Erro ao verificar novos agendamentos:', err);
+      return false;
+    }
+  }, [appointments, invalidateCache, refetch]);
+
+  // Realtime updates com debounce e suporte a polling
   useRealtimeUpdates({
     table: 'agendamentos',
     onInsert: (payload) => {
+      // ✅ NOVO: Se é polling, verificar novos agendamentos por timestamp
+      if (payload?._polling || payload?._forceRefresh) {
+        console.log('🔄 [POLLING] Verificando novos agendamentos via timestamp...');
+        checkForNewAppointments();
+        return;
+      }
+      
       if (isOperatingRef.current || isPausedRef.current) {
         console.log('⏸️ [REALTIME] Insert ignorado - operação em andamento');
         return;
@@ -448,29 +486,38 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       
       // ⚡ FASE 3: Update Local Otimista (aparece instantaneamente)
       const newAppointment = payload.new as AppointmentWithRelations;
-      setAppointments(prev => [newAppointment, ...prev]);
-      console.log('⚡ [REALTIME-INSTANT] Novo agendamento inserido localmente');
+      if (newAppointment && newAppointment.id) {
+        setAppointments(prev => [newAppointment, ...prev]);
+        console.log('⚡ [REALTIME-INSTANT] Novo agendamento inserido localmente');
+      }
       
-      // Refetch completo em background após 5s para garantir dados corretos
+      // Refetch completo em background após 3s para garantir dados corretos
       setTimeout(() => {
         console.log('🔄 [BACKGROUND] Refetch completo após insert...');
+        invalidateCache();
         refetch();
-      }, 5000);
+      }, 3000);
     },
     onUpdate: (payload) => {
+      if (payload?._polling) return; // Polling trata apenas inserts
+      
       if (isOperatingRef.current || isPausedRef.current) {
         console.log('⏸️ [REALTIME] Update ignorado - operação em andamento');
         return;
       }
-      console.log('🔄 [REALTIME] Agendamento atualizado - aguardando 3s');
+      console.log('🔄 [REALTIME] Agendamento atualizado - refetch imediato');
+      invalidateCache();
       debouncedRefetch();
     },
     onDelete: (payload) => {
+      if (payload?._polling) return; // Polling trata apenas inserts
+      
       if (isOperatingRef.current || isPausedRef.current) {
         console.log('⏸️ [REALTIME] Delete ignorado - operação em andamento');
         return;
       }
-      console.log('🔄 [REALTIME] Agendamento deletado - aguardando 3s');
+      console.log('🔄 [REALTIME] Agendamento deletado - refetch imediato');
+      invalidateCache();
       debouncedRefetch();
     }
   });
