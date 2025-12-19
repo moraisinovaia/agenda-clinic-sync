@@ -669,15 +669,10 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         description: 'O agendamento foi cancelado' 
       });
       
-      setTimeout(() => {
-        if (!isOperatingRef.current) {
-          console.log('🔄 [BACKGROUND-CANCEL] Executando refetch de validação...');
-          invalidateCache();
-          refetch();
-        } else {
-          console.warn('⚠️ [BACKGROUND-CANCEL] Refetch cancelado - operação em andamento');
-        }
-      }, 2000);
+      // Refetch imediato após cancelar
+      console.log('🔄 [CANCEL] Executando refetch imediato...');
+      invalidateCache();
+      await refetch();
       
     } catch (error) {
       console.error('❌ [CANCEL] Erro detalhado:', {
@@ -807,15 +802,10 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         description: 'O agendamento foi confirmado' 
       });
       
-      setTimeout(() => {
-        if (!isOperatingRef.current) {
-          console.log('🔄 [BACKGROUND-CONFIRM] Executando refetch de validação...');
-          invalidateCache();
-          refetch();
-        } else {
-          console.warn('⚠️ [BACKGROUND-CONFIRM] Refetch cancelado - operação em andamento');
-        }
-      }, 2000);
+      // Refetch imediato após confirmar
+      console.log('🔄 [CONFIRM] Executando refetch imediato...');
+      invalidateCache();
+      await refetch();
       
     } catch (error) {
       console.error('❌ [CONFIRM] Erro detalhado:', {
