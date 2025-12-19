@@ -427,17 +427,29 @@ const FALLBACK_MINIMUM_BOOKING_DATE = '2026-01-01';
 const FALLBACK_PHONE = '(87) 3866-4050';
 const FALLBACK_DIAS_BUSCA_INICIAL = 14;
 const FALLBACK_DIAS_BUSCA_EXPANDIDA = 45;
-const FALLBACK_MESSAGES = {
-  date_blocked: `Agendamentos disponíveis a partir de janeiro/2026. Para datas anteriores, entre em contato pelo telefone: ${FALLBACK_PHONE}`,
-  old_appointments: `Não encontrei agendamentos no sistema novo. Se sua consulta é anterior a janeiro/2026, os dados estão no sistema anterior. Entre em contato: ${FALLBACK_PHONE}`,
-  no_availability: `Não há vagas disponíveis antes de janeiro/2026. Para consultas anteriores a esta data, ligue: ${FALLBACK_PHONE}`
-};
 
 /**
  * Retorna data mínima de agendamento (dinâmica ou fallback)
  */
 function getMinimumBookingDate(config: DynamicConfig | null): string {
   return config?.clinic_info?.data_minima_agendamento || FALLBACK_MINIMUM_BOOKING_DATE;
+}
+
+/**
+ * Retorna texto formatado da data mínima para exibição ao usuário
+ * Ex: "dezembro/2025" ou "janeiro/2026"
+ */
+function getMinDateDisplayText(config: DynamicConfig | null): string {
+  const minDate = getMinimumBookingDate(config);
+  const [year, month] = minDate.split('-');
+  
+  const meses: Record<string, string> = {
+    '01': 'janeiro', '02': 'fevereiro', '03': 'março', '04': 'abril',
+    '05': 'maio', '06': 'junho', '07': 'julho', '08': 'agosto',
+    '09': 'setembro', '10': 'outubro', '11': 'novembro', '12': 'dezembro'
+  };
+  
+  return `${meses[month] || month}/${year}`;
 }
 
 /**
@@ -572,7 +584,8 @@ function getMigrationBlockMessage(
 
   // Mensagem genérica para outros médicos
   const phone = getClinicPhone(config);
-  return `Agendamentos disponíveis a partir de janeiro/2026. Para datas anteriores, entre em contato pelo telefone: ${phone}`;
+  const minDateText = getMinDateDisplayText(config);
+  return `Agendamentos disponíveis a partir de ${minDateText}. Para datas anteriores, entre em contato pelo telefone: ${phone}`;
 }
 
 // 🌎 Função para obter data E HORA atual no fuso horário de São Paulo
@@ -2537,11 +2550,12 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string, c
     if (!pacientesEncontrados || pacientesEncontrados.length === 0) {
       console.log('❌ Paciente não encontrado no sistema novo - possível caso de migração');
       const clinicPhone = getClinicPhone(config);
+      const minDateText = getMinDateDisplayText(config);
       return successResponse({
         encontrado: false,
         consultas: [],
-        message: `Não encontrei agendamentos no sistema novo. Se sua consulta é anterior a janeiro/2026, os dados estão no sistema anterior. Entre em contato: ${clinicPhone}`,
-        observacao: 'Sistema em migração - dados anteriores a janeiro/2026 não disponíveis',
+        message: `Não encontrei agendamentos no sistema novo. Se sua consulta é anterior a ${minDateText}, os dados estão no sistema anterior. Entre em contato: ${clinicPhone}`,
+        observacao: `Sistema em migração - dados anteriores a ${minDateText} não disponíveis`,
         contato: clinicPhone,
         total: 0
       });
@@ -3831,7 +3845,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         proximas_datas: proximasDatas,
         data_solicitada: data_consulta_original || data_consulta,
         data_minima: mensagemEspecial ? getMinimumBookingDate(config) : undefined,
-        observacao: mensagemEspecial ? 'Sistema em migração - sugestões a partir de janeiro/2026' : undefined,
+        observacao: mensagemEspecial ? `Sistema em migração - sugestões a partir de ${getMinDateDisplayText(config)}` : undefined,
         contexto: {
           medico_id: medico.id,
           medico_nome: medico.nome,
