@@ -8,9 +8,27 @@ import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 import { useDebounce } from '@/hooks/useDebounce';
 import { logger } from '@/utils/logger';
 
-// 🚨 OTIMIZAÇÃO FASE 7: Cache reduzido para ambiente multi-recepcionista + LLM
-// Removido singleton global para evitar memory leaks e data duplication
-const CACHE_DURATION = 5000; // ⚡ FASE 7: 5 segundos - crítico para LLM appointments aparecerem rápido
+// 🚨 OTIMIZAÇÃO FASE 8: Performance máxima para LLM + multi-recepcionista
+// Cache reduzido + filtro por data + polling incremental
+const CACHE_DURATION = 2000; // ⚡ FASE 8: 2 segundos - crítico para LLM appointments aparecerem rápido
+
+// 📅 FASE 8: Filtro por período para reduzir dados carregados (de ~5.4k para ~800)
+const DATE_FILTER_PAST_DAYS = 30;  // Últimos 30 dias
+const DATE_FILTER_FUTURE_DAYS = 60; // Próximos 60 dias
+
+// 🛠️ Helper para calcular datas do filtro
+const getDateFilterRange = () => {
+  const today = new Date();
+  const startDate = new Date(today);
+  startDate.setDate(startDate.getDate() - DATE_FILTER_PAST_DAYS);
+  const endDate = new Date(today);
+  endDate.setDate(endDate.getDate() + DATE_FILTER_FUTURE_DAYS);
+  
+  return {
+    startDate: startDate.toISOString().split('T')[0],
+    endDate: endDate.toISOString().split('T')[0]
+  };
+};
 
 // 🔄 QUERY DIRETA: Versão Otimizada 2025-10-27-17:00 - Solução definitiva com índices
 export function useAppointmentsList(itemsPerPage: number = 20) {
@@ -64,108 +82,53 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     
     fetchPromiseRef.current = measureApiCall(async () => {
       try {
-        // 🔥 SEM FILTRO DE DATA - Carregar TODOS os agendamentos
-        console.log('📅 [FILTRO] Buscando TODOS os agendamentos (sem filtro de data)');
+        // 📅 FASE 8: Filtro por período para performance
+        const { startDate, endDate } = getDateFilterRange();
+        console.log(`📅 [FILTRO FASE 8] Buscando agendamentos de ${startDate} até ${endDate}`);
         
-        // 🔥 PAGINAÇÃO MANUAL - Buscar em blocos de 1000
-        let allAppointments: any[] = [];
-        let currentPage = 0;
-        const pageSize = 1000; // ✅ Limite real do Supabase PostgREST
-        let hasMore = true;
-        let totalCount = 0;
-        
-        while (hasMore) {
-          const start = currentPage * pageSize;
-          const end = start + pageSize - 1;
+        // ⚡ FASE 8: Query otimizada com filtro de data - sem paginação manual na maioria dos casos
+        const { data: pageData, error, count } = await supabase
+          .from('agendamentos')
+          .select(`
+            *,
+            pacientes!inner(
+              id,
+              nome_completo,
+              convenio,
+              celular,
+              telefone,
+              data_nascimento
+            ),
+            medicos!inner(
+              id,
+              nome,
+              especialidade,
+              ativo
+            ),
+            atendimentos!inner(
+              id,
+              nome,
+              tipo,
+              medico_id
+            )
+          `, { count: 'exact' })
+          .is('excluido_em', null)
+          .gte('data_agendamento', startDate)
+          .lte('data_agendamento', endDate)
+          .order('data_agendamento', { ascending: false })
+          .order('hora_agendamento', { ascending: false })
+          .limit(1000); // ⚡ Limite seguro - filtro de data já reduz bastante
           
-          console.log(`📦 [PÁGINA ${currentPage + 1}] Buscando registros ${start}-${end}...`);
-          
-            const { data: pageData, error, count } = await supabase
-              .from('agendamentos')
-              .select(`
-                *,
-                pacientes!inner(
-                  id,
-                  nome_completo,
-                  convenio,
-                  celular,
-                  telefone,
-                  data_nascimento
-                ),
-                medicos!inner(
-                  id,
-                  nome,
-                  especialidade,
-                  ativo
-                ),
-                atendimentos!inner(
-                  id,
-                  nome,
-                  tipo,
-                  medico_id
-                )
-              `, { count: 'exact' })
-            .is('excluido_em', null)
-            .order('data_agendamento', { ascending: false })
-            .order('hora_agendamento', { ascending: false })
-            .range(start, end);
-          
-          if (error) {
-            console.error(`❌ [PÁGINA ${currentPage + 1}] Erro:`, error);
-            logger.error('Erro na paginação de agendamentos', error, 'APPOINTMENTS');
-            throw error;
-          }
-          
-          if (count !== null && currentPage === 0) {
-            totalCount = count;
-            console.log(`📊 [TOTAL] ${totalCount} agendamentos disponíveis no banco`);
-            console.log(`🔍 [PRIMEIRA PÁGINA] Recebidos ${pageData?.length || 0} registros`);
-          }
-          
-          if (!pageData || pageData.length === 0) {
-            console.log(`✅ [PÁGINA ${currentPage + 1}] Sem mais dados`);
-            hasMore = false;
-            break;
-          }
-          
-          allAppointments = [...allAppointments, ...pageData];
-          console.log(`✅ [PÁGINA ${currentPage + 1}] ${pageData.length} registros carregados (total acumulado: ${allAppointments.length}/${totalCount})`);
-          
-          // 📊 LOG: Status dos últimos 5 registros da página
-          if (pageData && pageData.length > 0) {
-            console.log(`📊 [STATUS] Últimos 5 registros da página ${currentPage + 1}:`, 
-              pageData.slice(-5).map(a => ({ 
-                id: a.id, 
-                status: a.status, 
-                data: a.data_agendamento 
-              }))
-            );
-          }
-          
-          currentPage++; // ✅ Incrementar PRIMEIRO
-          
-          // 🔍 DEBUG: Verificar progresso
-          console.log(`🔍 [DEBUG] Página ${currentPage}: ${pageData.length} registros recebidos`);
-          console.log(`🔍 [DEBUG] Total acumulado: ${allAppointments.length}/${totalCount}`);
-          
-          // ✅ Parar APENAS quando não há dados OU já temos todos os registros
-          if (pageData.length === 0) {
-            console.log(`✅ [FINAL] Sem mais dados na página ${currentPage}`);
-            hasMore = false;
-          } else if (allAppointments.length >= totalCount) {
-            console.log(`✅ [FINAL] Todos os ${totalCount} registros carregados`);
-            hasMore = false;
-          }
-          // ❌ REMOVIDO: else if (pageData.length < pageSize) - Causava parada prematura
-          
-          // ✅ Aumentado para 10 páginas (10.000 registros) para garantir todos os dados
-          if (currentPage >= 10) {
-            console.warn('⚠️ Limite: 10 páginas (10.000 registros)');
-            hasMore = false;
-          }
+        if (error) {
+          console.error('❌ [FETCH] Erro na query:', error);
+          logger.error('Erro ao buscar agendamentos', error, 'APPOINTMENTS');
+          throw error;
         }
         
-        console.log(`✅ [FINAL] Total carregado: ${allAppointments.length} agendamentos`);
+        const allAppointments = pageData || [];
+        const totalCount = count || 0;
+        
+        console.log(`✅ [FASE 8] ${allAppointments.length} agendamentos carregados (de ${totalCount} no período)`);
         
         // Buscar profiles dos usuários em uma query separada (mais confiável)
         console.log(`🔍 [PROFILES-START] Coletando user_ids...`);
@@ -247,10 +210,9 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           profile_nome: a.criado_por_profile?.nome
         })));
 
-        logger.info('Agendamentos carregados com sucesso via paginação manual', { 
+        logger.info('Agendamentos carregados com sucesso (FASE 8 - filtro por data)', { 
           count: transformedAppointments.length,
-          total: totalCount,
-          paginas: currentPage
+          total: totalCount
         }, 'APPOINTMENTS');
 
         return transformedAppointments;
@@ -446,68 +408,99 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     }, 500); // ⚡ FASE 2: Reduzido de 3000ms para 500ms
   }, [refetch]);
 
-  // ✅ FASE 7: Verificar mudanças por TIMESTAMP + COUNT (mais robusto para LLM appointments)
+  // ✅ FASE 8: Polling INCREMENTAL - busca apenas novos/alterados desde último timestamp
   const checkForNewAppointments = useCallback(async () => {
     try {
-      // 🔥 OTIMIZAÇÃO: Buscar timestamp E count em uma única query
-      const { data: latestData, count } = await supabase
-        .from('agendamentos')
-        .select('id, updated_at, created_at', { count: 'exact' })
-        .is('excluido_em', null)
-        .order('updated_at', { ascending: false })
-        .limit(1);
+      const { startDate, endDate } = getDateFilterRange();
       
-      if (latestData && latestData.length > 0 && count !== null) {
-        const latestTimestamp = latestData[0].updated_at;
-        const latestCreatedAt = latestData[0].created_at;
+      // 🔥 FASE 8: Se já temos timestamp, buscar APENAS registros alterados (incremental!)
+      if (lastKnownTimestampRef.current) {
+        const { data: changedData, error: changedError } = await supabase
+          .from('agendamentos')
+          .select(`
+            *,
+            pacientes!inner(id, nome_completo, convenio, celular, telefone, data_nascimento),
+            medicos!inner(id, nome, especialidade, ativo),
+            atendimentos!inner(id, nome, tipo, medico_id)
+          `)
+          .is('excluido_em', null)
+          .gte('data_agendamento', startDate)
+          .lte('data_agendamento', endDate)
+          .gt('updated_at', lastKnownTimestampRef.current)
+          .order('updated_at', { ascending: false });
         
-        // ✅ CORREÇÃO v7: Detectar mudanças por TIMESTAMP OU COUNT
-        const hasTimestampChange = latestTimestamp !== lastKnownTimestampRef.current;
-        const hasCountChange = lastKnownCountRef.current !== null && count !== lastKnownCountRef.current;
-        const hasChanges = hasTimestampChange || hasCountChange;
-        
-        // ✅ Debug detalhado para diagnóstico
-        if (hasChanges && lastKnownTimestampRef.current !== null) {
-          console.log('🆕 [POLLING v7] MUDANÇA DETECTADA!', { 
-            tipoMudanca: hasCountChange ? 'NOVO AGENDAMENTO' : 'ATUALIZAÇÃO',
-            newTimestamp: latestTimestamp,
-            newCreatedAt: latestCreatedAt,
-            previousTimestamp: lastKnownTimestampRef.current,
-            newCount: count,
-            previousCount: lastKnownCountRef.current,
-            diff: count - (lastKnownCountRef.current || 0)
+        if (!changedError && changedData && changedData.length > 0) {
+          console.log(`🆕 [POLLING INCREMENTAL] ${changedData.length} registro(s) alterado(s) detectado(s)!`);
+          
+          // ⚡ MERGE incremental: atualizar/adicionar sem recarregar tudo
+          setAppointments(prev => {
+            const existingIds = new Set(prev.map(a => a.id));
+            const updated = prev.map(apt => {
+              const changed = changedData.find(c => c.id === apt.id);
+              if (changed) {
+                return {
+                  ...changed,
+                  pacientes: changed.pacientes || null,
+                  medicos: changed.medicos || null,
+                  atendimentos: changed.atendimentos || null,
+                } as AppointmentWithRelations;
+              }
+              return apt;
+            });
+            
+            // Adicionar novos que não existiam
+            const newOnes = changedData
+              .filter(c => !existingIds.has(c.id))
+              .map(c => ({
+                ...c,
+                pacientes: c.pacientes || null,
+                medicos: c.medicos || null,
+                atendimentos: c.atendimentos || null,
+              } as AppointmentWithRelations));
+            
+            if (newOnes.length > 0) {
+              console.log(`✨ [POLLING INCREMENTAL] ${newOnes.length} NOVO(S) agendamento(s) adicionado(s)`);
+            }
+            
+            // Ordenar por data decrescente
+            const merged = [...newOnes, ...updated].sort((a, b) => {
+              const dateCompare = b.data_agendamento.localeCompare(a.data_agendamento);
+              if (dateCompare !== 0) return dateCompare;
+              return b.hora_agendamento.localeCompare(a.hora_agendamento);
+            });
+            
+            return merged;
           });
           
-          // ✅ Atualizar refs ANTES do refetch
-          lastKnownTimestampRef.current = latestTimestamp;
-          lastKnownCountRef.current = count;
-          
-          // ✅ Invalidar cache e refetch
-          fetchPromiseRef.current = null;
-          fetchTimestampRef.current = 0;
-          
-          await refetch();
+          // Atualizar timestamp para o mais recente
+          lastKnownTimestampRef.current = changedData[0].updated_at;
           return true;
         }
         
-        // ✅ Atualizar refs na primeira execução (silencioso)
-        if (lastKnownTimestampRef.current === null) {
-          lastKnownTimestampRef.current = latestTimestamp;
-          lastKnownCountRef.current = count;
-          console.log('📌 [POLLING v7] Valores iniciais registrados:', { 
-            timestamp: latestTimestamp, 
-            count: count 
-          });
-        } else if (lastKnownCountRef.current === null) {
-          lastKnownCountRef.current = count;
-        }
+        return false;
       }
+      
+      // 🔍 Primeira execução: buscar timestamp mais recente para inicializar
+      const { data: latestData } = await supabase
+        .from('agendamentos')
+        .select('updated_at')
+        .is('excluido_em', null)
+        .gte('data_agendamento', startDate)
+        .lte('data_agendamento', endDate)
+        .order('updated_at', { ascending: false })
+        .limit(1);
+      
+      if (latestData && latestData.length > 0) {
+        lastKnownTimestampRef.current = latestData[0].updated_at;
+        console.log('📌 [POLLING INCREMENTAL] Timestamp inicial:', lastKnownTimestampRef.current);
+      }
+      
       return false;
     } catch (err) {
-      console.warn('⚠️ [POLLING v7] Erro ao verificar mudanças:', err);
+      console.warn('⚠️ [POLLING INCREMENTAL] Erro:', err);
       return false;
     }
-  }, [refetch]);
+  }, []);
 
   // Realtime updates com debounce e suporte a polling
   // ✅ CORRIGIDO: Removido update otimista que causava "paciente não encontrado"
