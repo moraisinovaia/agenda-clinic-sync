@@ -1110,7 +1110,14 @@ serve(async (req) => {
     console.log(`🤖 LLM Agent API v3.1.0 Call: ${method} ${url.pathname}`);
 
     if (method === 'POST') {
-      const body = await req.json();
+      let body = await req.json();
+      
+      // ✅ Normalizar body se for array (n8n às vezes envia [{...}] ao invés de {...})
+      if (Array.isArray(body) && body.length > 0) {
+        console.log('⚠️ Body recebido como array, extraindo primeiro elemento');
+        body = body[0];
+      }
+      
       const rawAction = pathParts[1]; // /llm-agent-api/{action}
       
       // 🇧🇷 MAPEAMENTO PORTUGUÊS → INGLÊS (aceita ambos os formatos)
