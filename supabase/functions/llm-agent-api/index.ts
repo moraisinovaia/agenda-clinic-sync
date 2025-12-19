@@ -1112,11 +1112,21 @@ serve(async (req) => {
     if (method === 'POST') {
       let body = await req.json();
       
+      // 🔍 DEBUG: Mostrar exatamente o que foi recebido
+      console.log('📥 [DEBUG] Body recebido (raw):', JSON.stringify(body));
+      console.log('📥 [DEBUG] Tipo do body:', typeof body);
+      console.log('📥 [DEBUG] É array?:', Array.isArray(body));
+      if (body) {
+        console.log('📥 [DEBUG] Keys do body:', Object.keys(body));
+      }
+      
       // ✅ Normalizar body se for array (n8n às vezes envia [{...}] ao invés de {...})
       if (Array.isArray(body) && body.length > 0) {
         console.log('⚠️ Body recebido como array, extraindo primeiro elemento');
         body = body[0];
       }
+      
+      console.log('📤 [DEBUG] Body após normalização:', JSON.stringify(body));
       
       const rawAction = pathParts[1]; // /llm-agent-api/{action}
       
