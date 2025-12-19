@@ -2549,9 +2549,9 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string, c
       return successResponse({
         encontrado: false,
         consultas: [],
-        message: MIGRATION_MESSAGES.old_appointments,
+        message: FALLBACK_MESSAGES.old_appointments,
         observacao: 'Sistema em migração - dados anteriores a janeiro/2026 não disponíveis',
-        contato: MIGRATION_PHONE,
+        contato: FALLBACK_PHONE,
         total: 0
       });
     }
