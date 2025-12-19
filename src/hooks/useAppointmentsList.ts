@@ -31,6 +31,9 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   // ⚡ OTIMIZAÇÃO: Cache de perfil de usuário para evitar RPC repetidos
   const userProfileRef = useRef<{ nome: string; user_id: string } | null>(null);
   
+  // 🔥 Ref para último timestamp conhecido (para detectar novos agendamentos)
+  const lastKnownTimestampRef = useRef<string | null>(null);
+  
   // 🔥 Estado local para appointments
   const [appointments, setAppointments] = useState<AppointmentWithRelations[]>([]);
   const [loading, setLoading] = useState(true);
@@ -303,9 +306,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     }
   }, [fetchAppointments]);
 
-  // 🔥 Ref para último timestamp conhecido (para detectar novos agendamentos)
-  const lastKnownTimestampRef = useRef<string | null>(null);
-  
+
   // 🔄 Invalidar cache local quando necessário
   const invalidateCache = useCallback(() => {
     console.log('🗑️ Invalidando cache local COMPLETAMENTE');
