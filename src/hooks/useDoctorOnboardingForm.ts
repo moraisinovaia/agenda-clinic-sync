@@ -1,7 +1,5 @@
 import { useState, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import type { Json } from '@/integrations/supabase/types';
 import {
   DoctorOnboardingFormData,
   ServicoConfig,
@@ -10,6 +8,9 @@ import {
   initialServicoConfig,
   initialPreparoConfig,
 } from '@/types/doctor-onboarding';
+
+// URL da Edge Function no projeto principal
+const EDGE_FUNCTION_URL = 'https://qxlvzbvzajibdtlzngdy.supabase.co/functions/v1/doctor-onboarding';
 
 interface UseDoctorOnboardingFormProps {
   clienteId: string | null;
@@ -180,7 +181,7 @@ export function useDoctorOnboardingForm({ clienteId, onSuccess }: UseDoctorOnboa
     setErrors({});
   }, []);
 
-  // Submit the form
+  // Submit the form via Edge Function
   const submitForm = useCallback(async () => {
     if (!clienteId) {
       toast.error('Clínica não identificada');
@@ -199,7 +200,7 @@ export function useDoctorOnboardingForm({ clienteId, onSuccess }: UseDoctorOnboa
     setIsSubmitting(true);
 
     try {
-      // 1. Create the doctor
+      // Prepare data for Edge Function
       const conveniosFinal = [
         ...formData.convenios_aceitos,
         ...(formData.convenio_personalizado.trim() 
@@ -208,62 +209,22 @@ export function useDoctorOnboardingForm({ clienteId, onSuccess }: UseDoctorOnboa
         ),
       ];
 
-      const { data: medicoResult, error: medicoError } = await supabase.rpc('criar_medico', {
-        p_cliente_id: clienteId,
-        p_nome: formData.nome,
-        p_especialidade: formData.especialidade,
-        p_convenios_aceitos: conveniosFinal.length > 0 ? conveniosFinal : null,
-        p_idade_minima: formData.idade_minima || 0,
-        p_idade_maxima: formData.idade_maxima,
-        p_observacoes: formData.observacoes_gerais || null,
-      });
-
-      if (medicoError) throw medicoError;
-      
-      const result = medicoResult as { success: boolean; medico_id?: string; error?: string };
-      if (!result.success) {
-        throw new Error(result.error || 'Erro ao criar médico');
-      }
-
-      const medicoId = result.medico_id;
-      if (!medicoId) throw new Error('ID do médico não retornado');
-
-      // 2. Create atendimentos (services) for the doctor
-      const atendimentosIds: string[] = [];
-      for (const servico of formData.servicos) {
-        const { data: atendimento, error: atendError } = await supabase
-          .from('atendimentos')
-          .insert({
-            cliente_id: clienteId,
-            medico_id: medicoId,
-            nome: servico.nome,
-            tipo: servico.tipo,
-            ativo: true,
-            observacoes: servico.mensagem_personalizada || null,
-          })
-          .select('id')
-          .single();
-
-        if (atendError) {
-          console.error('Erro ao criar atendimento:', atendError);
-        } else if (atendimento) {
-          atendimentosIds.push(atendimento.id);
-        }
-      }
-
-      // 3. Create business rules with complete configuration
-      const businessRuleConfig = {
-        tipo_agendamento: formData.tipo_agendamento,
-        permite_agendamento_online: formData.permite_agendamento_online,
-        idade_minima: formData.idade_minima,
+      const payload = {
+        cliente_id: clienteId,
+        nome: formData.nome,
+        especialidade: formData.especialidade,
+        ativo: formData.ativo,
+        convenios_aceitos: conveniosFinal.length > 0 ? conveniosFinal : null,
+        convenios_restricoes: formData.convenios_restricoes,
+        idade_minima: formData.idade_minima || 0,
         idade_maxima: formData.idade_maxima,
         atende_criancas: formData.atende_criancas,
         atende_adultos: formData.atende_adultos,
-        convenios: conveniosFinal,
-        convenios_restricoes: formData.convenios_restricoes,
-        observacoes: formData.observacoes_gerais,
-        regras_especiais: formData.regras_especiais,
-        restricoes_gerais: formData.restricoes_gerais,
+        tipo_agendamento: formData.tipo_agendamento,
+        permite_agendamento_online: formData.permite_agendamento_online,
+        observacoes_gerais: formData.observacoes_gerais || null,
+        regras_especiais: formData.regras_especiais || null,
+        restricoes_gerais: formData.restricoes_gerais || null,
         servicos: formData.servicos.map(s => ({
           nome: s.nome,
           tipo: s.tipo,
@@ -272,48 +233,43 @@ export function useDoctorOnboardingForm({ clienteId, onSuccess }: UseDoctorOnboa
           dias_atendimento: s.dias_atendimento,
           periodos: s.periodos,
         })),
+        preparos: formData.preparos.filter(p => p.nome && p.exame).map(p => ({
+          nome: p.nome,
+          exame: p.exame,
+          jejum_horas: p.jejum_horas,
+          restricoes_alimentares: p.restricoes_alimentares,
+          medicacao_suspender: p.medicacao_suspender,
+          dias_suspensao: p.dias_suspensao,
+          itens_levar: p.itens_levar,
+          valor_particular: p.valor_particular,
+          valor_convenio: p.valor_convenio,
+          forma_pagamento: p.forma_pagamento,
+          observacoes_especiais: p.observacoes_especiais,
+        })),
       };
 
-      const { error: ruleError } = await supabase
-        .from('business_rules')
-        .insert([{
-          cliente_id: clienteId,
-          medico_id: medicoId,
-          config: JSON.parse(JSON.stringify(businessRuleConfig)) as Json,
-          ativo: true,
-        }]);
+      console.log('Enviando dados para Edge Function:', payload);
 
-      if (ruleError) {
-        console.error('Erro ao criar business rules:', ruleError);
+      const response = await fetch(EDGE_FUNCTION_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Erro ao cadastrar médico');
       }
 
-      // 4. Create preparos if any
-      for (const preparo of formData.preparos) {
-        if (preparo.nome && preparo.exame) {
-          const { error: preparoError } = await supabase
-            .from('preparos')
-            .insert({
-              cliente_id: clienteId,
-              nome: preparo.nome,
-              exame: preparo.exame,
-              jejum_horas: preparo.jejum_horas,
-              restricoes_alimentares: preparo.restricoes_alimentares || null,
-              medicacao_suspender: preparo.medicacao_suspender || null,
-              dias_suspensao: preparo.dias_suspensao,
-              itens_levar: preparo.itens_levar || null,
-              valor_particular: preparo.valor_particular,
-              valor_convenio: preparo.valor_convenio,
-              forma_pagamento: preparo.forma_pagamento || null,
-              observacoes_especiais: preparo.observacoes_especiais || null,
-            });
-
-          if (preparoError) {
-            console.error('Erro ao criar preparo:', preparoError);
-          }
-        }
+      if (!result.success) {
+        throw new Error(result.error || 'Erro ao cadastrar médico');
       }
 
-      toast.success('Médico cadastrado com sucesso!');
+      console.log('Médico cadastrado com sucesso:', result);
+      toast.success(`Médico ${result.medico_nome} cadastrado com sucesso!`);
       resetForm();
       onSuccess?.();
       return true;
