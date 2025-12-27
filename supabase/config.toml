@@ -94,6 +94,3 @@ verify_jwt = false
 
 [functions.create-test-user]
 verify_jwt = false
-
-[functions.doctor-onboarding]
-verify_jwt = false
