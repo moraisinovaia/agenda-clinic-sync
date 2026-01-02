@@ -971,6 +971,7 @@ export type Database = {
           convenios_aceitos: string[] | null
           convenios_restricoes: Json | null
           created_at: string | null
+          crm: string | null
           especialidade: string
           horarios: Json | null
           id: string
@@ -978,6 +979,7 @@ export type Database = {
           idade_minima: number | null
           nome: string
           observacoes: string | null
+          rqe: string | null
         }
         Insert: {
           ativo?: boolean | null
@@ -985,6 +987,7 @@ export type Database = {
           convenios_aceitos?: string[] | null
           convenios_restricoes?: Json | null
           created_at?: string | null
+          crm?: string | null
           especialidade: string
           horarios?: Json | null
           id?: string
@@ -992,6 +995,7 @@ export type Database = {
           idade_minima?: number | null
           nome: string
           observacoes?: string | null
+          rqe?: string | null
         }
         Update: {
           ativo?: boolean | null
@@ -999,6 +1003,7 @@ export type Database = {
           convenios_aceitos?: string[] | null
           convenios_restricoes?: Json | null
           created_at?: string | null
+          crm?: string | null
           especialidade?: string
           horarios?: Json | null
           id?: string
@@ -1006,6 +1011,7 @@ export type Database = {
           idade_minima?: number | null
           nome?: string
           observacoes?: string | null
+          rqe?: string | null
         }
         Relationships: [
           {

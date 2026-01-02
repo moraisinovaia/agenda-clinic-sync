@@ -27,6 +27,8 @@ interface Medico {
   observacoes: string | null;
   horarios: Record<string, unknown> | null;
   created_at: string;
+  crm?: string | null;
+  rqe?: string | null;
 }
 
 interface Atendimento {
@@ -50,6 +52,9 @@ interface MedicoFormData {
   // Campos LLM
   tipo_agendamento: 'ordem_chegada' | 'hora_marcada';
   permite_agendamento_online: boolean;
+  // Campos de registro profissional
+  crm: string;
+  rqe: string;
 }
 
 const CONVENIOS_DISPONIVEIS = [
@@ -103,7 +108,9 @@ export const DoctorManagementPanel: React.FC = () => {
     observacoes: '',
     ativo: true,
     tipo_agendamento: 'ordem_chegada',
-    permite_agendamento_online: true
+    permite_agendamento_online: true,
+    crm: '',
+    rqe: ''
   });
 
   // Para admin_clinica, usar seu cliente_id automaticamente
@@ -200,6 +207,8 @@ export const DoctorManagementPanel: React.FC = () => {
           idade_minima: data.idade_minima,
           idade_maxima: data.idade_maxima,
           observacoes: data.observacoes,
+          crm: data.crm || null,
+          rqe: data.rqe || null,
           horarios: {
             tipo_agendamento: data.tipo_agendamento,
             permite_agendamento_online: data.permite_agendamento_online
@@ -243,7 +252,9 @@ export const DoctorManagementPanel: React.FC = () => {
       observacoes: '',
       ativo: true,
       tipo_agendamento: 'ordem_chegada',
-      permite_agendamento_online: true
+      permite_agendamento_online: true,
+      crm: '',
+      rqe: ''
     });
     setEditingDoctor(null);
   };
@@ -281,7 +292,9 @@ export const DoctorManagementPanel: React.FC = () => {
       observacoes: medico.observacoes || '',
       ativo: medico.ativo,
       tipo_agendamento: (medico.horarios?.tipo_agendamento as 'ordem_chegada' | 'hora_marcada') || 'ordem_chegada',
-      permite_agendamento_online: medico.horarios?.permite_agendamento_online !== false
+      permite_agendamento_online: medico.horarios?.permite_agendamento_online !== false,
+      crm: medico.crm || '',
+      rqe: medico.rqe || ''
     });
     setIsDialogOpen(true);
   };
@@ -465,6 +478,7 @@ export const DoctorManagementPanel: React.FC = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nome</TableHead>
+                  <TableHead>CRM/RQE</TableHead>
                   <TableHead>Especialidade</TableHead>
                   <TableHead>Convênios</TableHead>
                   <TableHead>Agendamento</TableHead>
@@ -475,7 +489,7 @@ export const DoctorManagementPanel: React.FC = () => {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8">
+                    <TableCell colSpan={7} className="text-center py-8">
                       <RefreshCw className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
                     </TableCell>
                   </TableRow>
@@ -486,6 +500,13 @@ export const DoctorManagementPanel: React.FC = () => {
                     return (
                       <TableRow key={medico.id}>
                         <TableCell className="font-medium">{medico.nome}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-0.5 text-xs">
+                            {medico.crm && <span className="text-muted-foreground">CRM: {medico.crm}</span>}
+                            {medico.rqe && <span className="text-muted-foreground">RQE: {medico.rqe}</span>}
+                            {!medico.crm && !medico.rqe && <span className="text-muted-foreground">-</span>}
+                          </div>
+                        </TableCell>
                         <TableCell>{medico.especialidade}</TableCell>
                         <TableCell>
                           {medico.convenios_aceitos?.length ? (
@@ -527,14 +548,14 @@ export const DoctorManagementPanel: React.FC = () => {
                   })
                 ) : searchTerm ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
                       Nenhum médico encontrado para "{searchTerm}"
                     </TableCell>
                   </TableRow>
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
                       Nenhum médico cadastrado nesta clínica
                     </TableCell>
@@ -579,6 +600,28 @@ export const DoctorManagementPanel: React.FC = () => {
                   value={formData.nome}
                   onChange={(e) => setFormData(prev => ({ ...prev, nome: e.target.value }))}
                 />
+              </div>
+
+              {/* CRM e RQE */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="crm">CRM</Label>
+                  <Input
+                    id="crm"
+                    placeholder="Ex: 12345/MG"
+                    value={formData.crm}
+                    onChange={(e) => setFormData(prev => ({ ...prev, crm: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="rqe">RQE</Label>
+                  <Input
+                    id="rqe"
+                    placeholder="Ex: 54321"
+                    value={formData.rqe}
+                    onChange={(e) => setFormData(prev => ({ ...prev, rqe: e.target.value }))}
+                  />
+                </div>
               </div>
 
               {/* Especialidade */}

@@ -1408,7 +1408,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
       console.log(`🔍 Buscando médico por ID: ${medico_id}`);
       const { data, error } = await supabase
         .from('medicos')
-        .select('id, nome, ativo')
+        .select('id, nome, ativo, crm, rqe')
         .eq('id', medico_id)
         .eq('cliente_id', clienteId)
         .eq('ativo', true)
@@ -1429,7 +1429,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
       // Buscar TODOS os médicos ativos do cliente (mesma lógica do handleAvailability)
       const { data: todosMedicos, error: medicosError } = await supabase
         .from('medicos')
-        .select('id, nome, ativo')
+        .select('id, nome, ativo, crm, rqe')
         .eq('cliente_id', clienteId)
         .eq('ativo', true);
       
@@ -3363,7 +3363,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       // Busca por ID (exata)
       const { data, error } = await supabase
         .from('medicos')
-        .select('id, nome, ativo')
+        .select('id, nome, ativo, crm, rqe')
         .eq('id', medico_id)
         .eq('cliente_id', clienteId)
         .eq('ativo', true)
@@ -3387,7 +3387,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       // Buscar TODOS os médicos ativos
       const { data: todosMedicos, error } = await supabase
         .from('medicos')
-        .select('id, nome, ativo')
+        .select('id, nome, ativo, crm, rqe')
         .eq('cliente_id', clienteId)
         .eq('ativo', true);
       
