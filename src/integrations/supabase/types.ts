@@ -1876,6 +1876,7 @@ export type Database = {
           ativo: boolean
           convenios_aceitos: string[]
           created_at: string
+          crm: string
           especialidade: string
           horarios: Json
           id: string
@@ -1883,6 +1884,7 @@ export type Database = {
           idade_minima: number
           nome: string
           observacoes: string
+          rqe: string
         }[]
       }
       get_mensagem_personalizada: {
