@@ -46,6 +46,7 @@ interface PeriodoConfiguracao {
   hora_inicio: string;
   hora_fim: string;
   limite_pacientes: number;
+  dias_semana: number[]; // 0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sab
 }
 
 interface HorariosPeriodos {
@@ -78,10 +79,20 @@ interface MedicoFormData {
   intervalo_minutos: number;
 }
 
+const DIAS_SEMANA = [
+  { valor: 1, label: 'Seg', nome: 'Segunda' },
+  { valor: 2, label: 'Ter', nome: 'Terça' },
+  { valor: 3, label: 'Qua', nome: 'Quarta' },
+  { valor: 4, label: 'Qui', nome: 'Quinta' },
+  { valor: 5, label: 'Sex', nome: 'Sexta' },
+  { valor: 6, label: 'Sáb', nome: 'Sábado' },
+  { valor: 0, label: 'Dom', nome: 'Domingo' },
+];
+
 const initialPeriodos: HorariosPeriodos = {
-  manha: { ativo: false, hora_inicio: '08:00', hora_fim: '12:00', limite_pacientes: 10 },
-  tarde: { ativo: false, hora_inicio: '14:00', hora_fim: '18:00', limite_pacientes: 10 },
-  noite: { ativo: false, hora_inicio: '18:00', hora_fim: '21:00', limite_pacientes: 10 },
+  manha: { ativo: false, hora_inicio: '08:00', hora_fim: '12:00', limite_pacientes: 10, dias_semana: [1, 2, 3, 4, 5] },
+  tarde: { ativo: false, hora_inicio: '14:00', hora_fim: '18:00', limite_pacientes: 10, dias_semana: [1, 2, 3, 4, 5] },
+  noite: { ativo: false, hora_inicio: '18:00', hora_fim: '21:00', limite_pacientes: 10, dias_semana: [1, 2, 3, 4, 5] },
 };
 
 const CONVENIOS_DISPONIVEIS = [
@@ -349,7 +360,7 @@ export const DoctorManagementPanel: React.FC = () => {
     ).map(a => a.id) || [];
 
     // Buscar horários configurados
-    let periodosConfig: HorariosPeriodos = { ...initialPeriodos };
+    let periodosConfig: HorariosPeriodos = JSON.parse(JSON.stringify(initialPeriodos));
     let intervalo = 15;
 
     if (effectiveClinicId) {
@@ -360,17 +371,37 @@ export const DoctorManagementPanel: React.FC = () => {
         .eq('ativo', true);
 
       if (horarios && horarios.length > 0) {
+        // Agrupar dias por período
+        const diasPorPeriodo: Record<string, number[]> = {
+          manha: [],
+          tarde: [],
+          noite: []
+        };
+
         horarios.forEach(h => {
           const periodo = h.periodo as keyof HorariosPeriodos;
           if (periodosConfig[periodo]) {
             periodosConfig[periodo] = {
+              ...periodosConfig[periodo],
               ativo: true,
               hora_inicio: h.hora_inicio,
               hora_fim: h.hora_fim,
               limite_pacientes: h.limite_pacientes || 10
             };
+            // Coletar dias únicos
+            if (!diasPorPeriodo[periodo].includes(h.dia_semana)) {
+              diasPorPeriodo[periodo].push(h.dia_semana);
+            }
           }
         });
+
+        // Atribuir dias coletados
+        Object.keys(diasPorPeriodo).forEach(periodo => {
+          if (diasPorPeriodo[periodo].length > 0) {
+            periodosConfig[periodo as keyof HorariosPeriodos].dias_semana = diasPorPeriodo[periodo].sort((a, b) => a - b);
+          }
+        });
+
         intervalo = horarios[0]?.intervalo_minutos || 15;
       }
     }
@@ -425,14 +456,13 @@ export const DoctorManagementPanel: React.FC = () => {
       .delete()
       .eq('medico_id', medicoId);
     
-    // Inserir novas configurações para cada período ativo
+    // Inserir novas configurações para cada período ativo usando os dias selecionados
     const periodos = ['manha', 'tarde', 'noite'] as const;
-    const dias = [1, 2, 3, 4, 5]; // Segunda a sexta por padrão
     
     for (const periodo of periodos) {
       const config = formData.horarios_periodos[periodo];
-      if (config.ativo) {
-        for (const dia of dias) {
+      if (config.ativo && config.dias_semana.length > 0) {
+        for (const dia of config.dias_semana) {
           await supabase.from('horarios_configuracao').insert({
             cliente_id: effectiveClinicId,
             medico_id: medicoId,
@@ -447,6 +477,24 @@ export const DoctorManagementPanel: React.FC = () => {
         }
       }
     }
+  };
+
+  const handleDiaSemanaToggle = (periodo: keyof HorariosPeriodos, dia: number) => {
+    const diasAtuais = formData.horarios_periodos[periodo].dias_semana;
+    const novosDias = diasAtuais.includes(dia)
+      ? diasAtuais.filter(d => d !== dia)
+      : [...diasAtuais, dia].sort((a, b) => a - b);
+    handlePeriodoChange(periodo, { 
+      ...formData.horarios_periodos[periodo], 
+      dias_semana: novosDias 
+    });
+  };
+
+  const setDiasSemana = (periodo: keyof HorariosPeriodos, dias: number[]) => {
+    handlePeriodoChange(periodo, { 
+      ...formData.horarios_periodos[periodo], 
+      dias_semana: dias 
+    });
   };
 
   const handleSubmit = async () => {
@@ -974,6 +1022,44 @@ export const DoctorManagementPanel: React.FC = () => {
                       </div>
                     )}
                   </div>
+                  {formData.horarios_periodos.manha.ativo && (
+                    <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t">
+                      <span className="text-sm text-muted-foreground">Dias:</span>
+                      {DIAS_SEMANA.map(dia => (
+                        <Button
+                          key={dia.valor}
+                          type="button"
+                          variant={formData.horarios_periodos.manha.dias_semana.includes(dia.valor) ? "default" : "outline"}
+                          size="sm"
+                          className="h-8 w-10 p-0"
+                          onClick={() => handleDiaSemanaToggle('manha', dia.valor)}
+                          title={dia.nome}
+                        >
+                          {dia.label}
+                        </Button>
+                      ))}
+                      <div className="flex gap-1 ml-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs h-7"
+                          onClick={() => setDiasSemana('manha', [1, 2, 3, 4, 5])}
+                        >
+                          Seg-Sex
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs h-7"
+                          onClick={() => setDiasSemana('manha', [0, 1, 2, 3, 4, 5, 6])}
+                        >
+                          Todos
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Período Tarde */}
@@ -1015,6 +1101,44 @@ export const DoctorManagementPanel: React.FC = () => {
                       </div>
                     )}
                   </div>
+                  {formData.horarios_periodos.tarde.ativo && (
+                    <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t">
+                      <span className="text-sm text-muted-foreground">Dias:</span>
+                      {DIAS_SEMANA.map(dia => (
+                        <Button
+                          key={dia.valor}
+                          type="button"
+                          variant={formData.horarios_periodos.tarde.dias_semana.includes(dia.valor) ? "default" : "outline"}
+                          size="sm"
+                          className="h-8 w-10 p-0"
+                          onClick={() => handleDiaSemanaToggle('tarde', dia.valor)}
+                          title={dia.nome}
+                        >
+                          {dia.label}
+                        </Button>
+                      ))}
+                      <div className="flex gap-1 ml-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs h-7"
+                          onClick={() => setDiasSemana('tarde', [1, 2, 3, 4, 5])}
+                        >
+                          Seg-Sex
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs h-7"
+                          onClick={() => setDiasSemana('tarde', [0, 1, 2, 3, 4, 5, 6])}
+                        >
+                          Todos
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Período Noite */}
@@ -1056,10 +1180,48 @@ export const DoctorManagementPanel: React.FC = () => {
                       </div>
                     )}
                   </div>
+                  {formData.horarios_periodos.noite.ativo && (
+                    <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t">
+                      <span className="text-sm text-muted-foreground">Dias:</span>
+                      {DIAS_SEMANA.map(dia => (
+                        <Button
+                          key={dia.valor}
+                          type="button"
+                          variant={formData.horarios_periodos.noite.dias_semana.includes(dia.valor) ? "default" : "outline"}
+                          size="sm"
+                          className="h-8 w-10 p-0"
+                          onClick={() => handleDiaSemanaToggle('noite', dia.valor)}
+                          title={dia.nome}
+                        >
+                          {dia.label}
+                        </Button>
+                      ))}
+                      <div className="flex gap-1 ml-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs h-7"
+                          onClick={() => setDiasSemana('noite', [1, 2, 3, 4, 5])}
+                        >
+                          Seg-Sex
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs h-7"
+                          onClick={() => setDiasSemana('noite', [0, 1, 2, 3, 4, 5, 6])}
+                        >
+                          Todos
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <p className="text-xs text-muted-foreground">
-                  Os horários são aplicados de segunda a sexta-feira. Para configurações avançadas por dia, use o painel de Configuração de Agenda.
+                  Selecione os dias da semana em que cada período está ativo. Por padrão, segunda a sexta estão selecionados.
                 </p>
               </div>
 
