@@ -10,11 +10,11 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
-import { RefreshCw, Plus, Pencil, Stethoscope, Users, Search } from 'lucide-react';
+import { RefreshCw, Plus, Pencil, Stethoscope, Users, Search, AlertCircle } from 'lucide-react';
 
 interface Medico {
   id: string;
@@ -22,6 +22,7 @@ interface Medico {
   especialidade: string;
   ativo: boolean;
   convenios_aceitos: string[] | null;
+  convenios_restricoes: Record<string, string> | null;
   idade_minima: number | null;
   idade_maxima: number | null;
   observacoes: string | null;
@@ -29,6 +30,9 @@ interface Medico {
   created_at: string;
   crm?: string | null;
   rqe?: string | null;
+  telefone_alternativo?: string | null;
+  atende_criancas?: boolean;
+  atende_adultos?: boolean;
 }
 
 interface Atendimento {
@@ -41,20 +45,22 @@ interface MedicoFormData {
   nome: string;
   especialidade: string;
   convenios_aceitos: string[];
+  convenios_restricoes: Record<string, string>;
   outroConvenio: string;
   atendimentos_ids: string[];
   outroAtendimento: string;
   outroAtendimentoTipo: string;
   idade_minima: number | null;
   idade_maxima: number | null;
+  atende_criancas: boolean;
+  atende_adultos: boolean;
   observacoes: string;
   ativo: boolean;
-  // Campos LLM
   tipo_agendamento: 'ordem_chegada' | 'hora_marcada';
   permite_agendamento_online: boolean;
-  // Campos de registro profissional
   crm: string;
   rqe: string;
+  telefone_alternativo: string;
 }
 
 const CONVENIOS_DISPONIVEIS = [
@@ -99,18 +105,22 @@ export const DoctorManagementPanel: React.FC = () => {
     nome: '',
     especialidade: '',
     convenios_aceitos: [],
+    convenios_restricoes: {},
     outroConvenio: '',
     atendimentos_ids: [],
     outroAtendimento: '',
     outroAtendimentoTipo: 'exame',
     idade_minima: null,
     idade_maxima: null,
+    atende_criancas: true,
+    atende_adultos: true,
     observacoes: '',
     ativo: true,
     tipo_agendamento: 'ordem_chegada',
     permite_agendamento_online: true,
     crm: '',
-    rqe: ''
+    rqe: '',
+    telefone_alternativo: ''
   });
 
   // Para admin_clinica, usar seu cliente_id automaticamente
@@ -163,6 +173,7 @@ export const DoctorManagementPanel: React.FC = () => {
     mutationFn: async (data: MedicoFormData) => {
       if (!effectiveClinicId) throw new Error('Clínica não selecionada');
       
+      // Criar médico usando a RPC existente
       const { data: result, error } = await supabase.rpc('criar_medico', {
         p_cliente_id: effectiveClinicId,
         p_nome: data.nome,
@@ -176,9 +187,28 @@ export const DoctorManagementPanel: React.FC = () => {
       
       if (error) throw error;
       
-      const resultObj = result as { success: boolean; error?: string; message?: string };
+      const resultObj = result as { success: boolean; error?: string; message?: string; medico_id?: string };
       if (!resultObj.success) {
         throw new Error(resultObj.error || 'Erro ao criar médico');
+      }
+      
+      // Atualizar campos adicionais usando a RPC de atualização
+      if (resultObj.medico_id) {
+        await supabase.rpc('atualizar_medico', {
+          p_medico_id: resultObj.medico_id,
+          p_dados: {
+            crm: data.crm || null,
+            rqe: data.rqe || null,
+            telefone_alternativo: data.telefone_alternativo || null,
+            atende_criancas: data.atende_criancas,
+            atende_adultos: data.atende_adultos,
+            convenios_restricoes: data.convenios_restricoes,
+            horarios: {
+              tipo_agendamento: data.tipo_agendamento,
+              permite_agendamento_online: data.permite_agendamento_online
+            }
+          }
+        });
       }
       
       return resultObj;
@@ -204,11 +234,15 @@ export const DoctorManagementPanel: React.FC = () => {
           especialidade: data.especialidade,
           ativo: data.ativo,
           convenios_aceitos: data.convenios_aceitos,
+          convenios_restricoes: data.convenios_restricoes,
           idade_minima: data.idade_minima,
           idade_maxima: data.idade_maxima,
+          atende_criancas: data.atende_criancas,
+          atende_adultos: data.atende_adultos,
           observacoes: data.observacoes,
           crm: data.crm || null,
           rqe: data.rqe || null,
+          telefone_alternativo: data.telefone_alternativo || null,
           horarios: {
             tipo_agendamento: data.tipo_agendamento,
             permite_agendamento_online: data.permite_agendamento_online
@@ -243,18 +277,22 @@ export const DoctorManagementPanel: React.FC = () => {
       nome: '',
       especialidade: '',
       convenios_aceitos: [],
+      convenios_restricoes: {},
       outroConvenio: '',
       atendimentos_ids: [],
       outroAtendimento: '',
       outroAtendimentoTipo: 'exame',
       idade_minima: null,
       idade_maxima: null,
+      atende_criancas: true,
+      atende_adultos: true,
       observacoes: '',
       ativo: true,
       tipo_agendamento: 'ordem_chegada',
       permite_agendamento_online: true,
       crm: '',
-      rqe: ''
+      rqe: '',
+      telefone_alternativo: ''
     });
     setEditingDoctor(null);
   };
@@ -283,18 +321,22 @@ export const DoctorManagementPanel: React.FC = () => {
       convenios_aceitos: conveniosPersonalizados.length > 0 
         ? [...conveniosPadrao, 'OUTRO'] 
         : conveniosPadrao,
+      convenios_restricoes: (medico.convenios_restricoes as Record<string, string>) || {},
       outroConvenio: outroConvenioExistente,
       atendimentos_ids: atendimentosDoMedico,
       outroAtendimento: '',
       outroAtendimentoTipo: 'exame',
       idade_minima: medico.idade_minima,
       idade_maxima: medico.idade_maxima,
+      atende_criancas: medico.atende_criancas !== false,
+      atende_adultos: medico.atende_adultos !== false,
       observacoes: medico.observacoes || '',
       ativo: medico.ativo,
       tipo_agendamento: (medico.horarios?.tipo_agendamento as 'ordem_chegada' | 'hora_marcada') || 'ordem_chegada',
       permite_agendamento_online: medico.horarios?.permite_agendamento_online !== false,
       crm: medico.crm || '',
-      rqe: medico.rqe || ''
+      rqe: medico.rqe || '',
+      telefone_alternativo: medico.telefone_alternativo || ''
     });
     setIsDialogOpen(true);
   };
@@ -369,11 +411,32 @@ export const DoctorManagementPanel: React.FC = () => {
   };
 
   const handleConvenioToggle = (convenio: string) => {
+    setFormData(prev => {
+      const newConvenios = prev.convenios_aceitos.includes(convenio)
+        ? prev.convenios_aceitos.filter(c => c !== convenio)
+        : [...prev.convenios_aceitos, convenio];
+      
+      // Remover restrições de convênios desmarcados
+      const newRestricoes = { ...prev.convenios_restricoes };
+      if (!newConvenios.includes(convenio)) {
+        delete newRestricoes[convenio];
+      }
+      
+      return {
+        ...prev,
+        convenios_aceitos: newConvenios,
+        convenios_restricoes: newRestricoes
+      };
+    });
+  };
+
+  const handleConvenioRestricaoChange = (convenio: string, restricao: string) => {
     setFormData(prev => ({
       ...prev,
-      convenios_aceitos: prev.convenios_aceitos.includes(convenio)
-        ? prev.convenios_aceitos.filter(c => c !== convenio)
-        : [...prev.convenios_aceitos, convenio]
+      convenios_restricoes: {
+        ...prev.convenios_restricoes,
+        [convenio]: restricao
+      }
     }));
   };
 
@@ -481,6 +544,7 @@ export const DoctorManagementPanel: React.FC = () => {
                   <TableHead>CRM/RQE</TableHead>
                   <TableHead>Especialidade</TableHead>
                   <TableHead>Convênios</TableHead>
+                  <TableHead>Faixa Etária</TableHead>
                   <TableHead>Agendamento</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
@@ -489,7 +553,7 @@ export const DoctorManagementPanel: React.FC = () => {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
+                    <TableCell colSpan={8} className="text-center py-8">
                       <RefreshCw className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
                     </TableCell>
                   </TableRow>
@@ -497,6 +561,9 @@ export const DoctorManagementPanel: React.FC = () => {
                   medicosFiltrados.map((medico) => {
                     const tipoAgendamento = (medico.horarios?.tipo_agendamento as string) || 'ordem_chegada';
                     const permiteOnline = medico.horarios?.permite_agendamento_online !== false;
+                    const atendeCriancas = medico.atende_criancas !== false;
+                    const atendeAdultos = medico.atende_adultos !== false;
+                    
                     return (
                       <TableRow key={medico.id}>
                         <TableCell className="font-medium">{medico.nome}</TableCell>
@@ -516,6 +583,18 @@ export const DoctorManagementPanel: React.FC = () => {
                           ) : (
                             <span className="text-muted-foreground text-sm">-</span>
                           )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-0.5 text-xs">
+                            {atendeCriancas && <Badge variant="outline" className="text-xs w-fit">Crianças</Badge>}
+                            {atendeAdultos && <Badge variant="outline" className="text-xs w-fit">Adultos</Badge>}
+                            {medico.idade_minima != null && medico.idade_minima > 0 && (
+                              <span className="text-muted-foreground">Min: {medico.idade_minima} anos</span>
+                            )}
+                            {medico.idade_maxima != null && (
+                              <span className="text-muted-foreground">Max: {medico.idade_maxima} anos</span>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-col gap-1">
@@ -548,14 +627,14 @@ export const DoctorManagementPanel: React.FC = () => {
                   })
                 ) : searchTerm ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                       <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
                       Nenhum médico encontrado para "{searchTerm}"
                     </TableCell>
                   </TableRow>
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                       <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
                       Nenhum médico cadastrado nesta clínica
                     </TableCell>
@@ -622,6 +701,20 @@ export const DoctorManagementPanel: React.FC = () => {
                     onChange={(e) => setFormData(prev => ({ ...prev, rqe: e.target.value }))}
                   />
                 </div>
+              </div>
+
+              {/* Telefone Alternativo */}
+              <div className="space-y-2">
+                <Label htmlFor="telefone_alternativo">Telefone Alternativo</Label>
+                <Input
+                  id="telefone_alternativo"
+                  placeholder="Ex: (31) 99999-9999"
+                  value={formData.telefone_alternativo}
+                  onChange={(e) => setFormData(prev => ({ ...prev, telefone_alternativo: e.target.value }))}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Telefone alternativo para contato com o médico
+                </p>
               </div>
 
               {/* Especialidade */}
@@ -745,6 +838,31 @@ export const DoctorManagementPanel: React.FC = () => {
                     </p>
                   </div>
                 )}
+
+                {/* Restrições por Convênio */}
+                {formData.convenios_aceitos.filter(c => c !== 'OUTRO').length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4 text-amber-500" />
+                      <span className="text-sm font-medium">Restrições por Convênio (opcional)</span>
+                    </div>
+                    <div className="grid gap-2 p-3 border rounded-lg bg-amber-50/50">
+                      {formData.convenios_aceitos.filter(c => c !== 'OUTRO').map((convenio) => (
+                        <div key={convenio} className="flex items-center gap-2">
+                          <Badge variant="outline" className="min-w-[100px] justify-center">
+                            {convenio}
+                          </Badge>
+                          <Input
+                            placeholder="Ex: Apenas consultas, Carência de 30 dias..."
+                            value={formData.convenios_restricoes[convenio] || ''}
+                            onChange={(e) => handleConvenioRestricaoChange(convenio, e.target.value)}
+                            className="flex-1"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Tipos de Atendimento */}
@@ -810,34 +928,57 @@ export const DoctorManagementPanel: React.FC = () => {
               </div>
 
               {/* Faixa etária */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="idade_minima">Idade Mínima</Label>
-                  <Input
-                    id="idade_minima"
-                    type="number"
-                    min={0}
-                    placeholder="0"
-                    value={formData.idade_minima ?? ''}
-                    onChange={(e) => setFormData(prev => ({ 
-                      ...prev, 
-                      idade_minima: e.target.value ? parseInt(e.target.value) : null 
-                    }))}
-                  />
+              <div className="space-y-3 p-4 border rounded-lg">
+                <span className="text-sm font-medium">Restrições de Idade</span>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="idade_minima">Idade Mínima</Label>
+                    <Input
+                      id="idade_minima"
+                      type="number"
+                      min={0}
+                      placeholder="0"
+                      value={formData.idade_minima ?? ''}
+                      onChange={(e) => setFormData(prev => ({ 
+                        ...prev, 
+                        idade_minima: e.target.value ? parseInt(e.target.value) : null 
+                      }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="idade_maxima">Idade Máxima</Label>
+                    <Input
+                      id="idade_maxima"
+                      type="number"
+                      min={0}
+                      placeholder="Sem limite"
+                      value={formData.idade_maxima ?? ''}
+                      onChange={(e) => setFormData(prev => ({ 
+                        ...prev, 
+                        idade_maxima: e.target.value ? parseInt(e.target.value) : null 
+                      }))}
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="idade_maxima">Idade Máxima</Label>
-                  <Input
-                    id="idade_maxima"
-                    type="number"
-                    min={0}
-                    placeholder="Sem limite"
-                    value={formData.idade_maxima ?? ''}
-                    onChange={(e) => setFormData(prev => ({ 
-                      ...prev, 
-                      idade_maxima: e.target.value ? parseInt(e.target.value) : null 
-                    }))}
-                  />
+
+                <div className="flex flex-col sm:flex-row gap-4 pt-2">
+                  <div className="flex items-center justify-between flex-1 p-3 border rounded-md">
+                    <Label htmlFor="atende_criancas" className="cursor-pointer">Atende Crianças</Label>
+                    <Switch
+                      id="atende_criancas"
+                      checked={formData.atende_criancas}
+                      onCheckedChange={(checked) => setFormData(prev => ({ ...prev, atende_criancas: checked }))}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between flex-1 p-3 border rounded-md">
+                    <Label htmlFor="atende_adultos" className="cursor-pointer">Atende Adultos</Label>
+                    <Switch
+                      id="atende_adultos"
+                      checked={formData.atende_adultos}
+                      onCheckedChange={(checked) => setFormData(prev => ({ ...prev, atende_adultos: checked }))}
+                    />
+                  </div>
                 </div>
               </div>
 

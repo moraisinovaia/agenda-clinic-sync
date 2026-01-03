@@ -28,6 +28,7 @@ import { ServiceManagementPanel } from '@/components/admin/ServiceManagementPane
 import DoctorScheduleConfigPanel from '@/components/admin/DoctorScheduleConfigPanel';
 import { MultiClinicDashboard } from '@/components/admin/MultiClinicDashboard';
 import { LLMConfigPanel } from '@/components/admin/LLMConfigPanel';
+import { PreparosManagementPanel } from '@/components/admin/PreparosManagementPanel';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   LazyDashboard, 
@@ -592,12 +593,13 @@ const Index = () => {
             {/* Admin view - gerenciamento de usuários, médicos, serviços */}
             {(isAdmin || isClinicAdmin) ? (
               <Tabs defaultValue="usuarios" className="w-full">
-                <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-7' : 'grid-cols-5'} max-w-5xl mb-6`}>
+                <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-8' : 'grid-cols-6'} max-w-6xl mb-6`}>
                   {isAdmin && <TabsTrigger value="dashboard">Dashboard</TabsTrigger>}
                   <TabsTrigger value="usuarios">Usuários</TabsTrigger>
                   {isAdmin && <TabsTrigger value="clinicas">Clínicas</TabsTrigger>}
                   <TabsTrigger value="medicos">Médicos</TabsTrigger>
                   <TabsTrigger value="servicos">Serviços</TabsTrigger>
+                  <TabsTrigger value="preparos">Preparos</TabsTrigger>
                   <TabsTrigger value="horarios">Horários</TabsTrigger>
                   <TabsTrigger value="llm-config">LLM API</TabsTrigger>
                 </TabsList>
@@ -619,6 +621,9 @@ const Index = () => {
                 </TabsContent>
                 <TabsContent value="servicos">
                   <ServiceManagementPanel />
+                </TabsContent>
+                <TabsContent value="preparos">
+                  <PreparosManagementPanel />
                 </TabsContent>
                 <TabsContent value="horarios">
                   <DoctorScheduleConfigPanel />
