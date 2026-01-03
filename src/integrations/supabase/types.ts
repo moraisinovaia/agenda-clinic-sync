@@ -966,6 +966,8 @@ export type Database = {
       }
       medicos: {
         Row: {
+          atende_adultos: boolean | null
+          atende_criancas: boolean | null
           ativo: boolean | null
           cliente_id: string
           convenios_aceitos: string[] | null
@@ -980,8 +982,11 @@ export type Database = {
           nome: string
           observacoes: string | null
           rqe: string | null
+          telefone_alternativo: string | null
         }
         Insert: {
+          atende_adultos?: boolean | null
+          atende_criancas?: boolean | null
           ativo?: boolean | null
           cliente_id: string
           convenios_aceitos?: string[] | null
@@ -996,8 +1001,11 @@ export type Database = {
           nome: string
           observacoes?: string | null
           rqe?: string | null
+          telefone_alternativo?: string | null
         }
         Update: {
+          atende_adultos?: boolean | null
+          atende_criancas?: boolean | null
           ativo?: boolean | null
           cliente_id?: string
           convenios_aceitos?: string[] | null
@@ -1012,6 +1020,7 @@ export type Database = {
           nome?: string
           observacoes?: string | null
           rqe?: string | null
+          telefone_alternativo?: string | null
         }
         Relationships: [
           {
