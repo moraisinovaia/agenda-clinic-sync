@@ -588,6 +588,125 @@ function getMigrationBlockMessage(
   return `Agendamentos disponíveis a partir de ${minDateText}. Para datas anteriores, entre em contato pelo telefone: ${phone}`;
 }
 
+// ============= TIPO DE AGENDAMENTO EFETIVO =============
+// Tipos possíveis: 'ordem_chegada', 'hora_marcada', 'estimativa_horario'
+const TIPO_ORDEM_CHEGADA = 'ordem_chegada';
+const TIPO_HORA_MARCADA = 'hora_marcada';
+const TIPO_ESTIMATIVA_HORARIO = 'estimativa_horario';
+
+/**
+ * Determina o tipo de agendamento efetivo para um serviço
+ * Considera herança do médico quando tipo = 'herdar' ou não definido
+ * 
+ * @param servicoConfig - Configuração do serviço específico
+ * @param medicoConfig - Configuração geral do médico (regras)
+ * @returns 'ordem_chegada' | 'hora_marcada' | 'estimativa_horario'
+ */
+function getTipoAgendamentoEfetivo(
+  servicoConfig: any, 
+  medicoConfig: any
+): string {
+  // 1. Se serviço tem tipo próprio (não 'herdar'), usar dele
+  const tipoServico = servicoConfig?.tipo_agendamento || servicoConfig?.tipo;
+  
+  if (tipoServico && tipoServico !== 'herdar' && tipoServico !== 'default') {
+    console.log(`📋 [TIPO] Usando tipo do SERVIÇO: ${tipoServico}`);
+    return tipoServico;
+  }
+  
+  // 2. Caso contrário, herdar do médico
+  const tipoMedico = medicoConfig?.tipo_agendamento || TIPO_ORDEM_CHEGADA;
+  console.log(`📋 [TIPO] Herdando tipo do MÉDICO: ${tipoMedico}`);
+  return tipoMedico;
+}
+
+/**
+ * Verifica se o tipo de agendamento é estimativa de horário
+ */
+function isEstimativaHorario(tipo: string): boolean {
+  return tipo === TIPO_ESTIMATIVA_HORARIO;
+}
+
+/**
+ * Verifica se o tipo de agendamento é hora marcada (exato)
+ */
+function isHoraMarcada(tipo: string): boolean {
+  return tipo === TIPO_HORA_MARCADA;
+}
+
+/**
+ * Verifica se o tipo de agendamento é ordem de chegada
+ */
+function isOrdemChegada(tipo: string): boolean {
+  return tipo === TIPO_ORDEM_CHEGADA;
+}
+
+/**
+ * Obtém o intervalo de minutos apropriado para o tipo de agendamento
+ * - hora_marcada: usa intervalo_pacientes (padrão 30)
+ * - estimativa_horario: usa intervalo_estimado (padrão 30)
+ * - ordem_chegada: usa 1 minuto (para alocação sequencial)
+ */
+function getIntervaloMinutos(
+  tipo: string, 
+  servicoConfig: any, 
+  periodoConfig: any
+): number {
+  if (isOrdemChegada(tipo)) {
+    return 1; // Ordem de chegada: 1 minuto de incremento
+  }
+  
+  if (isEstimativaHorario(tipo)) {
+    // Para estimativa, priorizar intervalo_estimado do serviço, depois do período
+    return servicoConfig?.intervalo_estimado || 
+           periodoConfig?.intervalo_estimado || 
+           30;
+  }
+  
+  // Hora marcada: usar intervalo_pacientes ou intervalo_minutos
+  return servicoConfig?.intervalo_pacientes || 
+         periodoConfig?.intervalo_pacientes ||
+         periodoConfig?.intervalo_minutos || 
+         30;
+}
+
+/**
+ * Obtém a mensagem de estimativa personalizada para o tipo estimativa_horario
+ */
+function getMensagemEstimativa(servicoConfig: any, periodoConfig: any): string {
+  return servicoConfig?.mensagem_estimativa || 
+         periodoConfig?.mensagem_estimativa ||
+         'Horário aproximado, sujeito a alteração conforme ordem de atendimento.';
+}
+
+/**
+ * Formata horário para exibição considerando o tipo de agendamento
+ * - hora_marcada: "às 10:30"
+ * - estimativa_horario: "por volta das 10:30"
+ * - ordem_chegada: período de distribuição
+ */
+function formatarHorarioParaExibicao(
+  hora: string, 
+  tipo: string, 
+  periodoConfig?: any
+): string {
+  if (isOrdemChegada(tipo)) {
+    const distribuicao = periodoConfig?.distribuicao_fichas || 
+                         `${periodoConfig?.inicio || '08:00'} às ${periodoConfig?.fim || '12:00'}`;
+    return `por ordem de chegada (${distribuicao})`;
+  }
+  
+  // Formatar hora para HH:MM
+  const horaFormatada = hora.substring(0, 5);
+  
+  if (isEstimativaHorario(tipo)) {
+    return `por volta das ${horaFormatada}`;
+  }
+  
+  // Hora marcada
+  return `às ${horaFormatada}`;
+}
+
 // 🌎 Função para obter data E HORA atual no fuso horário de São Paulo
 function getDataHoraAtualBrasil() {
   const agora = new Date();
@@ -2382,6 +2501,17 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
     const horaFormatada = horarioFinal.substring(0, 5); // "08:00:00" → "08:00"
     const [hora] = horarioFinal.split(':').map(Number);
     
+    // 🆕 Determinar tipo de agendamento efetivo
+    const regrasMedicoSchedule = getMedicoRules(config, medico.id, BUSINESS_RULES.medicos[medico.id]);
+    const servicoSchedule = atendimento_nome ? Object.values(regrasMedicoSchedule?.servicos || {}).find((s: any) => {
+      const nomeServico = s.nome || '';
+      return nomeServico.toLowerCase().includes(atendimento_nome.toLowerCase()) ||
+             atendimento_nome.toLowerCase().includes(nomeServico.toLowerCase());
+    }) : null;
+    const tipoEfetivoSchedule = getTipoAgendamentoEfetivo(servicoSchedule, regrasMedicoSchedule);
+    
+    console.log(`📋 [CONFIRMAÇÃO] Tipo efetivo: ${tipoEfetivoSchedule}`);
+    
     // Buscar mensagens personalizadas do banco
     const msgConfirmacao = getMensagemPersonalizada(config, 'confirmacao_agendamento', medico.id);
     const msgPagamento = getMensagemPersonalizada(config, 'pagamento', medico.id);
@@ -2392,8 +2522,16 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
       // Usar mensagem personalizada do banco
       mensagem = `✅ ${msgConfirmacao}`;
     } else {
-      // Mensagem padrão genérica
-      mensagem = `✅ Consulta agendada com sucesso para ${paciente_nome} em ${dataFormatada}.`;
+      // 🆕 Mensagem diferenciada por tipo de agendamento
+      if (isEstimativaHorario(tipoEfetivoSchedule)) {
+        const mensagemEst = getMensagemEstimativa(servicoSchedule, null);
+        mensagem = `✅ Consulta agendada para ${paciente_nome} em ${dataFormatada} por volta das ${horaFormatada}.\n\n⏰ ${mensagemEst}`;
+      } else if (isOrdemChegada(tipoEfetivoSchedule)) {
+        mensagem = `✅ Consulta agendada para ${paciente_nome} em ${dataFormatada} por ordem de chegada.`;
+      } else {
+        // Hora marcada
+        mensagem = `✅ Consulta agendada para ${paciente_nome} em ${dataFormatada} às ${horaFormatada}.`;
+      }
     }
     
     // Adicionar informação de período baseado na hora
@@ -2411,7 +2549,8 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
     
     mensagem += `\n\nPosso ajudar em algo mais?`;
     
-    console.log(`💬 Mensagem de confirmação: ${msgConfirmacao ? 'personalizada do banco' : 'genérica'}`);
+    console.log(`💬 Mensagem de confirmação: ${msgConfirmacao ? 'personalizada do banco' : 'genérica por tipo'}`);
+    console.log(`💬 Tipo agendamento: ${tipoEfetivoSchedule}`);
     console.log(`💬 Mensagem de pagamento: ${msgPagamento ? 'personalizada do banco' : 'não configurada'}`);
 
     return successResponse({
@@ -4961,8 +5100,11 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
     }
 
     // 🎯 RESPOSTA DIFERENCIADA POR TIPO DE ATENDIMENTO
+    // Usar função getTipoAgendamentoEfetivo para determinar tipo real
+    const tipoEfetivo = getTipoAgendamentoEfetivo(servico, regras);
+    console.log(`📋 [DISPONIBILIDADE] Tipo efetivo: ${tipoEfetivo}`);
 
-    if (tipoAtendimento === 'ordem_chegada') {
+    if (isOrdemChegada(tipoEfetivo)) {
       // ✅ ORDEM DE CHEGADA - NÃO retorna horários específicos
       console.log('✅ Retornando disponibilidade por ORDEM DE CHEGADA');
       
@@ -4997,7 +5139,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         
         return successResponse({
           disponivel: false,
-          tipo_agendamento: 'ordem_chegada',
+          tipo_agendamento: TIPO_ORDEM_CHEGADA,
           medico: medico.nome,
           servico: servicoKey,
           data: data_consulta,
@@ -5018,7 +5160,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       
       return successResponse({
         disponivel: true,
-        tipo_agendamento: 'ordem_chegada',
+        tipo_agendamento: TIPO_ORDEM_CHEGADA,
         medico: medico.nome,
         servico: servicoKey,
         data: data_consulta,
@@ -5026,8 +5168,121 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         mensagem_whatsapp: mensagem,
         message: mensagem
       });
+    } else if (isEstimativaHorario(tipoEfetivo)) {
+      // ✅ ESTIMATIVA DE HORÁRIO - retorna horários ESTIMADOS (híbrido)
+      console.log('✅ Retornando disponibilidade por ESTIMATIVA DE HORÁRIO');
+      
+      const horariosEstimados = [];
+      const mensagemEstimativa = getMensagemEstimativa(servico, null);
+      
+      for (const periodo of periodosDisponiveis) {
+        if (!periodo.disponivel) continue;
+
+        // Usar intervalo_estimado do serviço ou período
+        const intervaloMinutos = getIntervaloMinutos(tipoEfetivo, servico, periodo);
+        console.log(`📋 [ESTIMATIVA] Intervalo: ${intervaloMinutos} minutos`);
+        
+        // Gerar slots de tempo estimados
+        const [horaInicio, minInicio] = periodo.hora_inicio.split(':').map(Number);
+        const [horaFim, minFim] = periodo.hora_fim.split(':').map(Number);
+        
+        let horaAtual = horaInicio * 60 + minInicio;
+        const horaLimite = horaFim * 60 + minFim;
+        
+        while (horaAtual < horaLimite) {
+          const h = Math.floor(horaAtual / 60);
+          const m = horaAtual % 60;
+          const horarioFormatado = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:00`;
+          
+          // Verificar se este horário específico está ocupado
+          const { count } = await supabase
+            .from('agendamentos')
+            .select('*', { count: 'exact', head: true })
+            .eq('medico_id', medico.id)
+            .eq('data_agendamento', data_consulta)
+            .eq('hora_agendamento', horarioFormatado)
+            .eq('cliente_id', clienteId)
+            .is('excluido_em', null)
+            .in('status', ['agendado', 'confirmado']);
+          
+          if (count === 0) {
+            horariosEstimados.push({
+              hora: horarioFormatado,
+              hora_formatada: formatarHorarioParaExibicao(horarioFormatado, tipoEfetivo, periodo),
+              disponivel: true,
+              periodo: periodo.periodo.toLowerCase(),
+              eh_estimativa: true
+            });
+          }
+          
+          horaAtual += intervaloMinutos;
+        }
+      }
+
+      // 🆕 Se não tem horários, buscar próximas datas
+      if (horariosEstimados.length === 0) {
+        const proximasDatas = await buscarProximasDatasDisponiveis(
+          supabase,
+          medico,
+          servicoKey,
+          servico,
+          data_consulta,
+          clienteId,
+          periodoPreferido,
+          60,
+          5
+        );
+        
+        let mensagem = `❌ Sem horários disponíveis para ${medico.nome} em ${data_consulta}.\n\n`;
+        
+        if (proximasDatas.length > 0) {
+          mensagem += `✅ Próximas datas disponíveis:\n\n`;
+          proximasDatas.forEach(d => {
+            mensagem += `📅 ${d.data} (${d.dia_semana}) - ${d.periodo} - ${d.vagas_disponiveis} vaga(s)\n`;
+          });
+          mensagem += `\n💡 Gostaria de agendar em uma destas datas?`;
+        } else {
+          mensagem += `⚠️ Não encontramos vagas nos próximos 60 dias.\n`;
+          mensagem += `Por favor, entre em contato com a clínica.`;
+        }
+        
+        return successResponse({
+          disponivel: false,
+          tipo_agendamento: TIPO_ESTIMATIVA_HORARIO,
+          medico: medico.nome,
+          servico: servicoKey,
+          data: data_consulta,
+          horarios_estimados: [],
+          total: 0,
+          proximas_datas: proximasDatas,
+          mensagem_estimativa: mensagemEstimativa,
+          mensagem_whatsapp: mensagem,
+          message: mensagem
+        });
+      }
+
+      // Se tem horários estimados, retornar com formatação adequada
+      const mensagem = `✅ ${medico.nome} - ${servicoKey}\n📅 ${data_consulta}\n\n` +
+        `${horariosEstimados.length} horário(s) estimado(s) disponível(is):\n` +
+        horariosEstimados.slice(0, 10).map(h => `• ${h.hora_formatada}`).join('\n') +
+        (horariosEstimados.length > 10 ? `\n... e mais ${horariosEstimados.length - 10} horário(s)` : '') +
+        `\n\n⏰ ${mensagemEstimativa}`;
+      
+      return successResponse({
+        disponivel: horariosEstimados.length > 0,
+        tipo_agendamento: TIPO_ESTIMATIVA_HORARIO,
+        medico: medico.nome,
+        servico: servicoKey,
+        data: data_consulta,
+        horarios_estimados: horariosEstimados,
+        horarios_disponiveis: horariosEstimados, // compatibilidade
+        total: horariosEstimados.length,
+        mensagem_estimativa: mensagemEstimativa,
+        mensagem_whatsapp: mensagem,
+        message: mensagem
+      });
     } else {
-      // ✅ HORA MARCADA - retorna slots específicos
+      // ✅ HORA MARCADA - retorna slots específicos (exatos)
       console.log('✅ Retornando disponibilidade por HORA MARCADA');
       const horariosDisponiveis = [];
       
