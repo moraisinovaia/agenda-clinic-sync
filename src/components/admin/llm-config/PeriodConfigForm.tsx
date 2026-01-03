@@ -1,7 +1,7 @@
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Clock, Users } from 'lucide-react';
+import { Clock, Users, Timer } from 'lucide-react';
 
 interface PeriodConfig {
   ativo: boolean;
@@ -10,13 +10,14 @@ interface PeriodConfig {
   limite: number;
   atendimento_inicio?: string;
   distribuicao_fichas?: string;
+  horarios_fixos?: string[]; // Para hora_marcada
 }
 
 interface PeriodConfigFormProps {
   periodo: 'manha' | 'tarde' | 'noite';
   config: PeriodConfig;
   onChange: (config: PeriodConfig) => void;
-  tipoAgendamento: 'ordem_chegada' | 'hora_marcada';
+  tipoAgendamento: 'ordem_chegada' | 'hora_marcada' | 'estimativa_horario';
 }
 
 const PERIODO_LABELS = {
@@ -121,6 +122,26 @@ export function PeriodConfigForm({ periodo, config, onChange, tipoAgendamento }:
                   Horário que paciente deve chegar
                 </p>
               </div>
+            </div>
+          )}
+
+          {/* Campos extras para hora marcada - informativo */}
+          {tipoAgendamento === 'hora_marcada' && (
+            <div className="pt-2 border-t">
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <Timer className="h-3 w-3" />
+                Os horários serão gerados automaticamente com base no intervalo definido no serviço.
+              </p>
+            </div>
+          )}
+
+          {/* Campos extras para estimativa de horário */}
+          {tipoAgendamento === 'estimativa_horario' && (
+            <div className="pt-2 border-t">
+              <p className="text-xs text-amber-600 flex items-center gap-1">
+                <Timer className="h-3 w-3" />
+                Os horários serão estimados com base no intervalo definido. O paciente será informado que o horário é aproximado.
+              </p>
             </div>
           )}
         </div>

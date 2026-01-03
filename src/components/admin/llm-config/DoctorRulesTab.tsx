@@ -112,11 +112,30 @@ export function DoctorRulesTab({ businessRules, medicos, saving, onSave, onDelet
                 {servicos.map(servicoNome => {
                   const servico = config.servicos[servicoNome];
                   const diasAtivos = servico.dias?.length || 0;
+                  const tipoServico = servico.tipo_agendamento || 'herdar';
+                  const tipoEfetivo = tipoServico === 'herdar' ? config.tipo_agendamento : tipoServico;
+                  
+                  const getTipoLabel = () => {
+                    switch (tipoEfetivo) {
+                      case 'ordem_chegada': return 'Ordem';
+                      case 'hora_marcada': return 'Hora Marcada';
+                      case 'estimativa_horario': return 'Estimativa';
+                      default: return 'Ordem';
+                    }
+                  };
+                  
                   return (
                     <div key={servicoNome} className="p-3 bg-muted rounded-lg">
                       <div className="flex items-center justify-between">
                         <span className="font-medium">{servicoNome}</span>
                         <div className="flex gap-2">
+                          <Badge 
+                            variant={tipoEfetivo === 'estimativa_horario' ? 'outline' : 'secondary'}
+                            className={tipoEfetivo === 'estimativa_horario' ? 'bg-amber-500/20 text-amber-700 border-amber-500/30' : ''}
+                          >
+                            {getTipoLabel()}
+                            {tipoServico === 'herdar' && ' (herdado)'}
+                          </Badge>
                           {diasAtivos > 0 && (
                             <Badge variant="outline" className="text-xs">
                               {diasAtivos} dia{diasAtivos !== 1 ? 's' : ''}
@@ -137,6 +156,9 @@ export function DoctorRulesTab({ businessRules, medicos, saving, onSave, onDelet
                                 <span>{cfg.inicio} - {cfg.fim}</span>
                                 <Users className="h-3 w-3 ml-2" />
                                 <span>Limite: {cfg.limite}</span>
+                                {tipoEfetivo === 'estimativa_horario' && servico.intervalo_estimado && (
+                                  <span className="text-amber-600">(~{servico.intervalo_estimado}min)</span>
+                                )}
                               </div>
                             )
                           ))}
@@ -437,7 +459,7 @@ function RuleEditDialog({
                 config={serviceConfig as any}
                 onChange={(cfg) => handleServiceChange(serviceName, cfg)}
                 onDelete={() => handleDeleteService(serviceName)}
-                tipoAgendamento={config.tipo_agendamento || 'ordem_chegada'}
+                tipoAgendamentoMedico={config.tipo_agendamento || 'ordem_chegada'}
               />
             ))}
 
