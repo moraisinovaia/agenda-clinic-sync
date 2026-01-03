@@ -5323,7 +5323,7 @@ async function handleListDoctors(supabase: any, body: any, clienteId: string, co
     
     const { data: medicos, error } = await supabase
       .from('medicos')
-      .select('id, nome, especialidade, convenios_aceitos, horarios, ativo')
+      .select('id, nome, especialidade, convenios_aceitos, horarios, ativo, crm, rqe')
       .eq('cliente_id', clienteId)
       .eq('ativo', true)
       .order('nome');
@@ -5343,7 +5343,9 @@ async function handleListDoctors(supabase: any, body: any, clienteId: string, co
         convenios_aceitos: medico.convenios_aceitos,
         tipo_agendamento: rules?.tipo_agendamento || 'hora_marcada',
         servicos: rules?.servicos ? Object.keys(rules.servicos) : [],
-        ativo: medico.ativo
+        ativo: medico.ativo,
+        crm: medico.crm,
+        rqe: medico.rqe
       };
     }) || [];
 
