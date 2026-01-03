@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useStableAuth } from '@/hooks/useStableAuth';
@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
-import { RefreshCw, Plus, Pencil, Stethoscope, Users, Search, AlertCircle } from 'lucide-react';
+import { RefreshCw, Plus, Pencil, Stethoscope, Users, Search, AlertCircle, Clock } from 'lucide-react';
 
 interface Medico {
   id: string;
@@ -41,6 +41,19 @@ interface Atendimento {
   tipo: string;
 }
 
+interface PeriodoConfiguracao {
+  ativo: boolean;
+  hora_inicio: string;
+  hora_fim: string;
+  limite_pacientes: number;
+}
+
+interface HorariosPeriodos {
+  manha: PeriodoConfiguracao;
+  tarde: PeriodoConfiguracao;
+  noite: PeriodoConfiguracao;
+}
+
 interface MedicoFormData {
   nome: string;
   especialidade: string;
@@ -61,7 +74,15 @@ interface MedicoFormData {
   crm: string;
   rqe: string;
   telefone_alternativo: string;
+  horarios_periodos: HorariosPeriodos;
+  intervalo_minutos: number;
 }
+
+const initialPeriodos: HorariosPeriodos = {
+  manha: { ativo: false, hora_inicio: '08:00', hora_fim: '12:00', limite_pacientes: 10 },
+  tarde: { ativo: false, hora_inicio: '14:00', hora_fim: '18:00', limite_pacientes: 10 },
+  noite: { ativo: false, hora_inicio: '18:00', hora_fim: '21:00', limite_pacientes: 10 },
+};
 
 const CONVENIOS_DISPONIVEIS = [
   'PARTICULAR',
@@ -120,7 +141,9 @@ export const DoctorManagementPanel: React.FC = () => {
     permite_agendamento_online: true,
     crm: '',
     rqe: '',
-    telefone_alternativo: ''
+    telefone_alternativo: '',
+    horarios_periodos: { ...initialPeriodos },
+    intervalo_minutos: 15
   });
 
   // Para admin_clinica, usar seu cliente_id automaticamente
@@ -211,6 +234,11 @@ export const DoctorManagementPanel: React.FC = () => {
         });
       }
       
+      // Salvar horários de atendimento
+      if (resultObj.medico_id) {
+        await saveHorariosConfig(resultObj.medico_id);
+      }
+      
       return resultObj;
     },
     onSuccess: () => {
@@ -258,6 +286,9 @@ export const DoctorManagementPanel: React.FC = () => {
         throw new Error(resultObj.error || 'Erro ao atualizar médico');
       }
       
+      // Salvar horários de atendimento
+      await saveHorariosConfig(medicoId);
+      
       return resultObj;
     },
     onSuccess: () => {
@@ -292,7 +323,9 @@ export const DoctorManagementPanel: React.FC = () => {
       permite_agendamento_online: true,
       crm: '',
       rqe: '',
-      telefone_alternativo: ''
+      telefone_alternativo: '',
+      horarios_periodos: { ...initialPeriodos },
+      intervalo_minutos: 15
     });
     setEditingDoctor(null);
   };
@@ -302,7 +335,7 @@ export const DoctorManagementPanel: React.FC = () => {
     setIsDialogOpen(true);
   };
 
-  const handleOpenEdit = (medico: Medico) => {
+  const handleOpenEdit = async (medico: Medico) => {
     setEditingDoctor(medico);
     
     // Separar convênios padrão dos personalizados
@@ -314,6 +347,33 @@ export const DoctorManagementPanel: React.FC = () => {
     const atendimentosDoMedico = atendimentosDisponiveis?.filter(a => 
       a.medico_id === medico.id
     ).map(a => a.id) || [];
+
+    // Buscar horários configurados
+    let periodosConfig: HorariosPeriodos = { ...initialPeriodos };
+    let intervalo = 15;
+
+    if (effectiveClinicId) {
+      const { data: horarios } = await supabase
+        .from('horarios_configuracao')
+        .select('*')
+        .eq('medico_id', medico.id)
+        .eq('ativo', true);
+
+      if (horarios && horarios.length > 0) {
+        horarios.forEach(h => {
+          const periodo = h.periodo as keyof HorariosPeriodos;
+          if (periodosConfig[periodo]) {
+            periodosConfig[periodo] = {
+              ativo: true,
+              hora_inicio: h.hora_inicio,
+              hora_fim: h.hora_fim,
+              limite_pacientes: h.limite_pacientes || 10
+            };
+          }
+        });
+        intervalo = horarios[0]?.intervalo_minutos || 15;
+      }
+    }
     
     setFormData({
       nome: medico.nome,
@@ -336,9 +396,57 @@ export const DoctorManagementPanel: React.FC = () => {
       permite_agendamento_online: medico.horarios?.permite_agendamento_online !== false,
       crm: medico.crm || '',
       rqe: medico.rqe || '',
-      telefone_alternativo: medico.telefone_alternativo || ''
+      telefone_alternativo: medico.telefone_alternativo || '',
+      horarios_periodos: periodosConfig,
+      intervalo_minutos: intervalo
     });
     setIsDialogOpen(true);
+  };
+
+  const handlePeriodoChange = (
+    periodo: keyof HorariosPeriodos, 
+    config: PeriodoConfiguracao
+  ) => {
+    setFormData(prev => ({
+      ...prev,
+      horarios_periodos: {
+        ...prev.horarios_periodos,
+        [periodo]: config
+      }
+    }));
+  };
+
+  const saveHorariosConfig = async (medicoId: string) => {
+    if (!effectiveClinicId) return;
+    
+    // Deletar configurações antigas
+    await supabase
+      .from('horarios_configuracao')
+      .delete()
+      .eq('medico_id', medicoId);
+    
+    // Inserir novas configurações para cada período ativo
+    const periodos = ['manha', 'tarde', 'noite'] as const;
+    const dias = [1, 2, 3, 4, 5]; // Segunda a sexta por padrão
+    
+    for (const periodo of periodos) {
+      const config = formData.horarios_periodos[periodo];
+      if (config.ativo) {
+        for (const dia of dias) {
+          await supabase.from('horarios_configuracao').insert({
+            cliente_id: effectiveClinicId,
+            medico_id: medicoId,
+            dia_semana: dia,
+            periodo,
+            hora_inicio: config.hora_inicio,
+            hora_fim: config.hora_fim,
+            limite_pacientes: config.limite_pacientes,
+            intervalo_minutos: formData.intervalo_minutos,
+            ativo: true
+          });
+        }
+      }
+    }
   };
 
   const handleSubmit = async () => {
@@ -801,6 +909,158 @@ export const DoctorManagementPanel: React.FC = () => {
                     </p>
                   </div>
                 </div>
+              </div>
+
+              {/* Horários de Atendimento por Período */}
+              <div className="space-y-4 p-4 border rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-5 w-5 text-primary" />
+                    <span className="font-medium">Horários de Atendimento</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-sm">Intervalo:</Label>
+                    <Input
+                      type="number"
+                      min={5}
+                      max={120}
+                      value={formData.intervalo_minutos}
+                      onChange={(e) => setFormData(prev => ({ 
+                        ...prev, 
+                        intervalo_minutos: parseInt(e.target.value) || 15 
+                      }))}
+                      className="w-20"
+                    />
+                    <span className="text-sm text-muted-foreground">min</span>
+                  </div>
+                </div>
+                
+                {/* Período Manhã */}
+                <div className={`p-3 rounded-lg border transition-colors ${formData.horarios_periodos.manha.ativo ? 'border-primary/50 bg-primary/5' : 'bg-muted/30'}`}>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Checkbox
+                      id="periodo-manha"
+                      checked={formData.horarios_periodos.manha.ativo}
+                      onCheckedChange={(checked) => handlePeriodoChange('manha', { ...formData.horarios_periodos.manha, ativo: !!checked })}
+                    />
+                    <label htmlFor="periodo-manha" className="font-medium cursor-pointer min-w-[80px]">🌅 Manhã</label>
+                    
+                    {formData.horarios_periodos.manha.ativo && (
+                      <div className="flex flex-wrap items-center gap-2 ml-auto">
+                        <Input
+                          type="time"
+                          value={formData.horarios_periodos.manha.hora_inicio}
+                          onChange={(e) => handlePeriodoChange('manha', { ...formData.horarios_periodos.manha, hora_inicio: e.target.value })}
+                          className="w-28"
+                        />
+                        <span className="text-sm">às</span>
+                        <Input
+                          type="time"
+                          value={formData.horarios_periodos.manha.hora_fim}
+                          onChange={(e) => handlePeriodoChange('manha', { ...formData.horarios_periodos.manha, hora_fim: e.target.value })}
+                          className="w-28"
+                        />
+                        <div className="flex items-center gap-1">
+                          <Users className="h-4 w-4 text-muted-foreground" />
+                          <Input
+                            type="number"
+                            min={1}
+                            max={50}
+                            value={formData.horarios_periodos.manha.limite_pacientes}
+                            onChange={(e) => handlePeriodoChange('manha', { ...formData.horarios_periodos.manha, limite_pacientes: parseInt(e.target.value) || 1 })}
+                            className="w-16"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Período Tarde */}
+                <div className={`p-3 rounded-lg border transition-colors ${formData.horarios_periodos.tarde.ativo ? 'border-primary/50 bg-primary/5' : 'bg-muted/30'}`}>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Checkbox
+                      id="periodo-tarde"
+                      checked={formData.horarios_periodos.tarde.ativo}
+                      onCheckedChange={(checked) => handlePeriodoChange('tarde', { ...formData.horarios_periodos.tarde, ativo: !!checked })}
+                    />
+                    <label htmlFor="periodo-tarde" className="font-medium cursor-pointer min-w-[80px]">☀️ Tarde</label>
+                    
+                    {formData.horarios_periodos.tarde.ativo && (
+                      <div className="flex flex-wrap items-center gap-2 ml-auto">
+                        <Input
+                          type="time"
+                          value={formData.horarios_periodos.tarde.hora_inicio}
+                          onChange={(e) => handlePeriodoChange('tarde', { ...formData.horarios_periodos.tarde, hora_inicio: e.target.value })}
+                          className="w-28"
+                        />
+                        <span className="text-sm">às</span>
+                        <Input
+                          type="time"
+                          value={formData.horarios_periodos.tarde.hora_fim}
+                          onChange={(e) => handlePeriodoChange('tarde', { ...formData.horarios_periodos.tarde, hora_fim: e.target.value })}
+                          className="w-28"
+                        />
+                        <div className="flex items-center gap-1">
+                          <Users className="h-4 w-4 text-muted-foreground" />
+                          <Input
+                            type="number"
+                            min={1}
+                            max={50}
+                            value={formData.horarios_periodos.tarde.limite_pacientes}
+                            onChange={(e) => handlePeriodoChange('tarde', { ...formData.horarios_periodos.tarde, limite_pacientes: parseInt(e.target.value) || 1 })}
+                            className="w-16"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Período Noite */}
+                <div className={`p-3 rounded-lg border transition-colors ${formData.horarios_periodos.noite.ativo ? 'border-primary/50 bg-primary/5' : 'bg-muted/30'}`}>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Checkbox
+                      id="periodo-noite"
+                      checked={formData.horarios_periodos.noite.ativo}
+                      onCheckedChange={(checked) => handlePeriodoChange('noite', { ...formData.horarios_periodos.noite, ativo: !!checked })}
+                    />
+                    <label htmlFor="periodo-noite" className="font-medium cursor-pointer min-w-[80px]">🌙 Noite</label>
+                    
+                    {formData.horarios_periodos.noite.ativo && (
+                      <div className="flex flex-wrap items-center gap-2 ml-auto">
+                        <Input
+                          type="time"
+                          value={formData.horarios_periodos.noite.hora_inicio}
+                          onChange={(e) => handlePeriodoChange('noite', { ...formData.horarios_periodos.noite, hora_inicio: e.target.value })}
+                          className="w-28"
+                        />
+                        <span className="text-sm">às</span>
+                        <Input
+                          type="time"
+                          value={formData.horarios_periodos.noite.hora_fim}
+                          onChange={(e) => handlePeriodoChange('noite', { ...formData.horarios_periodos.noite, hora_fim: e.target.value })}
+                          className="w-28"
+                        />
+                        <div className="flex items-center gap-1">
+                          <Users className="h-4 w-4 text-muted-foreground" />
+                          <Input
+                            type="number"
+                            min={1}
+                            max={50}
+                            value={formData.horarios_periodos.noite.limite_pacientes}
+                            onChange={(e) => handlePeriodoChange('noite', { ...formData.horarios_periodos.noite, limite_pacientes: parseInt(e.target.value) || 1 })}
+                            className="w-16"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  Os horários são aplicados de segunda a sexta-feira. Para configurações avançadas por dia, use o painel de Configuração de Agenda.
+                </p>
               </div>
 
               {/* Convênios */}
