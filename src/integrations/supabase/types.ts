@@ -1310,6 +1310,45 @@ export type Database = {
           },
         ]
       }
+      system_backups: {
+        Row: {
+          backup_type: string
+          completed_at: string | null
+          config: Json | null
+          created_at: string | null
+          data_size: number | null
+          error_message: string | null
+          id: string
+          metadata: Json | null
+          status: string
+          table_count: number | null
+        }
+        Insert: {
+          backup_type?: string
+          completed_at?: string | null
+          config?: Json | null
+          created_at?: string | null
+          data_size?: number | null
+          error_message?: string | null
+          id?: string
+          metadata?: Json | null
+          status?: string
+          table_count?: number | null
+        }
+        Update: {
+          backup_type?: string
+          completed_at?: string | null
+          config?: Json | null
+          created_at?: string | null
+          data_size?: number | null
+          error_message?: string | null
+          id?: string
+          metadata?: Json | null
+          status?: string
+          table_count?: number | null
+        }
+        Relationships: []
+      }
       system_logs: {
         Row: {
           context: string | null
