@@ -6,9 +6,11 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PeriodConfigForm } from './PeriodConfigForm';
-import { ChevronDown, ChevronUp, Trash2, Calendar, MessageSquare } from 'lucide-react';
+import { ChevronDown, ChevronUp, Trash2, Calendar, MessageSquare, Clock } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
 
 const DIAS_SEMANA = [
   { value: 0, label: 'Dom', fullLabel: 'Domingo' },
@@ -20,8 +22,19 @@ const DIAS_SEMANA = [
   { value: 6, label: 'Sáb', fullLabel: 'Sábado' },
 ];
 
+const TIPOS_AGENDAMENTO = [
+  { value: 'herdar', label: 'Herdar do Médico', description: 'Usa o tipo padrão do médico' },
+  { value: 'ordem_chegada', label: 'Ordem de Chegada', description: 'Paciente chega e aguarda atendimento' },
+  { value: 'hora_marcada', label: 'Hora Marcada', description: 'Horário específico agendado' },
+  { value: 'estimativa_horario', label: 'Estimativa de Horário', description: 'Horário aproximado, sujeito a alteração' },
+];
+
 interface ServiceConfig {
   permite_online: boolean;
+  tipo_agendamento?: 'herdar' | 'ordem_chegada' | 'hora_marcada' | 'estimativa_horario';
+  intervalo_estimado?: number; // Para estimativa_horario
+  intervalo_pacientes?: number; // Para hora_marcada
+  mensagem_estimativa?: string; // Mensagem para estimativa
   mensagem?: string;
   dias?: number[];
   periodos?: {
@@ -36,7 +49,7 @@ interface ServiceConfigFormProps {
   config: ServiceConfig;
   onChange: (config: ServiceConfig) => void;
   onDelete: () => void;
-  tipoAgendamento: 'ordem_chegada' | 'hora_marcada';
+  tipoAgendamentoMedico: 'ordem_chegada' | 'hora_marcada';
 }
 
 export function ServiceConfigForm({ 
@@ -44,9 +57,14 @@ export function ServiceConfigForm({
   config, 
   onChange, 
   onDelete,
-  tipoAgendamento 
+  tipoAgendamentoMedico 
 }: ServiceConfigFormProps) {
   const [isOpen, setIsOpen] = useState(true);
+
+  // Tipo efetivo: se for 'herdar' ou não definido, usa o do médico
+  const tipoEfetivo = (!config.tipo_agendamento || config.tipo_agendamento === 'herdar') 
+    ? tipoAgendamentoMedico 
+    : config.tipo_agendamento;
 
   const handleChange = (field: string, value: any) => {
     onChange({ ...config, [field]: value });
@@ -73,6 +91,20 @@ export function ServiceConfigForm({
     noite: { ativo: false, inicio: '18:00', fim: '22:00', limite: 5 },
   };
 
+  const getTipoBadge = () => {
+    const tipo = config.tipo_agendamento || 'herdar';
+    switch (tipo) {
+      case 'ordem_chegada':
+        return <Badge variant="default">Ordem de Chegada</Badge>;
+      case 'hora_marcada':
+        return <Badge variant="secondary">Hora Marcada</Badge>;
+      case 'estimativa_horario':
+        return <Badge className="bg-amber-500/20 text-amber-700 border-amber-500/30">Estimativa</Badge>;
+      default:
+        return <Badge variant="outline">Herda: {tipoAgendamentoMedico === 'ordem_chegada' ? 'Ordem' : 'Hora Marcada'}</Badge>;
+    }
+  };
+
   return (
     <Card className="mb-4">
       <Collapsible open={isOpen} onOpenChange={setIsOpen}>
@@ -82,6 +114,7 @@ export function ServiceConfigForm({
               <Button variant="ghost" className="flex items-center gap-2 p-0 h-auto hover:bg-transparent">
                 <Calendar className="h-4 w-4 text-primary" />
                 <CardTitle className="text-lg">{serviceName}</CardTitle>
+                {getTipoBadge()}
                 {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </Button>
             </CollapsibleTrigger>
@@ -105,6 +138,81 @@ export function ServiceConfigForm({
         
         <CollapsibleContent>
           <CardContent className="space-y-6">
+            {/* Tipo de Agendamento do Serviço */}
+            <div className="p-4 bg-muted/30 rounded-lg border space-y-4">
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Tipo de Agendamento deste Serviço
+                </Label>
+                <Select 
+                  value={config.tipo_agendamento || 'herdar'}
+                  onValueChange={(v) => handleChange('tipo_agendamento', v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TIPOS_AGENDAMENTO.map(tipo => (
+                      <SelectItem key={tipo.value} value={tipo.value}>
+                        <div className="flex flex-col">
+                          <span>{tipo.label}</span>
+                          <span className="text-xs text-muted-foreground">{tipo.description}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Campos específicos para Hora Marcada */}
+              {tipoEfetivo === 'hora_marcada' && (
+                <div className="space-y-2">
+                  <Label className="text-sm">Intervalo entre Pacientes (minutos)</Label>
+                  <Input
+                    type="number"
+                    min={5}
+                    max={120}
+                    value={config.intervalo_pacientes || 30}
+                    onChange={(e) => handleChange('intervalo_pacientes', parseInt(e.target.value) || 30)}
+                    className="w-32"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Tempo entre cada agendamento (ex: 30 min)
+                  </p>
+                </div>
+              )}
+
+              {/* Campos específicos para Estimativa de Horário */}
+              {tipoEfetivo === 'estimativa_horario' && (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label className="text-sm">Intervalo Estimado (minutos)</Label>
+                    <Input
+                      type="number"
+                      min={5}
+                      max={120}
+                      value={config.intervalo_estimado || 30}
+                      onChange={(e) => handleChange('intervalo_estimado', parseInt(e.target.value) || 30)}
+                      className="w-32"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Tempo aproximado entre pacientes
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm">Mensagem para Paciente</Label>
+                    <Textarea
+                      value={config.mensagem_estimativa || 'Horário aproximado, sujeito a alteração conforme ordem de atendimento.'}
+                      onChange={(e) => handleChange('mensagem_estimativa', e.target.value)}
+                      rows={2}
+                      className="text-sm"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Mensagem personalizada */}
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
@@ -153,19 +261,19 @@ export function ServiceConfigForm({
                   periodo="manha"
                   config={defaultPeriodos.manha || { ativo: false, inicio: '08:00', fim: '12:00', limite: 10 }}
                   onChange={(cfg) => handlePeriodoChange('manha', cfg)}
-                  tipoAgendamento={tipoAgendamento}
+                  tipoAgendamento={tipoEfetivo}
                 />
                 <PeriodConfigForm
                   periodo="tarde"
                   config={defaultPeriodos.tarde || { ativo: false, inicio: '14:00', fim: '18:00', limite: 10 }}
                   onChange={(cfg) => handlePeriodoChange('tarde', cfg)}
-                  tipoAgendamento={tipoAgendamento}
+                  tipoAgendamento={tipoEfetivo}
                 />
                 <PeriodConfigForm
                   periodo="noite"
                   config={defaultPeriodos.noite || { ativo: false, inicio: '18:00', fim: '22:00', limite: 5 }}
                   onChange={(cfg) => handlePeriodoChange('noite', cfg)}
-                  tipoAgendamento={tipoAgendamento}
+                  tipoAgendamento={tipoEfetivo}
                 />
               </div>
             </div>
