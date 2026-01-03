@@ -1443,16 +1443,14 @@ export type Database = {
         }
         Returns: Json
       }
-      atualizar_medico:
-        | { Args: { p_dados: Json; p_medico_id: string }; Returns: Json }
-        | {
-            Args: {
-              p_atendimentos_ids?: string[]
-              p_dados: Json
-              p_medico_id: string
-            }
-            Returns: Json
-          }
+      atualizar_medico: {
+        Args: {
+          p_atendimentos_ids?: string[]
+          p_dados: Json
+          p_medico_id: string
+        }
+        Returns: Json
+      }
       atualizar_role_usuario: {
         Args: {
           p_action?: string
@@ -1873,8 +1871,11 @@ export type Database = {
       get_medicos_por_clinica: {
         Args: { p_cliente_id: string }
         Returns: {
+          atende_adultos: boolean
+          atende_criancas: boolean
           ativo: boolean
           convenios_aceitos: string[]
+          convenios_restricoes: Json
           created_at: string
           crm: string
           especialidade: string
@@ -1885,6 +1886,7 @@ export type Database = {
           nome: string
           observacoes: string
           rqe: string
+          telefone_alternativo: string
         }[]
       }
       get_mensagem_personalizada: {
