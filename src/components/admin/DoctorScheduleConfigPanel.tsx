@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useStableAuth } from "@/hooks/useStableAuth";
@@ -11,7 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
-import { Clock, Calendar, Save, RotateCcw, Loader2, Building2, User, Users } from "lucide-react";
+import { Clock, Calendar, Save, RotateCcw, Loader2, Building2, User, Users, Search, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface HorarioConfig {
   id?: string;
@@ -47,13 +48,7 @@ const DIAS_SEMANA = [
   { value: 0, label: "Domingo" },
 ];
 
-const INTERVALOS = [
-  { value: 5, label: "5 min" },
-  { value: 10, label: "10 min" },
-  { value: 15, label: "15 min" },
-  { value: 20, label: "20 min" },
-  { value: 30, label: "30 min" },
-];
+const COMMON_INTERVALS = [10, 15, 20, 30, 45, 60];
 
 const DEFAULT_DAY_CONFIG: DayConfig = {
   manha: { ativo: false, hora_inicio: "08:00", hora_fim: "12:00", limite_pacientes: null },
@@ -89,8 +84,31 @@ export default function DoctorScheduleConfigPanel() {
   const [intervaloMinutos, setIntervaloMinutos] = useState<number>(15);
   const [scheduleConfig, setScheduleConfig] = useState<Record<number, DayConfig>>({});
   const [hasChanges, setHasChanges] = useState(false);
+  
+  // Search state
+  const [searchTerm, setSearchTerm] = useState<string>("");
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Initialize default config
+  useEffect(() => {
+    const initialConfig: Record<number, DayConfig> = {};
+    DIAS_SEMANA.forEach(dia => {
+      initialConfig[dia.value] = { ...DEFAULT_DAY_CONFIG };
+    });
+    setScheduleConfig(initialConfig);
+  }, []);
   useEffect(() => {
     const initialConfig: Record<number, DayConfig> = {};
     DIAS_SEMANA.forEach(dia => {
@@ -134,6 +152,24 @@ export default function DoctorScheduleConfigPanel() {
     },
     enabled: !!selectedClinicId,
   });
+
+  // Filter doctors by search term
+  const filteredMedicos = useMemo(() => {
+    if (!medicos) return [];
+    if (!searchTerm.trim()) return medicos;
+    
+    const normalizedSearch = searchTerm.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    
+    return medicos.filter(m => {
+      const nome = m.nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const especialidade = m.especialidade?.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") || "";
+      return nome.includes(normalizedSearch) || especialidade.includes(normalizedSearch);
+    });
+  }, [medicos, searchTerm]);
+
+  const selectedDoctor = useMemo(() => {
+    return medicos?.find(m => m.id === selectedMedicoId);
+  }, [medicos, selectedMedicoId]);
 
   // Fetch existing schedule config for selected doctor
   const { data: existingConfig, isLoading: loadingConfig } = useQuery({
@@ -341,47 +377,114 @@ export default function DoctorScheduleConfigPanel() {
             </div>
           )}
 
-          <div className="space-y-2">
+          {/* Busca de Médico */}
+          <div className="space-y-2" ref={dropdownRef}>
             <Label className="flex items-center gap-2">
               <User className="h-4 w-4" />
               Médico
             </Label>
-            <Select 
-              value={selectedMedicoId} 
-              onValueChange={setSelectedMedicoId}
-              disabled={!selectedClinicId || loadingMedicos}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={loadingMedicos ? "Carregando..." : "Selecione o médico"} />
-              </SelectTrigger>
-              <SelectContent>
-                {medicos?.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>
-                    {m.nome} - {m.especialidade}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder={loadingMedicos ? "Carregando..." : "Buscar médico por nome ou especialidade..."}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onFocus={() => setIsDropdownOpen(true)}
+                className="pl-10 pr-10"
+                disabled={!selectedClinicId || loadingMedicos}
+              />
+              {(searchTerm || selectedMedicoId) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+                  onClick={() => {
+                    setSearchTerm("");
+                    setSelectedMedicoId("");
+                    setIsDropdownOpen(false);
+                  }}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+            
+            {/* Dropdown de resultados */}
+            {isDropdownOpen && selectedClinicId && !loadingMedicos && (
+              <Card className="absolute z-50 w-full max-w-md mt-1 max-h-64 overflow-y-auto shadow-lg border bg-popover">
+                {filteredMedicos.length > 0 ? (
+                  <div className="py-1">
+                    {filteredMedicos.map(m => (
+                      <div
+                        key={m.id}
+                        className={cn(
+                          "px-4 py-2 cursor-pointer hover:bg-accent transition-colors",
+                          selectedMedicoId === m.id && "bg-primary/10"
+                        )}
+                        onClick={() => {
+                          setSelectedMedicoId(m.id);
+                          setSearchTerm("");
+                          setIsDropdownOpen(false);
+                        }}
+                      >
+                        <div className="font-medium text-foreground">{m.nome}</div>
+                        <div className="text-sm text-muted-foreground">{m.especialidade}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="px-4 py-3 text-center text-muted-foreground">
+                    Nenhum médico encontrado
+                  </div>
+                )}
+              </Card>
+            )}
+            
+            {/* Badge do médico selecionado */}
+            {selectedDoctor && (
+              <Badge variant="secondary" className="mt-2">
+                {selectedDoctor.nome} - {selectedDoctor.especialidade}
+              </Badge>
+            )}
           </div>
 
+          {/* Intervalo personalizado */}
           <div className="space-y-2">
             <Label className="flex items-center gap-2">
               <Calendar className="h-4 w-4" />
-              Intervalo padrão
+              Intervalo (minutos)
             </Label>
-            <Select 
-              value={intervaloMinutos.toString()} 
-              onValueChange={(v) => { setIntervaloMinutos(parseInt(v)); setHasChanges(true); }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {INTERVALOS.map((i) => (
-                  <SelectItem key={i.value} value={i.value.toString()}>{i.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                min={1}
+                max={180}
+                value={intervaloMinutos}
+                onChange={(e) => {
+                  const value = parseInt(e.target.value) || 15;
+                  setIntervaloMinutos(Math.min(180, Math.max(1, value)));
+                  setHasChanges(true);
+                }}
+                className="w-20"
+                placeholder="15"
+              />
+              <span className="text-sm text-muted-foreground">min</span>
+            </div>
+            
+            {/* Botões de atalho */}
+            <div className="flex flex-wrap gap-1">
+              {COMMON_INTERVALS.map(v => (
+                <Button
+                  key={v}
+                  variant={intervaloMinutos === v ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => { setIntervaloMinutos(v); setHasChanges(true); }}
+                >
+                  {v}min
+                </Button>
+              ))}
+            </div>
           </div>
         </div>
 
