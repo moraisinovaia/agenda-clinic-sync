@@ -983,6 +983,7 @@ export type Database = {
           observacoes: string | null
           rqe: string | null
           telefone_alternativo: string | null
+          updated_at: string | null
         }
         Insert: {
           atende_adultos?: boolean | null
@@ -1002,6 +1003,7 @@ export type Database = {
           observacoes?: string | null
           rqe?: string | null
           telefone_alternativo?: string | null
+          updated_at?: string | null
         }
         Update: {
           atende_adultos?: boolean | null
@@ -1021,6 +1023,7 @@ export type Database = {
           observacoes?: string | null
           rqe?: string | null
           telefone_alternativo?: string | null
+          updated_at?: string | null
         }
         Relationships: [
           {
