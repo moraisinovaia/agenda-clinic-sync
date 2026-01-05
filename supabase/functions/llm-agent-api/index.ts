@@ -25,7 +25,13 @@ interface DynamicConfig {
     medico_nome: string;
     config: any;
   }>;
-  mensagens: Array<{
+  mensagens: Record<string, {
+    id: string;
+    tipo: string;
+    medico_id: string | null;
+    mensagem: string;
+    ativo: boolean;
+  }> | Array<{
     id: string;
     tipo: string;
     medico_id: string | null;
@@ -72,8 +78,10 @@ async function loadDynamicConfig(supabase: any, clienteId: string): Promise<Dyna
       return null;
     }
     
-    if (!data?.success) {
-      console.warn('⚠️ [CONFIG] RPC retornou sucesso=false:', data?.error);
+    // RPC retorna diretamente {clinic_info, business_rules, mensagens, loaded_at}
+    // Verificar se há dados válidos (clinic_info ou business_rules presentes)
+    if (!data || (!data.clinic_info && Object.keys(data.business_rules || {}).length === 0)) {
+      console.warn('⚠️ [CONFIG] RPC não retornou dados válidos:', JSON.stringify(data));
       return null;
     }
     
@@ -502,13 +510,22 @@ function getMensagemPersonalizada(
   tipo: string,
   medicoId?: string
 ): string | null {
-  if (!config?.mensagens || config.mensagens.length === 0) {
+  if (!config?.mensagens) {
+    return null;
+  }
+  
+  // Mensagens podem ser array ou objeto (da RPC)
+  const mensagensArray = Array.isArray(config.mensagens) 
+    ? config.mensagens 
+    : Object.values(config.mensagens);
+  
+  if (mensagensArray.length === 0) {
     return null;
   }
   
   // 1. Buscar mensagem específica do médico
   if (medicoId) {
-    const msgMedico = config.mensagens.find(
+    const msgMedico = mensagensArray.find(
       m => m.tipo === tipo && m.medico_id === medicoId
     );
     if (msgMedico) {
@@ -518,7 +535,7 @@ function getMensagemPersonalizada(
   }
   
   // 2. Buscar mensagem global (medico_id = null)
-  const msgGlobal = config.mensagens.find(
+  const msgGlobal = mensagensArray.find(
     m => m.tipo === tipo && !m.medico_id
   );
   if (msgGlobal) {
