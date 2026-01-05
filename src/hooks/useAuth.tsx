@@ -1,7 +1,7 @@
 import { useState, useEffect, createContext, useContext, useRef } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from '@/hooks/use-toast';
 import { cleanupGoogleOAuthElements } from '@/utils/domCleanup';
 
 interface Profile {
@@ -54,7 +54,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const { toast } = useToast();
   const isLoggingOut = useRef(false);
 
   const fetchProfile = async (userId: string): Promise<Profile | null> => {
