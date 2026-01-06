@@ -1,5 +1,4 @@
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -7,12 +6,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Clock, Check, ChevronsUpDown, AlertCircle } from 'lucide-react';
+import { Clock, Check, ChevronsUpDown, AlertCircle, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Doctor, SchedulingFormData, Atendimento } from '@/types/scheduling';
 import { toZonedTime, format } from 'date-fns-tz';
 import { BRAZIL_TIMEZONE } from '@/utils/timezone';
 import FutureDateInput from "@/components/ui/future-date-input";
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { useIntervalValidation } from '@/hooks/useIntervalValidation';
 
 interface AppointmentDataFormProps {
   formData: SchedulingFormData;
@@ -33,6 +34,17 @@ export function AppointmentDataForm({
 }: AppointmentDataFormProps) {
   const [openDoctorCombo, setOpenDoctorCombo] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [intervalWarning, setIntervalWarning] = useState<string | null>(null);
+  const [unimedWarnings, setUnimedWarnings] = useState<string[]>([]);
+  const [unimedBlocked, setUnimedBlocked] = useState(false);
+
+  // Hook de validação de intervalos e regras especiais
+  const { 
+    validateExamInterval, 
+    validateUnimedRules, 
+    hasIntervalRules,
+    hasUnimedRules 
+  } = useIntervalValidation(formData.medicoId);
   
   // Filtrar atendimentos baseado no médico selecionado
   const filteredAtendimentos = formData.medicoId 
@@ -141,9 +153,59 @@ export function AppointmentDataForm({
       medicoId: '',
       atendimentoId: autoSelectAtendimento ? '' : prev.atendimentoId
     }));
+    // Limpar warnings ao mudar médico
+    setIntervalWarning(null);
+    setUnimedWarnings([]);
+    setUnimedBlocked(false);
 
     setOpenDoctorCombo(false);
   };
+
+  // Efeito para validar regras UNIMED quando convenio ou atendimento mudar
+  useEffect(() => {
+    if (!formData.convenio || !formData.atendimentoId) {
+      setUnimedWarnings([]);
+      setUnimedBlocked(false);
+      return;
+    }
+
+    const selectedAtendimento = atendimentos.find(a => a.id === formData.atendimentoId);
+    if (!selectedAtendimento) return;
+
+    const result = validateUnimedRules(formData.convenio, selectedAtendimento.nome);
+    setUnimedWarnings(result.messages);
+    setUnimedBlocked(result.blockExam);
+  }, [formData.convenio, formData.atendimentoId, atendimentos, validateUnimedRules]);
+
+  // Efeito para validar intervalo quando atendimento ou data mudar
+  useEffect(() => {
+    const validateInterval = async () => {
+      if (!formData.atendimentoId || !formData.dataAgendamento || !formData.telefone) {
+        setIntervalWarning(null);
+        return;
+      }
+
+      const selectedAtendimento = atendimentos.find(a => a.id === formData.atendimentoId);
+      if (!selectedAtendimento) return;
+
+      const result = await validateExamInterval(
+        formData.telefone || formData.celular,
+        selectedAtendimento.nome,
+        formData.dataAgendamento
+      );
+
+      if (!result.isValid && result.message) {
+        const warning = result.blockingAppointment 
+          ? `${result.message} (${result.blockingAppointment.exame} em ${result.blockingAppointment.data} - faltam ${result.blockingAppointment.diasRestantes} dias)`
+          : result.message;
+        setIntervalWarning(warning);
+      } else {
+        setIntervalWarning(null);
+      }
+    };
+
+    validateInterval();
+  }, [formData.atendimentoId, formData.dataAgendamento, formData.telefone, formData.celular, atendimentos, validateExamInterval]);
 
 // Função para mudança de data com validação de horário
 const handleDateChange = (date: string) => {
@@ -173,6 +235,30 @@ const handleDateChange = (date: string) => {
         <Clock className="h-4 w-4 animate-bounce-gentle" />
         Dados do Agendamento
       </h3>
+
+      {/* Alerta de intervalo entre exames */}
+      {intervalWarning && (
+        <Alert variant="destructive" className="animate-fade-in">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Intervalo Mínimo Não Respeitado</AlertTitle>
+          <AlertDescription>{intervalWarning}</AlertDescription>
+        </Alert>
+      )}
+
+      {/* Alertas de regras UNIMED */}
+      {unimedWarnings.length > 0 && (
+        <Alert variant={unimedBlocked ? "destructive" : "default"} className="animate-fade-in border-amber-500 bg-amber-50 dark:bg-amber-950/20">
+          <AlertTriangle className="h-4 w-4 text-amber-600" />
+          <AlertTitle className="text-amber-700 dark:text-amber-400">
+            {unimedBlocked ? 'Exame Bloqueado para UNIMED' : 'Regras Especiais UNIMED'}
+          </AlertTitle>
+          <AlertDescription className="text-amber-600 dark:text-amber-300">
+            {unimedWarnings.map((msg, idx) => (
+              <div key={idx}>{msg}</div>
+            ))}
+          </AlertDescription>
+        </Alert>
+      )}
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
