@@ -67,9 +67,11 @@ function criarMensagemComDatas(params: {
     mensagem += `🕐 ${disponibilidade.horarios.slice(0, 3).join(' | ')}\n\n`;
   });
   
-  mensagem += `Para reagendar, responda este WhatsApp ou ligue:\n`;
-  mensagem += `📞 ${telefoneClinica}\n\n`;
-  mensagem += nomeClinica;
+  mensagem += `Para reagendar, responda este WhatsApp`;
+  if (telefoneClinica) {
+    mensagem += ` ou ligue:\n📞 ${telefoneClinica}`;
+  }
+  mensagem += `\n\n${nomeClinica}`;
   
   return mensagem;
 }
@@ -91,9 +93,11 @@ function criarMensagemSemDatas(params: {
   mensagem += `Sua consulta com ${medicoNome} no dia ${formatarData(dataOriginal)} às ${formatarHora(horaOriginal)}h foi cancelada.\n\n`;
   mensagem += `📋 Motivo: ${motivo}\n\n`;
   mensagem += `⚠️ No momento não há vagas disponíveis na agenda online.\n\n`;
-  mensagem += `Por favor, entre em contato para reagendar:\n`;
-  mensagem += `📞 ${telefoneClinica}\n\n`;
-  mensagem += nomeClinica;
+  mensagem += `Por favor, entre em contato para reagendar`;
+  if (telefoneClinica) {
+    mensagem += `:\n📞 ${telefoneClinica}`;
+  }
+  mensagem += `\n\n${nomeClinica}`;
   
   return mensagem;
 }
@@ -177,8 +181,12 @@ serve(async (req) => {
       .eq('cliente_id', clienteIdFinal)
       .maybeSingle();
     
-    const telefoneClinica = clinicConfig?.telefone || clinicConfig?.whatsapp || '(19) 3442-8053';
+    // Usar telefone do banco ou mensagem genérica (sem hardcode de número de outro cliente)
+    const telefoneClinica = clinicConfig?.telefone || clinicConfig?.whatsapp || '';
     const nomeClinica = clinicConfig?.nome_clinica || 'Clínica';
+    
+    // Se não tiver telefone configurado, usar texto genérico nas mensagens
+    const contatoClinica = telefoneClinica || 'nossos canais de atendimento';
     
     console.log(`📞 Contato: ${telefoneClinica} | ${nomeClinica}`);
     
