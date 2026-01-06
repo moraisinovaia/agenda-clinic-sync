@@ -6,9 +6,10 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
-import { Plus, Save, Loader2, Calendar, Settings, Package, Clock, FileText, X } from 'lucide-react';
+import { Plus, Save, Loader2, Calendar, Settings, Package, Clock, FileText, X, ShieldAlert } from 'lucide-react';
 import { BusinessRule } from '@/hooks/useLLMConfig';
 import { ServiceConfigForm } from './ServiceConfigForm';
+import { AdvancedRulesSection } from './AdvancedRulesSection';
 import { supabase } from '@/integrations/supabase/client';
 import { useStableAuth } from '@/hooks/useStableAuth';
 
@@ -75,25 +76,41 @@ export function RuleEditDialog({
 
   const effectiveClienteId = clienteId || profile?.cliente_id;
 
-  // Fetch atendimentos when dialog opens
+  // State for convenios
+  const [conveniosDisponiveis, setConveniosDisponiveis] = useState<string[]>([]);
+  const [showAdvancedRules, setShowAdvancedRules] = useState(false);
+
+  // Fetch atendimentos and convenios when dialog opens
   useEffect(() => {
-    const fetchAtendimentos = async () => {
+    const fetchData = async () => {
       if (!effectiveClienteId) return;
       
-      const { data } = await supabase
+      // Fetch atendimentos
+      const { data: atendimentosData } = await supabase
         .from('atendimentos')
         .select('id, nome, tipo')
         .eq('cliente_id', effectiveClienteId)
         .eq('ativo', true)
         .order('nome');
       
-      setAtendimentos(data || []);
+      setAtendimentos(atendimentosData || []);
+
+      // Fetch convenios from medico if rule exists
+      if (rule?.medico_id) {
+        const { data: medicoData } = await supabase
+          .from('medicos')
+          .select('convenios_aceitos')
+          .eq('id', rule.medico_id)
+          .single();
+        
+        setConveniosDisponiveis(medicoData?.convenios_aceitos || []);
+      }
     };
 
     if (open) {
-      fetchAtendimentos();
+      fetchData();
     }
-  }, [open, effectiveClienteId]);
+  }, [open, effectiveClienteId, rule?.medico_id]);
 
   // Reset form when rule changes
   useEffect(() => {
@@ -532,6 +549,27 @@ export function RuleEditDialog({
                 Adicionar
               </Button>
             </div>
+          </div>
+
+          {/* Regras Avançadas */}
+          <div className="space-y-2">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setShowAdvancedRules(!showAdvancedRules)}
+              className="w-full justify-start gap-2"
+            >
+              <ShieldAlert className="h-4 w-4" />
+              {showAdvancedRules ? '▼' : '►'} Regras Avançadas (Restrições, Pacotes Obrigatórios, Intervalos)
+            </Button>
+            {showAdvancedRules && (
+              <AdvancedRulesSection
+                config={config}
+                atendimentos={atendimentos}
+                conveniosDisponiveis={conveniosDisponiveis}
+                onChange={setConfig}
+              />
+            )}
           </div>
 
           {/* Editor JSON Avançado */}
