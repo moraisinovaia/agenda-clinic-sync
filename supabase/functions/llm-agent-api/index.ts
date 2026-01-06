@@ -432,7 +432,7 @@ async function calcularVagasDisponiveisComLimites(
 
 // 🚨 VALORES HARDCODED (fallback quando banco não disponível)
 const FALLBACK_MINIMUM_BOOKING_DATE = '2026-01-01';
-const FALLBACK_PHONE = '(87) 3866-4050';
+const FALLBACK_PHONE = ''; // Vazio para forçar uso de mensagem genérica
 const FALLBACK_DIAS_BUSCA_INICIAL = 14;
 const FALLBACK_DIAS_BUSCA_EXPANDIDA = 45;
 

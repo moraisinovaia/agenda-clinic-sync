@@ -3,8 +3,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-api-key',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-api-key, x-cliente-id',
 };
+
+// Fallback para IPADO (cliente padrão)
+const IPADO_CLIENTE_ID = '2bfb98b5-ae41-4f96-8ba7-acc797c22054';
 
 interface AgendamentoRequest {
   paciente_nome: string;
@@ -17,6 +20,7 @@ interface AgendamentoRequest {
   data_agendamento: string; // YYYY-MM-DD
   hora_agendamento: string; // HH:MM
   observacoes?: string;
+  cliente_id?: string; // Opcional - permite especificar cliente no body
 }
 
 serve(async (req) => {
@@ -46,18 +50,34 @@ serve(async (req) => {
     const path = url.pathname.replace('/n8n-api', '');
     const method = req.method;
 
-    // Buscar cliente IPADO
-    const { data: cliente } = await supabase
-      .from('clientes')
-      .select('id')
-      .eq('nome', 'IPADO')
-      .single();
-
-    if (!cliente) {
-      throw new Error('Cliente IPADO não encontrado');
+    // ============= SISTEMA MULTI-CLIENTE =============
+    // Prioridade: 1. Header x-cliente-id  2. Query param cliente_id  3. Fallback IPADO
+    let cliente_id = req.headers.get('x-cliente-id') || url.searchParams.get('cliente_id');
+    
+    // Para métodos POST/PUT/DELETE, também verificar no body
+    let body: any = null;
+    if (method === 'POST' || method === 'PUT' || method === 'DELETE') {
+      try {
+        const rawBody = await req.text();
+        if (rawBody) {
+          body = JSON.parse(rawBody);
+          // Se cliente_id vier no body, usar (apenas se não veio via header/query)
+          if (!cliente_id && body.cliente_id) {
+            cliente_id = body.cliente_id;
+          }
+        }
+      } catch (e) {
+        // Body vazio ou inválido - continuar sem body
+      }
     }
-
-    const cliente_id = cliente.id;
+    
+    // Fallback para IPADO se nenhum cliente_id foi fornecido
+    if (!cliente_id) {
+      cliente_id = IPADO_CLIENTE_ID;
+      console.log(`⚠️ [N8N-API] cliente_id não fornecido, usando fallback IPADO: ${cliente_id}`);
+    } else {
+      console.log(`✅ [N8N-API] Usando cliente_id: ${cliente_id}`);
+    }
 
     // ==================== GET /medicos ====================
     if (method === 'GET' && path === '/medicos') {
@@ -70,7 +90,7 @@ serve(async (req) => {
       if (error) throw error;
 
       return new Response(
-        JSON.stringify({ success: true, medicos: data }),
+        JSON.stringify({ success: true, medicos: data, cliente_id }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -86,7 +106,7 @@ serve(async (req) => {
       if (error) throw error;
 
       return new Response(
-        JSON.stringify({ success: true, atendimentos: data }),
+        JSON.stringify({ success: true, atendimentos: data, cliente_id }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -117,7 +137,7 @@ serve(async (req) => {
       if (error) throw error;
 
       return new Response(
-        JSON.stringify({ success: true, horarios_ocupados: agendamentos }),
+        JSON.stringify({ success: true, horarios_ocupados: agendamentos, cliente_id }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -150,19 +170,20 @@ serve(async (req) => {
       if (error) throw error;
 
       return new Response(
-        JSON.stringify({ success: true, agendamentos }),
+        JSON.stringify({ success: true, agendamentos, cliente_id }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     // ==================== POST /agendamento ====================
     if (method === 'POST' && path === '/agendamento') {
-      const body: AgendamentoRequest = await req.json();
+      // body já foi parseado acima
+      const reqBody: AgendamentoRequest = body;
 
       // Validar campos obrigatórios
-      if (!body.paciente_nome || !body.paciente_data_nascimento || !body.paciente_convenio || 
-          !body.paciente_celular || !body.medico_id || !body.atendimento_id || 
-          !body.data_agendamento || !body.hora_agendamento) {
+      if (!reqBody.paciente_nome || !reqBody.paciente_data_nascimento || !reqBody.paciente_convenio || 
+          !reqBody.paciente_celular || !reqBody.medico_id || !reqBody.atendimento_id || 
+          !reqBody.data_agendamento || !reqBody.hora_agendamento) {
         return new Response(
           JSON.stringify({ error: 'Campos obrigatórios faltando' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -173,8 +194,8 @@ serve(async (req) => {
       const { data: pacienteExistente } = await supabase
         .from('pacientes')
         .select('id')
-        .eq('nome_completo', body.paciente_nome)
-        .eq('data_nascimento', body.paciente_data_nascimento)
+        .eq('nome_completo', reqBody.paciente_nome)
+        .eq('data_nascimento', reqBody.paciente_data_nascimento)
         .eq('cliente_id', cliente_id)
         .maybeSingle();
 
@@ -186,11 +207,11 @@ serve(async (req) => {
         const { data: novoPaciente, error: pacienteError } = await supabase
           .from('pacientes')
           .insert({
-            nome_completo: body.paciente_nome.toUpperCase(),
-            data_nascimento: body.paciente_data_nascimento,
-            convenio: body.paciente_convenio,
-            telefone: body.paciente_telefone || '',
-            celular: body.paciente_celular,
+            nome_completo: reqBody.paciente_nome.toUpperCase(),
+            data_nascimento: reqBody.paciente_data_nascimento,
+            convenio: reqBody.paciente_convenio,
+            telefone: reqBody.paciente_telefone || '',
+            celular: reqBody.paciente_celular,
             cliente_id
           })
           .select()
@@ -205,12 +226,12 @@ serve(async (req) => {
         .from('agendamentos')
         .insert({
           paciente_id,
-          medico_id: body.medico_id,
-          atendimento_id: body.atendimento_id,
-          data_agendamento: body.data_agendamento,
-          hora_agendamento: body.hora_agendamento,
-          convenio: body.paciente_convenio,
-          observacoes: body.observacoes || '',
+          medico_id: reqBody.medico_id,
+          atendimento_id: reqBody.atendimento_id,
+          data_agendamento: reqBody.data_agendamento,
+          hora_agendamento: reqBody.hora_agendamento,
+          convenio: reqBody.paciente_convenio,
+          observacoes: reqBody.observacoes || '',
           criado_por: 'n8n_agent',
           status: 'agendado',
           cliente_id
@@ -221,7 +242,7 @@ serve(async (req) => {
       if (agendamentoError) throw agendamentoError;
 
       return new Response(
-        JSON.stringify({ success: true, agendamento }),
+        JSON.stringify({ success: true, agendamento, cliente_id }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -229,12 +250,12 @@ serve(async (req) => {
     // ==================== PUT /agendamento/:id ====================
     if (method === 'PUT' && path.startsWith('/agendamento/')) {
       const agendamento_id = path.split('/')[2];
-      const body = await req.json();
+      // body já foi parseado acima
 
       const updateData: any = {};
-      if (body.data_agendamento) updateData.data_agendamento = body.data_agendamento;
-      if (body.hora_agendamento) updateData.hora_agendamento = body.hora_agendamento;
-      if (body.observacoes !== undefined) updateData.observacoes = body.observacoes;
+      if (body?.data_agendamento) updateData.data_agendamento = body.data_agendamento;
+      if (body?.hora_agendamento) updateData.hora_agendamento = body.hora_agendamento;
+      if (body?.observacoes !== undefined) updateData.observacoes = body.observacoes;
 
       const { data, error } = await supabase
         .from('agendamentos')
@@ -247,7 +268,7 @@ serve(async (req) => {
       if (error) throw error;
 
       return new Response(
-        JSON.stringify({ success: true, agendamento: data }),
+        JSON.stringify({ success: true, agendamento: data, cliente_id }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -267,7 +288,7 @@ serve(async (req) => {
       if (error) throw error;
 
       return new Response(
-        JSON.stringify({ success: true, agendamento: data }),
+        JSON.stringify({ success: true, agendamento: data, cliente_id }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
