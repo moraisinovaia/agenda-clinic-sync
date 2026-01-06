@@ -15,19 +15,114 @@ interface AdvancedRulesSectionProps {
   onChange: (config: any) => void;
 }
 
-interface RestricaoConvenio {
-  [servico: string]: string[];
+// ========== HELPER FUNCTIONS FOR DATA NORMALIZATION ==========
+
+/**
+ * Extracts the blocked convenios from restricoes_convenio value
+ * Supports both formats:
+ * - Legacy: { nao_permite: string[], mensagem?: string }
+ * - Simple: string[]
+ */
+function getBlockedConvenios(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (value && typeof value === 'object' && 'nao_permite' in value) {
+    const obj = value as { nao_permite: unknown };
+    if (Array.isArray(obj.nao_permite)) {
+      return obj.nao_permite;
+    }
+  }
+  return [];
 }
 
-interface PacoteObrigatorio {
+/**
+ * Extracts the message from restricoes_convenio value if present
+ */
+function getRestricaoMensagem(value: unknown): string | undefined {
+  if (value && typeof value === 'object' && 'mensagem' in value) {
+    return (value as { mensagem?: string }).mensagem;
+  }
+  return undefined;
+}
+
+/**
+ * Parses pacote_obrigatorio from database format to UI format
+ * Database format: { [convenio]: { [servico]: string[], mensagem?: string } }
+ * Returns array of { convenio, servico, exige, mensagem }
+ */
+function parsePacotesObrigatorios(pacotes: unknown): Array<{
+  convenio: string;
   servico: string;
   exige: string;
-  mensagem: string;
+  mensagem?: string;
+}> {
+  if (!pacotes || typeof pacotes !== 'object') return [];
+  
+  const result: Array<{ convenio: string; servico: string; exige: string; mensagem?: string }> = [];
+  
+  for (const [convenio, value] of Object.entries(pacotes)) {
+    if (!value || typeof value !== 'object') continue;
+    
+    const pacoteValue = value as Record<string, unknown>;
+    
+    // Check if it's the simple UI format: { servico, exige, mensagem }
+    if ('servico' in pacoteValue && 'exige' in pacoteValue) {
+      result.push({
+        convenio,
+        servico: String(pacoteValue.servico || ''),
+        exige: String(pacoteValue.exige || ''),
+        mensagem: pacoteValue.mensagem ? String(pacoteValue.mensagem) : undefined
+      });
+      continue;
+    }
+    
+    // Database format: { [servico]: string[], mensagem?: string }
+    const mensagem = typeof pacoteValue.mensagem === 'string' ? pacoteValue.mensagem : undefined;
+    
+    for (const [servico, exigeValue] of Object.entries(pacoteValue)) {
+      if (servico === 'mensagem') continue;
+      
+      if (Array.isArray(exigeValue)) {
+        result.push({
+          convenio,
+          servico,
+          exige: exigeValue.join(', '),
+          mensagem
+        });
+      }
+    }
+  }
+  
+  return result;
 }
 
-interface RestricaoIntervalo {
-  dias_minimo: number;
-  mensagem: string;
+/**
+ * Parses intervalo key to get the "de" and "para" service names
+ * Supports both formats: "ECG->TESTE" and "ECG_para_TESTE"
+ */
+function parseIntervaloKey(key: string): { de: string; para: string } {
+  if (key.includes('->')) {
+    const [de, para] = key.split('->');
+    return { de: de || '', para: para || '' };
+  }
+  if (key.includes('_para_')) {
+    const [de, para] = key.split('_para_');
+    return { 
+      de: (de || '').replace(/_/g, ' '), 
+      para: (para || '').replace(/_/g, ' ') 
+    };
+  }
+  return { de: key, para: '' };
+}
+
+/**
+ * Safely gets restricoes_intervalo as a record
+ */
+function getRestricoesIntervalo(config: any): Record<string, { dias_minimo: number; mensagem?: string }> {
+  const raw = config?.restricoes_intervalo;
+  if (!raw || typeof raw !== 'object') return {};
+  return raw as Record<string, { dias_minimo: number; mensagem?: string }>;
 }
 
 export function AdvancedRulesSection({ 
@@ -38,6 +133,7 @@ export function AdvancedRulesSection({
 }: AdvancedRulesSectionProps) {
   // Defensive check - ensure convenios is always an array
   const safeConvenios = Array.isArray(conveniosDisponiveis) ? conveniosDisponiveis : [];
+  
   // States for new restriction forms
   const [newRestricaoServico, setNewRestricaoServico] = useState('');
   const [selectedConvenios, setSelectedConvenios] = useState<string[]>([]);
@@ -54,12 +150,13 @@ export function AdvancedRulesSection({
 
   // Get all service names (from config and atendimentos)
   const allServiceNames = [
-    ...Object.keys(config.servicos || {}),
+    ...Object.keys(config?.servicos || {}),
     ...atendimentos.map(a => a.nome)
   ].filter((v, i, a) => a.indexOf(v) === i);
 
   // ========== RESTRIÇÕES DE CONVÊNIO ==========
-  const restricoesConvenio: RestricaoConvenio = config.restricoes_convenio || {};
+  const restricoesConvenioRaw = config?.restricoes_convenio || {};
+  const restricoesConvenio = typeof restricoesConvenioRaw === 'object' ? restricoesConvenioRaw : {};
   
   const handleToggleConvenio = (convenio: string) => {
     setSelectedConvenios(prev => 
@@ -72,12 +169,24 @@ export function AdvancedRulesSection({
   const handleAddRestricaoConvenio = () => {
     if (!newRestricaoServico || selectedConvenios.length === 0) return;
     
+    // Get existing data for this service
+    const existingValue = restricoesConvenio[newRestricaoServico];
+    const existingConvenios = getBlockedConvenios(existingValue);
+    const existingMensagem = getRestricaoMensagem(existingValue);
+    
+    // Merge with new convenios
+    const allConvenios = [
+      ...existingConvenios,
+      ...selectedConvenios.filter(c => !existingConvenios.includes(c))
+    ];
+    
+    // Save in database format (with nao_permite)
     const newRestricoes = {
       ...restricoesConvenio,
-      [newRestricaoServico]: [
-        ...(restricoesConvenio[newRestricaoServico] || []),
-        ...selectedConvenios.filter(c => !(restricoesConvenio[newRestricaoServico] || []).includes(c))
-      ]
+      [newRestricaoServico]: {
+        nao_permite: allConvenios,
+        ...(existingMensagem ? { mensagem: existingMensagem } : {})
+      }
     };
     
     onChange({ ...config, restricoes_convenio: newRestricoes });
@@ -92,21 +201,21 @@ export function AdvancedRulesSection({
   };
 
   // ========== PACOTES OBRIGATÓRIOS ==========
-  const pacotesObrigatorios: Record<string, PacoteObrigatorio> = config.pacote_obrigatorio || {};
+  const pacotesObrigatoriosRaw = config?.pacote_obrigatorio || {};
+  const pacotesList = parsePacotesObrigatorios(pacotesObrigatoriosRaw);
 
   const handleAddPacoteObrigatorio = () => {
     if (!newPacoteConvenio || !newPacoteServico || !newPacoteExige) return;
     
-    const newPacotes = {
-      ...pacotesObrigatorios,
-      [newPacoteConvenio]: {
-        servico: newPacoteServico,
-        exige: newPacoteExige,
-        mensagem: newPacoteMensagem || `${newPacoteServico} para ${newPacoteConvenio} exige ${newPacoteExige}`
-      }
+    // Save in database format
+    const existingPacotes = typeof pacotesObrigatoriosRaw === 'object' ? { ...pacotesObrigatoriosRaw } : {};
+    
+    existingPacotes[newPacoteConvenio] = {
+      [newPacoteServico]: [newPacoteExige],
+      mensagem: newPacoteMensagem || `${newPacoteServico} para ${newPacoteConvenio} exige ${newPacoteExige}`
     };
     
-    onChange({ ...config, pacote_obrigatorio: newPacotes });
+    onChange({ ...config, pacote_obrigatorio: existingPacotes });
     setNewPacoteConvenio('');
     setNewPacoteServico('');
     setNewPacoteExige('');
@@ -114,18 +223,21 @@ export function AdvancedRulesSection({
   };
 
   const handleRemovePacoteObrigatorio = (convenio: string) => {
-    const newPacotes = { ...pacotesObrigatorios };
+    const newPacotes = typeof pacotesObrigatoriosRaw === 'object' ? { ...pacotesObrigatoriosRaw } : {};
     delete newPacotes[convenio];
     onChange({ ...config, pacote_obrigatorio: Object.keys(newPacotes).length > 0 ? newPacotes : undefined });
   };
 
   // ========== INTERVALOS MÍNIMOS ==========
-  const restricoesIntervalo: Record<string, RestricaoIntervalo> = config.restricoes_intervalo || {};
+  const restricoesIntervalo = getRestricoesIntervalo(config);
 
   const handleAddRestricaoIntervalo = () => {
     if (!newIntervaloDe || !newIntervaloPara || newIntervaloDe === newIntervaloPara) return;
     
-    const key = `${newIntervaloDe}->${newIntervaloPara}`;
+    // Use database-compatible format with _para_
+    const encodeKey = (s: string) => s.toUpperCase().replace(/\s+/g, '_').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const key = `${encodeKey(newIntervaloDe)}_para_${encodeKey(newIntervaloPara)}`;
+    
     const newIntervalos = {
       ...restricoesIntervalo,
       [key]: {
@@ -161,28 +273,38 @@ export function AdvancedRulesSection({
 
         {/* Lista de restrições existentes */}
         <div className="space-y-2">
-          {Object.entries(restricoesConvenio).map(([servico, convenios]) => (
-            <Card key={servico} className="p-3 bg-background">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1">
-                  <p className="font-medium text-red-700 dark:text-red-400">{servico}</p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Não aceita: 
-                  </p>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {convenios.map((conv: string) => (
-                      <Badge key={conv} variant="outline" className="bg-red-500/10 text-red-700 border-red-500/30 text-xs">
-                        {conv}
-                      </Badge>
-                    ))}
+          {Object.entries(restricoesConvenio).map(([servico, value]) => {
+            const convenios = getBlockedConvenios(value);
+            const mensagem = getRestricaoMensagem(value);
+            
+            if (convenios.length === 0) return null;
+            
+            return (
+              <Card key={servico} className="p-3 bg-background">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1">
+                    <p className="font-medium text-red-700 dark:text-red-400">{servico}</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Não aceita: 
+                    </p>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {convenios.map((conv: string) => (
+                        <Badge key={conv} variant="outline" className="bg-red-500/10 text-red-700 border-red-500/30 text-xs">
+                          {conv}
+                        </Badge>
+                      ))}
+                    </div>
+                    {mensagem && (
+                      <p className="text-xs text-muted-foreground italic mt-2">{mensagem}</p>
+                    )}
                   </div>
+                  <Button variant="ghost" size="sm" onClick={() => handleRemoveRestricaoConvenio(servico)}>
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => handleRemoveRestricaoConvenio(servico)}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
         </div>
 
         {/* Formulário para nova restrição */}
@@ -248,11 +370,11 @@ export function AdvancedRulesSection({
 
         {/* Lista de pacotes existentes */}
         <div className="space-y-2">
-          {Object.entries(pacotesObrigatorios).map(([convenio, pacote]) => (
-            <Card key={convenio} className="p-3 bg-background">
+          {pacotesList.map((pacote, idx) => (
+            <Card key={`${pacote.convenio}-${idx}`} className="p-3 bg-background">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1">
-                  <p className="font-medium text-purple-700 dark:text-purple-400">{convenio}</p>
+                  <p className="font-medium text-purple-700 dark:text-purple-400">{pacote.convenio}</p>
                   <p className="text-sm mt-1">
                     <span className="font-medium">{pacote.servico}</span>
                     <span className="text-muted-foreground"> → exige </span>
@@ -262,7 +384,7 @@ export function AdvancedRulesSection({
                     <p className="text-xs text-muted-foreground italic mt-1">{pacote.mensagem}</p>
                   )}
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => handleRemovePacoteObrigatorio(convenio)}>
+                <Button variant="ghost" size="sm" onClick={() => handleRemovePacoteObrigatorio(pacote.convenio)}>
                   <X className="h-4 w-4" />
                 </Button>
               </div>
@@ -348,20 +470,22 @@ export function AdvancedRulesSection({
         {/* Lista de intervalos existentes */}
         <div className="space-y-2">
           {Object.entries(restricoesIntervalo).map(([key, intervalo]) => {
-            const [de, para] = key.split('->');
+            const { de, para } = parseIntervaloKey(key);
+            if (!de || !para) return null;
+            
             return (
               <Card key={key} className="p-3 bg-background">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <Badge variant="outline">{de}</Badge>
                       <span className="text-muted-foreground">→</span>
                       <Badge variant="outline">{para}</Badge>
                       <Badge className="bg-orange-500/20 text-orange-700 border-orange-500/30">
-                        Mín. {intervalo.dias_minimo} dias
+                        Mín. {intervalo?.dias_minimo || 0} dias
                       </Badge>
                     </div>
-                    {intervalo.mensagem && (
+                    {intervalo?.mensagem && (
                       <p className="text-xs text-muted-foreground italic mt-1">{intervalo.mensagem}</p>
                     )}
                   </div>
