@@ -13,8 +13,26 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
-import { RefreshCw, Plus, Pencil, Stethoscope, Users, Search, AlertCircle, Clock } from 'lucide-react';
+import { RefreshCw, Plus, Pencil, Stethoscope, Users, Search, AlertCircle, Clock, Settings2, FileText } from 'lucide-react';
+
+interface BusinessRuleService {
+  medico_id: string;
+  medico_nome: string;
+  servicos_count: number;
+  config: {
+    servicos?: Array<{
+      nome: string;
+      periodos?: Record<string, unknown>;
+    }>;
+    tipo_agendamento?: string;
+    permite_agendamento_online?: boolean;
+    idade_minima?: number;
+    idade_maxima?: number;
+    convenios?: string[];
+  };
+}
 
 interface Medico {
   id: string;
@@ -185,6 +203,20 @@ export const DoctorManagementPanel: React.FC = () => {
     enabled: !!effectiveClinicId
   });
 
+  // Buscar business_rules com serviços
+  const { data: businessRulesServices } = useQuery({
+    queryKey: ['business-rules-services', effectiveClinicId],
+    queryFn: async () => {
+      if (!effectiveClinicId) return [];
+      const { data, error } = await supabase.rpc('get_business_rules_with_services', {
+        p_cliente_id: effectiveClinicId
+      });
+      if (error) throw error;
+      return (data || []) as BusinessRuleService[];
+    },
+    enabled: !!effectiveClinicId
+  });
+
   // Buscar atendimentos disponíveis da clínica
   const { data: atendimentosDisponiveis } = useQuery({
     queryKey: ['atendimentos-clinica', effectiveClinicId],
@@ -305,6 +337,8 @@ export const DoctorManagementPanel: React.FC = () => {
     onSuccess: () => {
       toast.success('Médico atualizado com sucesso!');
       queryClient.invalidateQueries({ queryKey: ['medicos-por-clinica'] });
+      queryClient.invalidateQueries({ queryKey: ['business-rules-services'] });
+      queryClient.invalidateQueries({ queryKey: ['business-rules'] });
       resetForm();
       setIsDialogOpen(false);
       setEditingDoctor(null);
@@ -313,6 +347,16 @@ export const DoctorManagementPanel: React.FC = () => {
       toast.error(error.message);
     }
   });
+
+  // Função auxiliar para obter serviços de um médico
+  const getServicosForMedico = (medicoId: string): { count: number; nomes: string[] } => {
+    const rule = businessRulesServices?.find(br => br.medico_id === medicoId);
+    if (!rule?.config?.servicos) return { count: 0, nomes: [] };
+    return {
+      count: rule.config.servicos.length,
+      nomes: rule.config.servicos.map(s => s.nome)
+    };
+  };
 
   const resetForm = () => {
     setFormData({
@@ -699,6 +743,7 @@ export const DoctorManagementPanel: React.FC = () => {
                   <TableHead>Nome</TableHead>
                   <TableHead>CRM/RQE</TableHead>
                   <TableHead>Especialidade</TableHead>
+                  <TableHead>Serviços</TableHead>
                   <TableHead>Convênios</TableHead>
                   <TableHead>Faixa Etária</TableHead>
                   <TableHead>Agendamento</TableHead>
@@ -709,7 +754,7 @@ export const DoctorManagementPanel: React.FC = () => {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8">
+                    <TableCell colSpan={9} className="text-center py-8">
                       <RefreshCw className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
                     </TableCell>
                   </TableRow>
@@ -719,6 +764,7 @@ export const DoctorManagementPanel: React.FC = () => {
                     const permiteOnline = medico.horarios?.permite_agendamento_online !== false;
                     const atendeCriancas = medico.atende_criancas !== false;
                     const atendeAdultos = medico.atende_adultos !== false;
+                    const servicosInfo = getServicosForMedico(medico.id);
                     
                     return (
                       <TableRow key={medico.id}>
@@ -731,6 +777,44 @@ export const DoctorManagementPanel: React.FC = () => {
                           </div>
                         </TableCell>
                         <TableCell>{medico.especialidade}</TableCell>
+                        <TableCell>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="flex items-center gap-1.5">
+                                  {servicosInfo.count > 0 ? (
+                                    <Badge variant="default" className="text-xs">
+                                      <FileText className="h-3 w-3 mr-1" />
+                                      {servicosInfo.count}
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">
+                                      <AlertCircle className="h-3 w-3 mr-1" />
+                                      0
+                                    </Badge>
+                                  )}
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent side="left" className="max-w-[200px]">
+                                {servicosInfo.count > 0 ? (
+                                  <div className="text-xs space-y-1">
+                                    <p className="font-medium">Serviços configurados:</p>
+                                    <ul className="list-disc pl-4">
+                                      {servicosInfo.nomes.slice(0, 5).map((nome, i) => (
+                                        <li key={i}>{nome}</li>
+                                      ))}
+                                      {servicosInfo.nomes.length > 5 && (
+                                        <li>+{servicosInfo.nomes.length - 5} mais...</li>
+                                      )}
+                                    </ul>
+                                  </div>
+                                ) : (
+                                  <p className="text-xs">Nenhum serviço configurado na LLM API</p>
+                                )}
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </TableCell>
                         <TableCell>
                           {medico.convenios_aceitos?.length ? (
                             <Badge variant="outline">
@@ -770,27 +854,36 @@ export const DoctorManagementPanel: React.FC = () => {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleOpenEdit(medico)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center gap-1 justify-end">
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleOpenEdit(medico)}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Editar médico</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
                   })
                 ) : searchTerm ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                       <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
                       Nenhum médico encontrado para "{searchTerm}"
                     </TableCell>
                   </TableRow>
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                       <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
                       Nenhum médico cadastrado nesta clínica
                     </TableCell>
