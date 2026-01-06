@@ -16,6 +16,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 import { RefreshCw, Plus, Pencil, Stethoscope, Users, Search, AlertCircle, Clock, Settings2, FileText } from 'lucide-react';
+import { RuleEditDialog } from './llm-config/RuleEditDialog';
+import { useLLMConfig, BusinessRule } from '@/hooks/useLLMConfig';
 
 interface ServiceConfig {
   periodos?: Record<string, {
@@ -157,6 +159,11 @@ export const DoctorManagementPanel: React.FC = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingDoctor, setEditingDoctor] = useState<Medico | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Estados para o dialog de LLM inline
+  const [llmDialogOpen, setLLMDialogOpen] = useState(false);
+  const [selectedMedicoForLLM, setSelectedMedicoForLLM] = useState<BusinessRule | null>(null);
+  
   const [formData, setFormData] = useState<MedicoFormData>({
     nome: '',
     especialidade: '',
@@ -183,6 +190,9 @@ export const DoctorManagementPanel: React.FC = () => {
 
   // Para admin_clinica, usar seu cliente_id automaticamente
   const effectiveClinicId = isClinicAdmin ? clinicAdminClienteId : selectedClinicId;
+
+  // Hook para gerenciar LLM config (usado no dialog inline)
+  const { businessRules: llmBusinessRules, saveBusinessRule, saving: llmSaving, refetch: refetchLLM } = useLLMConfig(effectiveClinicId);
 
   // Buscar clientes (apenas para admin global)
   const { data: clientes } = useQuery({
@@ -886,18 +896,41 @@ export const DoctorManagementPanel: React.FC = () => {
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button
-                                    variant="ghost"
+                                    variant={servicosInfo.count > 0 ? "ghost" : "outline"}
                                     size="sm"
+                                    className={servicosInfo.count === 0 ? "border-amber-300 text-amber-600 hover:bg-amber-50" : ""}
                                     onClick={() => {
-                                      // Navegar para aba de configuração LLM do médico
-                                      window.location.hash = `llm-config-${medico.id}`;
-                                      toast.info(`Para configurar serviços de ${medico.nome}, acesse "Configuração LLM API" > "Regras por Médico"`);
+                                      // Buscar regra existente ou criar nova
+                                      const existingRule = llmBusinessRules.find(r => r.medico_id === medico.id);
+                                      const ruleToEdit: BusinessRule = existingRule || {
+                                        id: '',
+                                        cliente_id: effectiveClinicId || '',
+                                        medico_id: medico.id,
+                                        medico_nome: medico.nome,
+                                        config: {
+                                          nome: medico.nome.toUpperCase(),
+                                          tipo_agendamento: (medico.horarios as any)?.tipo_agendamento || 'ordem_chegada',
+                                          permite_agendamento_online: true,
+                                          servicos: {},
+                                          convenios: medico.convenios_aceitos || [],
+                                          idade_minima: medico.idade_minima,
+                                          idade_maxima: medico.idade_maxima
+                                        },
+                                        ativo: true,
+                                        version: 1
+                                      };
+                                      setSelectedMedicoForLLM(ruleToEdit);
+                                      setLLMDialogOpen(true);
                                     }}
                                   >
                                     <Settings2 className="h-4 w-4" />
                                   </Button>
                                 </TooltipTrigger>
-                                <TooltipContent>Configurar serviços LLM</TooltipContent>
+                                <TooltipContent>
+                                  {servicosInfo.count > 0 
+                                    ? `Editar ${servicosInfo.count} serviço(s) LLM` 
+                                    : "Configurar serviços LLM"}
+                                </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
                             <TooltipProvider>
@@ -1571,6 +1604,23 @@ export const DoctorManagementPanel: React.FC = () => {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Dialog para edição inline de serviços LLM */}
+        <RuleEditDialog
+          rule={selectedMedicoForLLM}
+          open={llmDialogOpen}
+          onOpenChange={setLLMDialogOpen}
+          onSave={async (medicoId, config) => {
+            const success = await saveBusinessRule(medicoId, config);
+            if (success) {
+              await refetchLLM();
+              queryClient.invalidateQueries({ queryKey: ['business-rules-services'] });
+            }
+            return success;
+          }}
+          saving={llmSaving}
+          clienteId={effectiveClinicId}
+        />
       </CardContent>
     </Card>
   );
