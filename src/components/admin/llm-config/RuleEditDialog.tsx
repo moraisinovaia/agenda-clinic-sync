@@ -146,25 +146,15 @@ export function RuleEditDialog({
               </Select>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-2">
-                <Label>Idade Mínima</Label>
-                <Input 
-                  type="number" 
-                  value={config.idade_minima || ''} 
-                  onChange={e => setConfig((prev: any) => ({ ...prev, idade_minima: e.target.value ? parseInt(e.target.value) : null }))}
-                  placeholder="Sem restrição"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Idade Máxima</Label>
-                <Input 
-                  type="number" 
-                  value={config.idade_maxima || ''} 
-                  onChange={e => setConfig((prev: any) => ({ ...prev, idade_maxima: e.target.value ? parseInt(e.target.value) : null }))}
-                  placeholder="Sem restrição"
-                />
-              </div>
+            {/* Restrições de idade - somente leitura */}
+            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">
+              <span className="font-medium">Restrições de idade:</span>
+              {config.idade_minima || config.idade_maxima ? (
+                <span>{config.idade_minima || 0} - {config.idade_maxima || '∞'} anos</span>
+              ) : (
+                <span>Sem restrição</span>
+              )}
+              <span className="text-xs opacity-70">(edite no formulário principal)</span>
             </div>
           </div>
 
