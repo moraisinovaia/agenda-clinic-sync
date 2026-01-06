@@ -145,6 +145,41 @@ export function useAtomicAppointmentCreation() {
 
       console.log('📝 Criando agendamento com criado_por:', criadorNome);
 
+      // Buscar cliente_id do médico para validar recursos
+      const { data: medicoData } = await supabase
+        .from('medicos')
+        .select('cliente_id')
+        .eq('id', formData.medicoId)
+        .single();
+
+      // Validar limite de recursos (MAPA, HOLTER, ECG) antes de criar
+      if (medicoData?.cliente_id && !editingAppointmentId) {
+        console.log('🔍 Validando limite de recursos...');
+        const { data: limiteResult, error: limiteError } = await supabase.rpc('validar_limite_recurso', {
+          p_atendimento_id: formData.atendimentoId,
+          p_medico_id: formData.medicoId,
+          p_data_agendamento: formData.dataAgendamento,
+          p_cliente_id: medicoData.cliente_id
+        });
+
+        if (limiteError) {
+          console.error('❌ Erro ao validar limite:', limiteError);
+        } else if (limiteResult && typeof limiteResult === 'object' && 'disponivel' in limiteResult) {
+          const resultado = limiteResult as { disponivel: boolean; motivo?: string; recurso_nome?: string; vagas_usadas?: number; vagas_total?: number };
+          if (!resultado.disponivel) {
+            console.log('🚫 Limite de recurso atingido:', resultado);
+            const resourceError = new Error(resultado.motivo || 'Limite de recurso atingido') as any;
+            resourceError.isResourceLimit = true;
+            resourceError.recursoNome = resultado.recurso_nome;
+            resourceError.vagasUsadas = resultado.vagas_usadas;
+            resourceError.vagasTotal = resultado.vagas_total;
+            throw resourceError;
+          } else if (resultado.recurso_nome) {
+            console.log(`✅ Recurso ${resultado.recurso_nome} disponível: ${resultado.vagas_usadas}/${resultado.vagas_total}`);
+          }
+        }
+      }
+
       // Chamar função SQL atômica COM LOCKS (uma única tentativa)
       const { data, error } = await supabase.rpc('criar_agendamento_atomico', {
         p_nome_completo: formData.nomeCompleto,
@@ -226,6 +261,16 @@ export function useAtomicAppointmentCreation() {
         throw conflictError;
       }
       
+      // Se é erro de limite de recurso, mostrar toast específico
+      if (error?.isResourceLimit) {
+        toast({
+          title: `Limite de ${error.recursoNome || 'recurso'} atingido`,
+          description: error.message,
+          variant: "destructive",
+        });
+        throw error;
+      }
+      
       // Para warnings de idade, não tratar como erro fatal
       if (error?.warnings && Array.isArray(error.warnings)) {
         console.log('⚠️ Warnings detectados (idade):', error.warnings);
@@ -237,7 +282,7 @@ export function useAtomicAppointmentCreation() {
           error?.message?.includes('inválido') ||
           error?.message?.includes('não está ativo');
       
-      if (!isCriticalValidationError && !error?.isConflict) {
+      if (!isCriticalValidationError && !error?.isConflict && !error?.isResourceLimit) {
         toast({
           title: "Erro ao criar agendamento",
           description: error?.message || "Ocorreu um erro inesperado",

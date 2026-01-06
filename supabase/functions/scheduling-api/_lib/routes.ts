@@ -145,6 +145,46 @@ export async function handleCreateAppointment(supabase: any, body: any) {
     );
   }
 
+  // Validar limite de recursos (MAPA, HOLTER, ECG)
+  try {
+    // Buscar cliente_id do médico
+    const { data: medicoData } = await supabase
+      .from('medicos')
+      .select('cliente_id')
+      .eq('id', medicoId)
+      .single();
+
+    if (medicoData?.cliente_id) {
+      const { data: limiteResult, error: limiteError } = await supabase.rpc('validar_limite_recurso', {
+        p_atendimento_id: atendimentoId,
+        p_medico_id: medicoId,
+        p_data_agendamento: dataAgendamento,
+        p_cliente_id: medicoData.cliente_id
+      });
+
+      if (limiteError) {
+        console.error('❌ Erro ao validar limite de recurso:', limiteError);
+      } else if (limiteResult && !limiteResult.disponivel) {
+        console.log('🚫 Limite de recurso atingido:', limiteResult);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: limiteResult.motivo,
+            recurso: limiteResult.recurso_nome,
+            vagas_usadas: limiteResult.vagas_usadas,
+            vagas_total: limiteResult.vagas_total
+          }),
+          { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      } else if (limiteResult?.recurso_nome) {
+        console.log(`✅ Recurso ${limiteResult.recurso_nome} disponível: ${limiteResult.vagas_usadas}/${limiteResult.vagas_total} vagas`);
+      }
+    }
+  } catch (limiteCheckError) {
+    console.error('❌ Erro ao verificar limite de recursos:', limiteCheckError);
+    // Não bloquear por erro de verificação, apenas logar
+  }
+
   try {
     // Usar sempre função atômica para agendamento simples
     const { data: result, error } = await supabase.rpc('criar_agendamento_atomico', {

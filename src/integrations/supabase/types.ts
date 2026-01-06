@@ -2417,6 +2417,15 @@ export type Database = {
         }
         Returns: Json
       }
+      validar_limite_recurso: {
+        Args: {
+          p_atendimento_id: string
+          p_cliente_id: string
+          p_data_agendamento: string
+          p_medico_id: string
+        }
+        Returns: Json
+      }
       validate_production_security: { Args: never; Returns: Json }
       validate_system_health: { Args: never; Returns: Json }
       verificar_status_email: { Args: { p_email: string }; Returns: Json }
