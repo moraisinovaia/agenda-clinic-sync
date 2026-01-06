@@ -1830,6 +1830,15 @@ export type Database = {
           version: number
         }[]
       }
+      get_business_rules_with_services: {
+        Args: { p_cliente_id: string }
+        Returns: {
+          config: Json
+          medico_id: string
+          medico_nome: string
+          servicos_count: number
+        }[]
+      }
       get_client_stats: { Args: { p_cliente_id: string }; Returns: Json }
       get_cliente_completo: { Args: { p_cliente_id: string }; Returns: Json }
       get_clientes_admin: {
@@ -2242,6 +2251,10 @@ export type Database = {
           p_telefone?: string
           p_whatsapp?: string
         }
+        Returns: Json
+      }
+      sync_medico_to_business_rules: {
+        Args: { p_medico_id: string }
         Returns: Json
       }
       test_whatsapp_edge_function: {
