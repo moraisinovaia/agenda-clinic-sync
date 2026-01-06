@@ -174,8 +174,8 @@ export function DoctorRulesTab({ businessRules, medicos, saving, onSave, onDelet
                               {diasAtivos} dia{diasAtivos !== 1 ? 's' : ''}
                             </Badge>
                           )}
-                          <Badge variant={servico.permite_online ? 'default' : 'destructive'}>
-                            {servico.permite_online ? 'Online' : 'Apenas ligação'}
+                          <Badge variant={servico.permite_online !== false ? 'default' : 'destructive'}>
+                            {servico.permite_online !== false ? 'WhatsApp/Online' : 'Apenas telefone'}
                           </Badge>
                         </div>
                       </div>
