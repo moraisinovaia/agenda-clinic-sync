@@ -74,9 +74,11 @@ export interface DoctorOnboardingFormData {
 
 export const CONVENIOS_PADRAO = [
   'PARTICULAR',
-  'UNIMED',
-  'UNIMED 20%',
+  'UNIMED NACIONAL',
+  'UNIMED REGIONAL',
   'UNIMED 40%',
+  'UNIMED 20%',
+  'UNIMED INTERCÂMBIO',
   'BRADESCO',
   'SULAMERICA',
   'AMIL',
