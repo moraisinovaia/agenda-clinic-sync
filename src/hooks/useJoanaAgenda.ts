@@ -215,11 +215,18 @@ export function useJoanaAgenda() {
   }, [recursos, distribuicoes]);
 
   const updateDistribuicao = useCallback(
-    async (id: string, quantidade: number) => {
+    async (id: string, data: { quantidade: number; periodo: string; horario_inicio: string | null; medico_id: string; dia_semana: number }) => {
       try {
         const { error } = await supabase
           .from('distribuicao_recursos')
-          .update({ quantidade, updated_at: new Date().toISOString() })
+          .update({ 
+            quantidade: data.quantidade, 
+            periodo: data.periodo,
+            horario_inicio: data.horario_inicio,
+            medico_id: data.medico_id,
+            dia_semana: data.dia_semana,
+            updated_at: new Date().toISOString() 
+          })
           .eq('id', id);
 
         if (error) throw error;
@@ -242,6 +249,81 @@ export function useJoanaAgenda() {
     [fetchData, toast]
   );
 
+  const createDistribuicao = useCallback(
+    async (data: {
+      recurso_id: string;
+      medico_id: string;
+      dia_semana: number;
+      quantidade: number;
+      periodo: string;
+      horario_inicio: string | null;
+    }) => {
+      try {
+        // Get cliente_id from the recurso
+        const recurso = recursos.find(r => r.id === data.recurso_id);
+        if (!recurso) throw new Error('Recurso não encontrado');
+
+        const { error } = await supabase
+          .from('distribuicao_recursos')
+          .insert({
+            recurso_id: data.recurso_id,
+            medico_id: data.medico_id,
+            dia_semana: data.dia_semana,
+            quantidade: data.quantidade,
+            periodo: data.periodo,
+            horario_inicio: data.horario_inicio,
+            cliente_id: recurso.cliente_id,
+            ativo: true,
+          });
+
+        if (error) throw error;
+
+        toast({
+          title: 'Sucesso',
+          description: 'Distribuição criada.',
+        });
+
+        fetchData();
+      } catch (error) {
+        console.error('Erro ao criar distribuição:', error);
+        toast({
+          title: 'Erro',
+          description: 'Não foi possível criar a distribuição.',
+          variant: 'destructive',
+        });
+      }
+    },
+    [fetchData, toast, recursos]
+  );
+
+  const deleteDistribuicao = useCallback(
+    async (id: string) => {
+      try {
+        const { error } = await supabase
+          .from('distribuicao_recursos')
+          .update({ ativo: false, updated_at: new Date().toISOString() })
+          .eq('id', id);
+
+        if (error) throw error;
+
+        toast({
+          title: 'Sucesso',
+          description: 'Distribuição removida.',
+        });
+
+        fetchData();
+      } catch (error) {
+        console.error('Erro ao remover distribuição:', error);
+        toast({
+          title: 'Erro',
+          description: 'Não foi possível remover a distribuição.',
+          variant: 'destructive',
+        });
+      }
+    },
+    [fetchData, toast]
+  );
+
   return {
     recursos,
     distribuicoes,
@@ -253,6 +335,8 @@ export function useJoanaAgenda() {
     verificarDisponibilidade,
     getResumoSemanal,
     updateDistribuicao,
+    createDistribuicao,
+    deleteDistribuicao,
     refetch: fetchData,
   };
 }
