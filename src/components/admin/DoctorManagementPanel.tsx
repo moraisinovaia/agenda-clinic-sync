@@ -123,9 +123,11 @@ const initialPeriodos: HorariosPeriodos = {
 
 const CONVENIOS_DISPONIVEIS = [
   'PARTICULAR',
-  'UNIMED',
-  'UNIMED 20%',
+  'UNIMED NACIONAL',
+  'UNIMED REGIONAL',
   'UNIMED 40%',
+  'UNIMED 20%',
+  'UNIMED INTERCÂMBIO',
   'BRADESCO',
   'SULAMERICA',
   'AMIL',
