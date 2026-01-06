@@ -36,6 +36,8 @@ export function AdvancedRulesSection({
   conveniosDisponiveis,
   onChange 
 }: AdvancedRulesSectionProps) {
+  // Defensive check - ensure convenios is always an array
+  const safeConvenios = Array.isArray(conveniosDisponiveis) ? conveniosDisponiveis : [];
   // States for new restriction forms
   const [newRestricaoServico, setNewRestricaoServico] = useState('');
   const [selectedConvenios, setSelectedConvenios] = useState<string[]>([]);
@@ -202,7 +204,7 @@ export function AdvancedRulesSection({
           <div>
             <Label className="text-sm">Convênios que NÃO são aceitos</Label>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2 max-h-40 overflow-y-auto p-2 border rounded-md">
-              {conveniosDisponiveis.map(conv => (
+              {safeConvenios.map(conv => (
                 <div key={conv} className="flex items-center space-x-2">
                   <Checkbox 
                     id={`conv-${conv}`}
@@ -214,7 +216,7 @@ export function AdvancedRulesSection({
                   </label>
                 </div>
               ))}
-              {conveniosDisponiveis.length === 0 && (
+              {safeConvenios.length === 0 && (
                 <p className="text-sm text-muted-foreground col-span-full">
                   Nenhum convênio cadastrado para este médico.
                 </p>
@@ -278,7 +280,7 @@ export function AdvancedRulesSection({
                   <SelectValue placeholder="Selecionar" />
                 </SelectTrigger>
                 <SelectContent>
-                  {conveniosDisponiveis.map(c => (
+                  {safeConvenios.map(c => (
                     <SelectItem key={c} value={c}>{c}</SelectItem>
                   ))}
                 </SelectContent>

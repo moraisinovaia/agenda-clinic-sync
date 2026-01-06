@@ -103,7 +103,9 @@ export function RuleEditDialog({
           .eq('id', rule.medico_id)
           .single();
         
-        setConveniosDisponiveis(medicoData?.convenios_aceitos || []);
+        const conveniosArray = Array.isArray(medicoData?.convenios_aceitos) ? medicoData.convenios_aceitos : [];
+        
+        setConveniosDisponiveis(conveniosArray);
       }
     };
 
