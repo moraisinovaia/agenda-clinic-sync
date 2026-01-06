@@ -122,11 +122,11 @@ export function ServiceConfigForm({
               <div className="flex items-center gap-2">
                 <Switch
                   id={`online-${serviceName}`}
-                  checked={config.permite_online}
+                  checked={config.permite_online !== false}
                   onCheckedChange={(checked) => handleChange('permite_online', checked)}
                 />
                 <Label htmlFor={`online-${serviceName}`} className="text-sm">
-                  {config.permite_online ? 'Online' : 'Apenas Ligação'}
+                  {config.permite_online !== false ? 'WhatsApp/Online' : 'Apenas telefone'}
                 </Label>
               </div>
               <Button variant="ghost" size="icon" onClick={onDelete} className="text-destructive hover:text-destructive">
