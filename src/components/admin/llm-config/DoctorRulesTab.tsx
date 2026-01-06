@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Edit, Trash2, Clock, Users, Calendar, Settings } from 'lucide-react';
+import { Plus, Edit, Trash2, Clock, Users, Calendar, Settings, Package, FileText } from 'lucide-react';
 import { BusinessRule } from '@/hooks/useLLMConfig';
 import { Label } from '@/components/ui/label';
 import { RuleEditDialog } from './RuleEditDialog';
@@ -91,6 +91,24 @@ export function DoctorRulesTab({ businessRules, medicos, saving, onSave, onDelet
                 )}
                 {config.idade_minima && (
                   <Badge variant="outline">Idade mín: {config.idade_minima}</Badge>
+                )}
+                {config.pacotes_especiais?.length > 0 && (
+                  <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
+                    <Package className="h-3 w-3 mr-1" />
+                    {config.pacotes_especiais.length} pacote{config.pacotes_especiais.length !== 1 ? 's' : ''}
+                  </Badge>
+                )}
+                {config.regras_chegada && (
+                  <Badge variant="outline" className="bg-amber-500/10 text-amber-700 border-amber-500/30">
+                    <Clock className="h-3 w-3 mr-1" />
+                    Regras de chegada
+                  </Badge>
+                )}
+                {Object.keys(config.entrega_resultados || {}).length > 0 && (
+                  <Badge variant="outline" className="bg-blue-500/10 text-blue-700 border-blue-500/30">
+                    <FileText className="h-3 w-3 mr-1" />
+                    {Object.keys(config.entrega_resultados).length} prazo{Object.keys(config.entrega_resultados).length !== 1 ? 's' : ''}
+                  </Badge>
                 )}
               </div>
             </div>
