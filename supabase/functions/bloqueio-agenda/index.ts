@@ -239,10 +239,10 @@ serve(async (req) => {
 
     console.log('🔍 Verificando médico...');
     
-    // Verificar se médico existe
+    // Verificar se médico existe e obter cliente_id
     const { data: medico, error: medicoError } = await supabase
       .from('medicos')
-      .select('id, nome')
+      .select('id, nome, cliente_id')
       .eq('id', medicoId)
       .maybeSingle();
 
@@ -270,6 +270,12 @@ serve(async (req) => {
 
     console.log('✅ Médico encontrado:', medico.nome);
 
+    // Usar cliente_id do body, ou do médico, ou fallback para IPADO
+    const IPADO_FALLBACK_ID = '2bfb98b5-ae41-4f96-8ba7-acc797c22054';
+    const clienteIdFinal = body.cliente_id || medico.cliente_id || IPADO_FALLBACK_ID;
+    
+    console.log(`🏥 Cliente ID: ${clienteIdFinal} (fonte: ${body.cliente_id ? 'body' : medico.cliente_id ? 'médico' : 'fallback IPADO'})`);
+    
     // Preparar dados para inserção
     const insertData = {
       medico_id: medicoId,
@@ -277,7 +283,7 @@ serve(async (req) => {
       data_fim: dataFim,
       motivo: motivo,
       criado_por: 'recepcionista',
-      cliente_id: '2bfb98b5-ae41-4f96-8ba7-acc797c22054' // ID da clínica IPADO
+      cliente_id: clienteIdFinal
     };
     
     console.log('📝 Inserindo bloqueio:', insertData);
@@ -415,10 +421,7 @@ serve(async (req) => {
         })),
         total_pacientes_afetados: agendamentos.length,
         url_sistema: 'https://endogastro.lovable.app',
-        contato_clinica: {
-          telefone: '(19) 3442-8053',
-          whatsapp: '5519987654321'
-        }
+        cliente_id: clienteIdFinal
       };
 
       console.log('📦 Payload preparado:', JSON.stringify(webhookPayload, null, 2));

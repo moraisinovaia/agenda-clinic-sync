@@ -51,8 +51,10 @@ function criarMensagemComDatas(params: {
   horaOriginal: string;
   motivo: string;
   proximasDatas: Array<{data: string; dia_semana: string; horarios: string[]}>;
+  telefoneClinica: string;
+  nomeClinica: string;
 }): string {
-  const { pacienteNome, medicoNome, dataOriginal, horaOriginal, motivo, proximasDatas } = params;
+  const { pacienteNome, medicoNome, dataOriginal, horaOriginal, motivo, proximasDatas, telefoneClinica, nomeClinica } = params;
   
   let mensagem = `🚨 IMPORTANTE: Reagendamento Necessário\n\n`;
   mensagem += `Olá, ${pacienteNome}!\n\n`;
@@ -66,8 +68,8 @@ function criarMensagemComDatas(params: {
   });
   
   mensagem += `Para reagendar, responda este WhatsApp ou ligue:\n`;
-  mensagem += `📞 (19) 3442-8053\n\n`;
-  mensagem += `Clínica INOVAIA - IPADO`;
+  mensagem += `📞 ${telefoneClinica}\n\n`;
+  mensagem += nomeClinica;
   
   return mensagem;
 }
@@ -79,8 +81,10 @@ function criarMensagemSemDatas(params: {
   dataOriginal: string;
   horaOriginal: string;
   motivo: string;
+  telefoneClinica: string;
+  nomeClinica: string;
 }): string {
-  const { pacienteNome, medicoNome, dataOriginal, horaOriginal, motivo } = params;
+  const { pacienteNome, medicoNome, dataOriginal, horaOriginal, motivo, telefoneClinica, nomeClinica } = params;
   
   let mensagem = `🚨 IMPORTANTE: Reagendamento Necessário\n\n`;
   mensagem += `Olá, ${pacienteNome}!\n\n`;
@@ -88,8 +92,8 @@ function criarMensagemSemDatas(params: {
   mensagem += `📋 Motivo: ${motivo}\n\n`;
   mensagem += `⚠️ No momento não há vagas disponíveis na agenda online.\n\n`;
   mensagem += `Por favor, entre em contato para reagendar:\n`;
-  mensagem += `📞 (19) 3442-8053\n\n`;
-  mensagem += `Clínica INOVAIA - IPADO`;
+  mensagem += `📞 ${telefoneClinica}\n\n`;
+  mensagem += nomeClinica;
   
   return mensagem;
 }
@@ -146,11 +150,37 @@ serve(async (req) => {
       data_inicio, 
       data_fim, 
       motivo,
-      agendamentos_afetados 
+      agendamentos_afetados,
+      cliente_id 
     } = await req.json();
     
     console.log(`📋 Bloqueio criado: ${medico_nome} (${data_inicio} a ${data_fim})`);
     console.log(`👥 Agendamentos afetados: ${agendamentos_afetados}`);
+    
+    // Buscar cliente_id do médico se não fornecido
+    let clienteIdFinal = cliente_id;
+    if (!clienteIdFinal) {
+      const { data: medico } = await supabase
+        .from('medicos')
+        .select('cliente_id')
+        .eq('id', medico_id)
+        .maybeSingle();
+      clienteIdFinal = medico?.cliente_id || '2bfb98b5-ae41-4f96-8ba7-acc797c22054'; // Fallback IPADO
+    }
+    
+    console.log(`🏥 Cliente ID: ${clienteIdFinal}`);
+    
+    // Buscar dados da clínica do banco
+    const { data: clinicConfig } = await supabase
+      .from('llm_clinic_config')
+      .select('nome_clinica, telefone, whatsapp')
+      .eq('cliente_id', clienteIdFinal)
+      .maybeSingle();
+    
+    const telefoneClinica = clinicConfig?.telefone || clinicConfig?.whatsapp || '(19) 3442-8053';
+    const nomeClinica = clinicConfig?.nome_clinica || 'Clínica';
+    
+    console.log(`📞 Contato: ${telefoneClinica} | ${nomeClinica}`);
     
     // Buscar agendamentos cancelados por este bloqueio com dados dos pacientes
     const { data: agendamentos, error: agendamentosError } = await supabase
@@ -248,7 +278,9 @@ serve(async (req) => {
             medicoNome: medico_nome,
             dataOriginal: agendamento.data_agendamento,
             horaOriginal: agendamento.hora_agendamento,
-            motivo: motivo
+            motivo: motivo,
+            telefoneClinica,
+            nomeClinica
           });
         } else {
           console.log(`✅ ${disponibilidade.proximas_datas.length} datas encontradas`);
@@ -259,7 +291,9 @@ serve(async (req) => {
             dataOriginal: agendamento.data_agendamento,
             horaOriginal: agendamento.hora_agendamento,
             motivo: motivo,
-            proximasDatas: disponibilidade.proximas_datas
+            proximasDatas: disponibilidade.proximas_datas,
+            telefoneClinica,
+            nomeClinica
           });
         }
         
@@ -275,7 +309,7 @@ serve(async (req) => {
           mensagem: mensagem,
           celular: celularFormatado,
           status: 'enviado',
-          cliente_id: '2bfb98b5-ae41-4f96-8ba7-acc797c22054' // IPADO
+          cliente_id: clienteIdFinal
         });
         
         resultados.enviados++;
@@ -303,7 +337,7 @@ serve(async (req) => {
           status: 'erro',
           erro: error.message,
           tentativas: 1,
-          cliente_id: '2bfb98b5-ae41-4f96-8ba7-acc797c22054'
+          cliente_id: clienteIdFinal
         });
         
         resultados.erros++;
