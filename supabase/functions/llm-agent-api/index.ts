@@ -1356,20 +1356,19 @@ serve(async (req) => {
       
       // Identificar origem da requisição
       const isProxy = !!body.cliente_id;
-      const clienteNome = CLIENTE_ID === IPADO_CLIENT_ID ? 'IPADO' : 
-                          CLIENTE_ID === '20747f3c-8fa1-4f7e-8817-a55a8a6c8e0a' ? 'Clínica Vênus' :
-                          CLIENTE_ID === '39e120b4-5fb7-4d6f-9f91-a598a5bbd253' ? 'ENDOGASTRO' : 
-                          'Cliente Externo';
       
-      console.log(`🏥 Cliente: ${clienteNome} (${CLIENTE_ID})${isProxy ? ' [via proxy]' : ''}`);
+      console.log(`🏥 Cliente ID: ${CLIENTE_ID}${isProxy ? ' [via proxy]' : ''}`);
 
       // 🆕 CARREGAR CONFIGURAÇÃO DINÂMICA DO BANCO
       const dynamicConfig = await loadDynamicConfig(supabase, CLIENTE_ID);
       
+      // Nome do cliente vem do banco (sem hardcodes)
+      const clienteNome = dynamicConfig?.clinic_info?.nome_clinica || 'Cliente';
+      
       if (dynamicConfig?.clinic_info) {
-        console.log(`✅ Config carregada: ${dynamicConfig.clinic_info.nome_clinica || clienteNome}`);
+        console.log(`✅ Config carregada: ${clienteNome}`);
       } else {
-        console.log(`⚠️ Usando configuração hardcoded para ${clienteNome}`);
+        console.log(`⚠️ Sem configuração no banco para cliente ${CLIENTE_ID}`);
       }
 
       switch (action) {
