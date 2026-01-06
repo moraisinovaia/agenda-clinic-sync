@@ -1,11 +1,12 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Bot, Settings, Users, MessageSquare } from 'lucide-react';
+import { Bot, Settings, Users, MessageSquare, Clock } from 'lucide-react';
 import { useLLMConfig } from '@/hooks/useLLMConfig';
 import { GeneralConfigTab } from './llm-config/GeneralConfigTab';
 import { DoctorRulesTab } from './llm-config/DoctorRulesTab';
 import { MessagesTab } from './llm-config/MessagesTab';
+import { JoanaAgendaPanel } from './JoanaAgendaPanel';
 import { useStableAuth } from '@/hooks/useStableAuth';
 
 interface LLMConfigPanelProps {
@@ -65,7 +66,7 @@ export function LLMConfigPanel({ clienteId }: LLMConfigPanelProps) {
 
       {/* Tabs */}
       <Tabs defaultValue="general" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 max-w-lg">
+        <TabsList className="grid w-full grid-cols-4 max-w-2xl">
           <TabsTrigger value="general" className="flex items-center gap-2">
             <Settings className="h-4 w-4" />
             Config. Geral
@@ -77,6 +78,10 @@ export function LLMConfigPanel({ clienteId }: LLMConfigPanelProps) {
           <TabsTrigger value="messages" className="flex items-center gap-2">
             <MessageSquare className="h-4 w-4" />
             Mensagens
+          </TabsTrigger>
+          <TabsTrigger value="joana" className="flex items-center gap-2">
+            <Clock className="h-4 w-4" />
+            Agenda Joana
           </TabsTrigger>
         </TabsList>
 
@@ -106,6 +111,10 @@ export function LLMConfigPanel({ clienteId }: LLMConfigPanelProps) {
             onSave={saveMensagem}
             onDelete={deleteMensagem}
           />
+        </TabsContent>
+
+        <TabsContent value="joana" className="mt-6">
+          <JoanaAgendaPanel />
         </TabsContent>
       </Tabs>
     </div>

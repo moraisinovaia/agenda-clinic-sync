@@ -605,6 +605,70 @@ export type Database = {
           },
         ]
       }
+      distribuicao_recursos: {
+        Row: {
+          ativo: boolean | null
+          cliente_id: string
+          created_at: string | null
+          dia_semana: number
+          horario_inicio: string | null
+          id: string
+          medico_id: string
+          periodo: string | null
+          quantidade: number | null
+          recurso_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          cliente_id: string
+          created_at?: string | null
+          dia_semana: number
+          horario_inicio?: string | null
+          id?: string
+          medico_id: string
+          periodo?: string | null
+          quantidade?: number | null
+          recurso_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          cliente_id?: string
+          created_at?: string | null
+          dia_semana?: number
+          horario_inicio?: string | null
+          id?: string
+          medico_id?: string
+          periodo?: string | null
+          quantidade?: number | null
+          recurso_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "distribuicao_recursos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "distribuicao_recursos_medico_id_fkey"
+            columns: ["medico_id"]
+            isOneToOne: false
+            referencedRelation: "medicos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "distribuicao_recursos_recurso_id_fkey"
+            columns: ["recurso_id"]
+            isOneToOne: false
+            referencedRelation: "recursos_equipamentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fila_espera: {
         Row: {
           agendamento_id: string | null
@@ -1309,6 +1373,56 @@ export type Database = {
             columns: ["aprovado_por"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recursos_equipamentos: {
+        Row: {
+          ativo: boolean | null
+          cliente_id: string
+          created_at: string | null
+          descricao: string | null
+          ficha_fim: string | null
+          ficha_inicio: string | null
+          horario_instalacao: string | null
+          id: string
+          limite_diario: number | null
+          nome: string
+          updated_at: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          cliente_id: string
+          created_at?: string | null
+          descricao?: string | null
+          ficha_fim?: string | null
+          ficha_inicio?: string | null
+          horario_instalacao?: string | null
+          id?: string
+          limite_diario?: number | null
+          nome: string
+          updated_at?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          cliente_id?: string
+          created_at?: string | null
+          descricao?: string | null
+          ficha_fim?: string | null
+          ficha_inicio?: string | null
+          horario_instalacao?: string | null
+          id?: string
+          limite_diario?: number | null
+          nome?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recursos_equipamentos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
             referencedColumns: ["id"]
           },
         ]
