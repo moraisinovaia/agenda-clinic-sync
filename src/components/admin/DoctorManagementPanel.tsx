@@ -17,15 +17,21 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/comp
 import { toast } from 'sonner';
 import { RefreshCw, Plus, Pencil, Stethoscope, Users, Search, AlertCircle, Clock, Settings2, FileText } from 'lucide-react';
 
+interface ServiceConfig {
+  periodos?: Record<string, {
+    inicio?: string;
+    fim?: string;
+    limite?: number;
+    dias_especificos?: number[];
+  }>;
+}
+
 interface BusinessRuleService {
   medico_id: string;
   medico_nome: string;
   servicos_count: number;
   config: {
-    servicos?: Array<{
-      nome: string;
-      periodos?: Record<string, unknown>;
-    }>;
+    servicos?: Record<string, ServiceConfig>;  // Objeto, não array
     tipo_agendamento?: string;
     permite_agendamento_online?: boolean;
     idade_minima?: number;
@@ -349,12 +355,16 @@ export const DoctorManagementPanel: React.FC = () => {
   });
 
   // Função auxiliar para obter serviços de um médico
-  const getServicosForMedico = (medicoId: string): { count: number; nomes: string[] } => {
+  const getServicosForMedico = (medicoId: string): { count: number; nomes: string[]; rule?: BusinessRuleService } => {
     const rule = businessRulesServices?.find(br => br.medico_id === medicoId);
     if (!rule?.config?.servicos) return { count: 0, nomes: [] };
+    
+    // Servicos é um objeto, não array
+    const nomes = Object.keys(rule.config.servicos);
     return {
-      count: rule.config.servicos.length,
-      nomes: rule.config.servicos.map(s => s.nome)
+      count: nomes.length,
+      nomes,
+      rule
     };
   };
 
@@ -795,18 +805,35 @@ export const DoctorManagementPanel: React.FC = () => {
                                   )}
                                 </div>
                               </TooltipTrigger>
-                              <TooltipContent side="left" className="max-w-[200px]">
-                                {servicosInfo.count > 0 ? (
-                                  <div className="text-xs space-y-1">
+                              <TooltipContent side="left" className="max-w-[300px]">
+                                {servicosInfo.count > 0 && servicosInfo.rule?.config?.servicos ? (
+                                  <div className="text-xs space-y-2">
                                     <p className="font-medium">Serviços configurados:</p>
-                                    <ul className="list-disc pl-4">
-                                      {servicosInfo.nomes.slice(0, 5).map((nome, i) => (
-                                        <li key={i}>{nome}</li>
-                                      ))}
-                                      {servicosInfo.nomes.length > 5 && (
-                                        <li>+{servicosInfo.nomes.length - 5} mais...</li>
-                                      )}
-                                    </ul>
+                                    {servicosInfo.nomes.slice(0, 5).map((nome) => {
+                                      const servicoConfig = servicosInfo.rule?.config?.servicos?.[nome];
+                                      const periodos = servicoConfig?.periodos;
+                                      return (
+                                        <div key={nome} className="border-t border-border/50 pt-1">
+                                          <p className="font-medium text-primary">{nome}</p>
+                                          {periodos && Object.keys(periodos).length > 0 ? (
+                                            <ul className="text-muted-foreground pl-2 mt-0.5">
+                                              {Object.entries(periodos).slice(0, 3).map(([periodo, config]) => (
+                                                <li key={periodo} className="flex gap-1">
+                                                  <span className="capitalize">{periodo}:</span>
+                                                  <span>{config.inicio || '?'} - {config.fim || '?'}</span>
+                                                  {config.limite && <span>(max: {config.limite})</span>}
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          ) : (
+                                            <span className="text-muted-foreground">Sem horários definidos</span>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                    {servicosInfo.nomes.length > 5 && (
+                                      <p className="text-muted-foreground">+{servicosInfo.nomes.length - 5} mais...</p>
+                                    )}
                                   </div>
                                 ) : (
                                   <p className="text-xs">Nenhum serviço configurado na LLM API</p>
@@ -855,6 +882,24 @@ export const DoctorManagementPanel: React.FC = () => {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center gap-1 justify-end">
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      // Navegar para aba de configuração LLM do médico
+                                      window.location.hash = `llm-config-${medico.id}`;
+                                      toast.info(`Para configurar serviços de ${medico.nome}, acesse "Configuração LLM API" > "Regras por Médico"`);
+                                    }}
+                                  >
+                                    <Settings2 className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Configurar serviços LLM</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
