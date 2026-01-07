@@ -35,6 +35,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   const lastKnownTimestampRef = useRef<string | null>(null);
   const lastKnownCountRef = useRef<number | null>(null); // ✅ v7: count-based detection
   const lastKnownIdRef = useRef<string | null>(null);
+  const isCheckingRef = useRef(false); // ⚡ FASE 9: Flag anti-concorrência
   
   // 🔥 Estado local para appointments
   const [appointments, setAppointments] = useState<AppointmentWithRelations[]>([]);
@@ -475,10 +476,16 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     }, 500); // ⚡ FASE 2: Reduzido de 3000ms para 500ms
   }, [refetch]);
 
-  // ✅ FASE 7: Verificar mudanças por TIMESTAMP + COUNT (mais robusto para LLM appointments)
+  // ✅ FASE 9: Verificar mudanças com flag anti-concorrência
   const checkForNewAppointments = useCallback(async () => {
+    // ⚡ FASE 9: Evitar queries paralelas
+    if (isCheckingRef.current) {
+      console.log('⏸️ [POLLING] Verificação já em andamento, ignorando...');
+      return false;
+    }
+    
+    isCheckingRef.current = true;
     try {
-      // 🔥 OTIMIZAÇÃO: Buscar timestamp E count em uma única query
       const { data: latestData, count } = await supabase
         .from('agendamentos')
         .select('id, updated_at, created_at', { count: 'exact' })
@@ -488,30 +495,21 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       
       if (latestData && latestData.length > 0 && count !== null) {
         const latestTimestamp = latestData[0].updated_at;
-        const latestCreatedAt = latestData[0].created_at;
         
-        // ✅ CORREÇÃO v7: Detectar mudanças por TIMESTAMP OU COUNT
         const hasTimestampChange = latestTimestamp !== lastKnownTimestampRef.current;
         const hasCountChange = lastKnownCountRef.current !== null && count !== lastKnownCountRef.current;
         const hasChanges = hasTimestampChange || hasCountChange;
         
-        // ✅ Debug detalhado para diagnóstico
         if (hasChanges && lastKnownTimestampRef.current !== null) {
-          console.log('🆕 [POLLING v7] MUDANÇA DETECTADA!', { 
-            tipoMudanca: hasCountChange ? 'NOVO AGENDAMENTO' : 'ATUALIZAÇÃO',
-            newTimestamp: latestTimestamp,
-            newCreatedAt: latestCreatedAt,
-            previousTimestamp: lastKnownTimestampRef.current,
-            newCount: count,
-            previousCount: lastKnownCountRef.current,
-            diff: count - (lastKnownCountRef.current || 0)
+          console.log('🆕 [POLLING v9] MUDANÇA DETECTADA!', { 
+            tipo: hasCountChange ? 'NOVO' : 'UPDATE',
+            count,
+            prevCount: lastKnownCountRef.current
           });
           
-          // ✅ Atualizar refs ANTES do refetch
           lastKnownTimestampRef.current = latestTimestamp;
           lastKnownCountRef.current = count;
           
-          // ✅ Invalidar cache e refetch
           fetchPromiseRef.current = null;
           fetchTimestampRef.current = 0;
           
@@ -519,22 +517,17 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           return true;
         }
         
-        // ✅ Atualizar refs na primeira execução (silencioso)
         if (lastKnownTimestampRef.current === null) {
           lastKnownTimestampRef.current = latestTimestamp;
-          lastKnownCountRef.current = count;
-          console.log('📌 [POLLING v7] Valores iniciais registrados:', { 
-            timestamp: latestTimestamp, 
-            count: count 
-          });
-        } else if (lastKnownCountRef.current === null) {
           lastKnownCountRef.current = count;
         }
       }
       return false;
     } catch (err) {
-      console.warn('⚠️ [POLLING v7] Erro ao verificar mudanças:', err);
+      console.warn('⚠️ [POLLING] Erro:', err);
       return false;
+    } finally {
+      isCheckingRef.current = false;
     }
   }, [refetch]);
 

@@ -24,10 +24,10 @@ class RealtimeManager {
   private readonly MIN_CONNECTION_TIME = 10000; // ✅ REDUZIDO: 10 segundos (era 30s)
   private readonly STABLE_CONNECTION_RESET = 5 * 60 * 1000;
   
-  // ✅ FASE 6: Intervalos de polling otimizados (agendamentos = 2s para evitar conflitos)
+  // ✅ FASE 9: Intervalos de polling otimizados (agendamentos = 10s - update otimista compensa)
   private readonly POLLING_INTERVALS: Record<string, number> = {
-    'agendamentos': 2000,  // ⚡ 2 segundos para agendamentos (crítico - multi-recepcionista)
-    'default': 15000       // 15 segundos para outras tabelas
+    'agendamentos': 10000,  // ⚡ 10 segundos para agendamentos (update otimista compensa)
+    'default': 15000        // 15 segundos para outras tabelas
   };
 
   constructor() {
