@@ -3,6 +3,7 @@ import { useSchedulingData } from './useSchedulingData';
 import { useAppointmentsList } from './useAppointmentsList';
 import { usePatientManagement } from './usePatientManagement';
 import { useAtomicAppointmentCreation } from './useAtomicAppointmentCreation';
+import { supabase } from '@/integrations/supabase/client';
 
 export function useSupabaseScheduling() {
   // Usar os hooks especializados
@@ -19,7 +20,7 @@ export function useSupabaseScheduling() {
     ]);
   }, [schedulingData.refetch, appointmentsList.refetch]);
 
-  // ✅ CORREÇÃO DEFINITIVA: Invalidar cache SEMPRE após sucesso e garantir refetch
+  // ⚡ OTIMIZAÇÃO FASE 8: Update otimista - feedback instantâneo após criar agendamento
   const createAppointment = useCallback(async (formData: any, editingAppointmentId?: string, forceConflict = false) => {
     console.log('🌟🌟🌟 useSupabaseScheduling.createAppointment CHAMADO!', { formData, editingAppointmentId, forceConflict });
     
@@ -28,14 +29,39 @@ export function useSupabaseScheduling() {
       const result = await appointmentCreation.createAppointment(formData, editingAppointmentId, forceConflict);
       console.log('✨ useSupabaseScheduling: Resultado recebido:', result);
       
-      // ✅ FASE 6: Se há sucesso, invalidar cache E forçar refetch IMEDIATO
-      if (result && result.success !== false) {
-        // Invalidar cache imediatamente
-        appointmentsList.invalidateCache?.();
+      // ⚡ FASE 8: Se há sucesso, buscar o agendamento recém-criado e adicionar localmente
+      if (result && result.success !== false && result.agendamento_id) {
+        console.log('⚡ [OPTIMISTIC] Buscando agendamento recém-criado para update local...');
         
-        // ✅ CORREÇÃO: Forçar refetch IMEDIATO (não esperar polling)
-        await appointmentsList.refetch?.();
-        console.log('✅ [SCHEDULING] Refetch imediato executado após criar agendamento');
+        // Buscar apenas o novo agendamento (1 registro)
+        const { data: newAppointmentData } = await supabase
+          .from('agendamentos')
+          .select(`
+            *,
+            pacientes!inner(id, nome_completo, convenio, celular, telefone, data_nascimento),
+            medicos!inner(id, nome, especialidade, ativo),
+            atendimentos!inner(id, nome, tipo, medico_id)
+          `)
+          .eq('id', result.agendamento_id)
+          .single();
+        
+        if (newAppointmentData) {
+          console.log('⚡ [OPTIMISTIC] Adicionando agendamento localmente para feedback instantâneo');
+          // Adicionar localmente para feedback instantâneo
+          appointmentsList.addAppointmentLocally?.({
+            ...newAppointmentData,
+            pacientes: newAppointmentData.pacientes || null,
+            medicos: newAppointmentData.medicos || null,
+            atendimentos: newAppointmentData.atendimentos || null,
+          } as any);
+        }
+        
+        // Invalidar cache e fazer refetch silencioso em background (3s depois)
+        appointmentsList.invalidateCache?.();
+        setTimeout(() => {
+          console.log('🔄 [BACKGROUND] Executando refetch de sincronização...');
+          appointmentsList.refetch?.();
+        }, 3000);
       }
       
       return result;

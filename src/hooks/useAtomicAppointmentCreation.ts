@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { SchedulingFormData } from '@/types/scheduling';
 import { AtomicAppointmentResult } from '@/types/atomic-scheduling';
@@ -11,10 +11,21 @@ import { formatPhone, isValidPhone } from '@/utils/phoneFormatter';
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 segundo
 
+// ⚡ FASE 8: Cache de profile para evitar queries repetidas
+interface ProfileCache {
+  nome: string;
+  email: string;
+  timestamp: number;
+}
+
 export function useAtomicAppointmentCreation() {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
+  
+  // ⚡ FASE 8: Cache de profile por 5 minutos
+  const profileCacheRef = useRef<ProfileCache | null>(null);
+  const PROFILE_CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
 
   // Função de delay para retry
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -118,29 +129,36 @@ export function useAtomicAppointmentCreation() {
 
       console.log('🔑 Buscando profile do usuário:', user.id);
 
-      // Buscar nome do usuário logado com tratamento de erro
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('nome, email, status')
-        .eq('user_id', user.id)
-        .single();
+      // ⚡ FASE 8: Usar cache de profile se ainda válido
+      let criadorNome = 'Recepcionista';
+      const now = Date.now();
+      
+      if (profileCacheRef.current && (now - profileCacheRef.current.timestamp) < PROFILE_CACHE_DURATION) {
+        console.log('♻️ [PROFILE-CACHE] Usando profile cacheado:', profileCacheRef.current.nome);
+        criadorNome = profileCacheRef.current.nome;
+      } else {
+        // Buscar nome do usuário logado com tratamento de erro
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('nome, email, status')
+          .eq('user_id', user.id)
+          .single();
 
-      if (profileError) {
-        console.error('❌ Erro ao buscar profile:', profileError);
+        if (profileError) {
+          console.error('❌ Erro ao buscar profile:', profileError);
+        } else if (profile?.nome) {
+          console.log('👤 Profile encontrado e cacheado:', profile);
+          profileCacheRef.current = {
+            nome: profile.nome,
+            email: profile.email || '',
+            timestamp: now
+          };
+          criadorNome = profile.nome;
+        }
       }
 
-      console.log('👤 Profile encontrado:', profile);
-
-      // Validar que temos o nome
-      const criadorNome = profile?.nome || 'Recepcionista';
-
-      if (!profile?.nome) {
+      if (criadorNome === 'Recepcionista') {
         console.warn('⚠️ Nome do usuário não encontrado no profile, usando fallback');
-        toast({
-          title: 'Aviso',
-          description: 'Não foi possível identificar seu nome. Usando "Recepcionista" como padrão.',
-          variant: 'default',
-        });
       }
 
       console.log('📝 Criando agendamento com criado_por:', criadorNome);

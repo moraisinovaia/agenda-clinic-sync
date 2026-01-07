@@ -8,9 +8,9 @@ import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 import { useDebounce } from '@/hooks/useDebounce';
 import { logger } from '@/utils/logger';
 
-// 🚨 OTIMIZAÇÃO FASE 7: Cache reduzido para ambiente multi-recepcionista + LLM
-// Removido singleton global para evitar memory leaks e data duplication
-const CACHE_DURATION = 5000; // ⚡ FASE 7: 5 segundos - crítico para LLM appointments aparecerem rápido
+// 🚨 OTIMIZAÇÃO FASE 8: Cache aumentado + Update otimista para feedback instantâneo
+// Realtime + update otimista compensam o cache maior
+const CACHE_DURATION = 30000; // ⚡ FASE 8: 30 segundos - update otimista garante feedback rápido
 
 // 🔄 QUERY DIRETA: Versão Otimizada 2025-10-27-17:00 - Solução definitiva com índices
 export function useAppointmentsList(itemsPerPage: number = 20) {
@@ -368,6 +368,21 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       console.log('🔄 [LOCAL-UPDATE] Array reference mudou?', prev !== updated);
       
       return updated;
+    });
+  }, []);
+
+  // ⚡ OTIMIZAÇÃO FASE 8: Adicionar agendamento localmente para feedback instantâneo
+  const addAppointmentLocally = useCallback((newAppointment: AppointmentWithRelations) => {
+    console.log('⚡ [LOCAL-ADD] Adicionando agendamento instantaneamente:', newAppointment.id.substring(0, 8));
+    setAppointments(prev => {
+      // Verificar se já existe (evitar duplicatas)
+      if (prev.some(apt => apt.id === newAppointment.id)) {
+        console.log('⚠️ [LOCAL-ADD] Agendamento já existe, atualizando...');
+        return prev.map(apt => apt.id === newAppointment.id ? newAppointment : apt);
+      }
+      // Adicionar no início (mais recente primeiro)
+      console.log('✅ [LOCAL-ADD] Novo agendamento adicionado ao topo');
+      return [newAppointment, ...prev];
     });
   }, []);
 
@@ -1099,5 +1114,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     forceRefetch,
     pagination,
     error,
+    // ⚡ FASE 8: Funções para update otimista
+    addAppointmentLocally,
+    updateLocalAppointment,
   };
 }
