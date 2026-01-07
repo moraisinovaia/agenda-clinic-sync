@@ -20,20 +20,17 @@ export function useSupabaseScheduling() {
     ]);
   }, [schedulingData.refetch, appointmentsList.refetch]);
 
-  // ⚡ OTIMIZAÇÃO FASE 8: Update otimista - feedback instantâneo após criar agendamento
+  // ⚡ OTIMIZAÇÃO FASE 9: Update otimista INSTANTÂNEO - sem refetch pesado
   const createAppointment = useCallback(async (formData: any, editingAppointmentId?: string, forceConflict = false) => {
-    console.log('🌟🌟🌟 useSupabaseScheduling.createAppointment CHAMADO!', { formData, editingAppointmentId, forceConflict });
+    console.log('🌟 useSupabaseScheduling.createAppointment CHAMADO');
     
     try {
-      console.log('📞 useSupabaseScheduling: Chamando appointmentCreation.createAppointment...');
       const result = await appointmentCreation.createAppointment(formData, editingAppointmentId, forceConflict);
-      console.log('✨ useSupabaseScheduling: Resultado recebido:', result);
       
-      // ⚡ FASE 8: Se há sucesso, buscar o agendamento recém-criado e adicionar localmente
+      // ⚡ FASE 9: Update otimista instantâneo - buscar apenas o novo agendamento (1 registro)
       if (result && result.success !== false && result.agendamento_id) {
-        console.log('⚡ [OPTIMISTIC] Buscando agendamento recém-criado para update local...');
+        console.log('⚡ [OPTIMISTIC] Buscando apenas o novo agendamento...');
         
-        // Buscar apenas o novo agendamento (1 registro)
         const { data: newAppointmentData } = await supabase
           .from('agendamentos')
           .select(`
@@ -46,8 +43,7 @@ export function useSupabaseScheduling() {
           .single();
         
         if (newAppointmentData) {
-          console.log('⚡ [OPTIMISTIC] Adicionando agendamento localmente para feedback instantâneo');
-          // Adicionar localmente para feedback instantâneo
+          console.log('⚡ [OPTIMISTIC] Adicionando localmente para feedback instantâneo');
           appointmentsList.addAppointmentLocally?.({
             ...newAppointmentData,
             pacientes: newAppointmentData.pacientes || null,
@@ -56,17 +52,14 @@ export function useSupabaseScheduling() {
           } as any);
         }
         
-        // Invalidar cache e fazer refetch silencioso em background (3s depois)
+        // ⚡ FASE 9: Invalidar cache mas NÃO fazer refetch automático
+        // O polling a cada 10s vai sincronizar naturalmente
         appointmentsList.invalidateCache?.();
-        setTimeout(() => {
-          console.log('🔄 [BACKGROUND] Executando refetch de sincronização...');
-          appointmentsList.refetch?.();
-        }, 3000);
       }
       
       return result;
     } catch (error) {
-      throw error; // Repassar erro SEM afetar estado
+      throw error;
     }
   }, [appointmentCreation.createAppointment, appointmentsList]);
 

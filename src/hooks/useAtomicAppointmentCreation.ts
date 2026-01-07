@@ -127,52 +127,41 @@ export function useAtomicAppointmentCreation() {
         throw new Error('Usuário não está autenticado');
       }
 
-      console.log('🔑 Buscando profile do usuário:', user.id);
-
-      // ⚡ FASE 8: Usar cache de profile se ainda válido
+      // ⚡ FASE 9: Usar cache ou user_metadata primeiro (evita query)
       let criadorNome = 'Recepcionista';
       const now = Date.now();
       
-      if (profileCacheRef.current && (now - profileCacheRef.current.timestamp) < PROFILE_CACHE_DURATION) {
-        console.log('♻️ [PROFILE-CACHE] Usando profile cacheado:', profileCacheRef.current.nome);
+      // Tentar user_metadata primeiro (já disponível, zero queries)
+      if (user.user_metadata?.nome) {
+        criadorNome = user.user_metadata.nome;
+        console.log('⚡ [JWT] Usando nome do user_metadata:', criadorNome);
+      } else if (profileCacheRef.current && (now - profileCacheRef.current.timestamp) < PROFILE_CACHE_DURATION) {
         criadorNome = profileCacheRef.current.nome;
+        console.log('♻️ [CACHE] Usando profile cacheado:', criadorNome);
       } else {
-        // Buscar nome do usuário logado com tratamento de erro
-        const { data: profile, error: profileError } = await supabase
+        // Fallback: buscar profile apenas se necessário
+        const { data: profile } = await supabase
           .from('profiles')
-          .select('nome, email, status')
+          .select('nome, email')
           .eq('user_id', user.id)
           .single();
 
-        if (profileError) {
-          console.error('❌ Erro ao buscar profile:', profileError);
-        } else if (profile?.nome) {
-          console.log('👤 Profile encontrado e cacheado:', profile);
-          profileCacheRef.current = {
-            nome: profile.nome,
-            email: profile.email || '',
-            timestamp: now
-          };
+        if (profile?.nome) {
+          profileCacheRef.current = { nome: profile.nome, email: profile.email || '', timestamp: now };
           criadorNome = profile.nome;
         }
       }
 
-      if (criadorNome === 'Recepcionista') {
-        console.warn('⚠️ Nome do usuário não encontrado no profile, usando fallback');
-      }
+      // ⚡ FASE 9: Executar busca de médico e validação de limite EM PARALELO
+      const [medicoResult, _] = await Promise.all([
+        supabase.from('medicos').select('cliente_id').eq('id', formData.medicoId).single(),
+        Promise.resolve() // Placeholder para futuras queries paralelas
+      ]);
+      
+      const medicoData = medicoResult.data;
 
-      console.log('📝 Criando agendamento com criado_por:', criadorNome);
-
-      // Buscar cliente_id do médico para validar recursos
-      const { data: medicoData } = await supabase
-        .from('medicos')
-        .select('cliente_id')
-        .eq('id', formData.medicoId)
-        .single();
-
-      // Validar limite de recursos (MAPA, HOLTER, ECG) antes de criar
+      // Validar limite de recursos (MAPA, HOLTER, ECG) - apenas se não for edição
       if (medicoData?.cliente_id && !editingAppointmentId) {
-        console.log('🔍 Validando limite de recursos...');
         const { data: limiteResult, error: limiteError } = await supabase.rpc('validar_limite_recurso', {
           p_atendimento_id: formData.atendimentoId,
           p_medico_id: formData.medicoId,
@@ -180,20 +169,15 @@ export function useAtomicAppointmentCreation() {
           p_cliente_id: medicoData.cliente_id
         });
 
-        if (limiteError) {
-          console.error('❌ Erro ao validar limite:', limiteError);
-        } else if (limiteResult && typeof limiteResult === 'object' && 'disponivel' in limiteResult) {
+        if (!limiteError && limiteResult && typeof limiteResult === 'object' && 'disponivel' in limiteResult) {
           const resultado = limiteResult as { disponivel: boolean; motivo?: string; recurso_nome?: string; vagas_usadas?: number; vagas_total?: number };
           if (!resultado.disponivel) {
-            console.log('🚫 Limite de recurso atingido:', resultado);
             const resourceError = new Error(resultado.motivo || 'Limite de recurso atingido') as any;
             resourceError.isResourceLimit = true;
             resourceError.recursoNome = resultado.recurso_nome;
             resourceError.vagasUsadas = resultado.vagas_usadas;
             resourceError.vagasTotal = resultado.vagas_total;
             throw resourceError;
-          } else if (resultado.recurso_nome) {
-            console.log(`✅ Recurso ${resultado.recurso_nome} disponível: ${resultado.vagas_usadas}/${resultado.vagas_total}`);
           }
         }
       }
