@@ -1,79 +1,113 @@
 import { useAuth } from '@/hooks/useAuth';
-import { useMemo } from 'react';
-import * as React from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 /**
- * Hook que fornece valores estáveis do auth para evitar loops em useEffect
- * Usa apenas as propriedades essenciais para dependências
+ * Hook otimizado que fornece valores estáveis do auth
+ * Usa RPC única get_user_auth_data para reduzir chamadas ao banco
  */
 export const useStableAuth = () => {
   const auth = useAuth();
-  const { user, profile, loading, signOut } = auth;
+  const { user, profile, loading: authLoading, signOut } = auth;
 
-  // Verificar se usuário é admin ou admin_clinica usando RPC
-  const [isAdmin, setIsAdmin] = React.useState<boolean>(false);
-  const [isClinicAdmin, setIsClinicAdmin] = React.useState<boolean>(false);
-  const [clinicAdminClienteId, setClinicAdminClienteId] = React.useState<string | null>(null);
+  // Estados de roles
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [isClinicAdmin, setIsClinicAdmin] = useState<boolean>(false);
+  const [clinicAdminClienteId, setClinicAdminClienteId] = useState<string | null>(null);
+  const [rolesLoading, setRolesLoading] = useState<boolean>(true);
   
-  React.useEffect(() => {
+  // Cache para evitar chamadas repetidas
+  const authDataCacheRef = useRef<{
+    userId: string;
+    data: any;
+    timestamp: number;
+  } | null>(null);
+  const CACHE_DURATION = 60000; // 1 minuto
+
+  useEffect(() => {
     const checkRoles = async () => {
       if (!user?.id) {
         console.log('🔒 useStableAuth: Sem usuário, roles = false');
         setIsAdmin(false);
         setIsClinicAdmin(false);
         setClinicAdminClienteId(null);
+        setRolesLoading(false);
         return;
       }
       
       if (!profile?.status) {
         console.log('⏳ useStableAuth: Profile ainda não carregado, aguardando...');
-        return; // Aguardar profile carregar
+        return;
+      }
+
+      // Verificar cache
+      const now = Date.now();
+      if (
+        authDataCacheRef.current &&
+        authDataCacheRef.current.userId === user.id &&
+        (now - authDataCacheRef.current.timestamp) < CACHE_DURATION
+      ) {
+        console.log('♻️ useStableAuth: Usando cache de auth data');
+        const cached = authDataCacheRef.current.data;
+        setIsAdmin(cached.is_admin);
+        setIsClinicAdmin(cached.is_clinic_admin);
+        setClinicAdminClienteId(cached.cliente_id);
+        setRolesLoading(false);
+        return;
       }
       
-      console.log('🔍 useStableAuth: Verificando roles para', user.id);
+      console.log('🔍 useStableAuth: Verificando roles via RPC única para', user.id);
+      setRolesLoading(true);
       
       try {
-        // Verificar admin global e admin_clinica em paralelo
-        const [adminResult, clinicAdminResult, clinicIdResult] = await Promise.all([
-          (supabase.rpc as any)('has_role', { _user_id: user.id, _role: 'admin' }),
-          (supabase.rpc as any)('is_clinic_admin', { _user_id: user.id }),
-          (supabase.rpc as any)('get_clinic_admin_cliente_id', { _user_id: user.id })
-        ]);
-        
-        if (adminResult.error) {
-          console.error('❌ useStableAuth: Erro ao verificar role admin:', adminResult.error);
-        }
-        
-        if (clinicAdminResult.error) {
-          console.error('❌ useStableAuth: Erro ao verificar role clinic_admin:', clinicAdminResult.error);
-        }
-        
-        const isApprovedAdmin = adminResult.data === true && profile?.status === 'aprovado';
-        const isApprovedClinicAdmin = clinicAdminResult.data === true && profile?.status === 'aprovado';
-        
-        console.log('✅ useStableAuth: Resultado -', {
-          hasAdminRole: adminResult.data,
-          hasClinicAdminRole: clinicAdminResult.data,
-          clinicAdminClienteId: clinicIdResult.data,
-          profileStatus: profile?.status,
-          isApprovedAdmin,
-          isApprovedClinicAdmin
+        // ⚡ OTIMIZAÇÃO: Uma única RPC em vez de 3 separadas
+        const { data: authData, error } = await supabase.rpc('get_user_auth_data', { 
+          p_user_id: user.id 
         });
         
-        setIsAdmin(isApprovedAdmin);
-        setIsClinicAdmin(isApprovedClinicAdmin);
-        setClinicAdminClienteId(clinicIdResult.data || null);
+        if (error) {
+          console.error('❌ useStableAuth: Erro na RPC get_user_auth_data:', error);
+          // Fallback para método antigo
+          const [adminResult, clinicAdminResult, clinicIdResult] = await Promise.all([
+            (supabase.rpc as any)('has_role', { _user_id: user.id, _role: 'admin' }),
+            (supabase.rpc as any)('is_clinic_admin', { _user_id: user.id }),
+            (supabase.rpc as any)('get_clinic_admin_cliente_id', { _user_id: user.id })
+          ]);
+          
+          const isApprovedAdmin = adminResult.data === true && profile?.status === 'aprovado';
+          const isApprovedClinicAdmin = clinicAdminResult.data === true && profile?.status === 'aprovado';
+          
+          setIsAdmin(isApprovedAdmin);
+          setIsClinicAdmin(isApprovedClinicAdmin);
+          setClinicAdminClienteId(clinicIdResult.data || null);
+        } else {
+          // Usar dados da RPC otimizada
+          const result = authData as any;
+          console.log('✅ useStableAuth: RPC única retornou:', result);
+          
+          // Cachear resultado
+          authDataCacheRef.current = {
+            userId: user.id,
+            data: result,
+            timestamp: now
+          };
+          
+          setIsAdmin(result?.is_admin || false);
+          setIsClinicAdmin(result?.is_clinic_admin || false);
+          setClinicAdminClienteId(result?.cliente_id || null);
+        }
       } catch (err) {
         console.error('❌ useStableAuth: Exception ao verificar roles:', err);
         setIsAdmin(false);
         setIsClinicAdmin(false);
         setClinicAdminClienteId(null);
+      } finally {
+        setRolesLoading(false);
       }
     };
     
     checkRoles();
-  }, [user?.id, profile?.status, loading]);
+  }, [user?.id, profile?.status]);
 
   // Criar valores estáveis para usar como dependências
   const stableValues = useMemo(() => {
@@ -86,9 +120,9 @@ export const useStableAuth = () => {
       isAdmin,
       isClinicAdmin,
       clinicAdminClienteId,
-      loading
+      loading: authLoading || rolesLoading
     };
-  }, [user?.id, isAdmin, isClinicAdmin, clinicAdminClienteId, profile?.status, loading]);
+  }, [user?.id, isAdmin, isClinicAdmin, clinicAdminClienteId, profile?.status, authLoading, rolesLoading]);
 
   return {
     ...stableValues,
