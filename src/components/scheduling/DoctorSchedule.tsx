@@ -343,6 +343,16 @@ export function DoctorSchedule({
     apt => apt.status === 'agendado' || apt.status === 'confirmado' || apt.status === 'cancelado_bloqueio'
   );
 
+  // Contagem de agendamentos por tipo de atendimento
+  const appointmentsByType = useMemo(() => {
+    const counts: Record<string, number> = {};
+    activeAppointments.forEach(apt => {
+      const tipoNome = apt.atendimentos?.nome || 'Outros';
+      counts[tipoNome] = (counts[tipoNome] || 0) + 1;
+    });
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  }, [activeAppointments]);
+
   const emptyTimeSlots = useMemo(() => {
     try {
       const dateStr = format(selectedDate, 'yyyy-MM-dd');
@@ -550,6 +560,13 @@ export function DoctorSchedule({
                 </p>
                 {activeAppointments.length > 0 && (
                   <div className="text-xs">
+                    {appointmentsByType.map(([tipo, count], index) => (
+                      <span key={tipo}>
+                        {tipo}: {count}
+                        {index < appointmentsByType.length - 1 && ' | '}
+                      </span>
+                    ))}
+                    {appointmentsByType.length > 0 && ' | '}
                     Total: {activeAppointments.length}
                   </div>
                 )}
@@ -563,7 +580,16 @@ export function DoctorSchedule({
                     </h3>
                     {selectedDateAppointments.length > 0 && (
                       <div className="mt-1 text-xs text-muted-foreground">
-                        <span>Total: {activeAppointments.length}</span>
+                        <span>
+                          {appointmentsByType.map(([tipo, count], index) => (
+                            <span key={tipo}>
+                              {tipo}: {count}
+                              {index < appointmentsByType.length - 1 && ' | '}
+                            </span>
+                          ))}
+                          {appointmentsByType.length > 0 && ' | '}
+                          Total: {activeAppointments.length}
+                        </span>
                       </div>
                     )}
                   </div>
