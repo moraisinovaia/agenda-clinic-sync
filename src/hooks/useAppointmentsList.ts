@@ -41,7 +41,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  // ⚡ OTIMIZAÇÃO FASE 9: Usar RPC get_agendamentos_completos para busca única
+  // ⚡ OTIMIZAÇÃO FASE 10: Usar RPC PAGINADA get_agendamentos_completos_paged para carregar TODOS os agendamentos
   const fetchAppointments = useCallback(async () => {
     const executionId = Math.random().toString(36).substring(7);
     const now = Date.now();
@@ -59,38 +59,70 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     }
     
     // 🆕 Criar novo fetch
-    console.log(`🚀 [FETCH-${executionId}] ========== INÍCIO DA BUSCA OTIMIZADA (RPC) ==========`);
+    console.log(`🚀 [FETCH-${executionId}] ========== INÍCIO DA BUSCA PAGINADA (RPC) ==========`);
     fetchTimestampRef.current = now;
     
     fetchPromiseRef.current = measureApiCall(async () => {
       try {
-        console.log('📦 [RPC] Chamando get_agendamentos_completos...');
+        console.log('📦 [RPC-PAGED] Carregando TODOS os agendamentos em lotes...');
         const startTime = performance.now();
         
-        // ⚡ Uma única chamada RPC que retorna tudo (agendamentos + pacientes + médicos + atendimentos + profiles)
-        const { data: rpcData, error: rpcError } = await supabase.rpc('get_agendamentos_completos', {
-          p_cliente_id: null, // null = todos os clientes (admin global)
-          p_limit: 10000
-        });
+        // ⚡ NOVA LÓGICA: Buscar em loop até não haver mais dados
+        const PAGE_SIZE = 1000;
+        let allData: any[] = [];
+        let offset = 0;
+        let hasMore = true;
+        let pageCount = 0;
         
-        const rpcTime = performance.now() - startTime;
-        console.log(`⏱️ [RPC] Tempo de execução: ${rpcTime.toFixed(0)}ms`);
-        
-        if (rpcError) {
-          console.warn('⚠️ [RPC] Erro na RPC otimizada, tentando fallback...', rpcError);
-          // Fallback para o método antigo em caso de erro
-          return await fetchAppointmentsFallback();
+        while (hasMore) {
+          pageCount++;
+          console.log(`📦 [RPC-PAGED] Buscando página ${pageCount} (offset: ${offset})...`);
+          
+          const { data: pageData, error: pageError } = await supabase.rpc('get_agendamentos_completos_paged', {
+            p_cliente_id: null, // null = todos os clientes (admin global)
+            p_limit: PAGE_SIZE,
+            p_offset: offset
+          });
+          
+          if (pageError) {
+            console.warn('⚠️ [RPC-PAGED] Erro na página, tentando fallback...', pageError);
+            return await fetchAppointmentsFallback();
+          }
+          
+          if (!pageData || pageData.length === 0) {
+            console.log(`📭 [RPC-PAGED] Página ${pageCount} vazia, finalizando...`);
+            hasMore = false;
+          } else {
+            console.log(`✅ [RPC-PAGED] Página ${pageCount}: ${pageData.length} registros`);
+            allData = [...allData, ...pageData];
+            offset += PAGE_SIZE;
+            
+            // Se veio menos que PAGE_SIZE, é a última página
+            if (pageData.length < PAGE_SIZE) {
+              console.log(`🏁 [RPC-PAGED] Última página (${pageData.length} < ${PAGE_SIZE})`);
+              hasMore = false;
+            }
+          }
+          
+          // Limite de segurança: máximo 50 páginas (50.000 registros)
+          if (pageCount >= 50) {
+            console.warn('⚠️ [RPC-PAGED] Limite de segurança atingido (50 páginas)');
+            hasMore = false;
+          }
         }
         
-        if (!rpcData || rpcData.length === 0) {
-          console.log('📭 [RPC] Nenhum agendamento retornado');
+        const rpcTime = performance.now() - startTime;
+        console.log(`⏱️ [RPC-PAGED] Tempo total: ${rpcTime.toFixed(0)}ms | ${pageCount} páginas | ${allData.length} registros`);
+        
+        if (allData.length === 0) {
+          console.log('📭 [RPC-PAGED] Nenhum agendamento retornado');
           return [];
         }
         
-        console.log(`✅ [RPC] ${rpcData.length} agendamentos carregados em uma única chamada`);
+        console.log(`✅ [RPC-PAGED] ${allData.length} agendamentos carregados em ${pageCount} página(s)`);
         
         // Transformar dados da RPC para o formato esperado (cast as any para flexibilidade)
-        const transformedAppointments = rpcData.map((row: any) => ({
+        const transformedAppointments = allData.map((row: any) => ({
           id: row.id,
           paciente_id: row.paciente_id,
           medico_id: row.medico_id,
@@ -165,10 +197,11 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         }, {} as Record<string, number>);
 
         console.log('📊 [STATUS] Distribuição:', statusCount);
-        console.log(`✅ [FETCH-${executionId}] ========== BUSCA OTIMIZADA FINALIZADA ==========`);
+        console.log(`✅ [FETCH-${executionId}] ========== BUSCA PAGINADA FINALIZADA: ${transformedAppointments.length} TOTAL ==========`);
         
-        logger.info('Agendamentos carregados via RPC otimizada', { 
+        logger.info('Agendamentos carregados via RPC paginada', { 
           count: transformedAppointments.length,
+          pages: pageCount,
           tempo_ms: rpcTime.toFixed(0)
         }, 'APPOINTMENTS');
 
@@ -178,7 +211,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         logger.error('Erro ao buscar agendamentos', err, 'APPOINTMENTS');
         throw err;
       }
-    }, 'fetch_appointments_rpc', 'GET').finally(() => {
+    }, 'fetch_appointments_rpc_paged', 'GET').finally(() => {
       // Limpar cache após duração
       setTimeout(() => {
         fetchPromiseRef.current = null;
