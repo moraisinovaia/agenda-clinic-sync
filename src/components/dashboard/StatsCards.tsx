@@ -1,10 +1,8 @@
-import { Users, Calendar, Clock, AlertTriangle, TrendingUp, Activity, CheckCircle } from 'lucide-react';
+import { useMemo } from 'react';
+import { Users, Calendar, Clock, AlertTriangle, CheckCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Doctor, AppointmentWithRelations } from '@/types/scheduling';
-import { format, isToday, isTomorrow, addDays } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { format, addDays } from 'date-fns';
 
 interface StatsCardsProps {
   doctors: Doctor[];
@@ -12,45 +10,48 @@ interface StatsCardsProps {
 }
 
 export const StatsCards = ({ doctors, appointments }: StatsCardsProps) => {
-  const today = format(new Date(), 'yyyy-MM-dd');
-  const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd');
+  // ⚡ OTIMIZAÇÃO: Memoizar cálculos de datas
+  const { today, tomorrow } = useMemo(() => ({
+    today: format(new Date(), 'yyyy-MM-dd'),
+    tomorrow: format(addDays(new Date(), 1), 'yyyy-MM-dd')
+  }), []);
   
-  // Debug: verificar datas calculadas
-  console.log('📅 StatsCards - Datas calculadas:', {
-    today,
-    tomorrow,
-    totalAppointments: appointments.length
-  });
+  // ⚡ OTIMIZAÇÃO: Memoizar todos os cálculos de estatísticas
+  const stats = useMemo(() => {
+    // Uma única passagem para calcular tudo
+    let todayCount = 0;
+    let tomorrowCount = 0;
+    let pendingCount = 0;
+    let confirmedCount = 0;
+    const activeDoctorIds = new Set<string>();
+    
+    for (const apt of appointments) {
+      // Ignorar cancelados e excluídos para stats principais
+      if (apt.status === 'cancelado' || apt.status === 'excluido') continue;
+      if (apt.data_agendamento < today) continue;
+      
+      if (apt.data_agendamento === today) {
+        todayCount++;
+        activeDoctorIds.add(apt.medico_id);
+      }
+      if (apt.data_agendamento === tomorrow) tomorrowCount++;
+      if (apt.status === 'agendado') pendingCount++;
+      if (apt.status === 'confirmado') confirmedCount++;
+    }
+    
+    return {
+      todayAppointments: todayCount,
+      tomorrowAppointments: tomorrowCount,
+      pendingAppointments: pendingCount,
+      confirmedAppointments: confirmedCount,
+      activeDoctorsToday: activeDoctorIds.size
+    };
+  }, [appointments, today, tomorrow]);
   
-  // Filtrar apenas agendamentos válidos (não cancelados nem excluídos) E com data futura para estatísticas
-  const validAppointments = appointments.filter(apt => 
-    apt.status !== 'cancelado' && 
-    apt.status !== 'excluido' &&
-    apt.data_agendamento >= today
-  );
-  
-  const totalAppointments = validAppointments.length;
-  const todayAppointments = validAppointments.filter(apt => apt.data_agendamento === today).length;
-  const tomorrowAppointments = validAppointments.filter(apt => apt.data_agendamento === tomorrow).length;
-  const pendingAppointments = validAppointments.filter(apt => apt.status === 'agendado').length;
-  const confirmedAppointments = validAppointments.filter(apt => apt.status === 'confirmado').length;
-  
-  // Para cancelados, mostramos todos (incluindo cancelados e excluídos)
-  const cancelledAppointments = appointments.filter(apt => 
-    apt.status === 'cancelado' || apt.status === 'excluido'
-  ).length;
-  
-  // Calculate active doctors (with appointments today)
-  const activeDoctorsToday = new Set(
-    appointments
-      .filter(apt => apt.data_agendamento === today && apt.status !== 'cancelado' && apt.status !== 'excluido')
-      .map(apt => apt.medico_id)
-  ).size;
-
-  // Calculate occupation rate for today
-  const activeDoctors = doctors.filter(d => d.ativo).length;
-  const occupationRate = activeDoctors > 0 ? Math.round((activeDoctorsToday / activeDoctors) * 100) : 0;
-
+  // ⚡ OTIMIZAÇÃO: Memoizar contagem de médicos ativos
+  const activeDoctorsCount = useMemo(() => 
+    doctors.filter(d => d.ativo).length
+  , [doctors]);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
@@ -60,7 +61,7 @@ export const StatsCards = ({ doctors, appointments }: StatsCardsProps) => {
           <div className="flex items-center gap-3">
             <Users className="h-6 w-6 text-primary" />
             <div>
-              <p className="text-lg font-bold">{doctors.filter(d => d.ativo).length}</p>
+              <p className="text-lg font-bold">{activeDoctorsCount}</p>
               <p className="text-xs text-muted-foreground">Médicos Ativos</p>
             </div>
           </div>
@@ -73,10 +74,10 @@ export const StatsCards = ({ doctors, appointments }: StatsCardsProps) => {
           <div className="flex items-center gap-3">
             <Clock className="h-6 w-6 text-primary" />
             <div>
-              <p className="text-lg font-bold">{todayAppointments}</p>
+              <p className="text-lg font-bold">{stats.todayAppointments}</p>
               <p className="text-xs text-muted-foreground">Hoje</p>
-              {activeDoctorsToday > 0 && (
-                <p className="text-xs text-green-600">{activeDoctorsToday} médicos ativados</p>
+              {stats.activeDoctorsToday > 0 && (
+                <p className="text-xs text-green-600">{stats.activeDoctorsToday} médicos ativados</p>
               )}
             </div>
           </div>
@@ -89,7 +90,7 @@ export const StatsCards = ({ doctors, appointments }: StatsCardsProps) => {
           <div className="flex items-center gap-3">
             <Calendar className="h-6 w-6 text-primary" />
             <div>
-              <p className="text-lg font-bold">{tomorrowAppointments}</p>
+              <p className="text-lg font-bold">{stats.tomorrowAppointments}</p>
               <p className="text-xs text-muted-foreground">Amanhã</p>
             </div>
           </div>
@@ -102,7 +103,7 @@ export const StatsCards = ({ doctors, appointments }: StatsCardsProps) => {
           <div className="flex items-center gap-3">
             <AlertTriangle className="h-6 w-6 text-yellow-500" />
             <div>
-              <p className="text-lg font-bold">{pendingAppointments}</p>
+              <p className="text-lg font-bold">{stats.pendingAppointments}</p>
               <p className="text-xs text-muted-foreground">Agendados</p>
             </div>
           </div>
@@ -115,13 +116,12 @@ export const StatsCards = ({ doctors, appointments }: StatsCardsProps) => {
           <div className="flex items-center gap-3">
             <CheckCircle className="h-6 w-6 text-green-600" />
             <div>
-              <p className="text-lg font-bold">{confirmedAppointments}</p>
+              <p className="text-lg font-bold">{stats.confirmedAppointments}</p>
               <p className="text-xs text-muted-foreground">Confirmados</p>
             </div>
           </div>
         </CardContent>
       </Card>
-
     </div>
   );
 };

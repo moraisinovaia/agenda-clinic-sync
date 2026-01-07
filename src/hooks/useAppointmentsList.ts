@@ -41,7 +41,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  // ✅ FUNÇÃO DE QUERY DIRETA COM JOINS OTIMIZADOS
+  // ⚡ OTIMIZAÇÃO FASE 9: Usar RPC get_agendamentos_completos para busca única
   const fetchAppointments = useCallback(async () => {
     const executionId = Math.random().toString(36).substring(7);
     const now = Date.now();
@@ -59,171 +59,104 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     }
     
     // 🆕 Criar novo fetch
-    console.log(`🚀 [FETCH-${executionId}] ========== INÍCIO DA BUSCA DE AGENDAMENTOS ==========`);
+    console.log(`🚀 [FETCH-${executionId}] ========== INÍCIO DA BUSCA OTIMIZADA (RPC) ==========`);
     fetchTimestampRef.current = now;
     
     fetchPromiseRef.current = measureApiCall(async () => {
       try {
-        // 🔥 SEM FILTRO DE DATA - Carregar TODOS os agendamentos
-        console.log('📅 [FILTRO] Buscando TODOS os agendamentos (sem filtro de data)');
+        console.log('📦 [RPC] Chamando get_agendamentos_completos...');
+        const startTime = performance.now();
         
-        // 🔥 PAGINAÇÃO MANUAL - Buscar em blocos de 1000
-        let allAppointments: any[] = [];
-        let currentPage = 0;
-        const pageSize = 1000; // ✅ Limite real do Supabase PostgREST
-        let hasMore = true;
-        let totalCount = 0;
+        // ⚡ Uma única chamada RPC que retorna tudo (agendamentos + pacientes + médicos + atendimentos + profiles)
+        const { data: rpcData, error: rpcError } = await supabase.rpc('get_agendamentos_completos', {
+          p_cliente_id: null, // null = todos os clientes (admin global)
+          p_limit: 10000
+        });
         
-        while (hasMore) {
-          const start = currentPage * pageSize;
-          const end = start + pageSize - 1;
-          
-          console.log(`📦 [PÁGINA ${currentPage + 1}] Buscando registros ${start}-${end}...`);
-          
-            const { data: pageData, error, count } = await supabase
-              .from('agendamentos')
-              .select(`
-                *,
-                pacientes!inner(
-                  id,
-                  nome_completo,
-                  convenio,
-                  celular,
-                  telefone,
-                  data_nascimento
-                ),
-                medicos!inner(
-                  id,
-                  nome,
-                  especialidade,
-                  ativo
-                ),
-                atendimentos!inner(
-                  id,
-                  nome,
-                  tipo,
-                  medico_id
-                )
-              `, { count: 'exact' })
-            .is('excluido_em', null)
-            .order('data_agendamento', { ascending: false })
-            .order('hora_agendamento', { ascending: false })
-            .range(start, end);
-          
-          if (error) {
-            console.error(`❌ [PÁGINA ${currentPage + 1}] Erro:`, error);
-            logger.error('Erro na paginação de agendamentos', error, 'APPOINTMENTS');
-            throw error;
-          }
-          
-          if (count !== null && currentPage === 0) {
-            totalCount = count;
-            console.log(`📊 [TOTAL] ${totalCount} agendamentos disponíveis no banco`);
-            console.log(`🔍 [PRIMEIRA PÁGINA] Recebidos ${pageData?.length || 0} registros`);
-          }
-          
-          if (!pageData || pageData.length === 0) {
-            console.log(`✅ [PÁGINA ${currentPage + 1}] Sem mais dados`);
-            hasMore = false;
-            break;
-          }
-          
-          allAppointments = [...allAppointments, ...pageData];
-          console.log(`✅ [PÁGINA ${currentPage + 1}] ${pageData.length} registros carregados (total acumulado: ${allAppointments.length}/${totalCount})`);
-          
-          // 📊 LOG: Status dos últimos 5 registros da página
-          if (pageData && pageData.length > 0) {
-            console.log(`📊 [STATUS] Últimos 5 registros da página ${currentPage + 1}:`, 
-              pageData.slice(-5).map(a => ({ 
-                id: a.id, 
-                status: a.status, 
-                data: a.data_agendamento 
-              }))
-            );
-          }
-          
-          currentPage++; // ✅ Incrementar PRIMEIRO
-          
-          // 🔍 DEBUG: Verificar progresso
-          console.log(`🔍 [DEBUG] Página ${currentPage}: ${pageData.length} registros recebidos`);
-          console.log(`🔍 [DEBUG] Total acumulado: ${allAppointments.length}/${totalCount}`);
-          
-          // ✅ Parar APENAS quando não há dados OU já temos todos os registros
-          if (pageData.length === 0) {
-            console.log(`✅ [FINAL] Sem mais dados na página ${currentPage}`);
-            hasMore = false;
-          } else if (allAppointments.length >= totalCount) {
-            console.log(`✅ [FINAL] Todos os ${totalCount} registros carregados`);
-            hasMore = false;
-          }
-          // ❌ REMOVIDO: else if (pageData.length < pageSize) - Causava parada prematura
-          
-          // ✅ Aumentado para 10 páginas (10.000 registros) para garantir todos os dados
-          if (currentPage >= 10) {
-            console.warn('⚠️ Limite: 10 páginas (10.000 registros)');
-            hasMore = false;
-          }
+        const rpcTime = performance.now() - startTime;
+        console.log(`⏱️ [RPC] Tempo de execução: ${rpcTime.toFixed(0)}ms`);
+        
+        if (rpcError) {
+          console.warn('⚠️ [RPC] Erro na RPC otimizada, tentando fallback...', rpcError);
+          // Fallback para o método antigo em caso de erro
+          return await fetchAppointmentsFallback();
         }
         
-        console.log(`✅ [FINAL] Total carregado: ${allAppointments.length} agendamentos`);
-        
-        // Buscar profiles dos usuários em uma query separada (mais confiável)
-        console.log(`🔍 [PROFILES-START] Coletando user_ids...`);
-        const userIds = new Set<string>();
-        allAppointments.forEach((apt: any) => {
-          if (apt.criado_por_user_id) userIds.add(apt.criado_por_user_id);
-          if (apt.alterado_por_user_id) userIds.add(apt.alterado_por_user_id);
-        });
-
-        let profilesMap: Record<string, any> = {};
-        
-        if (userIds.size > 0) {
-          console.log(`🔍 [PROFILES-QUERY] Buscando ${userIds.size} perfis via RPC...`);
-          try {
-            const { data: profiles, error: profilesError } = await supabase
-              .rpc('get_user_profiles', { user_ids: Array.from(userIds) });
-            
-            if (profilesError) {
-              console.warn('⚠️ [PROFILES-ERROR] Erro ao buscar perfis via RPC, continuando sem nomes:', profilesError.message);
-            } else if (profiles && profiles.length > 0) {
-              console.log(`✅ [PROFILES-SUCCESS] ${profiles.length} perfis carregados via SECURITY DEFINER`);
-              profilesMap = profiles.reduce((acc, profile) => {
-                acc[profile.user_id] = profile;
-                return acc;
-              }, {} as Record<string, any>);
-            } else {
-              console.log('ℹ️ [PROFILES-EMPTY] Nenhum perfil retornado pela função RPC');
-            }
-          } catch (err) {
-            console.warn('⚠️ [PROFILES-CATCH] Falha ao buscar perfis via RPC, continuando sem nomes:', err);
-          }
+        if (!rpcData || rpcData.length === 0) {
+          console.log('📭 [RPC] Nenhum agendamento retornado');
+          return [];
         }
         
-        // Transformar dados
-        console.log(`🔄 [TRANSFORM] Transformando ${allAppointments.length} agendamentos...`);
+        console.log(`✅ [RPC] ${rpcData.length} agendamentos carregados em uma única chamada`);
         
-        const transformedAppointments: AppointmentWithRelations[] = allAppointments.map((apt: any, index: number) => {
-          const criadoPorProfile = apt.criado_por_user_id ? profilesMap[apt.criado_por_user_id] || null : null;
-          const alteradoPorProfile = apt.alterado_por_user_id ? profilesMap[apt.alterado_por_user_id] || null : null;
-          
-          // Debug: Log dos primeiros 3 agendamentos
-          if (index < 3) {
-            console.log(`🔍 [TRANSFORM-${index}] Agendamento ${apt.id.substring(0, 8)}:`, {
-              criado_por: apt.criado_por,
-              criado_por_user_id: apt.criado_por_user_id,
-              profile_nome: criadoPorProfile?.nome || 'sem profile'
-            });
-          }
-          
-          return {
-            ...apt,
-            pacientes: apt.pacientes || null,
-            medicos: apt.medicos || null,
-            atendimentos: apt.atendimentos || null,
-            criado_por_profile: criadoPorProfile,
-            alterado_por_profile: alteradoPorProfile,
-          };
-        });
+        // Transformar dados da RPC para o formato esperado (cast as any para flexibilidade)
+        const transformedAppointments = rpcData.map((row: any) => ({
+          id: row.id,
+          paciente_id: row.paciente_id,
+          medico_id: row.medico_id,
+          atendimento_id: row.atendimento_id,
+          data_agendamento: row.data_agendamento,
+          hora_agendamento: row.hora_agendamento,
+          status: row.status,
+          convenio: row.convenio,
+          observacoes: row.observacoes,
+          criado_por: row.criado_por,
+          criado_por_user_id: row.criado_por_user_id,
+          alterado_por_user_id: row.alterado_por_user_id,
+          cancelado_por: row.cancelado_por,
+          cancelado_por_user_id: row.cancelado_por_user_id,
+          cancelado_em: row.cancelado_em,
+          confirmado_por: row.confirmado_por,
+          confirmado_por_user_id: row.confirmado_por_user_id,
+          confirmado_em: row.confirmado_em,
+          excluido_por: row.excluido_por,
+          excluido_por_user_id: row.excluido_por_user_id,
+          excluido_em: row.excluido_em,
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+          cliente_id: row.cliente_id,
+          // Dados relacionados já embutidos - estrutura mínima necessária para UI
+          pacientes: row.paciente_nome ? {
+            id: row.paciente_id,
+            nome_completo: row.paciente_nome,
+            data_nascimento: row.paciente_data_nascimento,
+            convenio: row.paciente_convenio,
+            telefone: row.paciente_telefone,
+            celular: row.paciente_celular,
+            cliente_id: row.cliente_id,
+            created_at: row.created_at,
+            updated_at: row.updated_at
+          } : null,
+          medicos: row.medico_nome ? {
+            id: row.medico_id,
+            nome: row.medico_nome,
+            especialidade: row.medico_especialidade,
+            ativo: true
+          } : null,
+          atendimentos: row.atendimento_nome ? {
+            id: row.atendimento_id,
+            nome: row.atendimento_nome,
+            tipo: row.atendimento_tipo
+          } : null,
+          criado_por_profile: row.criado_por_profile_nome ? {
+            id: '',
+            user_id: row.criado_por_user_id,
+            nome: row.criado_por_profile_nome,
+            email: row.criado_por_profile_email,
+            ativo: true,
+            created_at: '',
+            updated_at: ''
+          } : null,
+          alterado_por_profile: row.alterado_por_profile_nome ? {
+            id: '',
+            user_id: row.alterado_por_user_id,
+            nome: row.alterado_por_profile_nome,
+            email: row.alterado_por_profile_email,
+            ativo: true,
+            created_at: '',
+            updated_at: ''
+          } : null
+        })) as AppointmentWithRelations[];
         
         // Análise por status
         const statusCount = transformedAppointments.reduce((acc, apt) => {
@@ -232,25 +165,11 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         }, {} as Record<string, number>);
 
         console.log('📊 [STATUS] Distribuição:', statusCount);
+        console.log(`✅ [FETCH-${executionId}] ========== BUSCA OTIMIZADA FINALIZADA ==========`);
         
-        // Log final de verificação
-        console.log(`✅ [FETCH-${executionId}] ========== BUSCA FINALIZADA ==========`);
-        console.log(`📦 [FETCH-${executionId}] Total retornado: ${transformedAppointments.length} agendamentos`);
-        
-        // Verificar se os primeiros 3 têm profile
-        const primeiros3 = transformedAppointments.slice(0, 3);
-        console.log(`🔍 [VERIFICAÇÃO] Primeiros 3 agendamentos com profile:`, primeiros3.map(a => ({
-          id: a.id.substring(0, 8),
-          criado_por: a.criado_por,
-          criado_por_user_id: a.criado_por_user_id,
-          tem_profile: !!a.criado_por_profile,
-          profile_nome: a.criado_por_profile?.nome
-        })));
-
-        logger.info('Agendamentos carregados com sucesso via paginação manual', { 
+        logger.info('Agendamentos carregados via RPC otimizada', { 
           count: transformedAppointments.length,
-          total: totalCount,
-          paginas: currentPage
+          tempo_ms: rpcTime.toFixed(0)
         }, 'APPOINTMENTS');
 
         return transformedAppointments;
@@ -259,8 +178,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         logger.error('Erro ao buscar agendamentos', err, 'APPOINTMENTS');
         throw err;
       }
-    }, 'fetch_appointments', 'GET').finally(() => {
-      // Limpar após 30s
+    }, 'fetch_appointments_rpc', 'GET').finally(() => {
+      // Limpar cache após duração
       setTimeout(() => {
         fetchPromiseRef.current = null;
         console.log('🧹 [CACHE] Cache local limpo');
@@ -269,6 +188,68 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     
     return fetchPromiseRef.current;
   }, [measureApiCall]);
+
+  // 🔄 FALLBACK: Método antigo caso RPC falhe
+  const fetchAppointmentsFallback = async (): Promise<AppointmentWithRelations[]> => {
+    console.log('🔄 [FALLBACK] Usando método de paginação manual...');
+    
+    let allAppointments: any[] = [];
+    let currentPage = 0;
+    const pageSize = 1000;
+    let hasMore = true;
+    let totalCount = 0;
+    
+    while (hasMore) {
+      const start = currentPage * pageSize;
+      const end = start + pageSize - 1;
+      
+      const { data: pageData, error, count } = await supabase
+        .from('agendamentos')
+        .select(`
+          *,
+          pacientes!inner(id, nome_completo, convenio, celular, telefone, data_nascimento),
+          medicos!inner(id, nome, especialidade, ativo),
+          atendimentos!inner(id, nome, tipo, medico_id)
+        `, { count: 'exact' })
+        .is('excluido_em', null)
+        .order('data_agendamento', { ascending: false })
+        .order('hora_agendamento', { ascending: false })
+        .range(start, end);
+      
+      if (error) throw error;
+      if (count !== null && currentPage === 0) totalCount = count;
+      if (!pageData || pageData.length === 0) break;
+      
+      allAppointments = [...allAppointments, ...pageData];
+      currentPage++;
+      
+      if (allAppointments.length >= totalCount || currentPage >= 10) hasMore = false;
+    }
+    
+    // Buscar profiles separadamente
+    const userIds = new Set<string>();
+    allAppointments.forEach((apt: any) => {
+      if (apt.criado_por_user_id) userIds.add(apt.criado_por_user_id);
+      if (apt.alterado_por_user_id) userIds.add(apt.alterado_por_user_id);
+    });
+
+    let profilesMap: Record<string, any> = {};
+    if (userIds.size > 0) {
+      const { data: profiles } = await supabase.rpc('get_user_profiles', { user_ids: Array.from(userIds) });
+      if (profiles) {
+        profilesMap = profiles.reduce((acc: any, p: any) => { acc[p.user_id] = p; return acc; }, {});
+      }
+    }
+    
+    return allAppointments.map((apt: any) => ({
+      ...apt,
+      pacientes: apt.pacientes || null,
+      medicos: apt.medicos || null,
+      atendimentos: apt.atendimentos || null,
+      criado_por_profile: apt.criado_por_user_id ? profilesMap[apt.criado_por_user_id] || null : null,
+      alterado_por_profile: apt.alterado_por_user_id ? profilesMap[apt.alterado_por_user_id] || null : null,
+    }));
+  };
 
   // 🔥 BUSCAR DADOS DIRETAMENTE SEM CACHE
   useEffect(() => {
