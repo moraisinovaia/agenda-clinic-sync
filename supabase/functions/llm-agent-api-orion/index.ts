@@ -20,8 +20,8 @@ const corsHeaders = {
 // 🏥 Config ID da Clínica Orion
 const CLINICA_ORION_CONFIG_ID = '223a7ffd-337b-4379-95b6-85bed89e47d0';
 
-// Cliente ID compartilhado com IPADO
-const CLIENTE_ID_IPADO = '2bfb98b5-ae41-4f96-8ba7-acc797c22054';
+// Cliente ID próprio da Clínica Orion (separado do IPADO)
+const CLIENTE_ID_ORION = 'e8f7d6c5-b4a3-4c2d-9e1f-0a1b2c3d4e5f';
 
 // URL da API principal
 const MAIN_API_URL = 'https://qxlvzbvzajibdtlzngdy.supabase.co/functions/v1/llm-agent-api';
@@ -70,7 +70,7 @@ serve(async (req) => {
     const enrichedBody = {
       ...body,
       config_id: CLINICA_ORION_CONFIG_ID,
-      cliente_id: CLIENTE_ID_IPADO
+      cliente_id: CLIENTE_ID_ORION
     };
 
     console.log(`📦 [ORION PROXY] Body enriquecido com config_id: ${CLINICA_ORION_CONFIG_ID}`);
