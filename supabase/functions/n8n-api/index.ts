@@ -180,12 +180,81 @@ serve(async (req) => {
       // body já foi parseado acima
       const reqBody: AgendamentoRequest = body;
 
-      // Validar campos obrigatórios
-      if (!reqBody.paciente_nome || !reqBody.paciente_data_nascimento || !reqBody.paciente_convenio || 
-          !reqBody.paciente_celular || !reqBody.medico_id || !reqBody.atendimento_id || 
-          !reqBody.data_agendamento || !reqBody.hora_agendamento) {
+      // ============= VALIDAÇÃO DE ENTRADA =============
+      const validationErrors: string[] = [];
+
+      // Campos obrigatórios
+      if (!reqBody.paciente_nome) validationErrors.push('paciente_nome é obrigatório');
+      if (!reqBody.paciente_data_nascimento) validationErrors.push('paciente_data_nascimento é obrigatório');
+      if (!reqBody.paciente_convenio) validationErrors.push('paciente_convenio é obrigatório');
+      if (!reqBody.paciente_celular) validationErrors.push('paciente_celular é obrigatório');
+      if (!reqBody.medico_id) validationErrors.push('medico_id é obrigatório');
+      if (!reqBody.atendimento_id) validationErrors.push('atendimento_id é obrigatório');
+      if (!reqBody.data_agendamento) validationErrors.push('data_agendamento é obrigatório');
+      if (!reqBody.hora_agendamento) validationErrors.push('hora_agendamento é obrigatório');
+
+      // Validação de formato - celular brasileiro (aceita 10-11 dígitos)
+      if (reqBody.paciente_celular) {
+        const celularClean = reqBody.paciente_celular.replace(/\D/g, '');
+        if (celularClean.length < 10 || celularClean.length > 11) {
+          validationErrors.push('paciente_celular deve ter 10 ou 11 dígitos');
+        }
+      }
+
+      // Validação de formato - data (YYYY-MM-DD)
+      if (reqBody.data_agendamento) {
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(reqBody.data_agendamento)) {
+          validationErrors.push('data_agendamento deve estar no formato YYYY-MM-DD');
+        }
+      }
+
+      // Validação de formato - hora (HH:MM ou HH:MM:SS)
+      if (reqBody.hora_agendamento) {
+        const timeRegex = /^\d{2}:\d{2}(:\d{2})?$/;
+        if (!timeRegex.test(reqBody.hora_agendamento)) {
+          validationErrors.push('hora_agendamento deve estar no formato HH:MM ou HH:MM:SS');
+        }
+      }
+
+      // Validação de formato - data nascimento (YYYY-MM-DD)
+      if (reqBody.paciente_data_nascimento) {
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(reqBody.paciente_data_nascimento)) {
+          validationErrors.push('paciente_data_nascimento deve estar no formato YYYY-MM-DD');
+        }
+      }
+
+      // Validação de comprimento - nome (min 3, max 200)
+      if (reqBody.paciente_nome) {
+        const nomeTrimmed = reqBody.paciente_nome.trim();
+        if (nomeTrimmed.length < 3) {
+          validationErrors.push('paciente_nome deve ter pelo menos 3 caracteres');
+        }
+        if (nomeTrimmed.length > 200) {
+          validationErrors.push('paciente_nome deve ter no máximo 200 caracteres');
+        }
+      }
+
+      // Validação de comprimento - observações (max 1000)
+      if (reqBody.observacoes && reqBody.observacoes.length > 1000) {
+        validationErrors.push('observacoes deve ter no máximo 1000 caracteres');
+      }
+
+      // Validação de UUID - medico_id e atendimento_id
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (reqBody.medico_id && !uuidRegex.test(reqBody.medico_id)) {
+        validationErrors.push('medico_id deve ser um UUID válido');
+      }
+      if (reqBody.atendimento_id && !uuidRegex.test(reqBody.atendimento_id)) {
+        validationErrors.push('atendimento_id deve ser um UUID válido');
+      }
+
+      // Retornar erros de validação
+      if (validationErrors.length > 0) {
+        console.log(`❌ [N8N-API] Erros de validação: ${validationErrors.join(', ')}`);
         return new Response(
-          JSON.stringify({ error: 'Campos obrigatórios faltando' }),
+          JSON.stringify({ error: 'Erro de validação', details: validationErrors }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
