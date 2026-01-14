@@ -532,8 +532,21 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     
     isCheckingRef.current = true;
     try {
-      // 🔐 CORREÇÃO: Filtrar polling por cliente_id do usuário logado
-      const userClienteId = userClienteIdRef.current;
+      // 🔐 CORREÇÃO RACE CONDITION: Garantir que cliente_id foi carregado ANTES de fazer query
+      let userClienteId = userClienteIdRef.current;
+      
+      // Se ainda não carregou, forçar carregamento agora
+      if (!clienteIdLoadedRef.current) {
+        console.log('🔐 [POLLING] cliente_id ainda não carregado, carregando...');
+        userClienteId = await loadUserClienteId();
+      }
+      
+      // 🔐 Se AINDA não tem cliente_id carregado após tentar, skip esta verificação
+      if (!clienteIdLoadedRef.current) {
+        console.log('⏸️ [POLLING] Aguardando carregamento do cliente_id...');
+        return false;
+      }
+      
       let query = supabase
         .from('agendamentos')
         .select('id, updated_at, created_at', { count: 'exact' })
@@ -542,6 +555,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       // 🔐 Aplicar filtro de cliente (exceto para admins globais sem cliente_id)
       if (userClienteId) {
         query = query.eq('cliente_id', userClienteId);
+        console.log('🔐 [POLLING] Filtrando por cliente_id:', userClienteId);
       }
       
       const { data: latestData, count } = await query
@@ -584,7 +598,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     } finally {
       isCheckingRef.current = false;
     }
-  }, [refetch]);
+  }, [refetch, loadUserClienteId]);
 
   // Realtime updates com debounce e suporte a polling
   // ✅ CORRIGIDO: Removido update otimista que causava "paciente não encontrado"
