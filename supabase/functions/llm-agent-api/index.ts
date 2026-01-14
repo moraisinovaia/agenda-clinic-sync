@@ -1,10 +1,131 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-// v3.0.0 - Sistema Dinâmico com carregamento de configurações do banco
+// v3.2.0 - Sistema Dinâmico com Logging Estruturado
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+const API_VERSION = '3.2.0';
+
+// ============= SISTEMA DE LOGGING ESTRUTURADO =============
+
+interface StructuredLog {
+  timestamp: string;
+  request_id: string;
+  cliente_id: string;
+  action: string;
+  level: 'info' | 'warn' | 'error' | 'debug';
+  phase: 'request' | 'processing' | 'response';
+  duration_ms?: number;
+  success?: boolean;
+  error_code?: string;
+  metadata?: Record<string, any>;
+}
+
+// Métricas agregadas em memória (reset a cada cold start)
+const METRICS = {
+  start_time: Date.now(),
+  total_requests: 0,
+  success_count: 0,
+  error_count: 0,
+  total_duration_ms: 0,
+  by_action: new Map<string, { count: number; total_ms: number; errors: number }>()
+};
+
+function generateRequestId(): string {
+  return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
+
+function structuredLog(log: StructuredLog): void {
+  console.log(JSON.stringify(log));
+}
+
+function updateMetrics(action: string, durationMs: number, success: boolean): void {
+  METRICS.total_requests++;
+  METRICS.total_duration_ms += durationMs;
+  if (success) {
+    METRICS.success_count++;
+  } else {
+    METRICS.error_count++;
+  }
+  
+  const actionMetrics = METRICS.by_action.get(action) || { count: 0, total_ms: 0, errors: 0 };
+  actionMetrics.count++;
+  actionMetrics.total_ms += durationMs;
+  if (!success) actionMetrics.errors++;
+  METRICS.by_action.set(action, actionMetrics);
+}
+
+async function withLogging<T>(
+  handlerName: string,
+  clienteId: string,
+  requestId: string,
+  body: any,
+  handler: () => Promise<T>
+): Promise<T> {
+  const startTime = performance.now();
+  
+  // Log de entrada
+  structuredLog({
+    timestamp: new Date().toISOString(),
+    request_id: requestId,
+    cliente_id: clienteId,
+    action: handlerName,
+    level: 'info',
+    phase: 'request',
+    metadata: {
+      body_keys: Object.keys(body || {}),
+      body_size: JSON.stringify(body || {}).length
+    }
+  });
+
+  try {
+    const result = await handler();
+    const duration = Math.round(performance.now() - startTime);
+    
+    // Atualizar métricas
+    updateMetrics(handlerName, duration, true);
+    
+    // Log de saída (sucesso)
+    structuredLog({
+      timestamp: new Date().toISOString(),
+      request_id: requestId,
+      cliente_id: clienteId,
+      action: handlerName,
+      level: 'info',
+      phase: 'response',
+      duration_ms: duration,
+      success: true
+    });
+    
+    return result;
+  } catch (error: any) {
+    const duration = Math.round(performance.now() - startTime);
+    
+    // Atualizar métricas
+    updateMetrics(handlerName, duration, false);
+    
+    // Log de saída (erro)
+    structuredLog({
+      timestamp: new Date().toISOString(),
+      request_id: requestId,
+      cliente_id: clienteId,
+      action: handlerName,
+      level: 'error',
+      phase: 'response',
+      duration_ms: duration,
+      success: false,
+      error_code: error?.code || 'UNKNOWN_ERROR',
+      metadata: {
+        error_message: error?.message,
+        error_stack: error?.stack?.substring(0, 500)
+      }
+    });
+    
+    throw error;
+  }
 }
 
 // ============= SISTEMA DE CACHE E CONFIGURAÇÃO DINÂMICA =============
@@ -1292,6 +1413,9 @@ function mapSchedulingData(body: any) {
 }
 
 serve(async (req) => {
+  const requestId = generateRequestId();
+  const apiStartTime = performance.now();
+  
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -1307,7 +1431,24 @@ serve(async (req) => {
     const method = req.method;
     const pathParts = url.pathname.split('/').filter(Boolean);
     
-    console.log(`🤖 LLM Agent API v3.1.0 Call: ${method} ${url.pathname}`);
+    // Log inicial estruturado
+    structuredLog({
+      timestamp: new Date().toISOString(),
+      request_id: requestId,
+      cliente_id: 'pending',
+      action: 'api_call',
+      level: 'info',
+      phase: 'request',
+      metadata: {
+        version: API_VERSION,
+        method,
+        path: url.pathname,
+        uptime_ms: Date.now() - METRICS.start_time,
+        total_requests_so_far: METRICS.total_requests
+      }
+    });
+    
+    console.log(`🤖 LLM Agent API v${API_VERSION} [${requestId}] ${method} ${url.pathname}`);
 
     if (method === 'POST') {
       let body = await req.json();
@@ -1373,26 +1514,47 @@ serve(async (req) => {
 
       switch (action) {
         case 'schedule':
-          return await handleSchedule(supabase, body, CLIENTE_ID, dynamicConfig);
+          return await withLogging('schedule', CLIENTE_ID, requestId, body,
+            () => handleSchedule(supabase, body, CLIENTE_ID, dynamicConfig));
         case 'check-patient':
-          return await handleCheckPatient(supabase, body, CLIENTE_ID, dynamicConfig);
+          return await withLogging('check-patient', CLIENTE_ID, requestId, body,
+            () => handleCheckPatient(supabase, body, CLIENTE_ID, dynamicConfig));
         case 'reschedule':
-          return await handleReschedule(supabase, body, CLIENTE_ID, dynamicConfig);
+          return await withLogging('reschedule', CLIENTE_ID, requestId, body,
+            () => handleReschedule(supabase, body, CLIENTE_ID, dynamicConfig));
         case 'cancel':
-          return await handleCancel(supabase, body, CLIENTE_ID, dynamicConfig);
+          return await withLogging('cancel', CLIENTE_ID, requestId, body,
+            () => handleCancel(supabase, body, CLIENTE_ID, dynamicConfig));
         case 'confirm':
-          return await handleConfirm(supabase, body, CLIENTE_ID, dynamicConfig);
+          return await withLogging('confirm', CLIENTE_ID, requestId, body,
+            () => handleConfirm(supabase, body, CLIENTE_ID, dynamicConfig));
         case 'availability':
-          return await handleAvailability(supabase, body, CLIENTE_ID, dynamicConfig);
+          return await withLogging('availability', CLIENTE_ID, requestId, body,
+            () => handleAvailability(supabase, body, CLIENTE_ID, dynamicConfig));
         case 'patient-search':
-          return await handlePatientSearch(supabase, body, CLIENTE_ID, dynamicConfig);
+          return await withLogging('patient-search', CLIENTE_ID, requestId, body,
+            () => handlePatientSearch(supabase, body, CLIENTE_ID, dynamicConfig));
         case 'list-appointments':
-          return await handleListAppointments(supabase, body, CLIENTE_ID, dynamicConfig);
+          return await withLogging('list-appointments', CLIENTE_ID, requestId, body,
+            () => handleListAppointments(supabase, body, CLIENTE_ID, dynamicConfig));
         case 'list-doctors':
-          return await handleListDoctors(supabase, body, CLIENTE_ID, dynamicConfig);
+          return await withLogging('list-doctors', CLIENTE_ID, requestId, body,
+            () => handleListDoctors(supabase, body, CLIENTE_ID, dynamicConfig));
         case 'clinic-info':
-          return await handleClinicInfo(supabase, body, CLIENTE_ID, dynamicConfig);
+          return await withLogging('clinic-info', CLIENTE_ID, requestId, body,
+            () => handleClinicInfo(supabase, body, CLIENTE_ID, dynamicConfig));
         default:
+          structuredLog({
+            timestamp: new Date().toISOString(),
+            request_id: requestId,
+            cliente_id: CLIENTE_ID,
+            action: action || 'unknown',
+            level: 'warn',
+            phase: 'response',
+            duration_ms: Math.round(performance.now() - apiStartTime),
+            success: false,
+            error_code: 'UNKNOWN_ACTION'
+          });
           return errorResponse('Ação não reconhecida. Ações disponíveis: schedule/agendar, check-patient/verificar-paciente, reschedule/remarcar, cancel/cancelar, confirm/confirmar, availability/disponibilidade, patient-search/pesquisa-pacientes, list-appointments/lista-consultas, list-doctors/lista-medicos, clinic-info/info-clinica');
       }
     }
@@ -1401,6 +1563,21 @@ serve(async (req) => {
 
   } catch (error: any) {
     console.error('❌ Erro na LLM Agent API:', error);
+    structuredLog({
+      timestamp: new Date().toISOString(),
+      request_id: requestId,
+      cliente_id: 'unknown',
+      action: 'api_error',
+      level: 'error',
+      phase: 'response',
+      duration_ms: Math.round(performance.now() - apiStartTime),
+      success: false,
+      error_code: 'INTERNAL_ERROR',
+      metadata: {
+        error_message: error?.message,
+        error_stack: error?.stack?.substring(0, 500)
+      }
+    });
     return errorResponse(`Erro interno: ${error?.message || 'Erro desconhecido'}`);
   }
 })
