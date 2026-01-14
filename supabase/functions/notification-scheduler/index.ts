@@ -1,41 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-// WhatsApp function directly embedded to avoid import issues
-async function enviarWhatsAppEvolution(celular: string, mensagem: string) {
-  try {
-    const evolutionUrl = Deno.env.get('EVOLUTION_API_URL') || 'https://evolutionapi.inovaia.online';
-    const apiKey = Deno.env.get('EVOLUTION_API_KEY') || 'grozNCsxwy32iYir20LRw7dfIRNPI8UZ';
-    const instanceName = Deno.env.get('EVOLUTION_INSTANCE_NAME') || 'Endogastro';
-
-    console.log(`📱 Enviando WhatsApp via Evolution API para: ${celular}`);
-
-    const response = await fetch(`${evolutionUrl}/message/sendText/${instanceName}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': apiKey
-      },
-      body: JSON.stringify({
-        number: celular,
-        text: mensagem
-      })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`❌ Erro ao enviar WhatsApp: ${response.status} - ${errorText}`);
-      throw new Error(`Evolution API error: ${response.status}`);
-    }
-
-    const result = await response.json();
-    console.log('✅ WhatsApp enviado com sucesso:', result);
-    return result;
-  } catch (error) {
-    console.error('❌ Erro na integração Evolution API:', error);
-    throw error;
-  }
-}
+// ⚠️ SEGURANÇA: WhatsApp é processado via n8n (não diretamente nesta função)
+// Esta função apenas prepara as notificações e salva no banco para n8n processar
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -311,35 +278,35 @@ async function processScheduledNotifications(supabase: any) {
     }
   }
 
-  // 3. ENVIAR NOTIFICAÇÕES
-  let sent = 0;
+  // 3. SALVAR NOTIFICAÇÕES NO BANCO PARA N8N PROCESSAR
+  let saved = 0;
   let errors = 0;
 
   for (const notification of notifications) {
     try {
-      await sendNotification(supabase, notification);
-      sent++;
+      await saveNotificationForN8N(supabase, notification);
+      saved++;
     } catch (error) {
-      console.error(`❌ Erro ao enviar notificação para ${notification.pacientes.nome_completo}:`, error);
+      console.error(`❌ Erro ao salvar notificação para ${notification.pacientes.nome_completo}:`, error);
       errors++;
     }
   }
 
-  console.log(`✅ Processamento concluído: ${sent} enviadas, ${errors} erros`);
+  console.log(`✅ Processamento concluído: ${saved} salvas para n8n, ${errors} erros`);
 
   return new Response(
     JSON.stringify({
       success: true,
       processed: notifications.length,
-      sent,
+      saved,
       errors,
-      message: `${sent} notificações enviadas com sucesso`
+      message: `${saved} notificações salvas para processamento via n8n`
     }),
     { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   );
 }
 
-async function sendNotification(supabase: any, notification: any) {
+async function saveNotificationForN8N(supabase: any, notification: any) {
   const template = templates[notification.type];
   if (!template) {
     throw new Error(`Template não encontrado para tipo: ${notification.type}`);
@@ -371,17 +338,15 @@ async function sendNotification(supabase: any, notification: any) {
 
   // Determinar destinatário
   const recipient = notification.isForStaff 
-    ? '5511999999999' // Número da recepção
+    ? '5511999999999' // Número da recepção - será configurado via n8n
     : notification.pacientes.celular;
 
   if (!recipient) {
     throw new Error('Destinatário não encontrado');
   }
 
-  // Enviar via WhatsApp
-  await enviarWhatsAppEvolution(recipient, message);
-
-  // Registrar log
+  // ⚠️ SEGURANÇA: Apenas salva no banco - n8n é responsável por enviar via WhatsApp
+  // Status 'pending_n8n' indica que n8n deve processar esta notificação
   await supabase
     .from('notification_logs')
     .insert({
@@ -389,12 +354,12 @@ async function sendNotification(supabase: any, notification: any) {
       type: notification.type,
       recipient,
       message,
-      status: 'sent',
-      sent_at: new Date().toISOString(),
+      status: 'pending_n8n', // n8n monitora esta tabela e envia via Evolution API
+      sent_at: null, // Será preenchido pelo n8n após envio
       is_for_staff: notification.isForStaff || false
     });
 
-  console.log(`📱 Notificação ${notification.type} enviada para ${notification.pacientes.nome_completo}`);
+  console.log(`📋 Notificação ${notification.type} salva para n8n processar: ${notification.pacientes.nome_completo}`);
 }
 
 async function scheduleNotification(supabase: any, body: any) {
@@ -467,8 +432,10 @@ async function getNotificationAnalytics(supabase: any) {
     stats.by_status[log.status] = (stats.by_status[log.status] || 0) + 1;
     
     // Por dia
-    const day = log.sent_at.split('T')[0];
-    stats.daily_stats[day] = (stats.daily_stats[day] || 0) + 1;
+    if (log.sent_at) {
+      const day = log.sent_at.split('T')[0];
+      stats.daily_stats[day] = (stats.daily_stats[day] || 0) + 1;
+    }
   });
 
   stats.success_rate = stats.total_sent > 0 

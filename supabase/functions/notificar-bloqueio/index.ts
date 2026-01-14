@@ -1,12 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+// ⚠️ SEGURANÇA: WhatsApp é processado via n8n (não diretamente nesta função)
+// Esta função apenas prepara as notificações e salva no banco para n8n processar
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-
-const DELAY_ENTRE_MENSAGENS = 2000; // 2 segundos para não sobrecarregar Evolution API
 
 // Função para formatar celular no padrão internacional brasileiro
 function formatarCelular(celular: string): string | null {
@@ -100,34 +101,6 @@ function criarMensagemSemDatas(params: {
   mensagem += `\n\n${nomeClinica}`;
   
   return mensagem;
-}
-
-// Função para enviar WhatsApp via Evolution API
-async function enviarWhatsApp(celular: string, mensagem: string) {
-  const evolutionUrl = Deno.env.get('EVOLUTION_API_URL') || 'https://evolutionapi.inovaia.online';
-  const apiKey = Deno.env.get('EVOLUTION_API_KEY') || 'grozNCsxwy32iYir20LRw7dfIRNPI8UZ';
-  const instanceName = Deno.env.get('EVOLUTION_INSTANCE_NAME') || 'Endogastro';
-  
-  console.log(`📱 Enviando WhatsApp para: ${celular}`);
-  
-  const response = await fetch(`${evolutionUrl}/message/sendText/${instanceName}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'apikey': apiKey
-    },
-    body: JSON.stringify({
-      number: celular,
-      text: mensagem
-    })
-  });
-  
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Evolution API error ${response.status}: ${errorText}`);
-  }
-  
-  return await response.json();
 }
 
 serve(async (req) => {
@@ -234,13 +207,13 @@ serve(async (req) => {
     
     const resultados = {
       total: agendamentos.length,
-      enviados: 0,
+      salvos: 0,
       erros: 0,
       pulados: 0,
       detalhes: [] as Array<{paciente: string; status: string; motivo?: string}>
     };
     
-    // Processar cada agendamento com rate limiting
+    // Processar cada agendamento
     for (let i = 0; i < agendamentos.length; i++) {
       const agendamento = agendamentos[i];
       const paciente = agendamento.pacientes;
@@ -305,32 +278,25 @@ serve(async (req) => {
           });
         }
         
-        // Enviar WhatsApp
-        const whatsappResult = await enviarWhatsApp(celularFormatado, mensagem);
-        console.log(`✅ WhatsApp enviado: ${paciente.nome_completo}`);
-        
-        // Registrar notificação no banco
+        // ⚠️ SEGURANÇA: Apenas salva no banco - n8n é responsável por enviar via WhatsApp
+        // Status 'pending_n8n' indica que n8n deve processar esta notificação
         await supabase.from('notificacoes_enviadas').insert({
           agendamento_id: agendamento.id,
           paciente_id: paciente.id,
           tipo: 'bloqueio_agenda',
           mensagem: mensagem,
           celular: celularFormatado,
-          status: 'enviado',
+          status: 'pending_n8n', // n8n monitora esta tabela e envia via Evolution API
           cliente_id: clienteIdFinal
         });
         
-        resultados.enviados++;
+        console.log(`📋 Notificação salva para n8n processar: ${paciente.nome_completo}`);
+        
+        resultados.salvos++;
         resultados.detalhes.push({
           paciente: paciente.nome_completo,
-          status: 'enviado'
+          status: 'salvo_para_n8n'
         });
-        
-        // Rate limiting: aguardar antes do próximo envio
-        if (i < agendamentos.length - 1) {
-          console.log(`⏳ Aguardando ${DELAY_ENTRE_MENSAGENS}ms...`);
-          await new Promise(resolve => setTimeout(resolve, DELAY_ENTRE_MENSAGENS));
-        }
         
       } catch (error: any) {
         console.error(`❌ Erro ao processar ${paciente.nome_completo}:`, error.message);
@@ -340,7 +306,7 @@ serve(async (req) => {
           agendamento_id: agendamento.id,
           paciente_id: paciente.id,
           tipo: 'bloqueio_agenda',
-          mensagem: 'Erro no envio',
+          mensagem: 'Erro no processamento',
           celular: celularFormatado,
           status: 'erro',
           erro: error.message,
@@ -358,7 +324,7 @@ serve(async (req) => {
     }
     
     console.log('\n📊 RESUMO FINAL:');
-    console.log(`✅ Enviados: ${resultados.enviados}`);
+    console.log(`✅ Salvos para n8n: ${resultados.salvos}`);
     console.log(`❌ Erros: ${resultados.erros}`);
     console.log(`⚠️ Pulados: ${resultados.pulados}`);
     
@@ -366,7 +332,7 @@ serve(async (req) => {
     await supabase.from('system_logs').insert({
       timestamp: new Date().toISOString(),
       level: 'info',
-      message: `Notificações de bloqueio processadas: ${resultados.enviados}/${resultados.total} enviadas`,
+      message: `Notificações de bloqueio processadas: ${resultados.salvos}/${resultados.total} salvas para n8n`,
       context: 'NOTIFICAR_BLOQUEIO',
       data: {
         medico: medico_nome,
@@ -379,7 +345,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true,
-        message: `Notificações processadas: ${resultados.enviados} enviadas, ${resultados.erros} erros, ${resultados.pulados} pulados`,
+        message: `Notificações processadas: ${resultados.salvos} salvas para n8n, ${resultados.erros} erros, ${resultados.pulados} pulados`,
         resultados: resultados
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
