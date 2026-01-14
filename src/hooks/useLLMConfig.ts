@@ -20,6 +20,7 @@ export interface LLMClinicConfig {
 export interface BusinessRule {
   id: string;
   cliente_id: string;
+  config_id?: string;
   medico_id: string;
   config: any;
   ativo: boolean;
@@ -30,6 +31,7 @@ export interface BusinessRule {
 export interface LLMMensagem {
   id: string;
   cliente_id: string;
+  config_id?: string;
   medico_id: string | null;
   tipo: string;
   mensagem: string;
@@ -40,6 +42,9 @@ export function useLLMConfig(clienteId: string | null) {
   const { toast } = useToast();
   const { profile } = useStableAuth();
   
+  // Multi-config states
+  const [allConfigs, setAllConfigs] = useState<LLMClinicConfig[]>([]);
+  const [selectedConfigId, setSelectedConfigId] = useState<string | null>(null);
   const [clinicConfig, setClinicConfig] = useState<LLMClinicConfig | null>(null);
   const [businessRules, setBusinessRules] = useState<BusinessRule[]>([]);
   const [mensagens, setMensagens] = useState<LLMMensagem[]>([]);
@@ -49,46 +54,72 @@ export function useLLMConfig(clienteId: string | null) {
 
   const effectiveClienteId = clienteId || profile?.cliente_id;
 
-  // Fetch clinic config
-  const fetchClinicConfig = useCallback(async () => {
+  // Fetch all clinic configs for this cliente
+  const fetchAllConfigs = useCallback(async () => {
     if (!effectiveClienteId) return;
     
     const { data, error } = await supabase
       .from('llm_clinic_config')
       .select('*')
       .eq('cliente_id', effectiveClienteId)
-      .single();
+      .eq('ativo', true)
+      .order('nome_clinica');
     
-    if (error && error.code !== 'PGRST116') {
-      console.error('Erro ao buscar config:', error);
+    if (error) {
+      console.error('Erro ao buscar configs:', error);
+      return;
     }
-    setClinicConfig(data);
-  }, [effectiveClienteId]);
-
-  // Fetch business rules with doctor names
-  const fetchBusinessRules = useCallback(async () => {
-    if (!effectiveClienteId) return;
     
-    const { data, error } = await supabase.rpc('get_business_rules_by_cliente', {
-      p_cliente_id: effectiveClienteId
-    });
+    setAllConfigs(data || []);
+    
+    // Select first config if none selected
+    if (data && data.length > 0 && !selectedConfigId) {
+      setSelectedConfigId(data[0].id);
+      setClinicConfig(data[0]);
+    }
+  }, [effectiveClienteId, selectedConfigId]);
+
+  // Update clinicConfig when selectedConfigId changes
+  useEffect(() => {
+    if (selectedConfigId && allConfigs.length > 0) {
+      const config = allConfigs.find(c => c.id === selectedConfigId);
+      setClinicConfig(config || null);
+    }
+  }, [selectedConfigId, allConfigs]);
+
+  // Fetch business rules filtered by config_id
+  const fetchBusinessRules = useCallback(async () => {
+    if (!selectedConfigId) return;
+    
+    const { data, error } = await supabase
+      .from('business_rules')
+      .select('*, medico:medicos(nome)')
+      .eq('config_id', selectedConfigId)
+      .eq('ativo', true)
+      .order('created_at');
     
     if (error) {
       console.error('Erro ao buscar business rules:', error);
       return;
     }
     
-    setBusinessRules((data || []) as BusinessRule[]);
-  }, [effectiveClienteId]);
+    // Transform to include medico_nome
+    const transformedData = (data || []).map(rule => ({
+      ...rule,
+      medico_nome: rule.medico?.nome || 'N/A'
+    }));
+    
+    setBusinessRules(transformedData as BusinessRule[]);
+  }, [selectedConfigId]);
 
-  // Fetch mensagens
+  // Fetch mensagens filtered by config_id
   const fetchMensagens = useCallback(async () => {
-    if (!effectiveClienteId) return;
+    if (!selectedConfigId) return;
     
     const { data, error } = await supabase
       .from('llm_mensagens')
       .select('*')
-      .eq('cliente_id', effectiveClienteId)
+      .eq('config_id', selectedConfigId)
       .order('tipo');
     
     if (error) {
@@ -97,7 +128,7 @@ export function useLLMConfig(clienteId: string | null) {
     }
     
     setMensagens(data || []);
-  }, [effectiveClienteId]);
+  }, [selectedConfigId]);
 
   // Fetch medicos
   const fetchMedicos = useCallback(async () => {
@@ -118,47 +149,50 @@ export function useLLMConfig(clienteId: string | null) {
     setMedicos(data || []);
   }, [effectiveClienteId]);
 
-  // Load all data
+  // Load initial data (configs + medicos)
   useEffect(() => {
-    const loadData = async () => {
+    const loadInitialData = async () => {
       setLoading(true);
       await Promise.all([
-        fetchClinicConfig(),
-        fetchBusinessRules(),
-        fetchMensagens(),
+        fetchAllConfigs(),
         fetchMedicos()
       ]);
       setLoading(false);
     };
 
     if (effectiveClienteId) {
-      loadData();
+      loadInitialData();
     }
-  }, [effectiveClienteId, fetchClinicConfig, fetchBusinessRules, fetchMensagens, fetchMedicos]);
+  }, [effectiveClienteId, fetchAllConfigs, fetchMedicos]);
+
+  // Load config-specific data when selectedConfigId changes
+  useEffect(() => {
+    const loadConfigData = async () => {
+      if (!selectedConfigId) return;
+      await Promise.all([
+        fetchBusinessRules(),
+        fetchMensagens()
+      ]);
+    };
+
+    loadConfigData();
+  }, [selectedConfigId, fetchBusinessRules, fetchMensagens]);
 
   // Save clinic config
   const saveClinicConfig = async (data: Partial<LLMClinicConfig>) => {
-    if (!effectiveClienteId) return false;
+    if (!effectiveClienteId || !selectedConfigId) return false;
     
     setSaving(true);
     try {
-      if (clinicConfig?.id) {
-        const { error } = await supabase
-          .from('llm_clinic_config')
-          .update(data)
-          .eq('id', clinicConfig.id);
-        
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('llm_clinic_config')
-          .insert([{ ...data, cliente_id: effectiveClienteId, nome_clinica: data.nome_clinica || 'Clínica' }]);
-        
-        if (error) throw error;
-      }
+      const { error } = await supabase
+        .from('llm_clinic_config')
+        .update(data)
+        .eq('id', selectedConfigId);
+      
+      if (error) throw error;
       
       toast({ title: 'Configuração salva com sucesso!' });
-      await fetchClinicConfig();
+      await fetchAllConfigs();
       return true;
     } catch (error: any) {
       toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' });
@@ -168,9 +202,9 @@ export function useLLMConfig(clienteId: string | null) {
     }
   };
 
-  // Save business rule
+  // Save business rule with config_id
   const saveBusinessRule = async (medicoId: string, config: any) => {
-    if (!effectiveClienteId) return false;
+    if (!effectiveClienteId || !selectedConfigId) return false;
     
     setSaving(true);
     try {
@@ -188,6 +222,7 @@ export function useLLMConfig(clienteId: string | null) {
           .from('business_rules')
           .insert({
             cliente_id: effectiveClienteId,
+            config_id: selectedConfigId,
             medico_id: medicoId,
             config,
             ativo: true,
@@ -230,9 +265,9 @@ export function useLLMConfig(clienteId: string | null) {
     }
   };
 
-  // Save mensagem
+  // Save mensagem with config_id
   const saveMensagem = async (data: Partial<LLMMensagem>) => {
-    if (!effectiveClienteId) return false;
+    if (!effectiveClienteId || !selectedConfigId) return false;
     
     setSaving(true);
     try {
@@ -246,7 +281,14 @@ export function useLLMConfig(clienteId: string | null) {
       } else {
         const { error } = await supabase
           .from('llm_mensagens')
-          .insert([{ mensagem: data.mensagem!, tipo: data.tipo!, medico_id: data.medico_id, cliente_id: effectiveClienteId, ativo: true }]);
+          .insert([{ 
+            mensagem: data.mensagem!, 
+            tipo: data.tipo!, 
+            medico_id: data.medico_id, 
+            cliente_id: effectiveClienteId, 
+            config_id: selectedConfigId,
+            ativo: true 
+          }]);
         
         if (error) throw error;
       }
@@ -284,18 +326,61 @@ export function useLLMConfig(clienteId: string | null) {
     }
   };
 
+  // Create new config
+  const createNewConfig = async (data: Partial<LLMClinicConfig>) => {
+    if (!effectiveClienteId) return false;
+    
+    setSaving(true);
+    try {
+      const { data: newConfig, error } = await supabase
+        .from('llm_clinic_config')
+        .insert([{ 
+          ...data, 
+          cliente_id: effectiveClienteId, 
+          nome_clinica: data.nome_clinica || 'Nova Clínica',
+          ativo: true 
+        }])
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      toast({ title: 'Nova configuração criada com sucesso!' });
+      await fetchAllConfigs();
+      
+      // Select the new config
+      if (newConfig) {
+        setSelectedConfigId(newConfig.id);
+      }
+      
+      return true;
+    } catch (error: any) {
+      toast({ title: 'Erro ao criar configuração', description: error.message, variant: 'destructive' });
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return {
+    // Multi-config
+    allConfigs,
+    selectedConfigId,
+    setSelectedConfigId,
+    // Current config data
     clinicConfig,
     businessRules,
     mensagens,
     medicos,
     loading,
     saving,
+    // Actions
     saveClinicConfig,
     saveBusinessRule,
     deleteBusinessRule,
     saveMensagem,
     deleteMensagem,
-    refetch: () => Promise.all([fetchClinicConfig(), fetchBusinessRules(), fetchMensagens()])
+    createNewConfig,
+    refetch: () => Promise.all([fetchAllConfigs(), fetchBusinessRules(), fetchMensagens()])
   };
 }
