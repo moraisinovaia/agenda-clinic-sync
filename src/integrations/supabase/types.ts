@@ -1867,10 +1867,9 @@ export type Database = {
           }
       diagnosticar_whatsapp_sistema: { Args: never; Returns: Json }
       ensure_user_cliente_id: { Args: never; Returns: undefined }
-      enviar_whatsapp_fallback: {
-        Args: { p_agendamento_id: string }
-        Returns: Json
-      }
+      enviar_whatsapp_fallback:
+        | { Args: { p_agendamento_id: string }; Returns: Json }
+        | { Args: { p_celular: string; p_mensagem: string }; Returns: Json }
       enviar_whatsapp_via_invoke: {
         Args: { p_agendamento_id: string }
         Returns: Json
