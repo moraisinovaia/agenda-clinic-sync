@@ -280,7 +280,8 @@ export async function handleCreateAppointment(supabase: any, body: any) {
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error?.message || 'Erro interno do servidor' 
+        error: 'Erro ao processar agendamento. Tente novamente mais tarde.',
+        codigo_erro: 'APPOINTMENT_CREATION_ERROR'
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
