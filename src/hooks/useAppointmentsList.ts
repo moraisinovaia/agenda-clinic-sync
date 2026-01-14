@@ -48,7 +48,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
 
   // 🔐 CORREÇÃO: Buscar cliente_id do usuário logado para isolamento de dados
   const loadUserClienteId = useCallback(async () => {
-    if (clienteIdLoadedRef.current && userClienteIdRef.current !== null) {
+    // 🔐 Se já carregou, retornar o valor (mesmo que seja null para admin global)
+    if (clienteIdLoadedRef.current) {
       return userClienteIdRef.current;
     }
     
@@ -272,7 +273,9 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       const start = currentPage * pageSize;
       const end = start + pageSize - 1;
       
-      const { data: pageData, error, count } = await supabase
+      // 🔐 CORREÇÃO: Filtrar por cliente_id do usuário logado
+      const userClienteId = userClienteIdRef.current;
+      let query = supabase
         .from('agendamentos')
         .select(`
           *,
@@ -280,7 +283,14 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           medicos!inner(id, nome, especialidade, ativo),
           atendimentos!inner(id, nome, tipo, medico_id)
         `, { count: 'exact' })
-        .is('excluido_em', null)
+        .is('excluido_em', null);
+      
+      // 🔐 Aplicar filtro de cliente (exceto para admins globais sem cliente_id)
+      if (userClienteId) {
+        query = query.eq('cliente_id', userClienteId);
+      }
+      
+      const { data: pageData, error, count } = await query
         .order('data_agendamento', { ascending: false })
         .order('hora_agendamento', { ascending: false })
         .range(start, end);
@@ -522,10 +532,19 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     
     isCheckingRef.current = true;
     try {
-      const { data: latestData, count } = await supabase
+      // 🔐 CORREÇÃO: Filtrar polling por cliente_id do usuário logado
+      const userClienteId = userClienteIdRef.current;
+      let query = supabase
         .from('agendamentos')
         .select('id, updated_at, created_at', { count: 'exact' })
-        .is('excluido_em', null)
+        .is('excluido_em', null);
+      
+      // 🔐 Aplicar filtro de cliente (exceto para admins globais sem cliente_id)
+      if (userClienteId) {
+        query = query.eq('cliente_id', userClienteId);
+      }
+      
+      const { data: latestData, count } = await query
         .order('updated_at', { ascending: false })
         .limit(1);
       
