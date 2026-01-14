@@ -119,12 +119,13 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       success: false,
       error: 'PROXY_ERROR',
-      message: `Erro ao processar requisição: ${error.message}`,
+      message: 'Erro ao processar requisição. Tente novamente.',
+      codigo_erro: 'VENUS_PROXY_ERROR',
       proxy_version: '3.0.0',
       cliente_id: CLINICA_VENUS_ID,
       timestamp: new Date().toISOString()
     }), {
-      status: 200, // Sempre 200 para N8N poder processar
+      status: 200,
       headers: {
         ...corsHeaders,
         'Content-Type': 'application/json'

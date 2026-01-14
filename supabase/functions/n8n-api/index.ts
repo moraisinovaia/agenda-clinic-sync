@@ -368,10 +368,14 @@ serve(async (req) => {
       { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error) {
-    console.error('Error:', error);
+  } catch (error: any) {
+    console.error('❌ [N8N-API] Erro interno:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        success: false,
+        error: 'Erro interno do servidor. Entre em contato com o suporte se o problema persistir.',
+        codigo_erro: 'INTERNAL_SERVER_ERROR'
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

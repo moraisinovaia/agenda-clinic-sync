@@ -5714,7 +5714,7 @@ async function handleClinicInfo(supabase: any, body: any, clienteId: string, con
 
   } catch (error: any) {
     console.error('❌ [CLINIC-INFO] Erro:', error);
-    return errorResponse(`Erro ao buscar informações da clínica: ${error?.message || 'Erro desconhecido'}`);
+    return errorResponse('Erro ao buscar informações. Tente novamente mais tarde.', 'CLINIC_INFO_ERROR');
   }
 }
 

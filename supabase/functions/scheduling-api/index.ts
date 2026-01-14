@@ -67,9 +67,13 @@ serve(async (req) => {
     );
 
   } catch (error: any) {
-    console.error('❌ Erro na API:', error);
+    console.error('❌ [SCHEDULING-API] Erro interno:', error);
     return new Response(
-      JSON.stringify({ success: false, error: error?.message || 'Erro desconhecido' }),
+      JSON.stringify({ 
+        success: false, 
+        error: 'Erro interno do servidor. Tente novamente.',
+        codigo_erro: 'INTERNAL_SERVER_ERROR'
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
