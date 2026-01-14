@@ -2428,12 +2428,10 @@ export type Database = {
           user_id: string
         }[]
       }
-      load_llm_config_for_clinic:
-        | { Args: { p_cliente_id: string }; Returns: Json }
-        | {
-            Args: { p_cliente_id?: string; p_config_id?: string }
-            Returns: Json
-          }
+      load_llm_config_for_clinic: {
+        Args: { p_cliente_id?: string; p_config_id?: string }
+        Returns: Json
+      }
       log_access_audit: {
         Args: { p_action: string; p_details?: Json; p_resource: string }
         Returns: undefined
