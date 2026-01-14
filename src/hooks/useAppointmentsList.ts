@@ -29,7 +29,11 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   const fetchTimestampRef = useRef<number>(0);
   
   // ⚡ OTIMIZAÇÃO: Cache de perfil de usuário para evitar RPC repetidos
-  const userProfileRef = useRef<{ nome: string; user_id: string } | null>(null);
+  const userProfileRef = useRef<{ nome: string; user_id: string; cliente_id: string | null } | null>(null);
+  
+  // 🔐 CORREÇÃO: Cache do cliente_id do usuário logado para isolamento de dados
+  const userClienteIdRef = useRef<string | null>(null);
+  const clienteIdLoadedRef = useRef(false);
   
   // 🔥 Refs para detectar mudanças no polling
   const lastKnownTimestampRef = useRef<string | null>(null);
@@ -41,6 +45,33 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
   const [appointments, setAppointments] = useState<AppointmentWithRelations[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+
+  // 🔐 CORREÇÃO: Buscar cliente_id do usuário logado para isolamento de dados
+  const loadUserClienteId = useCallback(async () => {
+    if (clienteIdLoadedRef.current && userClienteIdRef.current !== null) {
+      return userClienteIdRef.current;
+    }
+    
+    try {
+      console.log('🔐 [CLIENTE-ID] Buscando cliente_id do usuário logado...');
+      const { data: profile } = await supabase.rpc('get_current_user_profile');
+      
+      if (profile && profile.length > 0) {
+        userClienteIdRef.current = profile[0].cliente_id || null;
+        clienteIdLoadedRef.current = true;
+        console.log('✅ [CLIENTE-ID] Cliente identificado:', userClienteIdRef.current?.substring(0, 8) || 'NENHUM');
+      } else {
+        console.warn('⚠️ [CLIENTE-ID] Perfil não encontrado, usando null');
+        userClienteIdRef.current = null;
+        clienteIdLoadedRef.current = true;
+      }
+      
+      return userClienteIdRef.current;
+    } catch (err) {
+      console.error('❌ [CLIENTE-ID] Erro ao buscar cliente_id:', err);
+      return null;
+    }
+  }, []);
 
   // ⚡ OTIMIZAÇÃO FASE 10: Usar RPC PAGINADA get_agendamentos_completos_paged para carregar TODOS os agendamentos
   const fetchAppointments = useCallback(async () => {
@@ -59,13 +90,17 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       return fetchPromiseRef.current;
     }
     
+    // 🔐 CORREÇÃO: Buscar cliente_id do usuário ANTES de fazer a query
+    const userClienteId = await loadUserClienteId();
+    console.log(`🔐 [FETCH] Usando cliente_id: ${userClienteId?.substring(0, 8) || 'ADMIN (todos)'}`);
+    
     // 🆕 Criar novo fetch
     console.log(`🚀 [FETCH-${executionId}] ========== INÍCIO DA BUSCA PAGINADA (RPC) ==========`);
     fetchTimestampRef.current = now;
     
     fetchPromiseRef.current = measureApiCall(async () => {
       try {
-        console.log('📦 [RPC-PAGED] Carregando TODOS os agendamentos em lotes...');
+        console.log('📦 [RPC-PAGED] Carregando agendamentos do cliente em lotes...');
         const startTime = performance.now();
         
         // ⚡ NOVA LÓGICA: Buscar em loop até não haver mais dados
@@ -80,7 +115,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           console.log(`📦 [RPC-PAGED] Buscando página ${pageCount} (offset: ${offset})...`);
           
           const { data: pageData, error: pageError } = await supabase.rpc('get_agendamentos_completos_paged', {
-            p_cliente_id: null, // null = todos os clientes (admin global)
+            p_cliente_id: userClienteId, // 🔐 CORREÇÃO: Passar cliente_id do usuário logado
             p_limit: PAGE_SIZE,
             p_offset: offset
           });
@@ -350,7 +385,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     const { data: profile } = await supabase.rpc('get_current_user_profile');
     userProfileRef.current = {
       nome: profile?.[0]?.nome || 'Usuário',
-      user_id: profile?.[0]?.user_id || null
+      user_id: profile?.[0]?.user_id || null,
+      cliente_id: profile?.[0]?.cliente_id || null
     };
     console.log('✅ [PROFILE] Perfil cacheado:', userProfileRef.current);
     return userProfileRef.current;
