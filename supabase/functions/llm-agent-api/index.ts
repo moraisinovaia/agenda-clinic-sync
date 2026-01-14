@@ -177,29 +177,42 @@ function isCacheValid(clienteId: string): boolean {
 
 /**
  * Carrega configuração dinâmica do banco de dados via RPC
+ * Suporta dois modos:
+ * - config_id: Carrega config específica (usado por proxies como Orion)
+ * - cliente_id: Comportamento legado (primeira config ativa do cliente)
  * Retorna null se falhar (fallback para valores hardcoded)
  */
-async function loadDynamicConfig(supabase: any, clienteId: string): Promise<DynamicConfig | null> {
+async function loadDynamicConfig(supabase: any, clienteId: string, configId?: string): Promise<DynamicConfig | null> {
+  // Usar config_id como chave de cache se fornecido, senão cliente_id
+  const cacheKey = configId || clienteId;
+  
   // Verificar cache primeiro
-  if (isCacheValid(clienteId)) {
+  if (isCacheValid(cacheKey)) {
     console.log('📦 [CACHE] Usando configuração do cache');
-    return CONFIG_CACHE.get(clienteId)!.data;
+    return CONFIG_CACHE.get(cacheKey)!.data;
   }
   
   try {
-    console.log(`🔄 [CONFIG] Carregando configuração dinâmica para cliente ${clienteId}...`);
+    console.log(`🔄 [CONFIG] Carregando configuração dinâmica...`);
+    console.log(`   → config_id: ${configId || 'N/A'}`);
+    console.log(`   → cliente_id: ${clienteId}`);
     
-    // Carregar do banco via RPC
-    const { data, error } = await supabase.rpc('load_llm_config_for_clinic', {
-      p_cliente_id: clienteId
-    });
+    // Carregar do banco via RPC (suporta p_config_id e p_cliente_id)
+    const rpcParams: any = {};
+    if (configId) {
+      rpcParams.p_config_id = configId;
+    } else {
+      rpcParams.p_cliente_id = clienteId;
+    }
+    
+    const { data, error } = await supabase.rpc('load_llm_config_for_clinic', rpcParams);
     
     if (error) {
       console.warn('⚠️ [CONFIG] Erro ao carregar config do banco:', error.message);
       return null;
     }
     
-    // RPC retorna diretamente {clinic_info, business_rules, mensagens, loaded_at}
+    // RPC retorna diretamente {clinic_info, business_rules, mensagens, loaded_at, config_id_used}
     // Verificar se há dados válidos (clinic_info ou business_rules presentes)
     if (!data || (!data.clinic_info && Object.keys(data.business_rules || {}).length === 0)) {
       console.warn('⚠️ [CONFIG] RPC não retornou dados válidos:', JSON.stringify(data));
@@ -228,16 +241,18 @@ async function loadDynamicConfig(supabase: any, clienteId: string): Promise<Dyna
       loadedAt: Date.now()
     };
     
-    // Atualizar cache
-    CONFIG_CACHE.set(clienteId, {
+    // Atualizar cache usando a chave correta
+    CONFIG_CACHE.set(cacheKey, {
       data: dynamicConfig,
-      clienteId
+      clienteId: cacheKey
     });
     
     console.log(`✅ [CONFIG] Configuração carregada do banco:`, {
+      config_id_used: data.config_id_used,
       tem_clinic_info: !!dynamicConfig.clinic_info,
+      nome_clinica: dynamicConfig.clinic_info?.nome_clinica || 'N/A',
       total_business_rules: Object.keys(dynamicConfig.business_rules).length,
-      total_mensagens: dynamicConfig.mensagens.length,
+      total_mensagens: Object.keys(dynamicConfig.mensagens).length,
       data_minima: dynamicConfig.clinic_info?.data_minima_agendamento || 'N/A'
     });
     
@@ -1490,18 +1505,25 @@ serve(async (req) => {
         console.log(`🔄 [I18N] Action mapeada: ${rawAction} → ${action}`);
       }
 
-      // 🔑 MULTI-CLIENTE: Aceita cliente_id do body (usado por proxies como llm-agent-api-venus)
-      // Fallback para IPADO se não especificado (compatibilidade retroativa)
+      // 🔑 MULTI-CLIENTE: Aceita config_id e cliente_id do body
+      // config_id: Identifica configuração específica (usado por filiais como Orion)
+      // cliente_id: Fallback para compatibilidade (busca primeira config ativa)
       const IPADO_CLIENT_ID = '2bfb98b5-ae41-4f96-8ba7-acc797c22054';
       const CLIENTE_ID = body.cliente_id || IPADO_CLIENT_ID;
+      const CONFIG_ID = body.config_id; // Se fornecido, usa config específica
       
       // Identificar origem da requisição
-      const isProxy = !!body.cliente_id;
+      const isProxy = !!body.cliente_id || !!body.config_id;
       
       console.log(`🏥 Cliente ID: ${CLIENTE_ID}${isProxy ? ' [via proxy]' : ''}`);
+      if (CONFIG_ID) {
+        console.log(`🔧 Config ID: ${CONFIG_ID} (filial específica)`);
+      }
 
       // 🆕 CARREGAR CONFIGURAÇÃO DINÂMICA DO BANCO
-      const dynamicConfig = await loadDynamicConfig(supabase, CLIENTE_ID);
+      // Se config_id foi fornecido, carrega config específica (ex: Orion)
+      // Senão, busca primeira config ativa do cliente_id
+      const dynamicConfig = await loadDynamicConfig(supabase, CLIENTE_ID, CONFIG_ID);
       
       // Nome do cliente vem do banco (sem hardcodes)
       const clienteNome = dynamicConfig?.clinic_info?.nome_clinica || 'Cliente';

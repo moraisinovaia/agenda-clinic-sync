@@ -83,6 +83,9 @@ verify_jwt = false
 [functions.llm-agent-api-venus]
 verify_jwt = false
 
+[functions.llm-agent-api-orion]
+verify_jwt = false
+
 [functions.user-management]
 verify_jwt = false
 
