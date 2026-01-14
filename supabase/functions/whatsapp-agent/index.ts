@@ -60,11 +60,18 @@ function extrairDadosAgendamento(texto: string): Partial<AgendamentoData> {
 }
 
 // Função para enviar WhatsApp via Evolution API
+// ⚠️ SEGURANÇA: Todas as credenciais DEVEM vir de variáveis de ambiente
 async function enviarWhatsApp(celular: string, mensagem: string) {
   try {
-    const evolutionUrl = Deno.env.get('EVOLUTION_API_URL') || 'https://evolutionapi.inovaia.online';
-    const apiKey = Deno.env.get('EVOLUTION_API_KEY') || 'grozNCsxwy32iYir20LRw7dfIRNPI8UZ';
-    const instanceName = Deno.env.get('EVOLUTION_INSTANCE_NAME') || 'Endogastro';
+    const evolutionUrl = Deno.env.get('EVOLUTION_API_URL');
+    const apiKey = Deno.env.get('EVOLUTION_API_KEY');
+    const instanceName = Deno.env.get('EVOLUTION_INSTANCE_NAME');
+
+    // Validação de segurança: não permitir execução sem credenciais configuradas
+    if (!evolutionUrl || !apiKey || !instanceName) {
+      console.error('❌ [SEGURANÇA] Credenciais Evolution API não configuradas.');
+      throw new Error('Evolution API credentials not configured. Set EVOLUTION_API_URL, EVOLUTION_API_KEY, and EVOLUTION_INSTANCE_NAME.');
+    }
 
     const response = await fetch(`${evolutionUrl}/message/sendText/${instanceName}`, {
       method: 'POST',
