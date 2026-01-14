@@ -18,7 +18,7 @@ import inovaiaLogo from '@/assets/inovaia-logo.jpeg';
 
 export default function Auth() {
   const { user, loading, signIn, signUp } = useAuth();
-  const { rememberMe, savedUsername, savedPassword, saveCredentials, clearSavedCredentials } = useRememberMe();
+  const { rememberMe, savedUsername, saveCredentials, clearSavedCredentials } = useRememberMe();
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
@@ -33,7 +33,7 @@ export default function Auth() {
   
   const [loginData, setLoginData] = useState({
     emailOrUsername: savedUsername || '',
-    password: savedPassword || ''
+    password: ''
   });
   
   const [signupData, setSignupData] = useState({
@@ -69,11 +69,10 @@ export default function Auth() {
     if (savedUsername) {
       setLoginData(prev => ({ 
         ...prev, 
-        emailOrUsername: savedUsername,
-        password: savedPassword || ''
+        emailOrUsername: savedUsername
       }));
     }
-  }, [rememberMe, savedUsername, savedPassword]);
+  }, [rememberMe, savedUsername]);
 
   // Check for password recovery session FIRST (before any redirect logic)
   const hasRecoveryParams = searchParams.get('type') === 'recovery' || 
@@ -143,8 +142,8 @@ export default function Auth() {
         // Não exibir toast aqui pois o useAuth já exibe
       } else {
         console.log('🔐 Page: Login bem-sucedido, salvando credenciais se necessário');
-        // Apenas se login foi bem-sucedido
-        saveCredentials(loginData.emailOrUsername, loginData.password, rememberMeChecked);
+        // Apenas se login foi bem-sucedido - salvar apenas o username, NUNCA a senha
+        saveCredentials(loginData.emailOrUsername, rememberMeChecked);
         // Não exibir toast aqui pois o useAuth já exibe
       }
     } catch (error: any) {
