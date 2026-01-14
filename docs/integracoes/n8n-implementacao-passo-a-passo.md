@@ -287,7 +287,7 @@ return {
 ```json
 {
   "Content-Type": "application/json",
-  "apikey": "grozNCsxwy32iYir20LRw7dfIRNPI8UZ"
+  "apikey": "SUA_EVOLUTION_API_KEY_AQUI"
 }
 ```
 

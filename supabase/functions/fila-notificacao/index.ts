@@ -65,40 +65,27 @@ Digite:
 
 _Esta é uma oportunidade única da fila de espera._`
 
-        // Enviar WhatsApp via Evolution API
-        const evolutionUrl = Deno.env.get('EVOLUTION_API_URL') || 'https://evolutionapi.inovaia.online'
-        const apiKey = Deno.env.get('EVOLUTION_API_KEY') || 'grozNCsxwy32iYir20LRw7dfIRNPI8UZ'
-        const instanceName = Deno.env.get('EVOLUTION_INSTANCE_NAME') || 'Endogastro'
-
-        const response = await fetch(`${evolutionUrl}/message/sendText/${instanceName}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': apiKey
-          },
-          body: JSON.stringify({
-            number: paciente.celular,
-            text: mensagem
+        // Salvar mensagem e marcar como pendente para n8n processar
+        await supabaseClient
+          .from('fila_notificacoes')
+          .update({ 
+            status_envio: 'pending_n8n'
           })
-        })
+          .eq('id', notificacao.id)
 
-        if (response.ok) {
-          // Marcar como enviado
-          await supabaseClient
-            .from('fila_notificacoes')
-            .update({ status_envio: 'enviado' })
-            .eq('id', notificacao.id)
+        // Salvar notificação na tabela de notificações enviadas para n8n
+        await supabaseClient
+          .from('notificacoes_enviadas')
+          .insert({
+            cliente_id: notificacao.cliente_id,
+            paciente_id: fila.paciente_id,
+            celular: paciente.celular,
+            mensagem: mensagem,
+            tipo: 'fila_espera',
+            status: 'pending_n8n'
+          })
 
-          console.log(`✅ Notificação enviada para ${paciente.nome_completo}`)
-        } else {
-          // Marcar como erro
-          await supabaseClient
-            .from('fila_notificacoes')
-            .update({ status_envio: 'erro' })
-            .eq('id', notificacao.id)
-
-          console.error(`❌ Erro ao enviar para ${paciente.celular}`)
-        }
+        console.log(`✅ Notificação preparada para ${paciente.nome_completo} - aguardando n8n`)
 
       } catch (error) {
         console.error('Erro ao processar notificação:', error)

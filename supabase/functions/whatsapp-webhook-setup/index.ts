@@ -8,10 +8,17 @@ const corsHeaders = {
 // Função para configurar webhook na Evolution API
 async function configurarWebhook() {
   try {
-    const evolutionUrl = Deno.env.get('EVOLUTION_API_URL') || 'https://evolutionapi.inovaia.online';
-    const apiKey = Deno.env.get('EVOLUTION_API_KEY') || 'grozNCsxwy32iYir20LRw7dfIRNPI8UZ';
+    const evolutionUrl = Deno.env.get('EVOLUTION_API_URL');
+    const apiKey = Deno.env.get('EVOLUTION_API_KEY');
     const instanceName = Deno.env.get('EVOLUTION_INSTANCE_NAME') || 'Endogastro';
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
+
+    if (!evolutionUrl) {
+      throw new Error('EVOLUTION_API_URL não configurada');
+    }
+    if (!apiKey) {
+      throw new Error('EVOLUTION_API_KEY não configurada');
+    }
     
     if (!supabaseUrl) {
       throw new Error('SUPABASE_URL não configurada');
@@ -66,9 +73,16 @@ async function configurarWebhook() {
 // Função para verificar status da instância
 async function verificarStatus() {
   try {
-    const evolutionUrl = Deno.env.get('EVOLUTION_API_URL') || 'https://evolutionapi.inovaia.online';
-    const apiKey = Deno.env.get('EVOLUTION_API_KEY') || 'grozNCsxwy32iYir20LRw7dfIRNPI8UZ';
+    const evolutionUrl = Deno.env.get('EVOLUTION_API_URL');
+    const apiKey = Deno.env.get('EVOLUTION_API_KEY');
     const instanceName = Deno.env.get('EVOLUTION_INSTANCE_NAME') || 'Endogastro';
+
+    if (!evolutionUrl) {
+      throw new Error('EVOLUTION_API_URL não configurada');
+    }
+    if (!apiKey) {
+      throw new Error('EVOLUTION_API_KEY não configurada');
+    }
 
     const response = await fetch(`${evolutionUrl}/instance/connectionState/${instanceName}`, {
       method: 'GET',
