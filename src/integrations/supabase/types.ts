@@ -362,6 +362,7 @@ export type Database = {
           ativo: boolean | null
           cliente_id: string
           config: Json
+          config_id: string | null
           created_at: string | null
           id: string
           medico_id: string
@@ -372,6 +373,7 @@ export type Database = {
           ativo?: boolean | null
           cliente_id: string
           config: Json
+          config_id?: string | null
           created_at?: string | null
           id?: string
           medico_id: string
@@ -382,6 +384,7 @@ export type Database = {
           ativo?: boolean | null
           cliente_id?: string
           config?: Json
+          config_id?: string | null
           created_at?: string | null
           id?: string
           medico_id?: string
@@ -394,6 +397,13 @@ export type Database = {
             columns: ["cliente_id"]
             isOneToOne: false
             referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_rules_config_id_fkey"
+            columns: ["config_id"]
+            isOneToOne: false
+            referencedRelation: "llm_clinic_config"
             referencedColumns: ["id"]
           },
           {
@@ -987,6 +997,7 @@ export type Database = {
         Row: {
           ativo: boolean | null
           cliente_id: string
+          config_id: string | null
           created_at: string | null
           id: string
           medico_id: string | null
@@ -996,6 +1007,7 @@ export type Database = {
         Insert: {
           ativo?: boolean | null
           cliente_id: string
+          config_id?: string | null
           created_at?: string | null
           id?: string
           medico_id?: string | null
@@ -1005,6 +1017,7 @@ export type Database = {
         Update: {
           ativo?: boolean | null
           cliente_id?: string
+          config_id?: string | null
           created_at?: string | null
           id?: string
           medico_id?: string | null
@@ -1017,6 +1030,13 @@ export type Database = {
             columns: ["cliente_id"]
             isOneToOne: false
             referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "llm_mensagens_config_id_fkey"
+            columns: ["config_id"]
+            isOneToOne: false
+            referencedRelation: "llm_clinic_config"
             referencedColumns: ["id"]
           },
           {
