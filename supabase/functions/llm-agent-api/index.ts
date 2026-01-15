@@ -266,6 +266,57 @@ async function loadDynamicConfig(supabase: any, clienteId: string, configId?: st
 
 // ============= FUNÇÕES HELPER PARA VALORES DINÂMICOS =============
 
+/**
+ * Normaliza um objeto de período para ter campos compatíveis com código legado
+ * Suporta tanto formato antigo (inicio/fim) quanto novo (contagem_inicio/fim, horario_inicio/fim)
+ * @param periodo - Objeto de configuração do período (manha/tarde/noite)
+ * @returns Período normalizado com campos 'inicio' e 'fim' sempre presentes
+ */
+function normalizarPeriodo(periodo: any): any {
+  if (!periodo) return periodo;
+  
+  // Se já tem inicio/fim, retornar como está (formato legado)
+  if (periodo.inicio && periodo.fim) {
+    return periodo;
+  }
+  
+  // Normalizar para formato legado: usar contagem_inicio/fim ou horario_inicio/fim
+  const inicio = periodo.contagem_inicio || periodo.horario_inicio || periodo.inicio;
+  const fim = periodo.contagem_fim || periodo.horario_fim || periodo.fim;
+  
+  return {
+    ...periodo,
+    inicio: inicio,
+    fim: fim,
+    // Manter campos originais também
+    contagem_inicio: periodo.contagem_inicio,
+    contagem_fim: periodo.contagem_fim,
+    horario_inicio: periodo.horario_inicio,
+    horario_fim: periodo.horario_fim,
+    atendimento_inicio: periodo.atendimento_inicio
+  };
+}
+
+/**
+ * Normaliza todos os períodos de um serviço
+ * @param servico - Configuração do serviço com periodos
+ * @returns Serviço com períodos normalizados
+ */
+function normalizarServicoPeriodos(servico: any): any {
+  if (!servico || !servico.periodos) return servico;
+  
+  const periodosNormalizados: any = {};
+  
+  for (const [nomePeriodo, configPeriodo] of Object.entries(servico.periodos)) {
+    periodosNormalizados[nomePeriodo] = normalizarPeriodo(configPeriodo);
+  }
+  
+  return {
+    ...servico,
+    periodos: periodosNormalizados
+  };
+}
+
 // ============= SISTEMA DE LIMITES COMPARTILHADOS E SUBLIMITES =============
 
 interface LimiteCompartilhadoResult {
@@ -2530,8 +2581,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
         const regrasMedico = getMedicoRules(config, medico.id, BUSINESS_RULES.medicos[medico.id]);
         if (regrasMedico) {
           const servicoKey = Object.keys(regrasMedico.servicos)[0];
-          const servico = regrasMedico.servicos[servicoKey];
-          
+          const servico = normalizarServicoPeriodos(regrasMedico.servicos[servicoKey]);
           // Determinar se é manhã ou tarde
           if (servico.periodos?.manha) {
             const [hInicio] = servico.periodos.manha.inicio.split(':').map(Number);
@@ -2790,22 +2840,25 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
         
         // Buscar config do período para informações detalhadas
         if (regrasMedicoSchedule?.servicos) {
-          const servicoAtual = servicoConfigSchedule || Object.values(regrasMedicoSchedule.servicos)[0];
+          const servicoAtualRaw = servicoConfigSchedule || Object.values(regrasMedicoSchedule.servicos)[0];
+          const servicoAtual = normalizarServicoPeriodos(servicoAtualRaw);
           if (servicoAtual?.periodos) {
             if (servicoAtual.periodos.manha) {
-              const [hInicioM] = servicoAtual.periodos.manha.inicio.split(':').map(Number);
-              const [hFimM] = servicoAtual.periodos.manha.fim.split(':').map(Number);
+              const manha = servicoAtual.periodos.manha;
+              const [hInicioM] = manha.inicio.split(':').map(Number);
+              const [hFimM] = manha.fim.split(':').map(Number);
               if (hora >= hInicioM && hora < hFimM) {
                 periodoNomeConf = 'manhã';
-                periodoHorarioConf = `${servicoAtual.periodos.manha.inicio.substring(0,5)} às ${servicoAtual.periodos.manha.fim.substring(0,5)}`;
+                periodoHorarioConf = `${manha.inicio.substring(0,5)} às ${manha.fim.substring(0,5)}`;
               }
             }
             if (!periodoNomeConf && servicoAtual.periodos.tarde) {
-              const [hInicioT] = servicoAtual.periodos.tarde.inicio.split(':').map(Number);
-              const [hFimT] = servicoAtual.periodos.tarde.fim.split(':').map(Number);
+              const tarde = servicoAtual.periodos.tarde;
+              const [hInicioT] = tarde.inicio.split(':').map(Number);
+              const [hFimT] = tarde.fim.split(':').map(Number);
               if (hora >= hInicioT && hora < hFimT) {
                 periodoNomeConf = 'tarde';
-                periodoHorarioConf = `${servicoAtual.periodos.tarde.inicio.substring(0,5)} às ${servicoAtual.periodos.tarde.fim.substring(0,5)}`;
+                periodoHorarioConf = `${tarde.inicio.substring(0,5)} às ${tarde.fim.substring(0,5)}`;
               }
             }
           }
@@ -3931,7 +3984,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         console.log(`🔍 Match parcial selecionado: "${servicoKey}" (score: ${matchesParciais[0].score})`);
       }
     }
-    let servico = servicoKey ? regras.servicos[servicoKey] : null;
+    let servico = servicoKey ? normalizarServicoPeriodos(regras.servicos[servicoKey]) : null;
     
     // Não retornar erro ainda - busca melhorada será feita depois se necessário
     
