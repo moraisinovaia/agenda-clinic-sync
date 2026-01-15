@@ -75,6 +75,7 @@ interface ServiceConfigFormProps {
   onDelete: () => void;
   tipoAgendamentoMedico: 'ordem_chegada' | 'hora_marcada';
   outrosServicos?: string[];
+  todasConfigServicos?: { [servico: string]: ServiceConfig }; // Para validar referência circular
 }
 
 const DEFAULT_PERIOD: DayPeriodConfig = {
@@ -90,7 +91,8 @@ export function ServiceConfigForm({
   onChange, 
   onDelete,
   tipoAgendamentoMedico,
-  outrosServicos = []
+  outrosServicos = [],
+  todasConfigServicos = {}
 }: ServiceConfigFormProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [selectedDayTab, setSelectedDayTab] = useState<string>('1'); // Segunda por padrão
@@ -98,6 +100,18 @@ export function ServiceConfigForm({
   const tipoEfetivo = (!config.tipo_agendamento || config.tipo_agendamento === 'herdar') 
     ? tipoAgendamentoMedico 
     : config.tipo_agendamento;
+
+  // Detectar serviços que causariam referência circular
+  const getServicosComReferenciaCircular = (): string[] => {
+    return outrosServicos.filter(outroServico => {
+      const configOutro = todasConfigServicos[outroServico];
+      // Se o outro serviço aponta para este, seria circular
+      return configOutro?.compartilha_limite_com === serviceName;
+    });
+  };
+
+  const servicosComCircular = getServicosComReferenciaCircular();
+  const servicosDisponiveis = outrosServicos.filter(s => !servicosComCircular.includes(s));
 
   const handleChange = (field: string, value: any) => {
     onChange({ ...config, [field]: value });
@@ -317,6 +331,7 @@ export function ServiceConfigForm({
                         handleChange('limite_proprio', undefined);
                       }
                     }}
+                    disabled={servicosDisponiveis.length === 0}
                   />
                   <Label htmlFor={`compartilha-limite-${serviceName}`} className="cursor-pointer">
                     <span className="font-medium">🔗 Compartilhar limite com outro serviço</span>
@@ -325,6 +340,16 @@ export function ServiceConfigForm({
                     </p>
                   </Label>
                 </div>
+
+                {/* Aviso de referência circular */}
+                {servicosComCircular.length > 0 && (
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                    <p className="text-sm text-amber-700 dark:text-amber-400">
+                      ⚠️ <strong>{servicosComCircular.join(', ')}</strong> já compartilha limite com {serviceName}. 
+                      Não é possível criar referência circular.
+                    </p>
+                  </div>
+                )}
 
                 {config.compartilha_limite_com !== undefined && (
                   <div className="space-y-4 pl-4 border-l-2 border-primary/30">
@@ -338,7 +363,7 @@ export function ServiceConfigForm({
                           <SelectValue placeholder="Selecionar serviço" />
                         </SelectTrigger>
                         <SelectContent position="popper" onCloseAutoFocus={(e) => e.preventDefault()}>
-                          {outrosServicos.map(s => (
+                          {servicosDisponiveis.map(s => (
                             <SelectItem key={s} value={s}>{s}</SelectItem>
                           ))}
                         </SelectContent>
