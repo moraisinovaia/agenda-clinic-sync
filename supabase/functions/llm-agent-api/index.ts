@@ -298,6 +298,48 @@ function normalizarPeriodo(periodo: any): any {
 }
 
 /**
+ * Gera a string de horário para exibir ao paciente
+ * PRIORIDADE: horario_inicio/fim (comparecimento) > distribuicao_fichas > inicio/fim (contagem)
+ * @param periodo - Configuração do período com campos de horário
+ * @returns String formatada como "08:00 às 10:00"
+ */
+function getHorarioParaPaciente(periodo: any): string {
+  if (!periodo) return 'Horário não definido';
+  
+  // 1. PRIORIDADE MÁXIMA: distribuicao_fichas (explicitamente configurado para exibição)
+  if (periodo.distribuicao_fichas) {
+    return periodo.distribuicao_fichas;
+  }
+  
+  // 2. SEGUNDA PRIORIDADE: horario_inicio/fim (horário de comparecimento do paciente)
+  if (periodo.horario_inicio && periodo.horario_fim) {
+    return `${periodo.horario_inicio} às ${periodo.horario_fim}`;
+  }
+  
+  // 3. FALLBACK: inicio/fim (pode ser contagem ou legado)
+  if (periodo.inicio && periodo.fim) {
+    return `${periodo.inicio} às ${periodo.fim}`;
+  }
+  
+  // 4. ÚLTIMO RECURSO: contagem_inicio/fim
+  if (periodo.contagem_inicio && periodo.contagem_fim) {
+    return `${periodo.contagem_inicio} às ${periodo.contagem_fim}`;
+  }
+  
+  return 'Horário não definido';
+}
+
+/**
+ * Obtém o horário de início do atendimento (quando o médico começa a atender)
+ * @param periodo - Configuração do período
+ * @returns Hora de início do atendimento ou null
+ */
+function getHorarioAtendimento(periodo: any): string | null {
+  if (!periodo) return null;
+  return periodo.atendimento_inicio || null;
+}
+
+/**
  * Normaliza todos os períodos de um serviço
  * @param servico - Configuração do serviço com periodos
  * @returns Serviço com períodos normalizados
@@ -895,7 +937,7 @@ function formatarHorarioParaExibicao(
   periodoConfig?: any
 ): string {
   if (isOrdemChegada(tipo)) {
-    const distribuicao = periodoConfig?.distribuicao_fichas || 
+    const distribuicao = getHorarioParaPaciente(periodoConfig) || 
                          `${periodoConfig?.inicio || '08:00'} às ${periodoConfig?.fim || '12:00'}`;
     return `por ordem de chegada (${distribuicao})`;
   }
@@ -1160,8 +1202,7 @@ function montarMensagemConsulta(
   isOrdemChegada: boolean
 ): string {
   const dataFormatada = formatarDataPorExtenso(agendamento.data_agendamento);
-  const periodo = periodoConfig.distribuicao_fichas || 
-                  `${periodoConfig.inicio} às ${periodoConfig.fim}`;
+  const periodo = getHorarioParaPaciente(periodoConfig);
   
   let mensagem = `O(a) paciente ${agendamento.paciente_nome} tem uma consulta agendada para o dia ${dataFormatada}`;
   
@@ -1243,7 +1284,8 @@ function formatarConsultaComContexto(agendamento: any, config: DynamicConfig | n
   
   return {
     ...agendamento,
-    periodo: periodoConfig.distribuicao_fichas || `${periodoConfig.inicio} às ${periodoConfig.fim}`,
+    periodo: getHorarioParaPaciente(periodoConfig),
+    horario_comparecer: getHorarioParaPaciente(periodoConfig),
     atendimento_inicio: periodoConfig.atendimento_inicio,
     tipo_agendamento: servico.tipo,
     mensagem
@@ -4236,10 +4278,10 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
             const disponiveis = manha.limite - ocupadas;
             
             if (disponiveis > 0) {
-              // 🆕 USAR ordem_chegada_config se disponível
+              // 🆕 USAR ordem_chegada_config ou getHorarioParaPaciente
               const horarioDistribuicao = ordemChegadaConfig 
                 ? `${ordemChegadaConfig.hora_chegada_inicio} às ${ordemChegadaConfig.hora_chegada_fim}` 
-                : (manha.distribuicao_fichas || `${manha.inicio} às ${manha.fim}`);
+                : getHorarioParaPaciente(manha);
               
               periodosDisponiveis.push({
                 periodo: 'Manhã',
@@ -4276,10 +4318,10 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
             const disponiveis = tarde.limite - ocupadas;
             
             if (disponiveis > 0) {
-              // 🆕 USAR ordem_chegada_config se disponível
+              // 🆕 USAR ordem_chegada_config ou getHorarioParaPaciente
               const horarioDistribuicao = ordemChegadaConfig 
                 ? `${ordemChegadaConfig.hora_chegada_inicio} às ${ordemChegadaConfig.hora_chegada_fim}` 
-                : (tarde.distribuicao_fichas || `${tarde.inicio} às ${tarde.fim}`);
+                : getHorarioParaPaciente(tarde);
               
               periodosDisponiveis.push({
                 periodo: 'Tarde',
@@ -4374,7 +4416,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
             if (vagasDisponiveis > 0) {
               periodosDisponiveis.push({
                 periodo: periodo.charAt(0).toUpperCase() + periodo.slice(1),
-                horario_distribuicao: (config as any).distribuicao_fichas || `${(config as any).inicio} às ${(config as any).fim}`,
+                horario_distribuicao: getHorarioParaPaciente(config),
                 vagas_disponiveis: vagasDisponiveis,
                 limite_total: limite,
                 tipo: tipoAtendimento
@@ -5019,7 +5061,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           if (vagasDisponiveis > 0) {
             periodosDisponiveis.push({
               periodo: periodo === 'manha' ? 'Manhã' : 'Tarde',
-              horario_distribuicao: (config as any).distribuicao_fichas || `${(config as any).inicio} às ${(config as any).fim}`,
+              horario_distribuicao: getHorarioParaPaciente(config),
               vagas_disponiveis: vagasDisponiveis,
               total_vagas: (config as any).limite
             });
@@ -5369,13 +5411,15 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
 
       periodosDisponiveis.push({
         periodo: periodo === 'manha' ? 'Manhã' : 'Tarde',
-        horario_distribuicao: (config as any).distribuicao_fichas || `${(config as any).inicio} às ${(config as any).fim}`,
+        horario_distribuicao: getHorarioParaPaciente(config),
+        horario_comparecer: getHorarioParaPaciente(config),
+        hora_atendimento: getHorarioAtendimento(config),
         vagas_ocupadas: vagasOcupadas,
         vagas_disponiveis: vagasDisponiveis,
         total_vagas: (config as any).limite,
         disponivel: vagasDisponiveis > 0,
-        hora_inicio: (config as any).inicio,
-        hora_fim: (config as any).fim,
+        hora_inicio: (config as any).horario_inicio || (config as any).inicio,
+        hora_fim: (config as any).horario_fim || (config as any).fim,
         intervalo_minutos: (config as any).intervalo_minutos
       });
     }
@@ -5511,10 +5555,14 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       
       // Se tem vagas, retornar normalmente
       const mensagem = `✅ ${medico.nome} - ${servicoKey}\n📅 ${data_consulta}\n\n` +
-        periodosDisponiveis.filter(p => p.disponivel).map(p => 
-          `${p.periodo}: ${p.vagas_disponiveis} vaga(s) disponível(is) de ${p.total_vagas}\n` +
-          `Distribuição: ${p.horario_distribuicao}`
-        ).join('\n\n') +
+        periodosDisponiveis.filter(p => p.disponivel).map(p => {
+          let linha = `${p.periodo}: ${p.vagas_disponiveis} vaga(s) disponível(is) de ${p.total_vagas}\n` +
+            `🕐 Comparecer: ${p.horario_comparecer || p.horario_distribuicao}`;
+          if (p.hora_atendimento) {
+            linha += `\n⏰ Atendimento inicia às ${p.hora_atendimento}`;
+          }
+          return linha;
+        }).join('\n\n') +
         '\n\n⚠️ ORDEM DE CHEGADA: Não há horário marcado. Paciente deve chegar no período para pegar ficha.';
       
       return successResponse({
@@ -5909,7 +5957,7 @@ async function buscarProximasDatasComPeriodo(
         dia_semana: diasSemana[diaSemanaNum],
         periodos: [{
           periodo: periodoNomes[periodo],
-          horario_distribuicao: configPeriodo.distribuicao_fichas || `${configPeriodo.inicio} às ${configPeriodo.fim}`,
+          horario_distribuicao: getHorarioParaPaciente(configPeriodo),
           vagas_disponiveis: disponiveis,
           total_vagas: configPeriodo.limite,
           tipo: 'ordem_chegada'
