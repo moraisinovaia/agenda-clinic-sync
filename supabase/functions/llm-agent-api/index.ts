@@ -2621,9 +2621,22 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
             if (msgConfirmacao) {
               mensagem = msgConfirmacao;
             } else {
-              // Mensagem padrão genérica
+              // Mensagem padrão genérica com período detalhado
               const dataFormatada = new Date(data_consulta + 'T00:00:00').toLocaleDateString('pt-BR');
-              mensagem = `✅ Agendada para ${dataFormatada} por ordem de chegada.`;
+              
+              // Determinar nome do período baseado no horário alocado
+              const [hAlocado] = horarioAlocado.split(':').map(Number);
+              let periodoNomeLoop = hAlocado >= 7 && hAlocado < 12 ? 'manhã' : hAlocado >= 13 && hAlocado < 18 ? 'tarde' : '';
+              
+              // Buscar horários do período se disponível
+              let periodoInfoLoop = '';
+              if (periodoNomeLoop && periodoConfig) {
+                periodoInfoLoop = ` no período da ${periodoNomeLoop} (${periodoConfig.inicio.substring(0,5)} às ${periodoConfig.fim.substring(0,5)})`;
+              } else if (periodoNomeLoop) {
+                periodoInfoLoop = ` no período da ${periodoNomeLoop}`;
+              }
+              
+              mensagem = `✅ Agendada para ${dataFormatada}${periodoInfoLoop}, por ordem de chegada.`;
             }
             
             // Adicionar mensagem de pagamento se existir
@@ -2720,12 +2733,13 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
     
     // 🆕 Determinar tipo de agendamento efetivo
     const regrasMedicoSchedule = getMedicoRules(config, medico.id, BUSINESS_RULES.medicos[medico.id]);
-    const servicoSchedule = atendimento_nome ? Object.values(regrasMedicoSchedule?.servicos || {}).find((s: any) => {
-      const nomeServico = s.nome || '';
+    const servicoSchedule = atendimento_nome ? Object.entries(regrasMedicoSchedule?.servicos || {}).find(([nomeServico, _cfg]: [string, any]) => {
       return nomeServico.toLowerCase().includes(atendimento_nome.toLowerCase()) ||
              atendimento_nome.toLowerCase().includes(nomeServico.toLowerCase());
     }) : null;
-    const tipoEfetivoSchedule = getTipoAgendamentoEfetivo(servicoSchedule, regrasMedicoSchedule);
+    // Extrair o config do serviço se encontrado (o find retorna [key, value])
+    const servicoConfigSchedule = servicoSchedule ? servicoSchedule[1] : null;
+    const tipoEfetivoSchedule = getTipoAgendamentoEfetivo(servicoConfigSchedule, regrasMedicoSchedule);
     
     console.log(`📋 [CONFIRMAÇÃO] Tipo efetivo: ${tipoEfetivoSchedule}`);
     
@@ -2741,10 +2755,43 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
     } else {
       // 🆕 Mensagem diferenciada por tipo de agendamento
       if (isEstimativaHorario(tipoEfetivoSchedule)) {
-        const mensagemEst = getMensagemEstimativa(servicoSchedule, null);
+        const mensagemEst = getMensagemEstimativa(servicoConfigSchedule, null);
         mensagem = `✅ Consulta agendada para ${paciente_nome} em ${dataFormatada} por volta das ${horaFormatada}.\n\n⏰ ${mensagemEst}`;
       } else if (isOrdemChegada(tipoEfetivoSchedule)) {
-        mensagem = `✅ Consulta agendada para ${paciente_nome} em ${dataFormatada} por ordem de chegada.`;
+        // Determinar período e horário baseado na hora do agendamento
+        let periodoNomeConf = '';
+        let periodoHorarioConf = '';
+        
+        // Buscar config do período para informações detalhadas
+        if (regrasMedicoSchedule?.servicos) {
+          const servicoAtual = servicoConfigSchedule || Object.values(regrasMedicoSchedule.servicos)[0];
+          if (servicoAtual?.periodos) {
+            if (servicoAtual.periodos.manha) {
+              const [hInicioM] = servicoAtual.periodos.manha.inicio.split(':').map(Number);
+              const [hFimM] = servicoAtual.periodos.manha.fim.split(':').map(Number);
+              if (hora >= hInicioM && hora < hFimM) {
+                periodoNomeConf = 'manhã';
+                periodoHorarioConf = `${servicoAtual.periodos.manha.inicio.substring(0,5)} às ${servicoAtual.periodos.manha.fim.substring(0,5)}`;
+              }
+            }
+            if (!periodoNomeConf && servicoAtual.periodos.tarde) {
+              const [hInicioT] = servicoAtual.periodos.tarde.inicio.split(':').map(Number);
+              const [hFimT] = servicoAtual.periodos.tarde.fim.split(':').map(Number);
+              if (hora >= hInicioT && hora < hFimT) {
+                periodoNomeConf = 'tarde';
+                periodoHorarioConf = `${servicoAtual.periodos.tarde.inicio.substring(0,5)} às ${servicoAtual.periodos.tarde.fim.substring(0,5)}`;
+              }
+            }
+          }
+        }
+        
+        // Mensagem com período detalhado
+        if (periodoNomeConf && periodoHorarioConf) {
+          mensagem = `✅ Consulta agendada para ${paciente_nome} em ${dataFormatada} no período da ${periodoNomeConf} (${periodoHorarioConf}), por ordem de chegada.`;
+        } else {
+          // Fallback simples se não encontrar config
+          mensagem = `✅ Consulta agendada para ${paciente_nome} em ${dataFormatada} por ordem de chegada.`;
+        }
       } else {
         // Hora marcada
         mensagem = `✅ Consulta agendada para ${paciente_nome} em ${dataFormatada} às ${horaFormatada}.`;
