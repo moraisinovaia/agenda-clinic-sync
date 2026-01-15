@@ -8,9 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PeriodConfigForm } from './PeriodConfigForm';
-import { ChevronDown, ChevronUp, Trash2, Calendar, MessageSquare, Clock } from 'lucide-react';
+import { ChevronDown, ChevronUp, Trash2, Calendar, MessageSquare, Clock, Copy } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const DIAS_SEMANA = [
   { value: 0, label: 'Dom', fullLabel: 'Domingo' },
@@ -29,12 +30,27 @@ const TIPOS_AGENDAMENTO = [
   { value: 'estimativa_horario', label: 'Estimativa de Horário', description: 'Horário aproximado, sujeito a alteração' },
 ];
 
+interface DayPeriodConfig {
+  ativo: boolean;
+  inicio: string;
+  fim: string;
+  limite: number;
+  atendimento_inicio?: string;
+  distribuicao_fichas?: string;
+}
+
+interface DayConfig {
+  manha?: DayPeriodConfig;
+  tarde?: DayPeriodConfig;
+  noite?: DayPeriodConfig;
+}
+
 interface ServiceConfig {
   permite_online: boolean;
   tipo_agendamento?: 'herdar' | 'ordem_chegada' | 'hora_marcada' | 'estimativa_horario';
-  intervalo_estimado?: number; // Para estimativa_horario
-  intervalo_pacientes?: number; // Para hora_marcada
-  mensagem_estimativa?: string; // Mensagem para estimativa
+  intervalo_estimado?: number;
+  intervalo_pacientes?: number;
+  mensagem_estimativa?: string;
   mensagem?: string;
   dias?: number[];
   periodos?: {
@@ -42,6 +58,11 @@ interface ServiceConfig {
     tarde?: any;
     noite?: any;
   };
+  // Nova estrutura: horários por dia
+  horarios_por_dia?: {
+    [dia: number]: DayConfig;
+  };
+  usar_horario_por_dia?: boolean;
 }
 
 interface ServiceConfigFormProps {
@@ -52,6 +73,13 @@ interface ServiceConfigFormProps {
   tipoAgendamentoMedico: 'ordem_chegada' | 'hora_marcada';
 }
 
+const DEFAULT_PERIOD: DayPeriodConfig = {
+  ativo: false,
+  inicio: '08:00',
+  fim: '12:00',
+  limite: 10,
+};
+
 export function ServiceConfigForm({ 
   serviceName, 
   config, 
@@ -60,8 +88,8 @@ export function ServiceConfigForm({
   tipoAgendamentoMedico 
 }: ServiceConfigFormProps) {
   const [isOpen, setIsOpen] = useState(true);
+  const [selectedDayTab, setSelectedDayTab] = useState<string>('1'); // Segunda por padrão
 
-  // Tipo efetivo: se for 'herdar' ou não definido, usa o do médico
   const tipoEfetivo = (!config.tipo_agendamento || config.tipo_agendamento === 'herdar') 
     ? tipoAgendamentoMedico 
     : config.tipo_agendamento;
@@ -75,6 +103,22 @@ export function ServiceConfigForm({
     const newDias = currentDias.includes(dia)
       ? currentDias.filter(d => d !== dia)
       : [...currentDias, dia].sort((a, b) => a - b);
+    
+    // Se usando horário por dia, inicializa config do dia se não existir
+    if (config.usar_horario_por_dia && !currentDias.includes(dia)) {
+      const horarios = config.horarios_por_dia || {};
+      if (!horarios[dia]) {
+        handleChange('horarios_por_dia', {
+          ...horarios,
+          [dia]: {
+            manha: { ...DEFAULT_PERIOD },
+            tarde: { ...DEFAULT_PERIOD, inicio: '14:00', fim: '18:00' },
+            noite: { ...DEFAULT_PERIOD, inicio: '18:00', fim: '22:00', limite: 5 },
+          }
+        });
+      }
+    }
+    
     handleChange('dias', newDias);
   };
 
@@ -85,11 +129,53 @@ export function ServiceConfigForm({
     });
   };
 
+  // Handler para horários por dia
+  const handleDayPeriodoChange = (dia: number, periodo: 'manha' | 'tarde' | 'noite', periodConfig: DayPeriodConfig) => {
+    const horarios = config.horarios_por_dia || {};
+    const diaConfig = horarios[dia] || {};
+    
+    handleChange('horarios_por_dia', {
+      ...horarios,
+      [dia]: {
+        ...diaConfig,
+        [periodo]: periodConfig,
+      }
+    });
+  };
+
+  // Copiar horários de um dia para outros
+  const copyHorariosToOtherDays = (sourceDia: number) => {
+    const horarios = config.horarios_por_dia || {};
+    const sourceConfig = horarios[sourceDia];
+    if (!sourceConfig) return;
+
+    const diasAtivos = config.dias || [];
+    const newHorarios = { ...horarios };
+    
+    diasAtivos.forEach(dia => {
+      if (dia !== sourceDia) {
+        newHorarios[dia] = JSON.parse(JSON.stringify(sourceConfig));
+      }
+    });
+    
+    handleChange('horarios_por_dia', newHorarios);
+  };
+
   const defaultPeriodos = config.periodos || {
     manha: { ativo: false, inicio: '08:00', fim: '12:00', limite: 10 },
     tarde: { ativo: false, inicio: '14:00', fim: '18:00', limite: 10 },
     noite: { ativo: false, inicio: '18:00', fim: '22:00', limite: 5 },
   };
+
+  const getDayConfig = (dia: number): DayConfig => {
+    return config.horarios_por_dia?.[dia] || {
+      manha: { ...DEFAULT_PERIOD },
+      tarde: { ...DEFAULT_PERIOD, inicio: '14:00', fim: '18:00' },
+      noite: { ...DEFAULT_PERIOD, inicio: '18:00', fim: '22:00', limite: 5 },
+    };
+  };
+
+  const diasAtivos = (config.dias || []).sort((a, b) => a - b);
 
   const getTipoBadge = () => {
     const tipo = config.tipo_agendamento || 'herdar';
@@ -253,30 +339,118 @@ export function ServiceConfigForm({
               </div>
             </div>
 
-            {/* Períodos */}
-            <div className="space-y-3">
-              <Label>Períodos de Atendimento</Label>
-              <div className="space-y-3">
-                <PeriodConfigForm
-                  periodo="manha"
-                  config={defaultPeriodos.manha || { ativo: false, inicio: '08:00', fim: '12:00', limite: 10 }}
-                  onChange={(cfg) => handlePeriodoChange('manha', cfg)}
-                  tipoAgendamento={tipoEfetivo}
+            {/* Toggle para horário por dia */}
+            {diasAtivos.length > 0 && (
+              <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg border">
+                <Switch
+                  id="usar-horario-por-dia"
+                  checked={config.usar_horario_por_dia || false}
+                  onCheckedChange={(checked) => handleChange('usar_horario_por_dia', checked)}
                 />
-                <PeriodConfigForm
-                  periodo="tarde"
-                  config={defaultPeriodos.tarde || { ativo: false, inicio: '14:00', fim: '18:00', limite: 10 }}
-                  onChange={(cfg) => handlePeriodoChange('tarde', cfg)}
-                  tipoAgendamento={tipoEfetivo}
-                />
-                <PeriodConfigForm
-                  periodo="noite"
-                  config={defaultPeriodos.noite || { ativo: false, inicio: '18:00', fim: '22:00', limite: 5 }}
-                  onChange={(cfg) => handlePeriodoChange('noite', cfg)}
-                  tipoAgendamento={tipoEfetivo}
-                />
+                <Label htmlFor="usar-horario-por-dia" className="text-sm cursor-pointer">
+                  <span className="font-medium">Horários diferentes por dia</span>
+                  <p className="text-xs text-muted-foreground">
+                    Ative para configurar horários específicos para cada dia da semana
+                  </p>
+                </Label>
               </div>
-            </div>
+            )}
+
+            {/* Períodos - Modo Unificado */}
+            {!config.usar_horario_por_dia && (
+              <div className="space-y-3">
+                <Label>Períodos de Atendimento</Label>
+                <div className="space-y-3">
+                  <PeriodConfigForm
+                    periodo="manha"
+                    config={defaultPeriodos.manha || { ativo: false, inicio: '08:00', fim: '12:00', limite: 10 }}
+                    onChange={(cfg) => handlePeriodoChange('manha', cfg)}
+                    tipoAgendamento={tipoEfetivo}
+                  />
+                  <PeriodConfigForm
+                    periodo="tarde"
+                    config={defaultPeriodos.tarde || { ativo: false, inicio: '14:00', fim: '18:00', limite: 10 }}
+                    onChange={(cfg) => handlePeriodoChange('tarde', cfg)}
+                    tipoAgendamento={tipoEfetivo}
+                  />
+                  <PeriodConfigForm
+                    periodo="noite"
+                    config={defaultPeriodos.noite || { ativo: false, inicio: '18:00', fim: '22:00', limite: 5 }}
+                    onChange={(cfg) => handlePeriodoChange('noite', cfg)}
+                    tipoAgendamento={tipoEfetivo}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Períodos - Modo por Dia */}
+            {config.usar_horario_por_dia && diasAtivos.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label>Períodos de Atendimento por Dia</Label>
+                </div>
+                
+                <Tabs value={selectedDayTab} onValueChange={setSelectedDayTab} className="w-full">
+                  <TabsList className="w-full flex-wrap h-auto gap-1 bg-muted/50 p-1">
+                    {diasAtivos.map((dia) => {
+                      const diaInfo = DIAS_SEMANA.find(d => d.value === dia);
+                      return (
+                        <TabsTrigger 
+                          key={dia} 
+                          value={dia.toString()}
+                          className="flex-1 min-w-[60px] data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                        >
+                          {diaInfo?.label}
+                        </TabsTrigger>
+                      );
+                    })}
+                  </TabsList>
+                  
+                  {diasAtivos.map((dia) => {
+                    const diaInfo = DIAS_SEMANA.find(d => d.value === dia);
+                    const dayConfig = getDayConfig(dia);
+                    
+                    return (
+                      <TabsContent key={dia} value={dia.toString()} className="mt-4 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-medium text-sm">{diaInfo?.fullLabel}</h4>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => copyHorariosToOtherDays(dia)}
+                            className="text-xs gap-1"
+                          >
+                            <Copy className="h-3 w-3" />
+                            Copiar para outros dias
+                          </Button>
+                        </div>
+                        
+                        <div className="space-y-3">
+                          <PeriodConfigForm
+                            periodo="manha"
+                            config={dayConfig.manha || { ativo: false, inicio: '08:00', fim: '12:00', limite: 10 }}
+                            onChange={(cfg) => handleDayPeriodoChange(dia, 'manha', cfg)}
+                            tipoAgendamento={tipoEfetivo}
+                          />
+                          <PeriodConfigForm
+                            periodo="tarde"
+                            config={dayConfig.tarde || { ativo: false, inicio: '14:00', fim: '18:00', limite: 10 }}
+                            onChange={(cfg) => handleDayPeriodoChange(dia, 'tarde', cfg)}
+                            tipoAgendamento={tipoEfetivo}
+                          />
+                          <PeriodConfigForm
+                            periodo="noite"
+                            config={dayConfig.noite || { ativo: false, inicio: '18:00', fim: '22:00', limite: 5 }}
+                            onChange={(cfg) => handleDayPeriodoChange(dia, 'noite', cfg)}
+                            tipoAgendamento={tipoEfetivo}
+                          />
+                        </div>
+                      </TabsContent>
+                    );
+                  })}
+                </Tabs>
+              </div>
+            )}
           </CardContent>
         </CollapsibleContent>
       </Collapsible>
