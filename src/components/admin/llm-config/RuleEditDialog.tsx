@@ -268,7 +268,7 @@ export function RuleEditDialog({
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper" onCloseAutoFocus={(e) => e.preventDefault()}>
                   <SelectItem value="ordem_chegada">Ordem de Chegada</SelectItem>
                   <SelectItem value="hora_marcada">Hora Marcada</SelectItem>
                 </SelectContent>
@@ -297,7 +297,7 @@ export function RuleEditDialog({
                     <SelectTrigger className="w-[200px]">
                       <SelectValue placeholder="Selecionar serviço" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent position="popper" onCloseAutoFocus={(e) => e.preventDefault()}>
                       {availableServices.map(a => (
                         <SelectItem key={a.id} value={a.nome}>
                           {a.nome}
@@ -415,7 +415,7 @@ export function RuleEditDialog({
                     <SelectTrigger className="flex-1">
                       <SelectValue placeholder="Selecionar serviço" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent position="popper" onCloseAutoFocus={(e) => e.preventDefault()}>
                       {allServiceNames.map(s => (
                         <SelectItem key={s} value={s}>{s}</SelectItem>
                       ))}
@@ -524,7 +524,7 @@ export function RuleEditDialog({
                   <SelectTrigger>
                     <SelectValue placeholder="Selecionar serviço" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper" onCloseAutoFocus={(e) => e.preventDefault()}>
                     {allServiceNames
                       .filter(s => !Object.keys(config.entrega_resultados || {}).includes(s))
                       .map(s => (
