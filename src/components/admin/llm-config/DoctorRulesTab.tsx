@@ -278,9 +278,9 @@ export function DoctorRulesTab({ businessRules, medicos, saving, onSave, onDelet
           )}
 
           {/* Existing rules */}
-          {businessRules.length > 0 ? (
+          {validBusinessRules.length > 0 ? (
             <Accordion type="single" collapsible className="w-full">
-              {businessRules.map(renderRuleCard)}
+              {validBusinessRules.map(renderRuleCard)}
             </Accordion>
           ) : (
             <div className="text-center py-8 text-muted-foreground">
