@@ -5941,10 +5941,10 @@ async function handleDoctorSchedules(supabase: any, body: any, clienteId: string
     
     const { medico_nome, servico_nome } = body;
     
-    // Buscar médicos ativos
+    // Buscar médicos ativos com convênios
     let query = supabase
       .from('medicos')
-      .select('id, nome, especialidade, ativo')
+      .select('id, nome, especialidade, convenios_aceitos, ativo')
       .eq('cliente_id', clienteId)
       .eq('ativo', true)
       .order('nome');
@@ -6110,17 +6110,33 @@ async function handleDoctorSchedules(supabase: any, body: any, clienteId: string
       
       if (servicosProcessados.length === 0) continue;
       
+      // Processar convênios do médico
+      const conveniosRaw = medico.convenios_aceitos || regras.convenios_aceitos || [];
+      const convenios = Array.isArray(conveniosRaw) ? conveniosRaw : [];
+      
+      // Formatar convênios para exibição
+      const formatarConvenios = (convs: string[]): string => {
+        if (!convs || convs.length === 0) return 'Não informado';
+        if (convs.length <= 3) return convs.join(', ');
+        return `${convs.slice(0, 3).join(', ')} e mais ${convs.length - 3}`;
+      };
+      
       medicosComHorarios.push({
         id: medico.id,
         nome: medico.nome,
         especialidade: especialidade,
         tipo_agendamento: tipoAgendamento,
+        convenios_aceitos: convenios,
+        convenios_texto: formatarConvenios(convenios),
         servicos: servicosProcessados
       });
       
       // Adicionar bloco para mensagem WhatsApp
       const icone = tipoAgendamento === 'ordem_chegada' ? '🏥' : '👨‍⚕️';
-      mensagensWhatsApp.push(`${icone} ${medico.nome}${especialidade ? ` (${especialidade})` : ''}\n${linhasServico.join('\n')}`);
+      const conveniosLinha = convenios.length > 0 
+        ? `\n   💳 Convênios: ${formatarConvenios(convenios)}`
+        : '';
+      mensagensWhatsApp.push(`${icone} ${medico.nome}${especialidade ? ` (${especialidade})` : ''}${conveniosLinha}\n${linhasServico.join('\n')}`);
     }
     
     // Montar mensagem WhatsApp final
