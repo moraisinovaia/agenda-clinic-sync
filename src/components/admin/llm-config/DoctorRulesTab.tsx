@@ -4,7 +4,20 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Edit, Trash2, Clock, Users, Calendar, Settings, Package, FileText, Ban, Timer } from 'lucide-react';
+import { Plus, Edit, Trash2, Clock, Users, Calendar, Settings, Package, FileText, Ban, Timer, Link2 } from 'lucide-react';
+
+// Helper para formatar dias da semana
+const DIAS_SEMANA_ABREV = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+const formatarDiasSemana = (diasEspecificos: number[] | undefined): string => {
+  if (!diasEspecificos || diasEspecificos.length === 0) return '';
+  // Se são todos os dias úteis (seg-sex)
+  const sorted = [...diasEspecificos].sort((a, b) => a - b);
+  if (sorted.length === 5 && sorted.join(',') === '1,2,3,4,5') {
+    return 'Seg-Sex';
+  }
+  return sorted.map(d => DIAS_SEMANA_ABREV[d]).join(', ');
+};
 import { BusinessRule } from '@/hooks/useLLMConfig';
 import { Label } from '@/components/ui/label';
 import { RuleEditDialog } from './RuleEditDialog';
@@ -182,18 +195,32 @@ export function DoctorRulesTab({ businessRules, medicos, saving, onSave, onDelet
                           <Badge variant={servico.permite_online !== false ? 'default' : 'destructive'}>
                             {servico.permite_online !== false ? 'WhatsApp/Online' : 'Apenas telefone'}
                           </Badge>
+                          {servico.compartilha_limite_com && (
+                            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">
+                              <Link2 className="h-3 w-3 mr-1" />
+                              Limite com: {servico.compartilha_limite_com}
+                            </Badge>
+                          )}
                         </div>
                       </div>
-                      {servico.permite_online && servico.periodos && (
+                      {servico.periodos && (
                         <div className="mt-2 text-sm text-muted-foreground grid gap-1">
                           {Object.entries(servico.periodos).map(([periodo, cfg]: [string, any]) => (
                             cfg.ativo && (
-                              <div key={periodo} className="flex items-center gap-2">
+                              <div key={periodo} className="flex items-center gap-2 flex-wrap">
                                 <Clock className="h-3 w-3" />
-                                <span className="capitalize">{periodo}:</span>
+                                <span className="capitalize font-medium">{periodo}:</span>
                                 <span>{cfg.inicio} - {cfg.fim}</span>
-                                <Users className="h-3 w-3 ml-2" />
-                                <span>Limite: {cfg.limite}</span>
+                                {cfg.dias_especificos && cfg.dias_especificos.length > 0 && (
+                                  <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
+                                    <Calendar className="h-3 w-3 mr-1" />
+                                    {formatarDiasSemana(cfg.dias_especificos)}
+                                  </Badge>
+                                )}
+                                <div className="flex items-center gap-1">
+                                  <Users className="h-3 w-3" />
+                                  <span>Limite: {cfg.limite ?? '∞'}</span>
+                                </div>
                                 {tipoEfetivo === 'estimativa_horario' && servico.intervalo_estimado && (
                                   <span className="text-amber-600">(~{servico.intervalo_estimado}min)</span>
                                 )}
