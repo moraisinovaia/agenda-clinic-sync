@@ -328,6 +328,7 @@ export function RuleEditDialog({
                 onChange={(cfg) => handleServiceChange(serviceName, cfg)}
                 onDelete={() => handleDeleteService(serviceName)}
                 tipoAgendamentoMedico={config.tipo_agendamento || 'ordem_chegada'}
+                outrosServicos={Object.keys(config.servicos || {}).filter(s => s !== serviceName)}
               />
             ))}
 

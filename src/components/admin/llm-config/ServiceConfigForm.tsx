@@ -63,6 +63,9 @@ interface ServiceConfig {
     [dia: number]: DayConfig;
   };
   usar_horario_por_dia?: boolean;
+  // Limite compartilhado
+  compartilha_limite_com?: string;
+  limite_proprio?: number;
 }
 
 interface ServiceConfigFormProps {
@@ -71,6 +74,7 @@ interface ServiceConfigFormProps {
   onChange: (config: ServiceConfig) => void;
   onDelete: () => void;
   tipoAgendamentoMedico: 'ordem_chegada' | 'hora_marcada';
+  outrosServicos?: string[];
 }
 
 const DEFAULT_PERIOD: DayPeriodConfig = {
@@ -85,7 +89,8 @@ export function ServiceConfigForm({
   config, 
   onChange, 
   onDelete,
-  tipoAgendamentoMedico 
+  tipoAgendamentoMedico,
+  outrosServicos = []
 }: ServiceConfigFormProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [selectedDayTab, setSelectedDayTab] = useState<string>('1'); // Segunda por padrão
@@ -298,6 +303,84 @@ export function ServiceConfigForm({
                 </div>
               )}
             </div>
+
+            {/* Limite Compartilhado */}
+            {outrosServicos.length > 0 && (
+              <div className="p-4 bg-muted/30 rounded-lg border space-y-4">
+                <div className="flex items-center gap-3">
+                  <Switch
+                    id={`compartilha-limite-${serviceName}`}
+                    checked={!!config.compartilha_limite_com}
+                    onCheckedChange={(checked) => {
+                      if (!checked) {
+                        handleChange('compartilha_limite_com', undefined);
+                        handleChange('limite_proprio', undefined);
+                      }
+                    }}
+                  />
+                  <Label htmlFor={`compartilha-limite-${serviceName}`} className="cursor-pointer">
+                    <span className="font-medium">🔗 Compartilhar limite com outro serviço</span>
+                    <p className="text-xs text-muted-foreground">
+                      Ex: Consulta e Retorno dividem o mesmo total de vagas
+                    </p>
+                  </Label>
+                </div>
+
+                {config.compartilha_limite_com !== undefined && (
+                  <div className="space-y-4 pl-4 border-l-2 border-primary/30">
+                    <div className="space-y-2">
+                      <Label className="text-sm">Compartilhar limite com:</Label>
+                      <Select 
+                        value={config.compartilha_limite_com || ''}
+                        onValueChange={(v) => handleChange('compartilha_limite_com', v)}
+                      >
+                        <SelectTrigger className="w-full max-w-xs">
+                          <SelectValue placeholder="Selecionar serviço" />
+                        </SelectTrigger>
+                        <SelectContent position="popper" onCloseAutoFocus={(e) => e.preventDefault()}>
+                          {outrosServicos.map(s => (
+                            <SelectItem key={s} value={s}>{s}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        O limite de vagas do período será dividido entre {serviceName} e o serviço selecionado.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <Switch
+                        id={`limite-proprio-${serviceName}`}
+                        checked={config.limite_proprio !== undefined && config.limite_proprio > 0}
+                        onCheckedChange={(checked) => {
+                          handleChange('limite_proprio', checked ? 5 : undefined);
+                        }}
+                      />
+                      <Label htmlFor={`limite-proprio-${serviceName}`} className="text-sm cursor-pointer">
+                        Definir sublimite para este serviço
+                      </Label>
+                    </div>
+
+                    {config.limite_proprio !== undefined && config.limite_proprio > 0 && (
+                      <div className="space-y-2">
+                        <Label className="text-sm">Máximo de vagas para {serviceName}:</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={50}
+                          value={config.limite_proprio}
+                          onChange={(e) => handleChange('limite_proprio', parseInt(e.target.value) || 5)}
+                          className="w-24"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Dentro do limite compartilhado total, no máximo {config.limite_proprio} vagas podem ser de {serviceName}.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Mensagem personalizada */}
             <div className="space-y-2">
