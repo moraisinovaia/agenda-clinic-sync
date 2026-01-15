@@ -1221,15 +1221,26 @@ async function buscarProximoHorarioLivre(
   medicoId: string,
   dataConsulta: string,
   horarioInicial: string, // ex: "08:00:00"
-  periodoConfig: { inicio: string, fim: string, limite: number, intervalo_minutos?: number }
+  periodoConfig: { inicio: string, fim: string, limite: number, intervalo_minutos?: number, contagem_inicio?: string, contagem_fim?: string }
 ): Promise<{ horario: string, tentativas: number } | null> {
   
   const [horaInicio, minInicio] = periodoConfig.inicio.split(':').map(Number);
   const [horaFim, minFim] = periodoConfig.fim.split(':').map(Number);
   
-  // Converter para minutos desde meia-noite
+  // Converter para minutos desde meia-noite (para exibição e alocação)
   const minutoInicio = horaInicio * 60 + minInicio;
   const minutoFim = horaFim * 60 + minFim;
+  
+  // 🆕 Usar contagem_inicio/contagem_fim se configurados, senão fallback para inicio/fim
+  const inicioContagem = periodoConfig.contagem_inicio || periodoConfig.inicio;
+  const fimContagem = periodoConfig.contagem_fim || periodoConfig.fim;
+  const [horaInicioContagem, minInicioContagem] = inicioContagem.split(':').map(Number);
+  const [horaFimContagem, minFimContagem] = fimContagem.split(':').map(Number);
+  const minutoInicioContagem = horaInicioContagem * 60 + minInicioContagem;
+  const minutoFimContagem = horaFimContagem * 60 + minFimContagem;
+  
+  console.log(`🔢 [CONTAGEM] Período exibição: ${periodoConfig.inicio}-${periodoConfig.fim}`);
+  console.log(`🔢 [CONTAGEM] Período contagem: ${inicioContagem}-${fimContagem}`);
   
   // Buscar TODOS os agendamentos do dia para esse médico
   const { data: agendamentosDia } = await supabase
@@ -1240,15 +1251,15 @@ async function buscarProximoHorarioLivre(
     .eq('cliente_id', clienteId)
     .in('status', ['agendado', 'confirmado']);
 
-  // 🆕 FILTRAR APENAS AGENDAMENTOS DO PERÍODO ESPECÍFICO
+  // 🆕 FILTRAR AGENDAMENTOS USANDO OS HORÁRIOS DE CONTAGEM
   const agendamentos = agendamentosDia?.filter(a => {
     const [h, m] = a.hora_agendamento.split(':').map(Number);
     const minutoAgendamento = h * 60 + m;
-    return minutoAgendamento >= minutoInicio && minutoAgendamento < minutoFim;
+    return minutoAgendamento >= minutoInicioContagem && minutoAgendamento < minutoFimContagem;
   }) || [];
 
   console.log(`📊 Agendamentos totais do dia: ${agendamentosDia?.length || 0}`);
-  console.log(`📊 Agendamentos do período (${periodoConfig.inicio}-${periodoConfig.fim}): ${agendamentos.length}/${periodoConfig.limite}`);
+  console.log(`📊 Agendamentos no período de contagem (${inicioContagem}-${fimContagem}): ${agendamentos.length}/${periodoConfig.limite}`);
 
   // Verificar se já atingiu o limite de vagas DO PERÍODO
   if (agendamentos.length >= periodoConfig.limite) {
@@ -2061,6 +2072,11 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
               if (servicoLocal.periodos && periodo && data_consulta) {
                 const configPeriodo = servicoLocal.periodos[periodo];
                 if (configPeriodo && configPeriodo.limite) {
+                  // 🆕 Usar contagem_inicio/contagem_fim se configurados, senão fallback
+                  const inicioContagem = configPeriodo.contagem_inicio || configPeriodo.inicio;
+                  const fimContagem = configPeriodo.contagem_fim || configPeriodo.fim;
+                  console.log(`🔢 [CONTAGEM] Validação - exibição: ${configPeriodo.inicio}-${configPeriodo.fim}, contagem: ${inicioContagem}-${fimContagem}`);
+                  
                   // 🆕 Filtrar apenas agendamentos do período específico (incluindo recentes)
                   const cincMinutosAtras = new Date(Date.now() - 5 * 60 * 1000).toISOString();
                   let query = supabase
@@ -2074,11 +2090,11 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
                     .in('status', ['agendado', 'confirmado'])
                     .gte('created_at', cincMinutosAtras); // Incluir agendamentos criados nos últimos 5min
                   
-                  // Filtrar por horário do período
-                  if (configPeriodo.inicio && configPeriodo.fim) {
+                  // 🆕 Filtrar por horário do período de CONTAGEM
+                  if (inicioContagem && fimContagem) {
                     query = query
-                      .gte('hora_agendamento', configPeriodo.inicio)
-                      .lt('hora_agendamento', configPeriodo.fim);
+                      .gte('hora_agendamento', inicioContagem)
+                      .lt('hora_agendamento', fimContagem);
                   }
                   
                   const { data: agendamentos, error: agendError } = await query;
@@ -2130,11 +2146,11 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
                             .in('status', ['agendado', 'confirmado'])
                             .gte('created_at', cincMinutosAtras); // Incluir agendamentos criados nos últimos 5min
                           
-                          // Filtrar por horário do período
-                          if (configPeriodo.inicio && configPeriodo.fim) {
+                          // 🆕 Filtrar por horário do período de CONTAGEM
+                          if (inicioContagem && fimContagem) {
                             queryFuturos = queryFuturos
-                              .gte('hora_agendamento', configPeriodo.inicio)
-                              .lt('hora_agendamento', configPeriodo.fim);
+                              .gte('hora_agendamento', inicioContagem)
+                              .lt('hora_agendamento', fimContagem);
                           }
                           
                           const { data: agendadosFuturos, error: errorFuturo } = await queryFuturos;
@@ -2662,6 +2678,16 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
           console.log(`⚠️ Não foi possível alocar após ${tentativas} tentativas. Verificando estado do período...`);
           
           // 🔍 VERIFICAR CONTAGEM REAL DE AGENDAMENTOS NO PERÍODO
+          // 🆕 Usar contagem_inicio/contagem_fim se configurados
+          const inicioContagemFinal = periodoConfig.contagem_inicio || periodoConfig.inicio;
+          const fimContagemFinal = periodoConfig.contagem_fim || periodoConfig.fim;
+          const [hInicioContagem, mInicioContagem] = inicioContagemFinal.split(':').map(Number);
+          const [hFimContagem, mFimContagem] = fimContagemFinal.split(':').map(Number);
+          const minInicioContagem = hInicioContagem * 60 + mInicioContagem;
+          const minFimContagem = hFimContagem * 60 + mFimContagem;
+          
+          console.log(`🔢 [CONTAGEM FINAL] Exibição: ${periodoConfig.inicio}-${periodoConfig.fim}, Contagem: ${inicioContagemFinal}-${fimContagemFinal}`);
+          
           const { data: agendamentosDoPeriodo } = await supabase
             .from('agendamentos')
             .select('hora_agendamento')
@@ -2673,7 +2699,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
           const agendamentosNoPeriodo = agendamentosDoPeriodo?.filter(a => {
             const [h, m] = a.hora_agendamento.split(':').map(Number);
             const minutoAgendamento = h * 60 + m;
-            return minutoAgendamento >= minutoInicio && minutoAgendamento < minutoFim;
+            return minutoAgendamento >= minInicioContagem && minutoAgendamento < minFimContagem;
           }) || [];
           
           const vagasOcupadas = agendamentosNoPeriodo.length;
@@ -4493,10 +4519,16 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       // Classificar agendamentos no período correto
       let vagasOcupadas = 0;
       if (agendamentos && agendamentos.length > 0) {
-        // 🛡️ Verificar se hora_inicio e hora_fim existem antes de processar
-        if ((config as any).hora_inicio && (config as any).hora_fim) {
-          const [horaInicio] = (config as any).hora_inicio.split(':').map(Number);
-          const [horaFim] = (config as any).hora_fim.split(':').map(Number);
+        // 🆕 Usar contagem_inicio/contagem_fim se configurados, senão hora_inicio/hora_fim
+        const horaInicioContagem = (config as any).contagem_inicio || (config as any).hora_inicio;
+        const horaFimContagem = (config as any).contagem_fim || (config as any).hora_fim;
+        
+        // 🛡️ Verificar se os campos existem antes de processar
+        if (horaInicioContagem && horaFimContagem) {
+          const [horaInicio] = horaInicioContagem.split(':').map(Number);
+          const [horaFim] = horaFimContagem.split(':').map(Number);
+          
+          console.log(`🔢 [CONTAGEM DISPONIBILIDADE] ${servicoKey}/${periodo}: contagem ${horaInicioContagem}-${horaFimContagem}`);
           
           vagasOcupadas = agendamentos.filter(ag => {
             const [horaAg] = ag.hora_agendamento.split(':').map(Number);
