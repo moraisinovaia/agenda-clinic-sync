@@ -22,8 +22,13 @@ export function DoctorRulesTab({ businessRules, medicos, saving, onSave, onDelet
   const [showDialog, setShowDialog] = useState(false);
   const [newMedicoId, setNewMedicoId] = useState('');
 
+  // Filtrar apenas regras de médicos que pertencem à clínica atual
+  const validBusinessRules = businessRules.filter(rule => 
+    medicos.some(m => m.id === rule.medico_id)
+  );
+
   // Médicos sem regra definida
-  const medicosWithoutRules = medicos.filter(m => !businessRules.find(r => r.medico_id === m.id));
+  const medicosWithoutRules = medicos.filter(m => !validBusinessRules.find(r => r.medico_id === m.id));
 
   const handleEditRule = (rule: BusinessRule) => {
     setEditingRule(rule);
