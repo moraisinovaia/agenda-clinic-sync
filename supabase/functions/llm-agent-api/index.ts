@@ -2639,7 +2639,9 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
               paciente_id: resultadoFinal.paciente_id,
               data: data_consulta,
               medico: medico.nome,
-              atendimento: atendimento_nome || 'Consulta'
+              atendimento: atendimento_nome || 'Consulta',
+              validado: true,
+              confirmacao_criado: true
             });
           }
           
@@ -2774,7 +2776,9 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
       paciente_id: result.paciente_id,
       medico: medico.nome,
       data: data_consulta,
-      hora: hora_consulta
+      hora: hora_consulta,
+      validado: true,
+      confirmacao_criado: true
     });
 
   } catch (error: any) {
@@ -3353,7 +3357,8 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
       data_anterior: agendamento.data_agendamento,
       hora_anterior: agendamento.hora_agendamento,
       nova_data,
-      nova_hora
+      nova_hora,
+      validado: true
     });
 
   } catch (error: any) {
@@ -3421,7 +3426,8 @@ async function handleCancel(supabase: any, body: any, clienteId: string, config:
       medico: agendamento.medicos?.nome,
       data: agendamento.data_agendamento,
       hora: agendamento.hora_agendamento,
-      motivo
+      motivo,
+      validado: true
     });
 
   } catch (error: any) {
@@ -3473,7 +3479,8 @@ async function handleConfirm(supabase: any, body: any, clienteId: string, config
         medico: agendamento.medicos?.nome,
         data: agendamento.data_agendamento,
         hora: agendamento.hora_agendamento,
-        already_confirmed: true
+        already_confirmed: true,
+        validado: true
       });
     }
 
@@ -3521,7 +3528,8 @@ async function handleConfirm(supabase: any, body: any, clienteId: string, config
       data: agendamento.data_agendamento,
       hora: agendamento.hora_agendamento,
       status: 'confirmado',
-      confirmado_em: new Date().toISOString()
+      confirmado_em: new Date().toISOString(),
+      validado: true
     });
 
   } catch (error) {
