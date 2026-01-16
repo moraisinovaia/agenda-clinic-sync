@@ -730,84 +730,84 @@ export function DoctorSchedule({
                             
                             return (
                             <TableRow key={appointment.id} className="hover:bg-muted/20">
-                              <TableCell className="w-[120px] py-1 px-2 print:text-[9px]">
+                              <TableCell className="w-[140px] py-2 px-2 print:text-[9px]">
                                 <div className="flex items-center gap-2">
-                                  <Badge className={`text-[9px] px-1 py-0 w-fit leading-none ${getStatusColor(appointment.status)}`}>
+                                  <Badge className={`text-xs px-1.5 py-0.5 w-fit ${getStatusColor(appointment.status)}`}>
                                     {getStatusLabel(appointment.status)}
                                   </Badge>
-                                  <div className="font-mono text-[10px] print:text-[10px] font-medium leading-none">
+                                  <div className="font-mono text-sm print:text-[10px] font-medium">
                                     {appointment.hora_agendamento}
                                   </div>
                                 </div>
                               </TableCell>
                               
-                              <TableCell className="w-[180px] py-1 px-2 print:text-[9px]">
-                                <div className="leading-none">
-                                  <div className="text-[10px] font-medium leading-none">
+                              <TableCell className="w-[200px] py-2 px-2 print:text-[9px]">
+                                <div>
+                                  <div className="text-sm font-medium">
                                     {appointment.pacientes?.nome_completo || 'Paciente não encontrado'}
                                     {patientAge && (
-                                      <span className="ml-1 text-[9px] text-muted-foreground">
+                                      <span className="ml-1 text-xs text-muted-foreground">
                                         ({patientAge})
                                       </span>
                                     )}
                                   </div>
                                   {appointment.observacoes && (
-                                    <div className="text-[9px] text-muted-foreground truncate mt-0.5 leading-none">
+                                    <div className="text-xs text-muted-foreground truncate mt-0.5">
                                       {appointment.observacoes}
                                     </div>
                                   )}
                                 </div>
                               </TableCell>
                               
-                              <TableCell className="w-[120px] text-[9px] py-1 px-2 leading-none print:text-[7px]">
+                              <TableCell className="w-[130px] text-xs py-2 px-2 print:text-[7px]">
                                 {appointment.pacientes?.telefone || appointment.pacientes?.celular || 'N/A'}
                               </TableCell>
                               
-                              <TableCell className="w-[100px] py-1 px-2 print:text-[7px]">
-                                <Badge variant="outline" className="text-[9px] px-1 py-0 leading-none print:text-[7px]">
+                              <TableCell className="w-[110px] py-2 px-2 print:text-[7px]">
+                                <Badge variant="outline" className="text-xs px-1.5 py-0.5 print:text-[7px]">
                                   {appointment.pacientes?.convenio || 'N/A'}
                                 </Badge>
                               </TableCell>
                               
-                              <TableCell className="w-[120px] text-[9px] text-muted-foreground py-1 px-2 leading-none print:text-[7px]">
+                              <TableCell className="w-[130px] text-xs text-muted-foreground py-2 px-2 print:text-[7px]">
                                 {appointment.atendimentos?.nome || 'Consulta'}
                               </TableCell>
                               
-                              <TableCell className="w-[120px] text-[9px] py-1 px-2 leading-none print:text-[7px]">
-                                <div className="leading-none">
-                                  <div className="leading-none">
+                              <TableCell className="w-[130px] text-xs py-2 px-2 print:text-[7px]">
+                                <div>
+                                  <div>
                                     {safeFormatDate(appointment.created_at)}
                                   </div>
-                                  <div className="text-muted-foreground text-[8px] leading-none mt-0.5">
+                                  <div className="text-muted-foreground text-[11px] mt-0.5">
                                     {appointment.criado_por_profile?.nome?.split(' ')[0] || appointment.criado_por?.split(' ')[0] || 'Sistema'}
                                   </div>
                                 </div>
                               </TableCell>
                               
-                              <TableCell className="w-[120px] text-[9px] py-1 px-2 leading-none print:text-[7px]">
-                                <div className="leading-none">
-                                  <div className="leading-none">
+                              <TableCell className="w-[130px] text-xs py-2 px-2 print:text-[7px]">
+                                <div>
+                                  <div>
                                     {safeFormatDate(appointment.updated_at)}
                                   </div>
                                   {appointment.alterado_por_profile?.nome && (
-                                    <div className="text-muted-foreground text-[8px] leading-none mt-0.5">
+                                    <div className="text-muted-foreground text-[11px] mt-0.5">
                                       {appointment.alterado_por_profile.nome.split(' ')[0]}
                                     </div>
                                   )}
                                 </div>
                               </TableCell>
                               
-                              <TableCell className="w-[100px] py-1 px-2 print:hidden">
-                                <div className="flex items-center justify-center gap-0.5">
+                              <TableCell className="w-[120px] py-2 px-2 print:hidden">
+                                <div className="flex items-center justify-center gap-1">
                                   {onEditAppointment && (
                                     <Button 
                                       variant="ghost" 
                                       size="sm"
                                       onClick={() => onEditAppointment(appointment)}
-                                      className="h-4 w-4 p-0"
+                                      className="h-7 w-7 p-0"
                                       title="Editar"
                                     >
-                                      <Edit className="h-2 w-2" />
+                                      <Edit className="h-3.5 w-3.5" />
                                     </Button>
                                   )}
                                   {appointment.status === 'agendado' && onConfirmAppointment && (
@@ -823,13 +823,13 @@ export function DoctorSchedule({
                                           setIsConfirming(false);
                                         }
                                       }}
-                                      className="h-4 w-4 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                      className="h-7 w-7 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
                                       title="Confirmar"
                                     >
                                       {isConfirming ? (
-                                        <Loader2 className="h-2 w-2 animate-spin" />
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                       ) : (
-                                        <CheckCircle className="h-2 w-2" />
+                                        <CheckCircle className="h-3.5 w-3.5" />
                                       )}
                                     </Button>
                                   )}
@@ -846,13 +846,13 @@ export function DoctorSchedule({
                                           setIsUnconfirming(false);
                                         }
                                       }}
-                                      className="h-4 w-4 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                      className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                                       title="Desconfirmar"
                                     >
                                       {isUnconfirming ? (
-                                        <Loader2 className="h-2 w-2 animate-spin" />
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                       ) : (
-                                        <RotateCcw className="h-2 w-2" />
+                                        <RotateCcw className="h-3.5 w-3.5" />
                                       )}
                                     </Button>
                                   )}
@@ -862,10 +862,10 @@ export function DoctorSchedule({
                                         <Button 
                                           variant="ghost" 
                                           size="sm"
-                                          className="h-4 w-4 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                          className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
                                           title="Cancelar"
                                         >
-                                          <Trash2 className="h-2 w-2" />
+                                          <Trash2 className="h-3.5 w-3.5" />
                                         </Button>
                                       </AlertDialogTrigger>
                                       <AlertDialogContent>
@@ -909,10 +909,10 @@ export function DoctorSchedule({
                                         <Button 
                                           variant="ghost" 
                                           size="sm"
-                                          className="h-4 w-4 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                          className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
                                           title="Excluir"
                                         >
-                                          <Trash2 className="h-2 w-2" />
+                                          <Trash2 className="h-3.5 w-3.5" />
                                         </Button>
                                       </AlertDialogTrigger>
                                       <AlertDialogContent>
