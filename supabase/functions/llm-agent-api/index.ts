@@ -2743,7 +2743,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
               // Buscar horários do período se disponível
               let periodoInfoLoop = '';
               if (periodoNomeLoop && periodoConfig) {
-                periodoInfoLoop = ` no período da ${periodoNomeLoop} (${periodoConfig.inicio.substring(0,5)} às ${periodoConfig.fim.substring(0,5)})`;
+                periodoInfoLoop = ` no período da ${periodoNomeLoop} (${getHorarioParaPaciente(periodoConfig)})`;
               } else if (periodoNomeLoop) {
                 periodoInfoLoop = ` no período da ${periodoNomeLoop}`;
               }
@@ -2895,7 +2895,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
               const [hFimM] = manha.fim.split(':').map(Number);
               if (hora >= hInicioM && hora < hFimM) {
                 periodoNomeConf = 'manhã';
-                periodoHorarioConf = `${manha.inicio.substring(0,5)} às ${manha.fim.substring(0,5)}`;
+                periodoHorarioConf = getHorarioParaPaciente(manha);
               }
             }
             if (!periodoNomeConf && servicoAtual.periodos.tarde) {
@@ -2904,7 +2904,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
               const [hFimT] = tarde.fim.split(':').map(Number);
               if (hora >= hInicioT && hora < hFimT) {
                 periodoNomeConf = 'tarde';
-                periodoHorarioConf = `${tarde.inicio.substring(0,5)} às ${tarde.fim.substring(0,5)}`;
+                periodoHorarioConf = getHorarioParaPaciente(tarde);
               }
             }
           }
