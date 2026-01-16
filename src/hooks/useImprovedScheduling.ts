@@ -88,11 +88,12 @@ export function useImprovedScheduling() {
     try {
       console.log('🔄 Editando agendamento:', appointmentId, formData);
 
-      // Buscar dados atuais do agendamento para comparar
+      // Buscar dados atuais do agendamento para comparar (incluindo status)
       const { data: currentAppointment } = await supabase
         .from('agendamentos')
         .select(`
           paciente_id,
+          status,
           pacientes!inner(nome_completo, data_nascimento, convenio, telefone, celular)
         `)
         .eq('id', appointmentId)
@@ -145,19 +146,28 @@ export function useImprovedScheduling() {
         }
       }
 
+      // Preparar dados de atualização
+      const updateData: Record<string, any> = {
+        paciente_id: pacienteId,
+        medico_id: formData.medicoId,
+        atendimento_id: formData.atendimentoId,
+        data_agendamento: formData.dataAgendamento,
+        hora_agendamento: formData.horaAgendamento,
+        convenio: formData.convenio.toUpperCase(),
+        observacoes: formData.observacoes?.toUpperCase() || null,
+        updated_at: new Date().toISOString()
+      };
+
+      // Se estava cancelado por bloqueio, restaurar para agendado
+      if (currentAppointment.status === 'cancelado_bloqueio') {
+        updateData.status = 'agendado';
+        console.log('📤 Restaurando status de cancelado_bloqueio para agendado');
+      }
+
       // Atualizar o agendamento
       const { error: updateError } = await supabase
         .from('agendamentos')
-        .update({
-          paciente_id: pacienteId,
-          medico_id: formData.medicoId,
-          atendimento_id: formData.atendimentoId,
-          data_agendamento: formData.dataAgendamento,
-          hora_agendamento: formData.horaAgendamento,
-          convenio: formData.convenio.toUpperCase(),
-          observacoes: formData.observacoes?.toUpperCase() || null,
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', appointmentId);
 
       if (updateError) {
