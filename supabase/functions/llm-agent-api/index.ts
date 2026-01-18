@@ -2134,6 +2134,29 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
     // ===== VALIDAÇÕES DE REGRAS DE NEGÓCIO (APENAS PARA N8N) =====
     const regras = getMedicoRules(config, medico.id, BUSINESS_RULES.medicos[medico.id]);
     console.log(`📋 Regras encontradas para médico ID ${medico.id}: ${regras ? 'SIM' : 'NÃO'}`);
+
+    // 🆕 MAPEAMENTO DE AGENDA DEDICADA (handleSchedule)
+    // Verifica se o serviço tem agenda virtual separada (ex: "Teste Ergométrico - Dr. Marcelo")
+    let medicoIdParaQueries = medico.id;
+    let nomeAgendaDedicada: string | null = null;
+
+    if (atendimento_nome) {
+      console.log(`🔍 [SCHEDULE-AGENDA-DEDICADA] Verificando se "${atendimento_nome}" tem agenda separada...`);
+      const agendaDedicada = await buscarAgendaDedicada(
+        supabase, 
+        medico.nome, 
+        atendimento_nome, 
+        clienteId
+      );
+      
+      if (agendaDedicada) {
+        medicoIdParaQueries = agendaDedicada.id;
+        nomeAgendaDedicada = agendaDedicada.nome;
+        console.log(`✅ [SCHEDULE-AGENDA-DEDICADA] Usando agenda "${agendaDedicada.nome}" (ID: ${agendaDedicada.id}) para queries de agendamento`);
+      } else {
+        console.log(`ℹ️ [SCHEDULE-AGENDA-DEDICADA] Nenhuma agenda dedicada encontrada, usando agenda principal`);
+      }
+    }
     
     if (regras) {
       console.log(`✅ Regras válidas para ${regras.nome}`);
@@ -2238,7 +2261,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
                 const resultadoLimites = await verificarLimitesCompartilhados(
                   supabase,
                   clienteId,
-                  medico.id,
+                  medicoIdParaQueries, // 🆕 Usar agenda dedicada se existir
                   data_consulta,
                   servicoKeyValidacao,
                   servicoLocal,
@@ -2268,7 +2291,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
                     const vagasDisponiveis = await calcularVagasDisponiveisComLimites(
                       supabase,
                       clienteId,
-                      medico.id,
+                      medicoIdParaQueries, // 🆕 Usar agenda dedicada se existir
                       dataFuturaStr,
                       servicoKeyValidacao,
                       servicoLocal,
@@ -2386,7 +2409,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
                   let query = supabase
                     .from('agendamentos')
                     .select('id, hora_agendamento, created_at')
-                    .eq('medico_id', medico.id)
+                    .eq('medico_id', medicoIdParaQueries) // 🆕 Usar agenda dedicada se existir
                     .eq('data_agendamento', data_consulta)
                     .eq('cliente_id', clienteId)
                     .is('excluido_em', null)
@@ -2439,16 +2462,16 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
                           
                           // ✅ Buscar agendamentos do período específico (incluindo recentes)
                           const cincMinutosAtras = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-                          let queryFuturos = supabase
-                            .from('agendamentos')
-                            .select('id, atendimento_id, hora_agendamento, created_at')
-                            .eq('medico_id', medico.id)
-                            .eq('data_agendamento', dataFuturaStr)
-                            .eq('cliente_id', clienteId)
-                            .is('excluido_em', null)
-                            .is('cancelado_em', null)
-                            .in('status', ['agendado', 'confirmado'])
-                            .gte('created_at', cincMinutosAtras); // Incluir agendamentos criados nos últimos 5min
+                  let queryFuturos = supabase
+                    .from('agendamentos')
+                    .select('id, atendimento_id, hora_agendamento, created_at')
+                    .eq('medico_id', medicoIdParaQueries) // 🆕 Usar agenda dedicada se existir
+                    .eq('data_agendamento', dataFuturaStr)
+                    .eq('cliente_id', clienteId)
+                    .is('excluido_em', null)
+                    .is('cancelado_em', null)
+                    .in('status', ['agendado', 'confirmado'])
+                    .gte('created_at', cincMinutosAtras); // Incluir agendamentos criados nos últimos 5min
                           
                           // 🆕 Filtrar por horário do período de CONTAGEM
                           if (inicioContagem && fimContagem) {
@@ -2701,7 +2724,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
                 const { count } = await supabase
                   .from('agendamentos')
                   .select('*', { count: 'exact', head: true })
-                  .eq('medico_id', medico.id)
+                  .eq('medico_id', medicoIdParaQueries) // 🆕 Usar agenda dedicada se existir
                   .eq('data_agendamento', data_consulta)
                   .eq('hora_agendamento', horarioTeste)
                   .eq('cliente_id', clienteId)
@@ -2741,16 +2764,16 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
                 const m = horaAtual % 60;
                 const horarioTeste = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:00`;
                 
-                // Verificar se este horário está disponível
-                const { count } = await supabase
-                  .from('agendamentos')
-                  .select('*', { count: 'exact', head: true })
-                  .eq('medico_id', medico.id)
-                  .eq('data_agendamento', data_consulta)
-                  .eq('hora_agendamento', horarioTeste)
-                  .eq('cliente_id', clienteId)
-                  .is('excluido_em', null)
-                  .in('status', ['agendado', 'confirmado']);
+              // Verificar se este horário está disponível
+              const { count } = await supabase
+                .from('agendamentos')
+                .select('*', { count: 'exact', head: true })
+                .eq('medico_id', medicoIdParaQueries) // 🆕 Usar agenda dedicada se existir
+                .eq('data_agendamento', data_consulta)
+                .eq('hora_agendamento', horarioTeste)
+                .eq('cliente_id', clienteId)
+                .is('excluido_em', null)
+                .in('status', ['agendado', 'confirmado']);
                 
                 if (count === 0) {
                   console.log(`✅ Primeiro horário livre encontrado: ${horarioTeste}`);
@@ -2802,7 +2825,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
         p_convenio: formatarConvenioParaBanco(convenio), // ✅ Formatar para padrão do banco
         p_telefone: telefone || null,
         p_celular: celular,
-        p_medico_id: medico.id,
+        p_medico_id: medicoIdParaQueries, // 🆕 Usar agenda dedicada se existir
         p_atendimento_id: atendimento_id,
         p_data_agendamento: data_consulta,
         p_hora_agendamento: horarioFinal, // 🆕 Usar horário convertido
@@ -2874,7 +2897,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
               p_convenio: formatarConvenioParaBanco(convenio),
               p_telefone: telefone || null,
               p_celular: celular,
-              p_medico_id: medico.id,
+              p_medico_id: medicoIdParaQueries, // 🆕 Usar agenda dedicada se existir
               p_atendimento_id: atendimento_id,
               p_data_agendamento: data_consulta,
               p_hora_inicio_periodo: inicioContagem,
