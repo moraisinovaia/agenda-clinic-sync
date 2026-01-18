@@ -663,7 +663,8 @@ async function calcularVagasDisponiveisComLimites(
 const FALLBACK_MINIMUM_BOOKING_DATE = '2026-01-01';
 const FALLBACK_PHONE = ''; // Vazio para forçar uso de mensagem genérica
 const FALLBACK_DIAS_BUSCA_INICIAL = 14;
-const FALLBACK_DIAS_BUSCA_EXPANDIDA = 45;
+const FALLBACK_DIAS_BUSCA_EXPANDIDA = 50;
+const MAX_DATAS_RETORNO = 5;
 
 /**
  * Retorna data mínima de agendamento (dinâmica ou fallback)
@@ -5087,12 +5088,203 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         }
       }
 
-      console.log(`📊 Estatísticas da busca:
+      console.log(`📊 Estatísticas da busca inicial (${dias_busca} dias):
         - Datas verificadas: ${datasVerificadas}
         - Puladas (dia da semana): ${datasPuladasDiaSemana}
         - Puladas (bloqueio): ${datasPuladasBloqueio}
         - Sem vagas: ${datasSemVagas}
         - Datas disponíveis encontradas: ${proximasDatas.length}`);
+
+      // 🔄 BUSCA PROGRESSIVA: Se não encontrou vagas suficientes em 14 dias, expandir para 50
+      if (proximasDatas.length < MAX_DATAS_RETORNO && dias_busca < FALLBACK_DIAS_BUSCA_EXPANDIDA) {
+        console.log(`⚠️ Apenas ${proximasDatas.length} data(s) em ${dias_busca} dias. Expandindo busca para ${FALLBACK_DIAS_BUSCA_EXPANDIDA} dias...`);
+        
+        // Continuar de onde parou (dia 15 em diante)
+        for (let i = dias_busca; i < FALLBACK_DIAS_BUSCA_EXPANDIDA; i++) {
+          const dataAtual = new Date(hoje);
+          dataAtual.setDate(dataAtual.getDate() + i);
+          
+          const dataFormatada = dataAtual.toISOString().split('T')[0];
+          const diaSemana = dataAtual.getDay();
+          datasVerificadas++;
+          
+          // Verificar se o médico atende neste dia
+          if (servico.dias_semana && !servico.dias_semana.includes(diaSemana)) {
+            datasPuladasDiaSemana++;
+            continue;
+          }
+
+          // 🔒 Verificar se a data está bloqueada
+          const { data: bloqueios, error: bloqueioError } = await supabase
+            .from('bloqueios_agenda')
+            .select('id, motivo')
+            .eq('medico_id', medico.id)
+            .lte('data_inicio', dataFormatada)
+            .gte('data_fim', dataFormatada)
+            .eq('status', 'ativo')
+            .eq('cliente_id', clienteId);
+
+          if (!bloqueioError && bloqueios && bloqueios.length > 0) {
+            console.log(`⛔ [EXPANDIDA] Data ${dataFormatada} bloqueada:`, bloqueios[0].motivo);
+            datasPuladasBloqueio++;
+            continue;
+          }
+
+          // Verificar disponibilidade para esta data
+          const periodosDisponiveis: any[] = [];
+          
+          // 🔧 CORREÇÃO: Serviços sem periodos próprios que compartilham limite
+          const servicoSemPeriodos = !servico.periodos || Object.keys(servico.periodos).length === 0;
+          const compartilhaLimite = servico.compartilha_limite_com;
+          const ehHoraMarcada = (servico.tipo_agendamento === 'hora_marcada' || servico.tipo === 'procedimento');
+          
+          if (servicoSemPeriodos && compartilhaLimite) {
+            let atendimentoId: string | null = servico.atendimento_id || null;
+            if (!atendimentoId) {
+              const { data: atendData } = await supabase
+                .from('atendimentos')
+                .select('id')
+                .eq('medico_id', medico.id)
+                .eq('cliente_id', clienteId)
+                .eq('ativo', true)
+                .ilike('nome', `%${servicoKey.replace(/_/g, '%')}%`)
+                .maybeSingle();
+              atendimentoId = atendData?.id || null;
+            }
+            
+            const servicoConfigComAtendId = { ...servico, atendimento_id: atendimentoId };
+            const vagasDisponiveis = await calcularVagasDisponiveisComLimites(
+              supabase,
+              medico.id,
+              clienteId,
+              dataFormatada,
+              servicoConfigComAtendId,
+              regras
+            );
+            
+            if (vagasDisponiveis > 0) {
+              if (ehHoraMarcada) {
+                const { data: horariosVazios } = await supabase
+                  .from('horarios_vazios')
+                  .select('hora')
+                  .eq('medico_id', medico.id)
+                  .eq('cliente_id', clienteId)
+                  .eq('data', dataFormatada)
+                  .eq('status', 'disponivel')
+                  .order('hora', { ascending: true });
+                
+                if (horariosVazios && horariosVazios.length > 0) {
+                  const { data: agendamentosExistentes } = await supabase
+                    .from('agendamentos')
+                    .select('hora_agendamento')
+                    .eq('medico_id', medico.id)
+                    .eq('data_agendamento', dataFormatada)
+                    .eq('cliente_id', clienteId)
+                    .is('excluido_em', null)
+                    .in('status', ['agendado', 'confirmado']);
+                  
+                  const horariosOcupados = new Set(agendamentosExistentes?.map(a => a.hora_agendamento) || []);
+                  const horariosLivres = horariosVazios.filter(h => {
+                    const horaFormatada = h.hora.includes(':') ? h.hora : `${h.hora}:00:00`;
+                    return !horariosOcupados.has(horaFormatada);
+                  });
+                  
+                  if (horariosLivres.length > 0) {
+                    const primeiroHorario = horariosLivres[0].hora;
+                    const [horaH] = primeiroHorario.split(':').map(Number);
+                    const periodoNome = horaH < 12 ? 'Manhã' : 'Tarde';
+                    
+                    periodosDisponiveis.push({
+                      periodo: periodoNome,
+                      horario_distribuicao: `${horariosLivres.length} horário(s) específico(s) disponível(is)`,
+                      vagas_disponiveis: Math.min(vagasDisponiveis, horariosLivres.length),
+                      total_vagas: servico.limite_proprio || vagasDisponiveis,
+                      horarios: horariosLivres.map(h => h.hora)
+                    });
+                  }
+                }
+              } else {
+                periodosDisponiveis.push({
+                  periodo: 'Disponível',
+                  horario_distribuicao: 'Conforme disponibilidade',
+                  vagas_disponiveis: vagasDisponiveis,
+                  total_vagas: servico.limite_proprio || vagasDisponiveis
+                });
+              }
+            }
+          } else if (servicoSemPeriodos) {
+            datasSemVagas++;
+            continue;
+          }
+          
+          // Loop normal para serviços COM periodos definidos
+          if (servico.periodos && Object.keys(servico.periodos).length > 0) {
+            for (const [periodo, config] of Object.entries(servico.periodos)) {
+              if (periodoPreferido === 'tarde' && periodo === 'manha') continue;
+              if (periodoPreferido === 'manha' && periodo === 'tarde') continue;
+              
+              if ((config as any).dias_especificos && !(config as any).dias_especificos.includes(diaSemana)) {
+                continue;
+              }
+
+              const { data: todosAgendamentos } = await supabase
+                .from('agendamentos')
+                .select('hora_agendamento')
+                .eq('medico_id', medico.id)
+                .eq('data_agendamento', dataFormatada)
+                .eq('cliente_id', clienteId)
+                .is('excluido_em', null)
+                .in('status', ['agendado', 'confirmado']);
+
+              let vagasOcupadas = 0;
+              if (todosAgendamentos && todosAgendamentos.length > 0) {
+                vagasOcupadas = todosAgendamentos.filter(ag => {
+                  const periodoClassificado = classificarPeriodoAgendamento(
+                    ag.hora_agendamento, 
+                    { [periodo]: config }
+                  );
+                  return periodoClassificado === periodo;
+                }).length;
+              }
+
+              const vagasDisponiveis = (config as any).limite - vagasOcupadas;
+
+              if (vagasDisponiveis > 0) {
+                periodosDisponiveis.push({
+                  periodo: periodo === 'manha' ? 'Manhã' : 'Tarde',
+                  horario_distribuicao: getHorarioParaPaciente(config),
+                  vagas_disponiveis: vagasDisponiveis,
+                  total_vagas: (config as any).limite
+                });
+              }
+            }
+          }
+
+          // Se encontrou períodos disponíveis nesta data, adicionar
+          if (periodosDisponiveis.length > 0) {
+            const diasSemana = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+            proximasDatas.push({
+              data: dataFormatada,
+              dia_semana: diasSemana[diaSemana],
+              periodos: periodosDisponiveis
+            });
+            
+            console.log(`✅ [EXPANDIDA] Data disponível encontrada: ${dataFormatada} (${diasSemana[diaSemana]})`);
+            
+            // Limitar a 5 datas
+            if (proximasDatas.length >= MAX_DATAS_RETORNO) break;
+          } else {
+            datasSemVagas++;
+          }
+        }
+        
+        console.log(`📊 Estatísticas da busca EXPANDIDA (${FALLBACK_DIAS_BUSCA_EXPANDIDA} dias total):
+          - Datas verificadas: ${datasVerificadas}
+          - Puladas (dia da semana): ${datasPuladasDiaSemana}
+          - Puladas (bloqueio): ${datasPuladasBloqueio}
+          - Sem vagas: ${datasSemVagas}
+          - Datas disponíveis encontradas: ${proximasDatas.length}`);
+      }
 
       // ✅ Validação: verificar total de vagas
       if (proximasDatas.length > 0) {
@@ -5111,11 +5303,11 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       if (proximasDatas.length === 0) {
         return businessErrorResponse({
           codigo_erro: 'SEM_VAGAS_DISPONIVEIS',
-          mensagem_usuario: `😔 Não encontrei vagas disponíveis para ${medico.nome} - ${servicoKey} nos próximos ${dias_busca} dias.\n\n📞 Sugestões:\n   • Ligue para ${getClinicPhone(config)} para verificar outras opções\n   • Entre na fila de espera\n   • Consulte disponibilidade em outras especialidades`,
+          mensagem_usuario: `😔 Não encontrei vagas disponíveis para ${medico.nome} - ${servicoKey} nos próximos ${FALLBACK_DIAS_BUSCA_EXPANDIDA} dias.\n\n📞 Sugestões:\n   • Ligue para ${getClinicPhone(config)} para verificar outras opções\n   • Entre na fila de espera\n   • Consulte disponibilidade em outras especialidades`,
           detalhes: {
             medico: medico.nome,
             servico: servicoKey,
-            dias_buscados: dias_busca,
+            dias_buscados: FALLBACK_DIAS_BUSCA_EXPANDIDA,
             periodo_solicitado: periodoPreferido || 'qualquer'
           }
         });
