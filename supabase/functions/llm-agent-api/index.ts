@@ -6129,6 +6129,11 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
     if (periodosDisponiveis.length === 0) {
       console.log(`❌ Nenhum período disponível para ${data_consulta}. Buscando alternativas...`);
       
+      // 🆕 Determinar tipo de agendamento ANTES de buscar próximas datas
+      const tipoEfetivoProxDatas = getTipoAgendamentoEfetivo(servico, regras);
+      const ehOrdemChegadaProxDatas = isOrdemChegada(tipoEfetivoProxDatas);
+      console.log(`📋 [PRÓXIMAS DATAS] Tipo efetivo: ${tipoEfetivoProxDatas}, É ordem de chegada: ${ehOrdemChegadaProxDatas}`);
+      
       // 🔍 Buscar próximas datas disponíveis mantendo período preferido
       const proximasDatas = await buscarProximasDatasDisponiveis(
         supabase,
@@ -6141,6 +6146,30 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         60, // Buscar nos próximos 60 dias
         5   // Máximo 5 sugestões
       );
+      
+      // 🆕 Enriquecer próximas datas com informações de ordem de chegada
+      const proximasDatasEnriquecidas = proximasDatas.map(d => {
+        const baseData: any = {
+          ...d,
+          tipo: ehOrdemChegadaProxDatas ? 'ordem_chegada' : 'hora_marcada'
+        };
+        
+        if (ehOrdemChegadaProxDatas && servico?.periodos) {
+          // Buscar horário de distribuição baseado no período
+          const periodoKey = d.periodo?.toLowerCase() === 'manhã' ? 'manha' : 
+                             d.periodo?.toLowerCase() === 'tarde' ? 'tarde' : 'manha';
+          const periodoConfig = servico.periodos[periodoKey];
+          
+          if (periodoConfig) {
+            baseData.horario_distribuicao = (periodoConfig as any).distribuicao_fichas || 
+              `${(periodoConfig as any).inicio || '08:00'} às ${(periodoConfig as any).fim || '12:00'}`;
+            baseData.atendimento_inicio = (periodoConfig as any).atendimento_inicio;
+            baseData.instrucao = `Comparecer ${baseData.horario_distribuicao} para retirar ficha`;
+          }
+        }
+        
+        return baseData;
+      });
       
       // 🎯 Montar mensagem contextualizada
       const periodoTexto = periodoPreferido === 'manha' ? 'Manhã' : 
@@ -6155,7 +6184,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       
       mensagem += ` na data ${data_consulta}.\n\n`;
       
-      if (proximasDatas.length > 0) {
+      if (proximasDatasEnriquecidas.length > 0) {
         mensagem += `✅ Próximas datas disponíveis`;
         
         if (periodoTexto) {
@@ -6164,11 +6193,23 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         
         mensagem += `:\n\n`;
         
-        proximasDatas.forEach(d => {
-          mensagem += `📅 ${d.data} (${d.dia_semana}) - ${d.periodo || ''} - ${d.vagas_disponiveis} vaga(s)\n`;
+        proximasDatasEnriquecidas.forEach(d => {
+          let linhaData = `📅 ${d.data} (${d.dia_semana}) - ${d.periodo || ''} - ${d.vagas_disponiveis} vaga(s)`;
+          if (ehOrdemChegadaProxDatas && d.horario_distribuicao) {
+            linhaData += `\n   🕐 Ficha: ${d.horario_distribuicao}`;
+            if (d.atendimento_inicio) {
+              linhaData += ` | Atendimento: ${d.atendimento_inicio}`;
+            }
+          }
+          mensagem += linhaData + '\n';
         });
         
-        mensagem += `\n💡 Gostaria de agendar em uma destas datas?`;
+        // 🆕 Adicionar aviso de ordem de chegada
+        if (ehOrdemChegadaProxDatas) {
+          mensagem += `\n⚠️ ORDEM DE CHEGADA: Compareça no horário indicado para pegar ficha.`;
+        }
+        
+        mensagem += `\n\n💡 Gostaria de agendar em uma destas datas?`;
       } else {
         mensagem += `⚠️ Não encontramos vagas`;
         
@@ -6182,15 +6223,16 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         mensagem += `   • Opções: Fila de espera ou outros períodos`;
       }
       
-      // ✅ Retornar resposta estruturada (status 200)
-      return successResponse({
+      // ✅ Retornar resposta estruturada (status 200) com informações de ordem de chegada
+      const respostaProxDatas: any = {
         disponivel: false,
         motivo: 'periodo_data_nao_disponivel',
+        tipo_agendamento: tipoEfetivoProxDatas, // 🆕 Incluir tipo de agendamento
         medico: medico.nome,
         servico: servicoKey,
         data_solicitada: data_consulta,
         periodo_solicitado: periodoPreferido,
-        proximas_datas: proximasDatas,
+        proximas_datas: proximasDatasEnriquecidas, // 🆕 Datas enriquecidas
         message: mensagem,
         contexto: {
           medico_id: medico.id,
@@ -6198,9 +6240,18 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           servico: atendimento_nome,
           data_original: data_consulta,
           periodo_preferido: periodoPreferido,
-          total_alternativas: proximasDatas.length
+          total_alternativas: proximasDatasEnriquecidas.length
         }
-      });
+      };
+      
+      // 🆕 Adicionar campos específicos de ordem de chegada
+      if (ehOrdemChegadaProxDatas) {
+        respostaProxDatas.aviso_ordem_chegada = '⚠️ Compareça no horário indicado para pegar ficha. Atendimento por ordem de chegada.';
+        respostaProxDatas.instrucoes = regras?.ordem_chegada_config?.mensagem || 
+          'Paciente deve comparecer no horário de distribuição de fichas para garantir atendimento.';
+      }
+      
+      return successResponse(respostaProxDatas);
     }
 
     // 🎯 RESPOSTA DIFERENCIADA POR TIPO DE ATENDIMENTO
@@ -6228,14 +6279,45 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           5
         );
         
+        // 🆕 Enriquecer próximas datas com informações de ordem de chegada
+        const proximasDatasEnriquecidas = proximasDatas.map(d => {
+          const baseData: any = {
+            ...d,
+            tipo: 'ordem_chegada'
+          };
+          
+          if (servico?.periodos) {
+            const periodoKey = d.periodo?.toLowerCase() === 'manhã' ? 'manha' : 
+                               d.periodo?.toLowerCase() === 'tarde' ? 'tarde' : 'manha';
+            const periodoConfig = servico.periodos[periodoKey];
+            
+            if (periodoConfig) {
+              baseData.horario_distribuicao = (periodoConfig as any).distribuicao_fichas || 
+                `${(periodoConfig as any).inicio || '08:00'} às ${(periodoConfig as any).fim || '12:00'}`;
+              baseData.atendimento_inicio = (periodoConfig as any).atendimento_inicio;
+              baseData.instrucao = `Comparecer ${baseData.horario_distribuicao} para retirar ficha`;
+            }
+          }
+          
+          return baseData;
+        });
+        
         let mensagem = `❌ Sem vagas disponíveis para ${medico.nome} em ${data_consulta}.\n\n`;
         
-        if (proximasDatas.length > 0) {
+        if (proximasDatasEnriquecidas.length > 0) {
           mensagem += `✅ Próximas datas disponíveis:\n\n`;
-          proximasDatas.forEach(d => {
-            mensagem += `📅 ${d.data} (${d.dia_semana}) - ${d.periodo} - ${d.vagas_disponiveis} vaga(s)\n`;
+          proximasDatasEnriquecidas.forEach(d => {
+            let linhaData = `📅 ${d.data} (${d.dia_semana}) - ${d.periodo} - ${d.vagas_disponiveis} vaga(s)`;
+            if (d.horario_distribuicao) {
+              linhaData += `\n   🕐 Ficha: ${d.horario_distribuicao}`;
+              if (d.atendimento_inicio) {
+                linhaData += ` | Atendimento: ${d.atendimento_inicio}`;
+              }
+            }
+            mensagem += linhaData + '\n';
           });
-          mensagem += `\n💡 Gostaria de agendar em uma destas datas?`;
+          mensagem += `\n⚠️ ORDEM DE CHEGADA: Compareça no horário indicado para pegar ficha.`;
+          mensagem += `\n\n💡 Gostaria de agendar em uma destas datas?`;
         } else {
           mensagem += `⚠️ Não encontramos vagas nos próximos 60 dias.\n`;
           mensagem += `Por favor, entre em contato com a clínica.`;
@@ -6244,11 +6326,14 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         return successResponse({
           disponivel: false,
           tipo_agendamento: TIPO_ORDEM_CHEGADA,
+          aviso_ordem_chegada: '⚠️ Compareça no horário indicado para pegar ficha. Atendimento por ordem de chegada.',
           medico: medico.nome,
           servico: servicoKey,
           data: data_consulta,
           periodos: periodosDisponiveis,
-          proximas_datas: proximasDatas,
+          proximas_datas: proximasDatasEnriquecidas,
+          instrucoes: regras?.ordem_chegada_config?.mensagem || 
+            'Paciente deve comparecer no horário de distribuição de fichas para garantir atendimento.',
           mensagem_whatsapp: mensagem,
           message: mensagem
         });
@@ -6341,14 +6426,21 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           5
         );
         
+        // 🆕 Enriquecer próximas datas com tipo
+        const proximasDatasEnriquecidas = proximasDatas.map(d => ({
+          ...d,
+          tipo: 'estimativa_horario'
+        }));
+        
         let mensagem = `❌ Sem horários disponíveis para ${medico.nome} em ${data_consulta}.\n\n`;
         
-        if (proximasDatas.length > 0) {
+        if (proximasDatasEnriquecidas.length > 0) {
           mensagem += `✅ Próximas datas disponíveis:\n\n`;
-          proximasDatas.forEach(d => {
+          proximasDatasEnriquecidas.forEach(d => {
             mensagem += `📅 ${d.data} (${d.dia_semana}) - ${d.periodo} - ${d.vagas_disponiveis} vaga(s)\n`;
           });
-          mensagem += `\n💡 Gostaria de agendar em uma destas datas?`;
+          mensagem += `\n⏰ ${mensagemEstimativa}`;
+          mensagem += `\n\n💡 Gostaria de agendar em uma destas datas?`;
         } else {
           mensagem += `⚠️ Não encontramos vagas nos próximos 60 dias.\n`;
           mensagem += `Por favor, entre em contato com a clínica.`;
@@ -6362,7 +6454,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           data: data_consulta,
           horarios_estimados: [],
           total: 0,
-          proximas_datas: proximasDatas,
+          proximas_datas: proximasDatasEnriquecidas,
           mensagem_estimativa: mensagemEstimativa,
           mensagem_whatsapp: mensagem,
           message: mensagem
@@ -6448,11 +6540,17 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           5
         );
         
+        // 🆕 Enriquecer próximas datas com tipo
+        const proximasDatasEnriquecidas = proximasDatas.map(d => ({
+          ...d,
+          tipo: 'hora_marcada'
+        }));
+        
         let mensagem = `❌ Sem horários disponíveis para ${medico.nome} em ${data_consulta}.\n\n`;
         
-        if (proximasDatas.length > 0) {
+        if (proximasDatasEnriquecidas.length > 0) {
           mensagem += `✅ Próximas datas disponíveis:\n\n`;
-          proximasDatas.forEach(d => {
+          proximasDatasEnriquecidas.forEach(d => {
             mensagem += `📅 ${d.data} (${d.dia_semana}) - ${d.periodo} - ${d.vagas_disponiveis} vaga(s)\n`;
           });
           mensagem += `\n💡 Gostaria de agendar em uma destas datas?`;
@@ -6469,7 +6567,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           data: data_consulta,
           horarios_disponiveis: [],
           total: 0,
-          proximas_datas: proximasDatas,
+          proximas_datas: proximasDatasEnriquecidas,
           mensagem_whatsapp: mensagem,
           message: mensagem
         });
