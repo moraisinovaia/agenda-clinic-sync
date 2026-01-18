@@ -1043,6 +1043,12 @@ function classificarPeriodoAgendamento(
   horaAgendamento: string,
   periodosConfig: any
 ): string | null {
+  // ✅ Validação de entrada - protege contra undefined/null
+  if (!horaAgendamento || typeof horaAgendamento !== 'string') {
+    console.warn('⚠️ hora_agendamento inválido em classificarPeriodoAgendamento:', horaAgendamento);
+    return null;
+  }
+  
   const [h, m] = horaAgendamento.split(':').map(Number);
   const minutos = h * 60 + m;
 
@@ -1231,6 +1237,16 @@ function montarMensagemConsulta(
  * Formata consulta com contexto de regras de negócio (períodos, ordem de chegada, etc)
  */
 function formatarConsultaComContexto(agendamento: any, config: DynamicConfig | null): any {
+  // ✅ Validar hora_agendamento antes de processar
+  if (!agendamento.hora_agendamento) {
+    console.warn('⚠️ Agendamento sem hora_agendamento:', agendamento.id);
+    return {
+      ...agendamento,
+      horario_formatado: 'Horário não definido',
+      mensagem: `Consulta agendada para ${formatarDataPorExtenso(agendamento.data_agendamento)}.`
+    };
+  }
+  
   // 1. Buscar regras do médico (dinâmico primeiro, fallback para hardcoded)
   const regras = getMedicoRules(config, agendamento.medico_id, BUSINESS_RULES.medicos[agendamento.medico_id]);
   
@@ -1839,6 +1855,11 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
     
     // Função simples para classificar período baseado na hora
     const classificarPeriodoSimples = (hora: string): string => {
+      // ✅ Validação de entrada
+      if (!hora || typeof hora !== 'string') {
+        console.warn('⚠️ Hora inválida em classificarPeriodoSimples:', hora);
+        return 'manha'; // Default seguro
+      }
       const [h] = hora.split(':').map(Number);
       return h < 12 ? 'manha' : 'tarde';
     };
@@ -3300,24 +3321,33 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string, c
     }
 
     // 📋 PASSO 3: Montar resposta com agendamentos futuros formatados contextualmente
-    const consultas = agendamentos.map((a: any) => {
-      const consultaBase = {
-        id: a.id,
-        paciente_nome: a.pacientes?.nome_completo,
-        medico_id: a.medico_id,
-        medico_nome: a.medicos?.nome,
-        especialidade: a.medicos?.especialidade,
-        atendimento_nome: a.atendimentos?.nome,
-        data_agendamento: a.data_agendamento,
-        hora_agendamento: a.hora_agendamento,
-        status: a.status,
-        convenio: a.pacientes?.convenio,
-        observacoes: a.observacoes
-      };
-      
-      // ✅ Aplicar formatação contextual com regras de negócio (passando config dinâmica)
-      return formatarConsultaComContexto(consultaBase, config);
-    });
+    // ✅ Filtrar agendamentos com dados válidos antes de processar
+    const consultas = agendamentos
+      .filter((a: any) => {
+        if (!a.hora_agendamento) {
+          console.warn('⚠️ Agendamento ignorado por falta de hora_agendamento:', a.id);
+          return false;
+        }
+        return true;
+      })
+      .map((a: any) => {
+        const consultaBase = {
+          id: a.id,
+          paciente_nome: a.pacientes?.nome_completo,
+          medico_id: a.medico_id,
+          medico_nome: a.medicos?.nome,
+          especialidade: a.medicos?.especialidade,
+          atendimento_nome: a.atendimentos?.nome,
+          data_agendamento: a.data_agendamento,
+          hora_agendamento: a.hora_agendamento,
+          status: a.status,
+          convenio: a.pacientes?.convenio,
+          observacoes: a.observacoes
+        };
+        
+        // ✅ Aplicar formatação contextual com regras de negócio (passando config dinâmica)
+        return formatarConsultaComContexto(consultaBase, config);
+      });
 
     // Construir mensagem geral com todas as consultas formatadas
     const mensagensConsultas = consultas.map((c, i) => 
