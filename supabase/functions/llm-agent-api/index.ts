@@ -2703,81 +2703,50 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
           }
         }
         
-        // Se encontrou período válido, fazer loop minuto a minuto
+        // Se encontrou período válido, usar função otimizada que verifica CONTAGEM de vagas
         if (periodoConfig) {
           console.log(`📋 Período detectado: ${nomePeriodo} (${periodoConfig.inicio}-${periodoConfig.fim}, limite: ${periodoConfig.limite})`);
           
-          // Calcular minutos do período
-          const [hInicio, minInicio] = periodoConfig.inicio.split(':').map(Number);
-          const [hFim, minFim] = periodoConfig.fim.split(':').map(Number);
-          const minutoInicio = hInicio * 60 + minInicio;
-          const minutoFim = hFim * 60 + minFim;
+          // 🆕 Usar contagem_inicio/contagem_fim se configurados
+          const inicioContagem = periodoConfig.contagem_inicio || periodoConfig.inicio;
+          const fimContagem = periodoConfig.contagem_fim || periodoConfig.fim;
           
-          console.log(`🔍 Iniciando busca de ${periodoConfig.inicio} até ${periodoConfig.fim} (${minutoFim - minutoInicio} minutos)`);
+          console.log(`🔢 [ORDEM CHEGADA] Contagem de vagas: ${inicioContagem}-${fimContagem}, Limite: ${periodoConfig.limite}`);
           
-          let tentativas = 0;
-          let horarioAlocado = null;
-          let resultadoFinal = null;
+          // ✅ NOVA LÓGICA: Usar função SQL que verifica contagem de vagas (1 chamada ao banco!)
+          const { data: resultadoOrdemChegada, error: erroOrdemChegada } = await supabase
+            .rpc('criar_agendamento_ordem_chegada', {
+              p_cliente_id: clienteId,
+              p_nome_completo: paciente_nome.toUpperCase(),
+              p_data_nascimento: data_nascimento,
+              p_convenio: formatarConvenioParaBanco(convenio),
+              p_telefone: telefone || null,
+              p_celular: celular,
+              p_medico_id: medico.id,
+              p_atendimento_id: atendimento_id,
+              p_data_agendamento: data_consulta,
+              p_hora_inicio_periodo: inicioContagem,
+              p_hora_fim_periodo: fimContagem,
+              p_limite_vagas: periodoConfig.limite,
+              p_observacoes: (observacoes || 'Agendamento via LLM Agent WhatsApp').toUpperCase(),
+              p_criado_por: 'LLM Agent WhatsApp'
+            });
           
-          // Loop minuto a minuto
-          for (let minutoAtual = minutoInicio; minutoAtual < minutoFim; minutoAtual++) {
-            tentativas++;
-            const hora = Math.floor(minutoAtual / 60);
-            const min = minutoAtual % 60;
-            const horarioTeste = `${String(hora).padStart(2, '0')}:${String(min).padStart(2, '0')}:00`;
-            
-            console.log(`🔁 Tentativa ${tentativas}: Testando ${horarioTeste}...`);
-            
-            // Tentar agendar neste minuto
-            const { data: tentativaResult, error: tentativaError } = await supabase
-              .rpc('criar_agendamento_atomico_externo', {
-                p_cliente_id: clienteId,
-                p_nome_completo: paciente_nome.toUpperCase(),
-                p_data_nascimento: data_nascimento,
-                p_convenio: formatarConvenioParaBanco(convenio), // ✅ Formatar para padrão do banco
-                p_telefone: telefone || null,
-                p_celular: celular,
-                p_medico_id: medico.id,
-                p_atendimento_id: atendimento_id,
-                p_data_agendamento: data_consulta,
-                p_hora_agendamento: horarioTeste,
-                p_observacoes: (observacoes || 'Agendamento via LLM Agent WhatsApp').toUpperCase(),
-                p_criado_por: 'LLM Agent WhatsApp',
-                p_force_conflict: false
-              });
-            
-            // Verificar resultado
-            if (tentativaError) {
-              console.error(`❌ Erro inesperado em ${horarioTeste}:`, tentativaError);
-              // Continuar tentando outros horários mesmo com erro
-              continue;
-            }
-            
-            if (tentativaResult?.success) {
-              // ✅ SUCESSO! Encontramos um horário livre
-              console.log(`✅ SUCESSO! Agendado em ${horarioTeste} após ${tentativas} tentativas`);
-              horarioAlocado = horarioTeste;
-              resultadoFinal = tentativaResult;
-              break;
-            }
-            
-            if (tentativaResult?.error === 'CONFLICT') {
-              // Horário ocupado, continuar para o próximo
-              console.log(`⏭️  ${horarioTeste} ocupado, tentando próximo...`);
-              continue;
-            }
-            
-            // Outro tipo de erro (idade, convênio, etc.) - parar o loop
-            console.error(`⚠️ Erro não-conflito em ${horarioTeste}:`, tentativaResult?.error);
+          // Verificar erro de execução
+          if (erroOrdemChegada) {
+            console.error(`❌ Erro ao executar criar_agendamento_ordem_chegada:`, erroOrdemChegada);
             return businessErrorResponse({
-              codigo_erro: tentativaResult?.error || 'ERRO_DESCONHECIDO',
-              mensagem_usuario: tentativaResult?.message || `Erro ao tentar agendar: ${tentativaResult?.error}`,
-              detalhes: { horario: horarioTeste }
+              codigo_erro: 'ERRO_BANCO',
+              mensagem_usuario: 'Erro interno ao processar agendamento. Por favor, tente novamente.',
+              detalhes: { erro: erroOrdemChegada.message }
             });
           }
           
-          // Verificar se conseguiu alocar
-          if (horarioAlocado && resultadoFinal) {
+          // Verificar resultado
+          if (resultadoOrdemChegada?.success) {
+            // ✅ SUCESSO!
+            console.log(`✅ SUCESSO! Agendado por ordem de chegada. Vagas: ${resultadoOrdemChegada.vagas_ocupadas}/${resultadoOrdemChegada.vagas_total}`);
+            
             // 🆕 Usar mensagens dinâmicas do banco
             let mensagem = `✅ Consulta agendada com sucesso para ${paciente_nome}`;
             
@@ -2791,16 +2760,12 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
               // Mensagem padrão genérica com período detalhado
               const dataFormatada = new Date(data_consulta + 'T00:00:00').toLocaleDateString('pt-BR');
               
-              // Determinar nome do período baseado no horário alocado
-              const [hAlocado] = horarioAlocado.split(':').map(Number);
-              let periodoNomeLoop = hAlocado >= 7 && hAlocado < 12 ? 'manhã' : hAlocado >= 13 && hAlocado < 18 ? 'tarde' : '';
-              
               // Buscar horários do período se disponível
               let periodoInfoLoop = '';
-              if (periodoNomeLoop && periodoConfig) {
-                periodoInfoLoop = ` no período da ${periodoNomeLoop} (${getHorarioParaPaciente(periodoConfig)})`;
-              } else if (periodoNomeLoop) {
-                periodoInfoLoop = ` no período da ${periodoNomeLoop}`;
+              if (nomePeriodo && periodoConfig) {
+                periodoInfoLoop = ` no período da ${nomePeriodo} (${getHorarioParaPaciente(periodoConfig)})`;
+              } else if (nomePeriodo) {
+                periodoInfoLoop = ` no período da ${nomePeriodo}`;
               }
               
               mensagem = `✅ Agendada para ${dataFormatada}${periodoInfoLoop}, por ordem de chegada.`;
@@ -2815,80 +2780,40 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
             
             return successResponse({
               message: mensagem,
-              agendamento_id: resultadoFinal.agendamento_id,
-              paciente_id: resultadoFinal.paciente_id,
+              agendamento_id: resultadoOrdemChegada.agendamento_id,
+              paciente_id: resultadoOrdemChegada.paciente_id,
               data: data_consulta,
               medico: medico.nome,
               atendimento: atendimento_nome || 'Consulta',
               validado: true,
-              confirmacao_criado: true
+              confirmacao_criado: true,
+              vagas_ocupadas: resultadoOrdemChegada.vagas_ocupadas,
+              vagas_total: resultadoOrdemChegada.vagas_total
             });
           }
           
-          // Se chegou aqui, não conseguiu alocar em nenhum minuto
-          console.log(`⚠️ Não foi possível alocar após ${tentativas} tentativas. Verificando estado do período...`);
-          
-          // 🔍 VERIFICAR CONTAGEM REAL DE AGENDAMENTOS NO PERÍODO
-          // 🆕 Usar contagem_inicio/contagem_fim se configurados
-          const inicioContagemFinal = periodoConfig.contagem_inicio || periodoConfig.inicio;
-          const fimContagemFinal = periodoConfig.contagem_fim || periodoConfig.fim;
-          const [hInicioContagem, mInicioContagem] = inicioContagemFinal.split(':').map(Number);
-          const [hFimContagem, mFimContagem] = fimContagemFinal.split(':').map(Number);
-          const minInicioContagem = hInicioContagem * 60 + mInicioContagem;
-          const minFimContagem = hFimContagem * 60 + mFimContagem;
-          
-          console.log(`🔢 [CONTAGEM FINAL] Exibição: ${periodoConfig.inicio}-${periodoConfig.fim}, Contagem: ${inicioContagemFinal}-${fimContagemFinal}`);
-          
-          const { data: agendamentosDoPeriodo } = await supabase
-            .from('agendamentos')
-            .select('hora_agendamento')
-            .eq('medico_id', medico.id)
-            .eq('data_agendamento', data_consulta)
-            .eq('cliente_id', clienteId)
-            .in('status', ['agendado', 'confirmado']);
-          
-          const agendamentosNoPeriodo = agendamentosDoPeriodo?.filter(a => {
-            const [h, m] = a.hora_agendamento.split(':').map(Number);
-            const minutoAgendamento = h * 60 + m;
-            return minutoAgendamento >= minInicioContagem && minutoAgendamento < minFimContagem;
-          }) || [];
-          
-          const vagasOcupadas = agendamentosNoPeriodo.length;
-          const vagasDisponiveis = periodoConfig.limite - vagasOcupadas;
-          
-          console.log(`📊 Estado final: ${vagasOcupadas}/${periodoConfig.limite} vagas ocupadas no período ${nomePeriodo}`);
-          
-          if (vagasDisponiveis <= 0) {
-            // Período realmente lotado
-            console.log(`❌ Período ${nomePeriodo} está completamente lotado`);
+          // Tratar erros específicos
+          if (resultadoOrdemChegada?.error === 'PERIODO_LOTADO') {
+            console.log(`❌ Período ${nomePeriodo} está completamente lotado: ${resultadoOrdemChegada.vagas_ocupadas}/${resultadoOrdemChegada.vagas_total}`);
             return businessErrorResponse({
               codigo_erro: 'PERIODO_LOTADO',
-              mensagem_usuario: `O período da ${nomePeriodo} está com todas as vagas ocupadas (${vagasOcupadas}/${periodoConfig.limite}). Por favor, escolha outro período ou outro dia.`,
+              mensagem_usuario: `O período da ${nomePeriodo} está com todas as vagas ocupadas (${resultadoOrdemChegada.vagas_ocupadas}/${resultadoOrdemChegada.vagas_total}). Por favor, escolha outro período ou outro dia.`,
               detalhes: {
                 periodo: nomePeriodo,
-                vagas_ocupadas: vagasOcupadas,
-                vagas_total: periodoConfig.limite,
-                data_solicitada: data_consulta,
-                tentativas_realizadas: tentativas
-              }
-            });
-          } else {
-            // Tem vagas mas nenhum minuto passou na função atômica
-            console.log(`⚠️ Período tem ${vagasDisponiveis} vaga(s) mas nenhum horário foi aceito pelo banco após ${tentativas} tentativas`);
-            return businessErrorResponse({
-              codigo_erro: 'ALOCACAO_FALHOU',
-              mensagem_usuario: `Não foi possível encontrar um horário disponível no período da ${nomePeriodo}. Foram testados ${tentativas} minutos, mas todos apresentaram conflitos. Por favor, tente outro período ou entre em contato.`,
-              detalhes: {
-                periodo: nomePeriodo,
-                vagas_disponiveis: vagasDisponiveis,
-                vagas_ocupadas: vagasOcupadas,
-                vagas_total: periodoConfig.limite,
-                data_solicitada: data_consulta,
-                tentativas_realizadas: tentativas,
-                sugestao: 'O sistema pode estar com alta demanda ou há restrições específicas. Tente outro período.'
+                vagas_ocupadas: resultadoOrdemChegada.vagas_ocupadas,
+                vagas_total: resultadoOrdemChegada.vagas_total,
+                data_solicitada: data_consulta
               }
             });
           }
+          
+          // Outros erros (idade, convênio, etc.)
+          console.error(`⚠️ Erro ao agendar por ordem de chegada:`, resultadoOrdemChegada?.error, resultadoOrdemChegada?.message);
+          return businessErrorResponse({
+            codigo_erro: resultadoOrdemChegada?.error || 'ERRO_DESCONHECIDO',
+            mensagem_usuario: resultadoOrdemChegada?.message || `Erro ao tentar agendar: ${resultadoOrdemChegada?.error}`,
+            detalhes: { periodo: nomePeriodo }
+          });
         }
       }
       
