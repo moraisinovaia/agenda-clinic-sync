@@ -4247,12 +4247,11 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       if (agendaDedicada) {
         console.log(`🎯 [AGENDA DEDICADA] Usando agenda "${agendaDedicada.nome}" (${agendaDedicada.id}) para queries de disponibilidade`);
         
-        // Buscar regras da agenda dedicada (pode ter configurações diferentes)
-        const regrasDedicadas = getMedicoRules(config, agendaDedicada.id, BUSINESS_RULES.medicos[agendaDedicada.id]);
-        if (regrasDedicadas) {
-          console.log(`✅ [AGENDA DEDICADA] Regras específicas encontradas para agenda dedicada`);
-          regras = regrasDedicadas;
-        }
+        // IMPORTANTE: Regras de negócio (permite_online, horários, etc.) SEMPRE vêm do médico principal
+        // A agenda dedicada só afeta queries de banco (vagas, agendamentos, bloqueios)
+        // NÃO sobrescrever 'regras' aqui - manter as do médico principal
+        console.log(`ℹ️ [AGENDA DEDICADA] Mantendo regras de negócio do médico principal: ${medico.nome} (ID: ${medico.id})`);
+        console.log(`📋 [REGRAS] permite_online do médico principal: ${regras?.permite_online}`);
       }
     }
     
