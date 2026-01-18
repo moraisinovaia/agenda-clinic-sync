@@ -3547,13 +3547,14 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
     } = body;
 
     const nova_data = sanitizarCampoOpcional(novaDataRaw);
-    const nova_hora = sanitizarCampoOpcional(novaHoraRaw);
+    let nova_hora = sanitizarCampoOpcional(novaHoraRaw);
 
-    // Validação detalhada
+    // Validação inicial - agendamento_id e nova_data são sempre obrigatórios
     const camposFaltando = [];
     if (!agendamento_id) camposFaltando.push('agendamento_id');
     if (!nova_data) camposFaltando.push('nova_data');
-    if (!nova_hora) camposFaltando.push('nova_hora');
+    
+    // nova_hora será validada após determinar tipo de agendamento
     
     if (camposFaltando.length > 0) {
       const erro = `Campos obrigatórios faltando: ${camposFaltando.join(', ')}`;
@@ -3563,7 +3564,7 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
     }
     
     console.log('✅ Validação inicial OK');
-    console.log(`📝 Remarcando agendamento ${agendamento_id} para ${nova_data} às ${nova_hora}`);
+    console.log(`📝 Remarcando agendamento ${agendamento_id} para ${nova_data}`);
 
     // Verificar se agendamento existe COM filtro de cliente
     console.log(`🔍 Buscando agendamento ${agendamento_id}...`);
@@ -3572,11 +3573,13 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
       .select(`
         id,
         medico_id,
+        atendimento_id,
         data_agendamento,
         hora_agendamento,
         status,
         pacientes(nome_completo),
-        medicos(nome)
+        medicos(nome),
+        atendimentos(nome, tipo)
       `)
       .eq('id', agendamento_id)
       .eq('cliente_id', clienteId)
@@ -3595,6 +3598,7 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
     console.log('✅ Agendamento encontrado:', {
       paciente: agendamento.pacientes?.nome_completo,
       medico: agendamento.medicos?.nome,
+      atendimento: agendamento.atendimentos?.nome,
       data_atual: agendamento.data_agendamento,
       hora_atual: agendamento.hora_agendamento,
       status: agendamento.status
@@ -3605,8 +3609,226 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
       return errorResponse('Não é possível remarcar consulta cancelada');
     }
 
+    // 🆕 DETERMINAR TIPO DE AGENDAMENTO DO SERVIÇO
+    const regras = getMedicoRules(config, agendamento.medico_id, BUSINESS_RULES.medicos[agendamento.medico_id]);
+    let tipoAgendamento = 'hora_marcada'; // default
+    let servicoConfig: any = null;
+    let periodoConfig: any = null;
+    const atendimentoNome = agendamento.atendimentos?.nome || '';
+    
+    if (regras?.servicos) {
+      // Normalizar nome do atendimento para busca
+      const normalizarNome = (texto: string): string => 
+        texto.toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/\b(de|da|do|das|dos)\b/g, '')
+          .replace(/[_\-\s]+/g, '')
+          .replace(/oi/g, 'o')
+          .replace(/ai/g, 'a');
+      
+      const atendimentoNorm = normalizarNome(atendimentoNome);
+      const servicoKey = Object.keys(regras.servicos).find(s => {
+        const servicoNorm = normalizarNome(s);
+        return servicoNorm.includes(atendimentoNorm) || 
+               atendimentoNorm.includes(servicoNorm) ||
+               servicoNorm === atendimentoNorm;
+      });
+      
+      if (servicoKey) {
+        servicoConfig = regras.servicos[servicoKey];
+        tipoAgendamento = getTipoAgendamentoEfetivo(servicoConfig, regras);
+        console.log(`✅ Tipo de agendamento detectado: ${tipoAgendamento} para serviço "${servicoKey}"`);
+      }
+    } else if (regras?.tipo_agendamento) {
+      tipoAgendamento = regras.tipo_agendamento;
+      console.log(`✅ Tipo de agendamento do médico: ${tipoAgendamento}`);
+    }
+    
+    const ehOrdemChegada = isOrdemChegada(tipoAgendamento);
+    console.log(`📋 É ordem de chegada: ${ehOrdemChegada}`);
+    
+    // 🆕 PARA ORDEM DE CHEGADA: nova_hora pode ser período ou opcional
+    let horarioFinal = nova_hora;
+    let periodoSolicitado: string | null = null;
+    
+    if (ehOrdemChegada) {
+      // Detectar se nova_hora é um período (manhã/tarde)
+      const isPeriodo = (h: string | null): boolean => {
+        if (!h) return false;
+        const hLower = h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        return ['manha', 'tarde', 'noite'].includes(hLower);
+      };
+      
+      const normalizarPeriodo = (h: string): string => {
+        const hLower = h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        if (hLower.includes('manha')) return 'manha';
+        if (hLower.includes('tarde')) return 'tarde';
+        if (hLower.includes('noite')) return 'noite';
+        return 'manha';
+      };
+      
+      // Determinar dia da semana da nova data
+      const diaSemana = new Date(nova_data + 'T00:00:00').getDay();
+      console.log(`📅 Dia da semana para ${nova_data}: ${diaSemana}`);
+      
+      if (isPeriodo(nova_hora)) {
+        periodoSolicitado = normalizarPeriodo(nova_hora);
+        console.log(`📋 Período solicitado explicitamente: ${periodoSolicitado}`);
+      } else if (!nova_hora && servicoConfig?.periodos) {
+        // Auto-detectar período baseado no dia da semana
+        const periodos = ['manha', 'tarde', 'noite'];
+        for (const p of periodos) {
+          const pConfig = servicoConfig.periodos[p];
+          if (pConfig?.dias_especificos?.includes(diaSemana)) {
+            periodoSolicitado = p;
+            console.log(`📋 Período auto-detectado para dia ${diaSemana}: ${p}`);
+            break;
+          }
+        }
+        
+        if (!periodoSolicitado) {
+          // Fallback: usar primeiro período ativo
+          for (const p of periodos) {
+            if (servicoConfig.periodos[p]?.ativo !== false) {
+              periodoSolicitado = p;
+              console.log(`📋 Período fallback: ${p}`);
+              break;
+            }
+          }
+        }
+      }
+      
+      // Obter configuração do período
+      if (servicoConfig?.periodos && periodoSolicitado) {
+        periodoConfig = servicoConfig.periodos[periodoSolicitado];
+      }
+      
+      if (!periodoConfig && servicoConfig?.periodos) {
+        // Tentar encontrar qualquer período válido para o dia
+        const periodos = ['manha', 'tarde', 'noite'];
+        for (const p of periodos) {
+          const pConfig = servicoConfig.periodos[p];
+          if (pConfig && (pConfig.dias_especificos?.includes(diaSemana) || pConfig.ativo !== false)) {
+            periodoConfig = pConfig;
+            periodoSolicitado = p;
+            console.log(`📋 Período encontrado para dia ${diaSemana}: ${p}`);
+            break;
+          }
+        }
+      }
+      
+      // 🔍 BUSCAR PRIMEIRO SLOT LIVRE NO PERÍODO (ordem de chegada)
+      if (periodoConfig) {
+        console.log(`🔍 Buscando slot livre para ordem de chegada no período ${periodoSolicitado}...`);
+        console.log(`📋 Config do período:`, JSON.stringify(periodoConfig, null, 2));
+        
+        // Validar limite de vagas do período
+        const { count: vagasOcupadas } = await supabase
+          .from('agendamentos')
+          .select('*', { count: 'exact', head: true })
+          .eq('medico_id', agendamento.medico_id)
+          .eq('data_agendamento', nova_data)
+          .eq('cliente_id', clienteId)
+          .gte('hora_agendamento', periodoConfig.inicio)
+          .lte('hora_agendamento', periodoConfig.fim)
+          .neq('id', agendamento_id) // Excluir o próprio agendamento
+          .is('excluido_em', null)
+          .in('status', ['agendado', 'confirmado']);
+        
+        const limiteVagas = periodoConfig.limite || 10;
+        console.log(`📊 Vagas ocupadas: ${vagasOcupadas} de ${limiteVagas}`);
+        
+        if (vagasOcupadas >= limiteVagas) {
+          // Buscar próximas datas disponíveis
+          const { data: dataAtualBrasil } = getDataHoraAtualBrasil();
+          const proximasDatas: string[] = [];
+          
+          for (let dias = 1; dias <= 30 && proximasDatas.length < 3; dias++) {
+            const dataFutura = new Date(nova_data + 'T00:00:00');
+            dataFutura.setDate(dataFutura.getDate() + dias);
+            const dataFuturaStr = dataFutura.toISOString().split('T')[0];
+            const diaSemanaFuturo = dataFutura.getDay();
+            
+            // Verificar se dia é permitido
+            if (periodoConfig.dias_especificos && !periodoConfig.dias_especificos.includes(diaSemanaFuturo)) {
+              continue;
+            }
+            
+            // Verificar vagas
+            const { count: vagasFuturas } = await supabase
+              .from('agendamentos')
+              .select('*', { count: 'exact', head: true })
+              .eq('medico_id', agendamento.medico_id)
+              .eq('data_agendamento', dataFuturaStr)
+              .eq('cliente_id', clienteId)
+              .gte('hora_agendamento', periodoConfig.inicio)
+              .lte('hora_agendamento', periodoConfig.fim)
+              .is('excluido_em', null)
+              .in('status', ['agendado', 'confirmado']);
+            
+            if ((vagasFuturas || 0) < limiteVagas) {
+              proximasDatas.push(formatarDataPorExtenso(dataFuturaStr));
+            }
+          }
+          
+          return businessErrorResponse({
+            codigo_erro: 'LIMITE_VAGAS',
+            mensagem_usuario: `❌ Todas as ${limiteVagas} vagas já foram ocupadas para ${formatarDataPorExtenso(nova_data)}.\n\n📅 Próximas datas disponíveis:\n${proximasDatas.map(d => `   • ${d}`).join('\n')}\n\n💡 Gostaria de remarcar para uma dessas datas?`,
+            detalhes: { vagas_ocupadas: vagasOcupadas, limite: limiteVagas, proximas_datas: proximasDatas }
+          });
+        }
+        
+        // Buscar primeiro minuto livre no período
+        const [horaInicio, minInicio] = periodoConfig.inicio.split(':').map(Number);
+        const [horaFim, minFim] = periodoConfig.fim.split(':').map(Number);
+        
+        let horaAtual = horaInicio * 60 + minInicio;
+        const horaLimite = horaFim * 60 + minFim;
+        let slotEncontrado = false;
+        
+        while (horaAtual < horaLimite) {
+          const h = Math.floor(horaAtual / 60);
+          const m = horaAtual % 60;
+          const horarioTeste = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:00`;
+          
+          const { count } = await supabase
+            .from('agendamentos')
+            .select('*', { count: 'exact', head: true })
+            .eq('medico_id', agendamento.medico_id)
+            .eq('data_agendamento', nova_data)
+            .eq('hora_agendamento', horarioTeste)
+            .eq('cliente_id', clienteId)
+            .neq('id', agendamento_id) // Excluir próprio agendamento
+            .is('excluido_em', null)
+            .in('status', ['agendado', 'confirmado']);
+          
+          if (count === 0) {
+            console.log(`✅ Primeiro slot livre encontrado: ${horarioTeste}`);
+            horarioFinal = horarioTeste;
+            slotEncontrado = true;
+            break;
+          }
+          
+          horaAtual += 1; // Incremento de 1 minuto para ordem de chegada
+        }
+        
+        if (!slotEncontrado) {
+          return errorResponse(`❌ Não foi possível encontrar horário disponível no período da ${periodoSolicitado} em ${formatarDataPorExtenso(nova_data)}.`);
+        }
+      } else if (!nova_hora) {
+        // Sem período configurado e sem hora informada
+        return errorResponse('❌ Para remarcar este tipo de consulta, informe o período (manhã ou tarde) ou um horário específico.');
+      }
+    } else {
+      // Para hora marcada, nova_hora é obrigatório
+      if (!nova_hora) {
+        return errorResponse('Campo obrigatório faltando: nova_hora');
+      }
+    }
+
     // 🚫 VALIDAR: Nova data/hora não pode ser no passado
-    const validacaoDataReschedule = validarDataHoraFutura(nova_data, nova_hora);
+    const validacaoDataReschedule = validarDataHoraFutura(nova_data, horarioFinal);
     if (!validacaoDataReschedule.valido) {
       const { data: dataAtualBrasil } = getDataHoraAtualBrasil();
       
@@ -3614,10 +3836,10 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
         codigo_erro: validacaoDataReschedule.erro,
         mensagem_usuario: validacaoDataReschedule.erro === 'DATA_PASSADA' 
           ? `❌ Não é possível remarcar para ${formatarDataPorExtenso(nova_data)} pois essa data já passou.\n\n📅 A data de hoje é ${formatarDataPorExtenso(dataAtualBrasil)}.\n\n💡 Por favor, escolha uma data futura.`
-          : `❌ Não é possível remarcar para ${nova_hora} hoje pois esse horário já passou ou está muito próximo.\n\n⏰ Horário mínimo: ${validacaoDataReschedule.horaMinima}\n\n💡 Escolha um horário posterior ou remarque para outro dia.`,
+          : `❌ Não é possível remarcar para ${horarioFinal} hoje pois esse horário já passou ou está muito próximo.\n\n⏰ Horário mínimo: ${validacaoDataReschedule.horaMinima}\n\n💡 Escolha um horário posterior ou remarque para outro dia.`,
         detalhes: { 
           nova_data,
-          nova_hora,
+          nova_hora: horarioFinal,
           data_atual: dataAtualBrasil
         }
       });
@@ -3634,33 +3856,35 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
       });
     }
 
-    // Verificar disponibilidade do novo horário COM filtro de cliente
-    console.log(`🔍 Verificando disponibilidade em ${nova_data} às ${nova_hora}...`);
-    const { data: conflitos, error: conflitosError } = await supabase
-      .from('agendamentos')
-      .select('id, pacientes(nome_completo)')
-      .eq('medico_id', agendamento.medico_id)
-      .eq('data_agendamento', nova_data)
-      .eq('hora_agendamento', nova_hora)
-      .eq('cliente_id', clienteId)
-      .in('status', ['agendado', 'confirmado'])
-      .neq('id', agendamento_id);
+    // Verificar disponibilidade do novo horário COM filtro de cliente (para hora marcada)
+    if (!ehOrdemChegada) {
+      console.log(`🔍 Verificando disponibilidade em ${nova_data} às ${horarioFinal}...`);
+      const { data: conflitos, error: conflitosError } = await supabase
+        .from('agendamentos')
+        .select('id, pacientes(nome_completo)')
+        .eq('medico_id', agendamento.medico_id)
+        .eq('data_agendamento', nova_data)
+        .eq('hora_agendamento', horarioFinal)
+        .eq('cliente_id', clienteId)
+        .in('status', ['agendado', 'confirmado'])
+        .neq('id', agendamento_id);
 
-    if (conflitosError) {
-      console.error('❌ Erro ao verificar conflitos:', conflitosError);
+      if (conflitosError) {
+        console.error('❌ Erro ao verificar conflitos:', conflitosError);
+      }
+
+      if (conflitos && conflitos.length > 0) {
+        console.error('❌ Horário já ocupado:', conflitos[0]);
+        return errorResponse(`Horário já ocupado para este médico (${conflitos[0].pacientes?.nome_completo})`);
+      }
+
+      console.log('✅ Horário disponível');
     }
-
-    if (conflitos && conflitos.length > 0) {
-      console.error('❌ Horário já ocupado:', conflitos[0]);
-      return errorResponse(`Horário já ocupado para este médico (${conflitos[0].pacientes?.nome_completo})`);
-    }
-
-    console.log('✅ Horário disponível');
 
     // Atualizar agendamento
     const updateData: any = {
       data_agendamento: nova_data,
-      hora_agendamento: nova_hora,
+      hora_agendamento: horarioFinal,
       updated_at: new Date().toISOString()
     };
 
@@ -3682,36 +3906,66 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
 
     console.log('✅ Agendamento remarcado com sucesso!');
 
-    // Mensagem personalizada para Dra. Adriana
+    // 🆕 MENSAGEM DINÂMICA BASEADA NO TIPO DE AGENDAMENTO
     let mensagem = `Consulta remarcada com sucesso`;
+    
+    // Formatar data para exibição
+    const dataFormatada = new Date(nova_data + 'T00:00:00').toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+    const horaFormatada = horarioFinal.substring(0, 5);
 
-    const isDraAdriana = agendamento.medico_id === '32d30887-b876-4502-bf04-e55d7fb55b50';
-
-    if (isDraAdriana) {
-      // Formatar data e hora explicitamente
-      const dataFormatada = new Date(nova_data + 'T00:00:00').toLocaleDateString('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      });
+    if (ehOrdemChegada) {
+      // 🆕 MENSAGEM PARA ORDEM DE CHEGADA
+      let horarioDistribuicao = '';
       
-      const horaFormatada = nova_hora.substring(0, 5); // "08:00:00" → "08:00"
-      const [hora] = nova_hora.split(':').map(Number);
-      
-      let mensagemPeriodo = '';
-      if (hora >= 7 && hora < 12) {
-        // Manhã: 07:00-12:00
-        mensagemPeriodo = `📅 ${dataFormatada} às ${horaFormatada}\n\n⏰ Das 08:00 às 10:00 para fazer a ficha. A Dra. começa a atender às 08:45`;
-      } else if (hora >= 13 && hora < 18) {
-        // Tarde: 13:00-18:00
-        mensagemPeriodo = `📅 ${dataFormatada} às ${horaFormatada}\n\n⏰ Das 13:00 às 15:00 para fazer a ficha. A Dra. começa a atender às 14:45`;
+      // Buscar horário de distribuição de fichas da configuração
+      if (regras?.ordem_chegada_config) {
+        const ocConfig = regras.ordem_chegada_config;
+        horarioDistribuicao = `${ocConfig.hora_chegada_inicio || periodoConfig?.inicio?.substring(0,5) || '08:00'} às ${ocConfig.hora_chegada_fim || periodoConfig?.fim?.substring(0,5) || '12:00'}`;
+      } else if (periodoConfig) {
+        horarioDistribuicao = `${periodoConfig.inicio?.substring(0,5) || '08:00'} às ${periodoConfig.fim?.substring(0,5) || '12:00'}`;
       } else {
-        // Fallback com hora sempre visível
-        mensagemPeriodo = `📅 ${dataFormatada} às ${horaFormatada}\n\n⏰ Compareça no horário marcado. A Dra. atende por ordem de chegada`;
+        // Fallback baseado no horário calculado
+        const [hora] = horarioFinal.split(':').map(Number);
+        if (hora < 12) {
+          horarioDistribuicao = '08:00 às 10:00';
+        } else {
+          horarioDistribuicao = '13:00 às 15:00';
+        }
       }
       
-      mensagem = `✅ Remarcada! ${mensagemPeriodo}, por ordem de chegada.\n\n💰 Caso o plano Unimed seja coparticipação ou particular, recebemos apenas em espécie.\n\nPosso ajudar em algo mais?`;
-      console.log(`💬 Mensagem personalizada Dra. Adriana (${dataFormatada} às ${horaFormatada})`);
+      mensagem = `✅ Consulta remarcada!\n\n📅 ${dataFormatada}\n⏰ Compareça das ${horarioDistribuicao} para fazer a ficha.\n📋 Atendimento por ordem de chegada.`;
+      
+      // Adicionar mensagem personalizada do médico se existir
+      if (regras?.ordem_chegada_config?.mensagem) {
+        mensagem += `\n\n${regras.ordem_chegada_config.mensagem}`;
+      }
+      
+      console.log(`💬 Mensagem de ordem de chegada gerada para ${agendamento.medicos?.nome}`);
+    } else {
+      // Mensagem para hora marcada (comportamento anterior)
+      const isDraAdriana = agendamento.medico_id === '32d30887-b876-4502-bf04-e55d7fb55b50';
+
+      if (isDraAdriana) {
+        const [hora] = horarioFinal.split(':').map(Number);
+        
+        let mensagemPeriodo = '';
+        if (hora >= 7 && hora < 12) {
+          mensagemPeriodo = `📅 ${dataFormatada} às ${horaFormatada}\n\n⏰ Das 08:00 às 10:00 para fazer a ficha. A Dra. começa a atender às 08:45`;
+        } else if (hora >= 13 && hora < 18) {
+          mensagemPeriodo = `📅 ${dataFormatada} às ${horaFormatada}\n\n⏰ Das 13:00 às 15:00 para fazer a ficha. A Dra. começa a atender às 14:45`;
+        } else {
+          mensagemPeriodo = `📅 ${dataFormatada} às ${horaFormatada}\n\n⏰ Compareça no horário marcado. A Dra. atende por ordem de chegada`;
+        }
+        
+        mensagem = `✅ Remarcada! ${mensagemPeriodo}, por ordem de chegada.\n\n💰 Caso o plano Unimed seja coparticipação ou particular, recebemos apenas em espécie.\n\nPosso ajudar em algo mais?`;
+        console.log(`💬 Mensagem personalizada Dra. Adriana (${dataFormatada} às ${horaFormatada})`);
+      } else {
+        mensagem = `✅ Consulta remarcada!\n\n📅 ${dataFormatada} às ${horaFormatada}\n\nPosso ajudar em algo mais?`;
+      }
     }
 
     return successResponse({
@@ -3719,10 +3973,12 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
       agendamento_id,
       paciente: agendamento.pacientes?.nome_completo,
       medico: agendamento.medicos?.nome,
+      atendimento: atendimentoNome,
+      tipo_agendamento: tipoAgendamento,
       data_anterior: agendamento.data_agendamento,
       hora_anterior: agendamento.hora_agendamento,
       nova_data,
-      nova_hora,
+      nova_hora: horarioFinal,
       validado: true
     });
 
