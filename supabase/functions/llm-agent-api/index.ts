@@ -2938,6 +2938,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
         // Determinar período e horário baseado na hora do agendamento
         let periodoNomeConf = '';
         let periodoHorarioConf = '';
+        let horaAtendimentoConf = '';
         
         // Buscar config do período para informações detalhadas
         if (regrasMedicoSchedule?.servicos) {
@@ -2951,6 +2952,8 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
               if (hora >= hInicioM && hora < hFimM) {
                 periodoNomeConf = 'manhã';
                 periodoHorarioConf = getHorarioParaPaciente(manha);
+                const horarioAtend = getHorarioAtendimento(manha);
+                horaAtendimentoConf = horarioAtend?.atendimento_inicio || '';
               }
             }
             if (!periodoNomeConf && servicoAtual.periodos.tarde) {
@@ -2960,14 +2963,34 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
               if (hora >= hInicioT && hora < hFimT) {
                 periodoNomeConf = 'tarde';
                 periodoHorarioConf = getHorarioParaPaciente(tarde);
+                const horarioAtend = getHorarioAtendimento(tarde);
+                horaAtendimentoConf = horarioAtend?.atendimento_inicio || '';
               }
             }
           }
         }
         
-        // Mensagem com período detalhado
+        // Formatar nome do paciente (apenas primeiro nome, capitalizado)
+        const primeiroNome = paciente_nome.split(' ')[0];
+        const nomeFormatado = primeiroNome.charAt(0).toUpperCase() + primeiroNome.slice(1).toLowerCase();
+        
+        // Mensagem estruturada com período detalhado
         if (periodoNomeConf && periodoHorarioConf) {
-          mensagem = `✅ Consulta agendada para ${paciente_nome} em ${dataFormatada} no período da ${periodoNomeConf} (${periodoHorarioConf}), por ordem de chegada.`;
+          const msgParts = [
+            `✅ Consulta agendada com sucesso!`,
+            ``,
+            `Paciente: ${nomeFormatado}`,
+            `📅 Data: ${dataFormatada}`,
+            `🕖 Período da ${periodoNomeConf} — De ${periodoHorarioConf} para fazer a ficha.`
+          ];
+          
+          if (horaAtendimentoConf) {
+            msgParts.push(`👨‍⚕️ O médico inicia os atendimentos às ${horaAtendimentoConf}, por ordem de chegada.`);
+          } else {
+            msgParts.push(`👨‍⚕️ Atendimento por ordem de chegada.`);
+          }
+          
+          mensagem = msgParts.join('\n');
         } else {
           // Fallback simples se não encontrar config
           mensagem = `✅ Consulta agendada para ${paciente_nome} em ${dataFormatada} por ordem de chegada.`;
