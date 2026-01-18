@@ -4174,8 +4174,42 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       console.log(`✅ Médico encontrado: "${medico_nome}" → "${medico.nome}"`);
     }
     
+    // 🔍 DETECÇÃO DE AGENDA DEDICADA: Se o nome contém " - ", pode ser uma agenda virtual
+    // Ex: "Teste Ergométrico - Dr. Marcelo" ou "MAPA - Dr. Marcelo"
+    // Nesses casos, buscar o médico principal para as regras de negócio
+    let medicoPrincipal = medico; // Por padrão, médico = médico principal
+
+    if (medico.nome.includes(' - ')) {
+      // Extrair nome do médico da agenda dedicada
+      // Padrão: "SERVIÇO - Dr. Nome" → extrair "Dr. Nome"
+      const partes = medico.nome.split(' - ');
+      const nomeMedicoNaAgenda = partes.slice(1).join(' - ').trim();
+      
+      console.log(`🔍 [AGENDA DEDICADA DETECTADA] Nome da agenda: "${medico.nome}"`);
+      console.log(`🔍 [AGENDA DEDICADA DETECTADA] Buscando médico principal: "${nomeMedicoNaAgenda}"`);
+      
+      // Buscar médico principal que NÃO seja agenda dedicada
+      const medicoPrincipalEncontrado = todosMedicos.find(m => {
+        const nomeNorm = normalizar(m.nome);
+        const buscaNorm = normalizar(nomeMedicoNaAgenda);
+        // Deve conter o nome E não ser uma agenda dedicada (não ter " - ")
+        return nomeNorm.includes(buscaNorm) && !m.nome.includes(' - ');
+      });
+      
+      if (medicoPrincipalEncontrado) {
+        medicoPrincipal = medicoPrincipalEncontrado;
+        console.log(`✅ [AGENDA DEDICADA] Médico principal encontrado: "${medicoPrincipal.nome}" (ID: ${medicoPrincipal.id})`);
+        console.log(`ℹ️ [AGENDA DEDICADA] Regras de negócio serão buscadas do médico principal, queries de banco usarão agenda dedicada`);
+      } else {
+        console.log(`⚠️ [AGENDA DEDICADA] Médico principal não encontrado para "${nomeMedicoNaAgenda}", usando agenda dedicada para regras`);
+      }
+    }
+    
     // 🔍 BUSCAR REGRAS DE NEGÓCIO E CONFIGURAÇÃO DO SERVIÇO (declarar uma única vez)
-    let regras = getMedicoRules(config, medico.id, BUSINESS_RULES.medicos[medico.id]);
+    // IMPORTANTE: Regras SEMPRE vêm do médico principal (não da agenda dedicada)
+    let regras = getMedicoRules(config, medicoPrincipal.id, BUSINESS_RULES.medicos[medicoPrincipal.id]);
+    console.log(`📋 [REGRAS] Usando regras do médico: ${medicoPrincipal.nome} (ID: ${medicoPrincipal.id})`);
+    console.log(`📋 [REGRAS] permite_online: ${regras?.permite_online}`);
     
     // Normalizar nome do atendimento para matching (remover espaços, underscores, acentos)
     const normalizarParaMatch = (texto: string) => 
