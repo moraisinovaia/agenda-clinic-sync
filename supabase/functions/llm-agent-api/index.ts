@@ -1062,14 +1062,18 @@ function classificarPeriodoAgendamento(
     // ✅ Normalizar período para garantir que tem inicio/fim
     const periodoNormalizado = normalizarPeriodo(config);
     
-    // ✅ Validar que inicio/fim são strings válidas
-    const inicio = periodoNormalizado?.inicio;
-    const fim = periodoNormalizado?.fim;
+    // ✅ CORREÇÃO: Priorizar contagem_inicio/contagem_fim para classificação de vagas
+    // contagem_inicio/fim define o range real para contar agendamentos
+    // inicio/fim define apenas o horário de comparecer do paciente
+    const inicio = periodoNormalizado?.contagem_inicio || periodoNormalizado?.inicio;
+    const fim = periodoNormalizado?.contagem_fim || periodoNormalizado?.fim;
     
     if (!inicio || typeof inicio !== 'string' || !fim || typeof fim !== 'string') {
-      console.warn(`⚠️ Período "${periodo}" sem inicio/fim válidos:`, { inicio, fim });
+      console.warn(`⚠️ Período "${periodo}" sem inicio/fim válidos:`, { inicio, fim, config });
       continue; // Pular este período, não quebrar
     }
+    
+    console.log(`🔢 [CLASSIFICAR] Período ${periodo}: range ${inicio}-${fim} para hora ${horaAgendamento}`);
     
     const [hInicio, mInicio] = inicio.split(':').map(Number);
     const [hFim, mFim] = fim.split(':').map(Number);
