@@ -3920,13 +3920,37 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
     if (ehOrdemChegada) {
       // 🆕 MENSAGEM PARA ORDEM DE CHEGADA
       let horarioDistribuicao = '';
+      let atendimentoInicio = '';
       
-      // Buscar horário de distribuição de fichas da configuração
-      if (regras?.ordem_chegada_config) {
+      // 🔧 Re-detectar período correto para a NOVA DATA (pode ser diferente da original)
+      let periodoParaMensagem = periodoConfig;
+      if (servicoConfig?.periodos) {
+        const diaSemanaNovaData = new Date(nova_data + 'T00:00:00').getDay();
+        const periodos = ['manha', 'tarde', 'noite'];
+        for (const p of periodos) {
+          const pConfig = servicoConfig.periodos[p];
+          if (pConfig?.dias_especificos?.includes(diaSemanaNovaData) && pConfig.ativo !== false) {
+            periodoParaMensagem = pConfig;
+            console.log(`📋 Período correto para ${nova_data} (dia ${diaSemanaNovaData}): ${p}`, JSON.stringify(pConfig));
+            break;
+          }
+        }
+      }
+      
+      // 🔧 PRIORIDADE: distribuicao_fichas > ordem_chegada_config > inicio/fim
+      if (periodoParaMensagem?.distribuicao_fichas) {
+        // ✅ Usar diretamente o campo distribuicao_fichas configurado
+        horarioDistribuicao = periodoParaMensagem.distribuicao_fichas;
+        atendimentoInicio = periodoParaMensagem.atendimento_inicio || '';
+        console.log(`✅ Usando distribuicao_fichas do período: ${horarioDistribuicao}`);
+      } else if (regras?.ordem_chegada_config) {
         const ocConfig = regras.ordem_chegada_config;
-        horarioDistribuicao = `${ocConfig.hora_chegada_inicio || periodoConfig?.inicio?.substring(0,5) || '08:00'} às ${ocConfig.hora_chegada_fim || periodoConfig?.fim?.substring(0,5) || '12:00'}`;
-      } else if (periodoConfig) {
-        horarioDistribuicao = `${periodoConfig.inicio?.substring(0,5) || '08:00'} às ${periodoConfig.fim?.substring(0,5) || '12:00'}`;
+        horarioDistribuicao = `${ocConfig.hora_chegada_inicio || '08:00'} às ${ocConfig.hora_chegada_fim || '12:00'}`;
+        console.log(`⚠️ Usando ordem_chegada_config: ${horarioDistribuicao}`);
+      } else if (periodoParaMensagem) {
+        horarioDistribuicao = `${periodoParaMensagem.inicio?.substring(0,5) || '08:00'} às ${periodoParaMensagem.fim?.substring(0,5) || '12:00'}`;
+        atendimentoInicio = periodoParaMensagem.atendimento_inicio || '';
+        console.log(`⚠️ Usando inicio/fim do período: ${horarioDistribuicao}`);
       } else {
         // Fallback baseado no horário calculado
         const [hora] = horarioFinal.split(':').map(Number);
@@ -3935,9 +3959,15 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
         } else {
           horarioDistribuicao = '13:00 às 15:00';
         }
+        console.log(`⚠️ Usando fallback por horário: ${horarioDistribuicao}`);
       }
       
-      mensagem = `✅ Consulta remarcada!\n\n📅 ${dataFormatada}\n⏰ Compareça das ${horarioDistribuicao} para fazer a ficha.\n📋 Atendimento por ordem de chegada.`;
+      // 🆕 Mensagem com horário de início de atendimento se disponível
+      const atendimentoInicioStr = atendimentoInicio 
+        ? `\n🕐 Atendimento inicia às ${atendimentoInicio}.` 
+        : '';
+      
+      mensagem = `✅ Consulta remarcada!\n\n📅 ${dataFormatada}\n⏰ Compareça das ${horarioDistribuicao} para fazer a ficha.${atendimentoInicioStr}\n📋 Atendimento por ordem de chegada.`;
       
       // Adicionar mensagem personalizada do médico se existir
       if (regras?.ordem_chegada_config?.mensagem) {
