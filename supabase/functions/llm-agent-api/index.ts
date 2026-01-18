@@ -2568,14 +2568,14 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
     // Buscar atendimento por nome (se especificado) COM filtro de cliente
     let atendimento_id = null;
     if (atendimento_nome) {
-      console.log(`🔍 Buscando atendimento: "${atendimento_nome}" para médico ${medico.nome}`);
+      console.log(`🔍 Buscando atendimento: "${atendimento_nome}" para médico_id: ${medicoIdParaQueries} (agenda: ${nomeAgendaDedicada || medico.nome})`);
       
-      // Tentativa 1: Busca pelo nome fornecido
+      // Tentativa 1: Busca pelo nome fornecido - USANDO medicoIdParaQueries para agenda dedicada
       let { data: atendimento, error: atendimentoError } = await supabase
         .from('atendimentos')
         .select('id, nome, tipo')
         .ilike('nome', `%${atendimento_nome}%`)
-        .eq('medico_id', medico.id)
+        .eq('medico_id', medicoIdParaQueries)  // ✅ Usa agenda dedicada quando existir
         .eq('cliente_id', clienteId)
         .eq('ativo', true)
         .single();
@@ -2603,7 +2603,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
             .from('atendimentos')
             .select('id, nome, tipo')
             .eq('tipo', tipoAtendimento)
-            .eq('medico_id', medico.id)
+            .eq('medico_id', medicoIdParaQueries)  // ✅ Usa agenda dedicada
             .eq('cliente_id', clienteId)
             .eq('ativo', true)
             .limit(1);
@@ -2620,7 +2620,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
         const { data: atendimentosDisponiveis } = await supabase
           .from('atendimentos')
           .select('nome, tipo')
-          .eq('medico_id', medico.id)
+          .eq('medico_id', medicoIdParaQueries)  // ✅ Usa agenda dedicada
           .eq('cliente_id', clienteId)
           .eq('ativo', true);
         
@@ -2650,7 +2650,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
       const { data: atendimentos } = await supabase
         .from('atendimentos')
         .select('id, nome')
-        .eq('medico_id', medico.id)
+        .eq('medico_id', medicoIdParaQueries)  // ✅ Usa agenda dedicada
         .eq('cliente_id', clienteId)
         .eq('ativo', true)
         .limit(1);
