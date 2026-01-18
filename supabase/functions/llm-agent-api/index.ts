@@ -666,6 +666,158 @@ const FALLBACK_DIAS_BUSCA_INICIAL = 14;
 const FALLBACK_DIAS_BUSCA_EXPANDIDA = 50;
 const MAX_DATAS_RETORNO = 5;
 
+// ============= 🎯 SISTEMA DE AGENDAS DEDICADAS (VIRTUAIS) =============
+
+/**
+ * Interface para representar uma agenda dedicada encontrada
+ */
+interface AgendaDedicada {
+  id: string;
+  nome: string;
+  medico_principal_id?: string;
+  medico_principal_nome?: string;
+}
+
+/**
+ * Cache para mapear (medico_nome, servico_nome) -> agenda_dedicada
+ * Evita consultas repetidas ao banco
+ */
+const AGENDA_DEDICADA_CACHE: Map<string, AgendaDedicada | null> = new Map();
+const AGENDA_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
+
+/**
+ * 🎯 FUNÇÃO CRÍTICA: Buscar agenda dedicada para um serviço específico
+ * 
+ * Quando um paciente pede "Teste Ergométrico com Dr. Marcelo", esta função
+ * detecta se existe uma agenda virtual como "Teste Ergométrico - Dr. Marcelo"
+ * e retorna seus dados para que as queries usem o ID correto.
+ * 
+ * @param supabase - Cliente Supabase
+ * @param medicoNome - Nome do médico principal (ex: "Dr. Marcelo D'Carli")
+ * @param servicoNome - Nome do serviço solicitado (ex: "Teste Ergométrico")
+ * @param clienteId - ID do cliente/clínica
+ * @returns Agenda dedicada se encontrada, null caso contrário
+ */
+async function buscarAgendaDedicada(
+  supabase: any,
+  medicoNome: string,
+  servicoNome: string,
+  clienteId: string
+): Promise<AgendaDedicada | null> {
+  // Normalizar para cache key
+  const cacheKey = `${clienteId}:${medicoNome.toLowerCase()}:${servicoNome.toLowerCase()}`;
+  
+  // Verificar cache primeiro
+  if (AGENDA_DEDICADA_CACHE.has(cacheKey)) {
+    const cached = AGENDA_DEDICADA_CACHE.get(cacheKey);
+    console.log(`📦 [AGENDA DEDICADA] Cache hit para "${servicoNome}" + "${medicoNome}": ${cached ? cached.nome : 'nenhuma'}`);
+    return cached || null;
+  }
+  
+  console.log(`🔍 [AGENDA DEDICADA] Buscando agenda dedicada para serviço="${servicoNome}" médico="${medicoNome}"...`);
+  
+  try {
+    // Extrair primeiro nome/sobrenome do médico para matching flexível
+    const partesNomeMedico = medicoNome
+      .replace(/^dr\.?\s*/i, '')  // Remove "Dr." ou "Dr "
+      .replace(/^dra\.?\s*/i, '') // Remove "Dra." ou "Dra "
+      .split(/[\s]+/)
+      .filter(p => p.length > 2);  // Ignora preposições curtas
+    
+    const primeiroNome = partesNomeMedico[0] || '';
+    const ultimoNome = partesNomeMedico[partesNomeMedico.length - 1] || '';
+    
+    console.log(`🔍 [AGENDA DEDICADA] Partes do nome: primeiro="${primeiroNome}", último="${ultimoNome}"`);
+    
+    // Normalizar nome do serviço (ex: "Teste Ergométrico" -> "teste ergometrico")
+    const servicoNormalizado = servicoNome
+      .toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remove acentos
+      .replace(/[_-]/g, ' ')
+      .trim();
+    
+    // Buscar agendas que contenham o nome do serviço E alguma referência ao médico
+    const { data: agendas, error } = await supabase
+      .from('medicos')
+      .select('id, nome')
+      .eq('cliente_id', clienteId)
+      .eq('ativo', true);
+    
+    if (error || !agendas) {
+      console.error('❌ [AGENDA DEDICADA] Erro ao buscar agendas:', error);
+      AGENDA_DEDICADA_CACHE.set(cacheKey, null);
+      return null;
+    }
+    
+    // Procurar agenda que siga os padrões conhecidos
+    // Padrões aceitos:
+    // 1. "Teste Ergométrico - Dr. Marcelo"
+    // 2. "Teste Ergométrico - Marcelo"
+    // 3. "MAPA - Dr. Marcelo"
+    // 4. "Holter 24h - Dr. Fulano"
+    
+    const agendaDedicada = agendas.find((ag: any) => {
+      const nomeAgenda = ag.nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      
+      // Verificar se contém o nome do serviço
+      const contemServico = nomeAgenda.includes(servicoNormalizado) ||
+        servicoNormalizado.split(' ').every(palavra => 
+          palavra.length > 2 && nomeAgenda.includes(palavra)
+        );
+      
+      if (!contemServico) return false;
+      
+      // Verificar se contém referência ao médico (primeiro ou último nome)
+      const contemMedico = 
+        (primeiroNome && nomeAgenda.includes(primeiroNome.toLowerCase())) ||
+        (ultimoNome && nomeAgenda.includes(ultimoNome.toLowerCase()));
+      
+      // Verificar se tem separador típico de agenda dedicada
+      const ehFormatoDedicado = nomeAgenda.includes(' - ') || nomeAgenda.includes(' – ');
+      
+      const match = contemServico && contemMedico && ehFormatoDedicado;
+      
+      if (match) {
+        console.log(`✅ [AGENDA DEDICADA] Match encontrado: "${ag.nome}" para serviço="${servicoNome}"`);
+      }
+      
+      return match;
+    });
+    
+    if (agendaDedicada) {
+      const resultado: AgendaDedicada = {
+        id: agendaDedicada.id,
+        nome: agendaDedicada.nome,
+        medico_principal_nome: medicoNome
+      };
+      
+      console.log(`✅ [AGENDA DEDICADA] Encontrada: "${agendaDedicada.nome}" (ID: ${agendaDedicada.id})`);
+      AGENDA_DEDICADA_CACHE.set(cacheKey, resultado);
+      return resultado;
+    }
+    
+    console.log(`ℹ️ [AGENDA DEDICADA] Nenhuma agenda dedicada encontrada para "${servicoNome}" + "${medicoNome}"`);
+    AGENDA_DEDICADA_CACHE.set(cacheKey, null);
+    return null;
+    
+  } catch (err: any) {
+    console.error('❌ [AGENDA DEDICADA] Erro crítico:', err.message);
+    return null;
+  }
+}
+
+/**
+ * 🎯 Determina qual ID de médico usar para queries de agendamento
+ * Se existe agenda dedicada, usa o ID dela; caso contrário, usa o médico principal
+ */
+function getMedicoIdParaQueries(medico: any, agendaDedicada: AgendaDedicada | null): string {
+  if (agendaDedicada) {
+    console.log(`🔄 [QUERY] Usando agenda dedicada "${agendaDedicada.nome}" (${agendaDedicada.id}) em vez de "${medico.nome}" (${medico.id})`);
+    return agendaDedicada.id;
+  }
+  return medico.id;
+}
+
 /**
  * Retorna data mínima de agendamento (dinâmica ou fallback)
  */
@@ -4058,6 +4210,32 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       console.log(`📋 [SERVICO] compartilha_limite_com: ${servico.compartilha_limite_com || 'N/A'}, limite_proprio: ${servico.limite_proprio || 'N/A'}`);
     }
     
+    // 🎯 BUSCAR AGENDA DEDICADA: Verificar se este serviço tem uma agenda virtual separada
+    // Ex: "Teste Ergométrico" com "Dr. Marcelo D'Carli" → usa agenda "Teste Ergométrico - Dr. Marcelo"
+    let agendaDedicada: AgendaDedicada | null = null;
+    if (servicoKey && atendimento_nome) {
+      agendaDedicada = await buscarAgendaDedicada(
+        supabase,
+        medico.nome,
+        atendimento_nome,
+        clienteId
+      );
+      
+      if (agendaDedicada) {
+        console.log(`🎯 [AGENDA DEDICADA] Usando agenda "${agendaDedicada.nome}" (${agendaDedicada.id}) para queries de disponibilidade`);
+        
+        // Buscar regras da agenda dedicada (pode ter configurações diferentes)
+        const regrasDedicadas = getMedicoRules(config, agendaDedicada.id, BUSINESS_RULES.medicos[agendaDedicada.id]);
+        if (regrasDedicadas) {
+          console.log(`✅ [AGENDA DEDICADA] Regras específicas encontradas para agenda dedicada`);
+          regras = regrasDedicadas;
+        }
+      }
+    }
+    
+    // 🎯 DEFINIR medicoIdParaQueries: ID a ser usado em todas as queries de agendamento
+    const medicoIdParaQueries = getMedicoIdParaQueries(medico, agendaDedicada);
+    
     // 🧠 ANÁLISE DE CONTEXTO: Usar mensagem original para inferir intenção
     let isPerguntaAberta = false;
     let periodoPreferido: 'manha' | 'tarde' | null = null;
@@ -4283,7 +4461,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
             const { data: agendados } = await supabase
               .from('agendamentos')
               .select('id')
-              .eq('medico_id', medico.id)
+              .eq('medico_id', medicoIdParaQueries)
               .eq('data_agendamento', dataCheckStr)
               .eq('cliente_id', clienteId)
               .gte('hora_agendamento', manha.inicio)
@@ -4323,7 +4501,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
             const { data: agendados } = await supabase
               .from('agendamentos')
               .select('id')
-              .eq('medico_id', medico.id)
+              .eq('medico_id', medicoIdParaQueries)
               .eq('data_agendamento', dataCheckStr)
               .eq('cliente_id', clienteId)
               .gte('hora_agendamento', tarde.inicio)
@@ -4393,7 +4571,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           const { data: bloqueiosData } = await supabase
             .from('bloqueios_agenda')
             .select('id')
-            .eq('medico_id', medico.id)
+            .eq('medico_id', medicoIdParaQueries)
             .lte('data_inicio', dataCheckStr)
             .gte('data_fim', dataCheckStr)
             .eq('status', 'ativo')
@@ -4408,7 +4586,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           const { count: totalAgendamentos } = await supabase
             .from('agendamentos')
             .select('*', { count: 'exact', head: true })
-            .eq('medico_id', medico.id)
+            .eq('medico_id', medicoIdParaQueries)
             .eq('data_agendamento', dataCheckStr)
             .neq('status', 'cancelado')
             .eq('cliente_id', clienteId);
@@ -4422,7 +4600,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
             const { count: agendadosPeriodo } = await supabase
               .from('agendamentos')
               .select('*', { count: 'exact', head: true })
-              .eq('medico_id', medico.id)
+              .eq('medico_id', medicoIdParaQueries)
               .eq('data_agendamento', dataCheckStr)
               .gte('hora_agendamento', (config as any).inicio)
               .lt('hora_agendamento', (config as any).fim)
@@ -4562,7 +4740,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         const { data: bloqueios } = await supabase
           .from('bloqueios_agenda')
           .select('id')
-          .eq('medico_id', medico.id)
+          .eq('medico_id', medicoIdParaQueries)
           .lte('data_inicio', dataFuturaStr)
           .gte('data_fim', dataFuturaStr)
           .eq('status', 'ativo')
@@ -4627,7 +4805,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       const { data: agendamentos } = await supabase
         .from('agendamentos')
         .select('hora_agendamento')
-        .eq('medico_id', medico.id)
+        .eq('medico_id', medicoIdParaQueries)
         .eq('data_agendamento', dataFuturaStr)
         .eq('cliente_id', clienteId)
         .is('excluido_em', null)
@@ -4883,7 +5061,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         const { data: bloqueios, error: bloqueioError } = await supabase
           .from('bloqueios_agenda')
           .select('id, motivo')
-          .eq('medico_id', medico.id)
+          .eq('medico_id', medicoIdParaQueries)
           .lte('data_inicio', dataFormatada)
           .gte('data_fim', dataFormatada)
           .eq('status', 'ativo')
@@ -4913,7 +5091,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
             const { data: atendData } = await supabase
               .from('atendimentos')
               .select('id')
-              .eq('medico_id', medico.id)
+              .eq('medico_id', medicoIdParaQueries)
               .eq('cliente_id', clienteId)
               .eq('ativo', true)
               .ilike('nome', `%${servicoKey.replace(/_/g, '%')}%`)
@@ -4927,7 +5105,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           const servicoConfigComAtendId = { ...servico, atendimento_id: atendimentoId };
           const vagasDisponiveis = await calcularVagasDisponiveisComLimites(
             supabase,
-            medico.id,
+            medicoIdParaQueries,
             clienteId,
             dataFormatada,
             servicoConfigComAtendId,
@@ -4943,7 +5121,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
               const { data: horariosVazios, error: horariosError } = await supabase
                 .from('horarios_vazios')
                 .select('hora')
-                .eq('medico_id', medico.id)
+                .eq('medico_id', medicoIdParaQueries)
                 .eq('cliente_id', clienteId)
                 .eq('data', dataFormatada)
                 .eq('status', 'disponivel')
@@ -4954,7 +5132,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
                 const { data: agendamentosExistentes } = await supabase
                   .from('agendamentos')
                   .select('hora_agendamento')
-                  .eq('medico_id', medico.id)
+                  .eq('medico_id', medicoIdParaQueries)
                   .eq('data_agendamento', dataFormatada)
                   .eq('cliente_id', clienteId)
                   .is('excluido_em', null)
@@ -5041,7 +5219,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           const { data: todosAgendamentos, error: countError } = await supabase
             .from('agendamentos')
             .select('hora_agendamento')
-            .eq('medico_id', medico.id)
+            .eq('medico_id', medicoIdParaQueries)
             .eq('data_agendamento', dataFormatada)
             .eq('cliente_id', clienteId)
             .is('excluido_em', null)
@@ -5403,7 +5581,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
     const { data: bloqueios, error: bloqueioError } = await supabase
       .from('bloqueios_agenda')
       .select('id, motivo')
-      .eq('medico_id', medico.id)
+      .eq('medico_id', medicoIdParaQueries)
       .lte('data_inicio', data_consulta)
       .gte('data_fim', data_consulta)
       .eq('status', 'ativo')
@@ -5471,7 +5649,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         const { data: atendData } = await supabase
           .from('atendimentos')
           .select('id')
-          .eq('medico_id', medico.id)
+          .eq('medico_id', medicoIdParaQueries)
           .eq('cliente_id', clienteId)
           .eq('ativo', true)
           .ilike('nome', `%${servicoKey.replace(/_/g, '%')}%`)
@@ -5485,7 +5663,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       const servicoConfigFluxo3 = { ...servico, atendimento_id: atendimentoIdFluxo3 };
       const vagasDisponiveisFluxo3 = await calcularVagasDisponiveisComLimites(
         supabase,
-        medico.id,
+        medicoIdParaQueries,
         clienteId,
         data_consulta,
         servicoConfigFluxo3,
@@ -5500,7 +5678,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           const { data: horariosVaziosFluxo3 } = await supabase
             .from('horarios_vazios')
             .select('hora')
-            .eq('medico_id', medico.id)
+            .eq('medico_id', medicoIdParaQueries)
             .eq('cliente_id', clienteId)
             .eq('data', data_consulta)
             .eq('status', 'disponivel')
@@ -5511,7 +5689,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
             const { data: agendamentosFluxo3 } = await supabase
               .from('agendamentos')
               .select('hora_agendamento')
-              .eq('medico_id', medico.id)
+              .eq('medico_id', medicoIdParaQueries)
               .eq('data_agendamento', data_consulta)
               .eq('cliente_id', clienteId)
               .is('excluido_em', null)
@@ -5590,7 +5768,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       const { data: todosAgendamentosData, error: countError } = await supabase
         .from('agendamentos')
         .select('hora_agendamento')
-        .eq('medico_id', medico.id)
+        .eq('medico_id', medicoIdParaQueries)
         .eq('data_agendamento', data_consulta)
         .eq('cliente_id', clienteId)
         .is('excluido_em', null)
@@ -5814,7 +5992,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           const { count } = await supabase
             .from('agendamentos')
             .select('*', { count: 'exact', head: true })
-            .eq('medico_id', medico.id)
+            .eq('medico_id', medicoIdParaQueries)
             .eq('data_agendamento', data_consulta)
             .eq('hora_agendamento', horarioFormatado)
             .eq('cliente_id', clienteId)
@@ -5923,7 +6101,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           const { count } = await supabase
             .from('agendamentos')
             .select('*', { count: 'exact', head: true })
-            .eq('medico_id', medico.id)
+            .eq('medico_id', medicoIdParaQueries)
             .eq('data_agendamento', data_consulta)
             .eq('hora_agendamento', horarioFormatado)
             .eq('cliente_id', clienteId)
