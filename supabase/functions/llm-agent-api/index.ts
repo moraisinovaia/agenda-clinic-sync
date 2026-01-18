@@ -1049,12 +1049,30 @@ function classificarPeriodoAgendamento(
     return null;
   }
   
+  // ✅ Validar periodosConfig
+  if (!periodosConfig || typeof periodosConfig !== 'object') {
+    console.warn('⚠️ periodosConfig inválido em classificarPeriodoAgendamento:', periodosConfig);
+    return null;
+  }
+  
   const [h, m] = horaAgendamento.split(':').map(Number);
   const minutos = h * 60 + m;
 
   for (const [periodo, config] of Object.entries(periodosConfig)) {
-    const [hInicio, mInicio] = (config as any).inicio.split(':').map(Number);
-    const [hFim, mFim] = (config as any).fim.split(':').map(Number);
+    // ✅ Normalizar período para garantir que tem inicio/fim
+    const periodoNormalizado = normalizarPeriodo(config);
+    
+    // ✅ Validar que inicio/fim são strings válidas
+    const inicio = periodoNormalizado?.inicio;
+    const fim = periodoNormalizado?.fim;
+    
+    if (!inicio || typeof inicio !== 'string' || !fim || typeof fim !== 'string') {
+      console.warn(`⚠️ Período "${periodo}" sem inicio/fim válidos:`, { inicio, fim });
+      continue; // Pular este período, não quebrar
+    }
+    
+    const [hInicio, mInicio] = inicio.split(':').map(Number);
+    const [hFim, mFim] = fim.split(':').map(Number);
     const inicioMinutos = hInicio * 60 + mInicio;
     const fimMinutos = hFim * 60 + mFim;
 
@@ -1273,7 +1291,18 @@ function formatarConsultaComContexto(agendamento: any, config: DynamicConfig | n
     };
   }
   
-  const servico = regras.servicos[servicoKey];
+  // ✅ Normalizar serviço ANTES de classificar período (garante inicio/fim)
+  const servico = normalizarServicoPeriodos(regras.servicos[servicoKey]);
+  
+  // ✅ Validar se servico.periodos existe
+  if (!servico?.periodos) {
+    console.warn('⚠️ Serviço sem períodos configurados:', servicoKey);
+    return {
+      ...agendamento,
+      horario_formatado: agendamento.hora_agendamento,
+      mensagem: `Consulta agendada para ${formatarDataPorExtenso(agendamento.data_agendamento)} às ${agendamento.hora_agendamento}.`
+    };
+  }
   
   // 4. Usar classificarPeriodoAgendamento para identificar o período
   const periodo = classificarPeriodoAgendamento(
@@ -3365,6 +3394,12 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string, c
     });
 
   } catch (error: any) {
+    // ✅ Log detalhado para debugging
+    console.error('❌ Erro em handleCheckPatient:', {
+      message: error?.message,
+      stack: error?.stack,
+      clienteId
+    });
     return errorResponse(`Erro ao verificar paciente: ${error?.message || 'Erro desconhecido'}`);
   }
 }
