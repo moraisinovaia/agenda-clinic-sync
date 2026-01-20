@@ -640,7 +640,7 @@ export function DoctorSchedule({
                                 setPatientSearchResults([]);
                               }}
                             >
-                              <div className="font-medium text-sm">{apt.pacientes?.nome_completo}</div>
+                              <div className="font-medium text-sm">{apt.pacientes?.nome_completo?.toUpperCase()}</div>
                               <div className="text-xs text-muted-foreground mt-1 flex items-center gap-2 flex-wrap">
                                 <span>📅 {formatDateForDisplay(apt.data_agendamento)} às {apt.hora_agendamento}</span>
                                 <span>•</span>
@@ -744,7 +744,7 @@ export function DoctorSchedule({
                               <TableCell className="w-[240px] py-3 px-3 print:text-[9px]">
                                 <div>
                                   <div className="text-base font-semibold leading-relaxed">
-                                    {appointment.pacientes?.nome_completo || 'Paciente não encontrado'}
+                                    {(appointment.pacientes?.nome_completo || 'Paciente não encontrado').toUpperCase()}
                                     {patientAge && (
                                       <span className="ml-2 text-sm text-muted-foreground font-normal">
                                         ({patientAge})
