@@ -1832,6 +1832,25 @@ export type Database = {
         }
         Returns: Json
       }
+      criar_agendamento_ordem_chegada: {
+        Args: {
+          p_atendimento_id?: string
+          p_celular?: string
+          p_cliente_id: string
+          p_convenio: string
+          p_criado_por?: string
+          p_data_agendamento?: string
+          p_data_nascimento: string
+          p_hora_fim_periodo?: string
+          p_hora_inicio_periodo?: string
+          p_limite_vagas?: number
+          p_medico_id?: string
+          p_nome_completo: string
+          p_observacoes?: string
+          p_telefone?: string
+        }
+        Returns: Json
+      }
       criar_cliente: {
         Args: { p_admin_user_id?: string; p_nome: string }
         Returns: Json
