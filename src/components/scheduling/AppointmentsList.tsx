@@ -268,7 +268,7 @@ export const AppointmentsList = React.memo(({ appointments, doctors, onEditAppoi
                         onDoubleClick={() => onNavigateToAppointment?.(appointment)}
                         title="Duplo clique para navegar até a data"
                       >
-                        {(appointment.pacientes?.nome_completo || 'Paciente não encontrado').toUpperCase()}
+                        {appointment.pacientes?.nome_completo || 'Paciente não encontrado'}
                         {appointment.pacientes?.data_nascimento && (
                           <span className="ml-2 text-xs text-muted-foreground">
                             ({differenceInYears(new Date(), new Date(appointment.pacientes.data_nascimento))} anos)
@@ -336,7 +336,7 @@ export const AppointmentsList = React.memo(({ appointments, doctors, onEditAppoi
                         size="sm"
                         onClick={() => {
                           setSelectedAuditId(appointment.id);
-                          setSelectedPatientName((appointment.pacientes?.nome_completo || 'Paciente').toUpperCase());
+                          setSelectedPatientName(appointment.pacientes?.nome_completo || 'Paciente');
                         }}
                         className="h-8 w-8 p-0"
                         title="Ver histórico de alterações"

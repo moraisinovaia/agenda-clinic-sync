@@ -339,45 +339,18 @@ serve(async (req) => {
         console.log(`✅ ${agendamentos.length} agendamentos cancelados por bloqueio`);
       }
       
-      // Configuração de webhooks por clínica
-      const WEBHOOKS_POR_CLINICA: Record<string, { url: string; todos_medicos: boolean; medicos_habilitados: string[]; nome_clinica: string }> = {
-        // IPADO - webhook original (médicos específicos)
-        '2bfb98b5-ae41-4f96-8ba7-acc797c22054': {
-          url: 'https://n8n.inovaia.online/webhook/remarcar',
-          todos_medicos: false,
-          medicos_habilitados: [
-            '32d30887-b876-4502-bf04-e55d7fb55b50', // Dra. Adriana Carla de Sena
-            '1e110923-50df-46ff-a57a-29d88e372900', // Dr. Marcelo D'Carli
-            'c192e08e-e216-4c22-99bf-b5992ce05e17', // Dr. Alessandro Dias
-            '66e9310d-34cd-4005-8937-74e87125dc03'  // Dr. Pedro Francisco
-          ],
-          nome_clinica: 'IPADO'
-        },
-        // Clínica Orion - webhook novo (todos os médicos)
-        'e8f7d6c5-b4a3-4c2d-9e1f-0a1b2c3d4e5f': {
-          url: 'https://n8n-cia.inovaia-automacao.com.br/webhook/orion',
-          todos_medicos: true,
-          medicos_habilitados: [],
-          nome_clinica: 'Clínica Orion'
-        }
-      };
+      // Lista de médicos que disparam webhook N8N
+      const MEDICOS_COM_WEBHOOK_N8N = [
+        '32d30887-b876-4502-bf04-e55d7fb55b50', // Dra. Adriana Carla de Sena
+        '1e110923-50df-46ff-a57a-29d88e372900', // Dr. Marcelo D'Carli
+        'c192e08e-e216-4c22-99bf-b5992ce05e17', // Dr. Alessandro Dias
+        '66e9310d-34cd-4005-8937-74e87125dc03'  // Dr. Pedro Francisco
+      ];
 
-      // Verificar configuração de webhook para esta clínica
-      const configWebhook = WEBHOOKS_POR_CLINICA[clienteIdFinal];
-      const deveDispararWebhook = configWebhook && (
-        configWebhook.todos_medicos || 
-        configWebhook.medicos_habilitados.includes(medicoId)
-      );
-      const webhookUrl = configWebhook?.url || null;
+      // Verificar se este médico deve disparar webhook
+      const deveDispararWebhook = MEDICOS_COM_WEBHOOK_N8N.includes(medicoId);
 
-      console.log(`🔔 Webhook config para cliente ${clienteIdFinal}:`, {
-        configurado: !!configWebhook,
-        deveDisparar: deveDispararWebhook,
-        url: webhookUrl,
-        clinica: configWebhook?.nome_clinica
-      });
-
-      if (deveDispararWebhook && webhookUrl && agendamentos.length > 0) {
+      if (deveDispararWebhook && agendamentos.length > 0) {
         // 🔥 DISPARAR WEBHOOK N8N PARA REAGENDAMENTO
         console.log('📤 Enviando dados para N8N via webhook...');
         
@@ -417,10 +390,6 @@ serve(async (req) => {
       const webhookPayload = {
         tipo_evento: 'bloqueio_agenda',
         timestamp: new Date().toISOString(),
-        clinica: {
-          cliente_id: clienteIdFinal,
-          nome: configWebhook.nome_clinica
-        },
         medico: {
           id: medicoId,
           nome: medico.nome,
@@ -457,9 +426,11 @@ serve(async (req) => {
 
       console.log('📦 Payload preparado:', JSON.stringify(webhookPayload, null, 2));
 
-      // Enviar webhook para N8N (URL já definida dinamicamente)
+      // Enviar webhook para N8N
+      const webhookUrl = 'https://n8n.inovaia.online/webhook/remarcar';
+      
       try {
-        console.log(`🌐 Enviando para webhook N8N (${configWebhook.nome_clinica}):`, webhookUrl);
+        console.log('🌐 Enviando para webhook N8N:', webhookUrl);
         
         const webhookResponse = await fetch(webhookUrl, {
           method: 'POST',
@@ -477,12 +448,11 @@ serve(async (req) => {
           await supabase.from('system_logs').insert({
             timestamp: new Date().toISOString(),
             level: 'info',
-            message: `Webhook N8N disparado para bloqueio: ${agendamentos.length} pacientes - ${configWebhook.nome_clinica}`,
+            message: `Webhook N8N disparado para bloqueio: ${agendamentos.length} pacientes`,
             context: 'BLOQUEIO_WEBHOOK_N8N',
             data: {
               bloqueio_id: bloqueio.id,
               medico: medico.nome,
-              clinica: configWebhook.nome_clinica,
               total_pacientes: agendamentos.length,
               webhook_url: webhookUrl
             }

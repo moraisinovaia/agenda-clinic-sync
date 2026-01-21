@@ -298,48 +298,6 @@ function normalizarPeriodo(periodo: any): any {
 }
 
 /**
- * Gera a string de horário para exibir ao paciente
- * PRIORIDADE: horario_inicio/fim (comparecimento) > distribuicao_fichas > inicio/fim (contagem)
- * @param periodo - Configuração do período com campos de horário
- * @returns String formatada como "08:00 às 10:00"
- */
-function getHorarioParaPaciente(periodo: any): string {
-  if (!periodo) return 'Horário não definido';
-  
-  // 1. PRIORIDADE MÁXIMA: distribuicao_fichas (explicitamente configurado para exibição)
-  if (periodo.distribuicao_fichas) {
-    return periodo.distribuicao_fichas;
-  }
-  
-  // 2. SEGUNDA PRIORIDADE: horario_inicio/fim (horário de comparecimento do paciente)
-  if (periodo.horario_inicio && periodo.horario_fim) {
-    return `${periodo.horario_inicio} às ${periodo.horario_fim}`;
-  }
-  
-  // 3. FALLBACK: inicio/fim (pode ser contagem ou legado)
-  if (periodo.inicio && periodo.fim) {
-    return `${periodo.inicio} às ${periodo.fim}`;
-  }
-  
-  // 4. ÚLTIMO RECURSO: contagem_inicio/fim
-  if (periodo.contagem_inicio && periodo.contagem_fim) {
-    return `${periodo.contagem_inicio} às ${periodo.contagem_fim}`;
-  }
-  
-  return 'Horário não definido';
-}
-
-/**
- * Obtém o horário de início do atendimento (quando o médico começa a atender)
- * @param periodo - Configuração do período
- * @returns Hora de início do atendimento ou null
- */
-function getHorarioAtendimento(periodo: any): string | null {
-  if (!periodo) return null;
-  return periodo.atendimento_inicio || null;
-}
-
-/**
  * Normaliza todos os períodos de um serviço
  * @param servico - Configuração do serviço com periodos
  * @returns Serviço com períodos normalizados
@@ -663,160 +621,7 @@ async function calcularVagasDisponiveisComLimites(
 const FALLBACK_MINIMUM_BOOKING_DATE = '2026-01-01';
 const FALLBACK_PHONE = ''; // Vazio para forçar uso de mensagem genérica
 const FALLBACK_DIAS_BUSCA_INICIAL = 14;
-const FALLBACK_DIAS_BUSCA_EXPANDIDA = 50;
-const MAX_DATAS_RETORNO = 5;
-
-// ============= 🎯 SISTEMA DE AGENDAS DEDICADAS (VIRTUAIS) =============
-
-/**
- * Interface para representar uma agenda dedicada encontrada
- */
-interface AgendaDedicada {
-  id: string;
-  nome: string;
-  medico_principal_id?: string;
-  medico_principal_nome?: string;
-}
-
-/**
- * Cache para mapear (medico_nome, servico_nome) -> agenda_dedicada
- * Evita consultas repetidas ao banco
- */
-const AGENDA_DEDICADA_CACHE: Map<string, AgendaDedicada | null> = new Map();
-const AGENDA_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
-
-/**
- * 🎯 FUNÇÃO CRÍTICA: Buscar agenda dedicada para um serviço específico
- * 
- * Quando um paciente pede "Teste Ergométrico com Dr. Marcelo", esta função
- * detecta se existe uma agenda virtual como "Teste Ergométrico - Dr. Marcelo"
- * e retorna seus dados para que as queries usem o ID correto.
- * 
- * @param supabase - Cliente Supabase
- * @param medicoNome - Nome do médico principal (ex: "Dr. Marcelo D'Carli")
- * @param servicoNome - Nome do serviço solicitado (ex: "Teste Ergométrico")
- * @param clienteId - ID do cliente/clínica
- * @returns Agenda dedicada se encontrada, null caso contrário
- */
-async function buscarAgendaDedicada(
-  supabase: any,
-  medicoNome: string,
-  servicoNome: string,
-  clienteId: string
-): Promise<AgendaDedicada | null> {
-  // Normalizar para cache key
-  const cacheKey = `${clienteId}:${medicoNome.toLowerCase()}:${servicoNome.toLowerCase()}`;
-  
-  // Verificar cache primeiro
-  if (AGENDA_DEDICADA_CACHE.has(cacheKey)) {
-    const cached = AGENDA_DEDICADA_CACHE.get(cacheKey);
-    console.log(`📦 [AGENDA DEDICADA] Cache hit para "${servicoNome}" + "${medicoNome}": ${cached ? cached.nome : 'nenhuma'}`);
-    return cached || null;
-  }
-  
-  console.log(`🔍 [AGENDA DEDICADA] Buscando agenda dedicada para serviço="${servicoNome}" médico="${medicoNome}"...`);
-  
-  try {
-    // Extrair primeiro nome/sobrenome do médico para matching flexível
-    const partesNomeMedico = medicoNome
-      .replace(/^dr\.?\s*/i, '')  // Remove "Dr." ou "Dr "
-      .replace(/^dra\.?\s*/i, '') // Remove "Dra." ou "Dra "
-      .split(/[\s]+/)
-      .filter(p => p.length > 2);  // Ignora preposições curtas
-    
-    const primeiroNome = partesNomeMedico[0] || '';
-    const ultimoNome = partesNomeMedico[partesNomeMedico.length - 1] || '';
-    
-    console.log(`🔍 [AGENDA DEDICADA] Partes do nome: primeiro="${primeiroNome}", último="${ultimoNome}"`);
-    
-    // Normalizar nome do serviço (ex: "Teste Ergométrico" -> "teste ergometrico")
-    const servicoNormalizado = servicoNome
-      .toLowerCase()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remove acentos
-      .replace(/[_-]/g, ' ')
-      .trim();
-    
-    // Buscar agendas que contenham o nome do serviço E alguma referência ao médico
-    const { data: agendas, error } = await supabase
-      .from('medicos')
-      .select('id, nome')
-      .eq('cliente_id', clienteId)
-      .eq('ativo', true);
-    
-    if (error || !agendas) {
-      console.error('❌ [AGENDA DEDICADA] Erro ao buscar agendas:', error);
-      AGENDA_DEDICADA_CACHE.set(cacheKey, null);
-      return null;
-    }
-    
-    // Procurar agenda que siga os padrões conhecidos
-    // Padrões aceitos:
-    // 1. "Teste Ergométrico - Dr. Marcelo"
-    // 2. "Teste Ergométrico - Marcelo"
-    // 3. "MAPA - Dr. Marcelo"
-    // 4. "Holter 24h - Dr. Fulano"
-    
-    const agendaDedicada = agendas.find((ag: any) => {
-      const nomeAgenda = ag.nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      
-      // Verificar se contém o nome do serviço
-      const contemServico = nomeAgenda.includes(servicoNormalizado) ||
-        servicoNormalizado.split(' ').every(palavra => 
-          palavra.length > 2 && nomeAgenda.includes(palavra)
-        );
-      
-      if (!contemServico) return false;
-      
-      // Verificar se contém referência ao médico (primeiro ou último nome)
-      const contemMedico = 
-        (primeiroNome && nomeAgenda.includes(primeiroNome.toLowerCase())) ||
-        (ultimoNome && nomeAgenda.includes(ultimoNome.toLowerCase()));
-      
-      // Verificar se tem separador típico de agenda dedicada
-      const ehFormatoDedicado = nomeAgenda.includes(' - ') || nomeAgenda.includes(' – ');
-      
-      const match = contemServico && contemMedico && ehFormatoDedicado;
-      
-      if (match) {
-        console.log(`✅ [AGENDA DEDICADA] Match encontrado: "${ag.nome}" para serviço="${servicoNome}"`);
-      }
-      
-      return match;
-    });
-    
-    if (agendaDedicada) {
-      const resultado: AgendaDedicada = {
-        id: agendaDedicada.id,
-        nome: agendaDedicada.nome,
-        medico_principal_nome: medicoNome
-      };
-      
-      console.log(`✅ [AGENDA DEDICADA] Encontrada: "${agendaDedicada.nome}" (ID: ${agendaDedicada.id})`);
-      AGENDA_DEDICADA_CACHE.set(cacheKey, resultado);
-      return resultado;
-    }
-    
-    console.log(`ℹ️ [AGENDA DEDICADA] Nenhuma agenda dedicada encontrada para "${servicoNome}" + "${medicoNome}"`);
-    AGENDA_DEDICADA_CACHE.set(cacheKey, null);
-    return null;
-    
-  } catch (err: any) {
-    console.error('❌ [AGENDA DEDICADA] Erro crítico:', err.message);
-    return null;
-  }
-}
-
-/**
- * 🎯 Determina qual ID de médico usar para queries de agendamento
- * Se existe agenda dedicada, usa o ID dela; caso contrário, usa o médico principal
- */
-function getMedicoIdParaQueries(medico: any, agendaDedicada: AgendaDedicada | null): string {
-  if (agendaDedicada) {
-    console.log(`🔄 [QUERY] Usando agenda dedicada "${agendaDedicada.nome}" (${agendaDedicada.id}) em vez de "${medico.nome}" (${medico.id})`);
-    return agendaDedicada.id;
-  }
-  return medico.id;
-}
+const FALLBACK_DIAS_BUSCA_EXPANDIDA = 45;
 
 /**
  * Retorna data mínima de agendamento (dinâmica ou fallback)
@@ -1090,7 +895,7 @@ function formatarHorarioParaExibicao(
   periodoConfig?: any
 ): string {
   if (isOrdemChegada(tipo)) {
-    const distribuicao = getHorarioParaPaciente(periodoConfig) || 
+    const distribuicao = periodoConfig?.distribuicao_fichas || 
                          `${periodoConfig?.inicio || '08:00'} às ${periodoConfig?.fim || '12:00'}`;
     return `por ordem de chegada (${distribuicao})`;
   }
@@ -1195,40 +1000,12 @@ function classificarPeriodoAgendamento(
   horaAgendamento: string,
   periodosConfig: any
 ): string | null {
-  // ✅ Validação de entrada - protege contra undefined/null
-  if (!horaAgendamento || typeof horaAgendamento !== 'string') {
-    console.warn('⚠️ hora_agendamento inválido em classificarPeriodoAgendamento:', horaAgendamento);
-    return null;
-  }
-  
-  // ✅ Validar periodosConfig
-  if (!periodosConfig || typeof periodosConfig !== 'object') {
-    console.warn('⚠️ periodosConfig inválido em classificarPeriodoAgendamento:', periodosConfig);
-    return null;
-  }
-  
   const [h, m] = horaAgendamento.split(':').map(Number);
   const minutos = h * 60 + m;
 
   for (const [periodo, config] of Object.entries(periodosConfig)) {
-    // ✅ Normalizar período para garantir que tem inicio/fim
-    const periodoNormalizado = normalizarPeriodo(config);
-    
-    // ✅ CORREÇÃO: Priorizar contagem_inicio/contagem_fim para classificação de vagas
-    // contagem_inicio/fim define o range real para contar agendamentos
-    // inicio/fim define apenas o horário de comparecer do paciente
-    const inicio = periodoNormalizado?.contagem_inicio || periodoNormalizado?.inicio;
-    const fim = periodoNormalizado?.contagem_fim || periodoNormalizado?.fim;
-    
-    if (!inicio || typeof inicio !== 'string' || !fim || typeof fim !== 'string') {
-      console.warn(`⚠️ Período "${periodo}" sem inicio/fim válidos:`, { inicio, fim, config });
-      continue; // Pular este período, não quebrar
-    }
-    
-    console.log(`🔢 [CLASSIFICAR] Período ${periodo}: range ${inicio}-${fim} para hora ${horaAgendamento}`);
-    
-    const [hInicio, mInicio] = inicio.split(':').map(Number);
-    const [hFim, mFim] = fim.split(':').map(Number);
+    const [hInicio, mInicio] = (config as any).inicio.split(':').map(Number);
+    const [hFim, mFim] = (config as any).fim.split(':').map(Number);
     const inicioMinutos = hInicio * 60 + mInicio;
     const fimMinutos = hFim * 60 + mFim;
 
@@ -1383,7 +1160,8 @@ function montarMensagemConsulta(
   isOrdemChegada: boolean
 ): string {
   const dataFormatada = formatarDataPorExtenso(agendamento.data_agendamento);
-  const periodo = getHorarioParaPaciente(periodoConfig);
+  const periodo = periodoConfig.distribuicao_fichas || 
+                  `${periodoConfig.inicio} às ${periodoConfig.fim}`;
   
   let mensagem = `O(a) paciente ${agendamento.paciente_nome} tem uma consulta agendada para o dia ${dataFormatada}`;
   
@@ -1411,16 +1189,6 @@ function montarMensagemConsulta(
  * Formata consulta com contexto de regras de negócio (períodos, ordem de chegada, etc)
  */
 function formatarConsultaComContexto(agendamento: any, config: DynamicConfig | null): any {
-  // ✅ Validar hora_agendamento antes de processar
-  if (!agendamento.hora_agendamento) {
-    console.warn('⚠️ Agendamento sem hora_agendamento:', agendamento.id);
-    return {
-      ...agendamento,
-      horario_formatado: 'Horário não definido',
-      mensagem: `Consulta agendada para ${formatarDataPorExtenso(agendamento.data_agendamento)}.`
-    };
-  }
-  
   // 1. Buscar regras do médico (dinâmico primeiro, fallback para hardcoded)
   const regras = getMedicoRules(config, agendamento.medico_id, BUSINESS_RULES.medicos[agendamento.medico_id]);
   
@@ -1447,18 +1215,7 @@ function formatarConsultaComContexto(agendamento: any, config: DynamicConfig | n
     };
   }
   
-  // ✅ Normalizar serviço ANTES de classificar período (garante inicio/fim)
-  const servico = normalizarServicoPeriodos(regras.servicos[servicoKey]);
-  
-  // ✅ Validar se servico.periodos existe
-  if (!servico?.periodos) {
-    console.warn('⚠️ Serviço sem períodos configurados:', servicoKey);
-    return {
-      ...agendamento,
-      horario_formatado: agendamento.hora_agendamento,
-      mensagem: `Consulta agendada para ${formatarDataPorExtenso(agendamento.data_agendamento)} às ${agendamento.hora_agendamento}.`
-    };
-  }
+  const servico = regras.servicos[servicoKey];
   
   // 4. Usar classificarPeriodoAgendamento para identificar o período
   const periodo = classificarPeriodoAgendamento(
@@ -1486,8 +1243,7 @@ function formatarConsultaComContexto(agendamento: any, config: DynamicConfig | n
   
   return {
     ...agendamento,
-    periodo: getHorarioParaPaciente(periodoConfig),
-    horario_comparecer: getHorarioParaPaciente(periodoConfig),
+    periodo: periodoConfig.distribuicao_fichas || `${periodoConfig.inicio} às ${periodoConfig.fim}`,
     atendimento_inicio: periodoConfig.atendimento_inicio,
     tipo_agendamento: servico.tipo,
     mensagem
@@ -2040,11 +1796,6 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
     
     // Função simples para classificar período baseado na hora
     const classificarPeriodoSimples = (hora: string): string => {
-      // ✅ Validação de entrada
-      if (!hora || typeof hora !== 'string') {
-        console.warn('⚠️ Hora inválida em classificarPeriodoSimples:', hora);
-        return 'manha'; // Default seguro
-      }
       const [h] = hora.split(':').map(Number);
       return h < 12 ? 'manha' : 'tarde';
     };
@@ -2134,29 +1885,6 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
     // ===== VALIDAÇÕES DE REGRAS DE NEGÓCIO (APENAS PARA N8N) =====
     const regras = getMedicoRules(config, medico.id, BUSINESS_RULES.medicos[medico.id]);
     console.log(`📋 Regras encontradas para médico ID ${medico.id}: ${regras ? 'SIM' : 'NÃO'}`);
-
-    // 🆕 MAPEAMENTO DE AGENDA DEDICADA (handleSchedule)
-    // Verifica se o serviço tem agenda virtual separada (ex: "Teste Ergométrico - Dr. Marcelo")
-    let medicoIdParaQueries = medico.id;
-    let nomeAgendaDedicada: string | null = null;
-
-    if (atendimento_nome) {
-      console.log(`🔍 [SCHEDULE-AGENDA-DEDICADA] Verificando se "${atendimento_nome}" tem agenda separada...`);
-      const agendaDedicada = await buscarAgendaDedicada(
-        supabase, 
-        medico.nome, 
-        atendimento_nome, 
-        clienteId
-      );
-      
-      if (agendaDedicada) {
-        medicoIdParaQueries = agendaDedicada.id;
-        nomeAgendaDedicada = agendaDedicada.nome;
-        console.log(`✅ [SCHEDULE-AGENDA-DEDICADA] Usando agenda "${agendaDedicada.nome}" (ID: ${agendaDedicada.id}) para queries de agendamento`);
-      } else {
-        console.log(`ℹ️ [SCHEDULE-AGENDA-DEDICADA] Nenhuma agenda dedicada encontrada, usando agenda principal`);
-      }
-    }
     
     if (regras) {
       console.log(`✅ Regras válidas para ${regras.nome}`);
@@ -2261,7 +1989,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
                 const resultadoLimites = await verificarLimitesCompartilhados(
                   supabase,
                   clienteId,
-                  medicoIdParaQueries, // 🆕 Usar agenda dedicada se existir
+                  medico.id,
                   data_consulta,
                   servicoKeyValidacao,
                   servicoLocal,
@@ -2291,7 +2019,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
                     const vagasDisponiveis = await calcularVagasDisponiveisComLimites(
                       supabase,
                       clienteId,
-                      medicoIdParaQueries, // 🆕 Usar agenda dedicada se existir
+                      medico.id,
                       dataFuturaStr,
                       servicoKeyValidacao,
                       servicoLocal,
@@ -2409,7 +2137,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
                   let query = supabase
                     .from('agendamentos')
                     .select('id, hora_agendamento, created_at')
-                    .eq('medico_id', medicoIdParaQueries) // 🆕 Usar agenda dedicada se existir
+                    .eq('medico_id', medico.id)
                     .eq('data_agendamento', data_consulta)
                     .eq('cliente_id', clienteId)
                     .is('excluido_em', null)
@@ -2462,16 +2190,16 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
                           
                           // ✅ Buscar agendamentos do período específico (incluindo recentes)
                           const cincMinutosAtras = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-                  let queryFuturos = supabase
-                    .from('agendamentos')
-                    .select('id, atendimento_id, hora_agendamento, created_at')
-                    .eq('medico_id', medicoIdParaQueries) // 🆕 Usar agenda dedicada se existir
-                    .eq('data_agendamento', dataFuturaStr)
-                    .eq('cliente_id', clienteId)
-                    .is('excluido_em', null)
-                    .is('cancelado_em', null)
-                    .in('status', ['agendado', 'confirmado'])
-                    .gte('created_at', cincMinutosAtras); // Incluir agendamentos criados nos últimos 5min
+                          let queryFuturos = supabase
+                            .from('agendamentos')
+                            .select('id, atendimento_id, hora_agendamento, created_at')
+                            .eq('medico_id', medico.id)
+                            .eq('data_agendamento', dataFuturaStr)
+                            .eq('cliente_id', clienteId)
+                            .is('excluido_em', null)
+                            .is('cancelado_em', null)
+                            .in('status', ['agendado', 'confirmado'])
+                            .gte('created_at', cincMinutosAtras); // Incluir agendamentos criados nos últimos 5min
                           
                           // 🆕 Filtrar por horário do período de CONTAGEM
                           if (inicioContagem && fimContagem) {
@@ -2568,14 +2296,14 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
     // Buscar atendimento por nome (se especificado) COM filtro de cliente
     let atendimento_id = null;
     if (atendimento_nome) {
-      console.log(`🔍 Buscando atendimento: "${atendimento_nome}" para médico_id: ${medicoIdParaQueries} (agenda: ${nomeAgendaDedicada || medico.nome})`);
+      console.log(`🔍 Buscando atendimento: "${atendimento_nome}" para médico ${medico.nome}`);
       
-      // Tentativa 1: Busca pelo nome fornecido - USANDO medicoIdParaQueries para agenda dedicada
+      // Tentativa 1: Busca pelo nome fornecido
       let { data: atendimento, error: atendimentoError } = await supabase
         .from('atendimentos')
         .select('id, nome, tipo')
         .ilike('nome', `%${atendimento_nome}%`)
-        .eq('medico_id', medicoIdParaQueries)  // ✅ Usa agenda dedicada quando existir
+        .eq('medico_id', medico.id)
         .eq('cliente_id', clienteId)
         .eq('ativo', true)
         .single();
@@ -2603,7 +2331,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
             .from('atendimentos')
             .select('id, nome, tipo')
             .eq('tipo', tipoAtendimento)
-            .eq('medico_id', medicoIdParaQueries)  // ✅ Usa agenda dedicada
+            .eq('medico_id', medico.id)
             .eq('cliente_id', clienteId)
             .eq('ativo', true)
             .limit(1);
@@ -2620,7 +2348,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
         const { data: atendimentosDisponiveis } = await supabase
           .from('atendimentos')
           .select('nome, tipo')
-          .eq('medico_id', medicoIdParaQueries)  // ✅ Usa agenda dedicada
+          .eq('medico_id', medico.id)
           .eq('cliente_id', clienteId)
           .eq('ativo', true);
         
@@ -2650,7 +2378,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
       const { data: atendimentos } = await supabase
         .from('atendimentos')
         .select('id, nome')
-        .eq('medico_id', medicoIdParaQueries)  // ✅ Usa agenda dedicada
+        .eq('medico_id', medico.id)
         .eq('cliente_id', clienteId)
         .eq('ativo', true)
         .limit(1);
@@ -2724,7 +2452,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
                 const { count } = await supabase
                   .from('agendamentos')
                   .select('*', { count: 'exact', head: true })
-                  .eq('medico_id', medicoIdParaQueries) // 🆕 Usar agenda dedicada se existir
+                  .eq('medico_id', medico.id)
                   .eq('data_agendamento', data_consulta)
                   .eq('hora_agendamento', horarioTeste)
                   .eq('cliente_id', clienteId)
@@ -2764,16 +2492,16 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
                 const m = horaAtual % 60;
                 const horarioTeste = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:00`;
                 
-              // Verificar se este horário está disponível
-              const { count } = await supabase
-                .from('agendamentos')
-                .select('*', { count: 'exact', head: true })
-                .eq('medico_id', medicoIdParaQueries) // 🆕 Usar agenda dedicada se existir
-                .eq('data_agendamento', data_consulta)
-                .eq('hora_agendamento', horarioTeste)
-                .eq('cliente_id', clienteId)
-                .is('excluido_em', null)
-                .in('status', ['agendado', 'confirmado']);
+                // Verificar se este horário está disponível
+                const { count } = await supabase
+                  .from('agendamentos')
+                  .select('*', { count: 'exact', head: true })
+                  .eq('medico_id', medico.id)
+                  .eq('data_agendamento', data_consulta)
+                  .eq('hora_agendamento', horarioTeste)
+                  .eq('cliente_id', clienteId)
+                  .is('excluido_em', null)
+                  .in('status', ['agendado', 'confirmado']);
                 
                 if (count === 0) {
                   console.log(`✅ Primeiro horário livre encontrado: ${horarioTeste}`);
@@ -2825,7 +2553,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
         p_convenio: formatarConvenioParaBanco(convenio), // ✅ Formatar para padrão do banco
         p_telefone: telefone || null,
         p_celular: celular,
-        p_medico_id: medicoIdParaQueries, // 🆕 Usar agenda dedicada se existir
+        p_medico_id: medico.id,
         p_atendimento_id: atendimento_id,
         p_data_agendamento: data_consulta,
         p_hora_agendamento: horarioFinal, // 🆕 Usar horário convertido
@@ -2878,50 +2606,81 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
           }
         }
         
-        // Se encontrou período válido, usar função otimizada que verifica CONTAGEM de vagas
+        // Se encontrou período válido, fazer loop minuto a minuto
         if (periodoConfig) {
           console.log(`📋 Período detectado: ${nomePeriodo} (${periodoConfig.inicio}-${periodoConfig.fim}, limite: ${periodoConfig.limite})`);
           
-          // 🆕 Usar contagem_inicio/contagem_fim se configurados
-          const inicioContagem = periodoConfig.contagem_inicio || periodoConfig.inicio;
-          const fimContagem = periodoConfig.contagem_fim || periodoConfig.fim;
+          // Calcular minutos do período
+          const [hInicio, minInicio] = periodoConfig.inicio.split(':').map(Number);
+          const [hFim, minFim] = periodoConfig.fim.split(':').map(Number);
+          const minutoInicio = hInicio * 60 + minInicio;
+          const minutoFim = hFim * 60 + minFim;
           
-          console.log(`🔢 [ORDEM CHEGADA] Contagem de vagas: ${inicioContagem}-${fimContagem}, Limite: ${periodoConfig.limite}`);
+          console.log(`🔍 Iniciando busca de ${periodoConfig.inicio} até ${periodoConfig.fim} (${minutoFim - minutoInicio} minutos)`);
           
-          // ✅ NOVA LÓGICA: Usar função SQL que verifica contagem de vagas (1 chamada ao banco!)
-          const { data: resultadoOrdemChegada, error: erroOrdemChegada } = await supabase
-            .rpc('criar_agendamento_ordem_chegada', {
-              p_cliente_id: clienteId,
-              p_nome_completo: paciente_nome.toUpperCase(),
-              p_data_nascimento: data_nascimento,
-              p_convenio: formatarConvenioParaBanco(convenio),
-              p_telefone: telefone || null,
-              p_celular: celular,
-              p_medico_id: medicoIdParaQueries, // 🆕 Usar agenda dedicada se existir
-              p_atendimento_id: atendimento_id,
-              p_data_agendamento: data_consulta,
-              p_hora_inicio_periodo: inicioContagem,
-              p_hora_fim_periodo: fimContagem,
-              p_limite_vagas: periodoConfig.limite,
-              p_observacoes: (observacoes || 'Agendamento via LLM Agent WhatsApp').toUpperCase(),
-              p_criado_por: 'LLM Agent WhatsApp'
-            });
+          let tentativas = 0;
+          let horarioAlocado = null;
+          let resultadoFinal = null;
           
-          // Verificar erro de execução
-          if (erroOrdemChegada) {
-            console.error(`❌ Erro ao executar criar_agendamento_ordem_chegada:`, erroOrdemChegada);
+          // Loop minuto a minuto
+          for (let minutoAtual = minutoInicio; minutoAtual < minutoFim; minutoAtual++) {
+            tentativas++;
+            const hora = Math.floor(minutoAtual / 60);
+            const min = minutoAtual % 60;
+            const horarioTeste = `${String(hora).padStart(2, '0')}:${String(min).padStart(2, '0')}:00`;
+            
+            console.log(`🔁 Tentativa ${tentativas}: Testando ${horarioTeste}...`);
+            
+            // Tentar agendar neste minuto
+            const { data: tentativaResult, error: tentativaError } = await supabase
+              .rpc('criar_agendamento_atomico_externo', {
+                p_cliente_id: clienteId,
+                p_nome_completo: paciente_nome.toUpperCase(),
+                p_data_nascimento: data_nascimento,
+                p_convenio: formatarConvenioParaBanco(convenio), // ✅ Formatar para padrão do banco
+                p_telefone: telefone || null,
+                p_celular: celular,
+                p_medico_id: medico.id,
+                p_atendimento_id: atendimento_id,
+                p_data_agendamento: data_consulta,
+                p_hora_agendamento: horarioTeste,
+                p_observacoes: (observacoes || 'Agendamento via LLM Agent WhatsApp').toUpperCase(),
+                p_criado_por: 'LLM Agent WhatsApp',
+                p_force_conflict: false
+              });
+            
+            // Verificar resultado
+            if (tentativaError) {
+              console.error(`❌ Erro inesperado em ${horarioTeste}:`, tentativaError);
+              // Continuar tentando outros horários mesmo com erro
+              continue;
+            }
+            
+            if (tentativaResult?.success) {
+              // ✅ SUCESSO! Encontramos um horário livre
+              console.log(`✅ SUCESSO! Agendado em ${horarioTeste} após ${tentativas} tentativas`);
+              horarioAlocado = horarioTeste;
+              resultadoFinal = tentativaResult;
+              break;
+            }
+            
+            if (tentativaResult?.error === 'CONFLICT') {
+              // Horário ocupado, continuar para o próximo
+              console.log(`⏭️  ${horarioTeste} ocupado, tentando próximo...`);
+              continue;
+            }
+            
+            // Outro tipo de erro (idade, convênio, etc.) - parar o loop
+            console.error(`⚠️ Erro não-conflito em ${horarioTeste}:`, tentativaResult?.error);
             return businessErrorResponse({
-              codigo_erro: 'ERRO_BANCO',
-              mensagem_usuario: 'Erro interno ao processar agendamento. Por favor, tente novamente.',
-              detalhes: { erro: erroOrdemChegada.message }
+              codigo_erro: tentativaResult?.error || 'ERRO_DESCONHECIDO',
+              mensagem_usuario: tentativaResult?.message || `Erro ao tentar agendar: ${tentativaResult?.error}`,
+              detalhes: { horario: horarioTeste }
             });
           }
           
-          // Verificar resultado
-          if (resultadoOrdemChegada?.success) {
-            // ✅ SUCESSO!
-            console.log(`✅ SUCESSO! Agendado por ordem de chegada. Vagas: ${resultadoOrdemChegada.vagas_ocupadas}/${resultadoOrdemChegada.vagas_total}`);
-            
+          // Verificar se conseguiu alocar
+          if (horarioAlocado && resultadoFinal) {
             // 🆕 Usar mensagens dinâmicas do banco
             let mensagem = `✅ Consulta agendada com sucesso para ${paciente_nome}`;
             
@@ -2935,12 +2694,16 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
               // Mensagem padrão genérica com período detalhado
               const dataFormatada = new Date(data_consulta + 'T00:00:00').toLocaleDateString('pt-BR');
               
+              // Determinar nome do período baseado no horário alocado
+              const [hAlocado] = horarioAlocado.split(':').map(Number);
+              let periodoNomeLoop = hAlocado >= 7 && hAlocado < 12 ? 'manhã' : hAlocado >= 13 && hAlocado < 18 ? 'tarde' : '';
+              
               // Buscar horários do período se disponível
               let periodoInfoLoop = '';
-              if (nomePeriodo && periodoConfig) {
-                periodoInfoLoop = ` no período da ${nomePeriodo} (${getHorarioParaPaciente(periodoConfig)})`;
-              } else if (nomePeriodo) {
-                periodoInfoLoop = ` no período da ${nomePeriodo}`;
+              if (periodoNomeLoop && periodoConfig) {
+                periodoInfoLoop = ` no período da ${periodoNomeLoop} (${periodoConfig.inicio.substring(0,5)} às ${periodoConfig.fim.substring(0,5)})`;
+              } else if (periodoNomeLoop) {
+                periodoInfoLoop = ` no período da ${periodoNomeLoop}`;
               }
               
               mensagem = `✅ Agendada para ${dataFormatada}${periodoInfoLoop}, por ordem de chegada.`;
@@ -2955,40 +2718,80 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
             
             return successResponse({
               message: mensagem,
-              agendamento_id: resultadoOrdemChegada.agendamento_id,
-              paciente_id: resultadoOrdemChegada.paciente_id,
+              agendamento_id: resultadoFinal.agendamento_id,
+              paciente_id: resultadoFinal.paciente_id,
               data: data_consulta,
               medico: medico.nome,
               atendimento: atendimento_nome || 'Consulta',
               validado: true,
-              confirmacao_criado: true,
-              vagas_ocupadas: resultadoOrdemChegada.vagas_ocupadas,
-              vagas_total: resultadoOrdemChegada.vagas_total
+              confirmacao_criado: true
             });
           }
           
-          // Tratar erros específicos
-          if (resultadoOrdemChegada?.error === 'PERIODO_LOTADO') {
-            console.log(`❌ Período ${nomePeriodo} está completamente lotado: ${resultadoOrdemChegada.vagas_ocupadas}/${resultadoOrdemChegada.vagas_total}`);
+          // Se chegou aqui, não conseguiu alocar em nenhum minuto
+          console.log(`⚠️ Não foi possível alocar após ${tentativas} tentativas. Verificando estado do período...`);
+          
+          // 🔍 VERIFICAR CONTAGEM REAL DE AGENDAMENTOS NO PERÍODO
+          // 🆕 Usar contagem_inicio/contagem_fim se configurados
+          const inicioContagemFinal = periodoConfig.contagem_inicio || periodoConfig.inicio;
+          const fimContagemFinal = periodoConfig.contagem_fim || periodoConfig.fim;
+          const [hInicioContagem, mInicioContagem] = inicioContagemFinal.split(':').map(Number);
+          const [hFimContagem, mFimContagem] = fimContagemFinal.split(':').map(Number);
+          const minInicioContagem = hInicioContagem * 60 + mInicioContagem;
+          const minFimContagem = hFimContagem * 60 + mFimContagem;
+          
+          console.log(`🔢 [CONTAGEM FINAL] Exibição: ${periodoConfig.inicio}-${periodoConfig.fim}, Contagem: ${inicioContagemFinal}-${fimContagemFinal}`);
+          
+          const { data: agendamentosDoPeriodo } = await supabase
+            .from('agendamentos')
+            .select('hora_agendamento')
+            .eq('medico_id', medico.id)
+            .eq('data_agendamento', data_consulta)
+            .eq('cliente_id', clienteId)
+            .in('status', ['agendado', 'confirmado']);
+          
+          const agendamentosNoPeriodo = agendamentosDoPeriodo?.filter(a => {
+            const [h, m] = a.hora_agendamento.split(':').map(Number);
+            const minutoAgendamento = h * 60 + m;
+            return minutoAgendamento >= minInicioContagem && minutoAgendamento < minFimContagem;
+          }) || [];
+          
+          const vagasOcupadas = agendamentosNoPeriodo.length;
+          const vagasDisponiveis = periodoConfig.limite - vagasOcupadas;
+          
+          console.log(`📊 Estado final: ${vagasOcupadas}/${periodoConfig.limite} vagas ocupadas no período ${nomePeriodo}`);
+          
+          if (vagasDisponiveis <= 0) {
+            // Período realmente lotado
+            console.log(`❌ Período ${nomePeriodo} está completamente lotado`);
             return businessErrorResponse({
               codigo_erro: 'PERIODO_LOTADO',
-              mensagem_usuario: `O período da ${nomePeriodo} está com todas as vagas ocupadas (${resultadoOrdemChegada.vagas_ocupadas}/${resultadoOrdemChegada.vagas_total}). Por favor, escolha outro período ou outro dia.`,
+              mensagem_usuario: `O período da ${nomePeriodo} está com todas as vagas ocupadas (${vagasOcupadas}/${periodoConfig.limite}). Por favor, escolha outro período ou outro dia.`,
               detalhes: {
                 periodo: nomePeriodo,
-                vagas_ocupadas: resultadoOrdemChegada.vagas_ocupadas,
-                vagas_total: resultadoOrdemChegada.vagas_total,
-                data_solicitada: data_consulta
+                vagas_ocupadas: vagasOcupadas,
+                vagas_total: periodoConfig.limite,
+                data_solicitada: data_consulta,
+                tentativas_realizadas: tentativas
+              }
+            });
+          } else {
+            // Tem vagas mas nenhum minuto passou na função atômica
+            console.log(`⚠️ Período tem ${vagasDisponiveis} vaga(s) mas nenhum horário foi aceito pelo banco após ${tentativas} tentativas`);
+            return businessErrorResponse({
+              codigo_erro: 'ALOCACAO_FALHOU',
+              mensagem_usuario: `Não foi possível encontrar um horário disponível no período da ${nomePeriodo}. Foram testados ${tentativas} minutos, mas todos apresentaram conflitos. Por favor, tente outro período ou entre em contato.`,
+              detalhes: {
+                periodo: nomePeriodo,
+                vagas_disponiveis: vagasDisponiveis,
+                vagas_ocupadas: vagasOcupadas,
+                vagas_total: periodoConfig.limite,
+                data_solicitada: data_consulta,
+                tentativas_realizadas: tentativas,
+                sugestao: 'O sistema pode estar com alta demanda ou há restrições específicas. Tente outro período.'
               }
             });
           }
-          
-          // Outros erros (idade, convênio, etc.)
-          console.error(`⚠️ Erro ao agendar por ordem de chegada:`, resultadoOrdemChegada?.error, resultadoOrdemChegada?.message);
-          return businessErrorResponse({
-            codigo_erro: resultadoOrdemChegada?.error || 'ERRO_DESCONHECIDO',
-            mensagem_usuario: resultadoOrdemChegada?.message || `Erro ao tentar agendar: ${resultadoOrdemChegada?.error}`,
-            detalhes: { periodo: nomePeriodo }
-          });
         }
       }
       
@@ -3038,7 +2841,6 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
         // Determinar período e horário baseado na hora do agendamento
         let periodoNomeConf = '';
         let periodoHorarioConf = '';
-        let horaAtendimentoConf = '';
         
         // Buscar config do período para informações detalhadas
         if (regrasMedicoSchedule?.servicos) {
@@ -3051,9 +2853,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
               const [hFimM] = manha.fim.split(':').map(Number);
               if (hora >= hInicioM && hora < hFimM) {
                 periodoNomeConf = 'manhã';
-                periodoHorarioConf = getHorarioParaPaciente(manha);
-                const horarioAtend = getHorarioAtendimento(manha);
-                horaAtendimentoConf = horarioAtend?.atendimento_inicio || '';
+                periodoHorarioConf = `${manha.inicio.substring(0,5)} às ${manha.fim.substring(0,5)}`;
               }
             }
             if (!periodoNomeConf && servicoAtual.periodos.tarde) {
@@ -3062,35 +2862,15 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
               const [hFimT] = tarde.fim.split(':').map(Number);
               if (hora >= hInicioT && hora < hFimT) {
                 periodoNomeConf = 'tarde';
-                periodoHorarioConf = getHorarioParaPaciente(tarde);
-                const horarioAtend = getHorarioAtendimento(tarde);
-                horaAtendimentoConf = horarioAtend?.atendimento_inicio || '';
+                periodoHorarioConf = `${tarde.inicio.substring(0,5)} às ${tarde.fim.substring(0,5)}`;
               }
             }
           }
         }
         
-        // Formatar nome do paciente (apenas primeiro nome, capitalizado)
-        const primeiroNome = paciente_nome.split(' ')[0];
-        const nomeFormatado = primeiroNome.charAt(0).toUpperCase() + primeiroNome.slice(1).toLowerCase();
-        
-        // Mensagem estruturada com período detalhado
+        // Mensagem com período detalhado
         if (periodoNomeConf && periodoHorarioConf) {
-          const msgParts = [
-            `✅ Consulta agendada com sucesso!`,
-            ``,
-            `Paciente: ${nomeFormatado}`,
-            `📅 Data: ${dataFormatada}`,
-            `🕖 Período da ${periodoNomeConf} — De ${periodoHorarioConf} para fazer a ficha.`
-          ];
-          
-          if (horaAtendimentoConf) {
-            msgParts.push(`👨‍⚕️ O médico inicia os atendimentos às ${horaAtendimentoConf}, por ordem de chegada.`);
-          } else {
-            msgParts.push(`👨‍⚕️ Atendimento por ordem de chegada.`);
-          }
-          
-          mensagem = msgParts.join('\n');
+          mensagem = `✅ Consulta agendada para ${paciente_nome} em ${dataFormatada} no período da ${periodoNomeConf} (${periodoHorarioConf}), por ordem de chegada.`;
         } else {
           // Fallback simples se não encontrar config
           mensagem = `✅ Consulta agendada para ${paciente_nome} em ${dataFormatada} por ordem de chegada.`;
@@ -3477,33 +3257,24 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string, c
     }
 
     // 📋 PASSO 3: Montar resposta com agendamentos futuros formatados contextualmente
-    // ✅ Filtrar agendamentos com dados válidos antes de processar
-    const consultas = agendamentos
-      .filter((a: any) => {
-        if (!a.hora_agendamento) {
-          console.warn('⚠️ Agendamento ignorado por falta de hora_agendamento:', a.id);
-          return false;
-        }
-        return true;
-      })
-      .map((a: any) => {
-        const consultaBase = {
-          id: a.id,
-          paciente_nome: a.pacientes?.nome_completo,
-          medico_id: a.medico_id,
-          medico_nome: a.medicos?.nome,
-          especialidade: a.medicos?.especialidade,
-          atendimento_nome: a.atendimentos?.nome,
-          data_agendamento: a.data_agendamento,
-          hora_agendamento: a.hora_agendamento,
-          status: a.status,
-          convenio: a.pacientes?.convenio,
-          observacoes: a.observacoes
-        };
-        
-        // ✅ Aplicar formatação contextual com regras de negócio (passando config dinâmica)
-        return formatarConsultaComContexto(consultaBase, config);
-      });
+    const consultas = agendamentos.map((a: any) => {
+      const consultaBase = {
+        id: a.id,
+        paciente_nome: a.pacientes?.nome_completo,
+        medico_id: a.medico_id,
+        medico_nome: a.medicos?.nome,
+        especialidade: a.medicos?.especialidade,
+        atendimento_nome: a.atendimentos?.nome,
+        data_agendamento: a.data_agendamento,
+        hora_agendamento: a.hora_agendamento,
+        status: a.status,
+        convenio: a.pacientes?.convenio,
+        observacoes: a.observacoes
+      };
+      
+      // ✅ Aplicar formatação contextual com regras de negócio (passando config dinâmica)
+      return formatarConsultaComContexto(consultaBase, config);
+    });
 
     // Construir mensagem geral com todas as consultas formatadas
     const mensagensConsultas = consultas.map((c, i) => 
@@ -3521,12 +3292,6 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string, c
     });
 
   } catch (error: any) {
-    // ✅ Log detalhado para debugging
-    console.error('❌ Erro em handleCheckPatient:', {
-      message: error?.message,
-      stack: error?.stack,
-      clienteId
-    });
     return errorResponse(`Erro ao verificar paciente: ${error?.message || 'Erro desconhecido'}`);
   }
 }
@@ -3547,14 +3312,13 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
     } = body;
 
     const nova_data = sanitizarCampoOpcional(novaDataRaw);
-    let nova_hora = sanitizarCampoOpcional(novaHoraRaw);
+    const nova_hora = sanitizarCampoOpcional(novaHoraRaw);
 
-    // Validação inicial - agendamento_id e nova_data são sempre obrigatórios
+    // Validação detalhada
     const camposFaltando = [];
     if (!agendamento_id) camposFaltando.push('agendamento_id');
     if (!nova_data) camposFaltando.push('nova_data');
-    
-    // nova_hora será validada após determinar tipo de agendamento
+    if (!nova_hora) camposFaltando.push('nova_hora');
     
     if (camposFaltando.length > 0) {
       const erro = `Campos obrigatórios faltando: ${camposFaltando.join(', ')}`;
@@ -3564,7 +3328,7 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
     }
     
     console.log('✅ Validação inicial OK');
-    console.log(`📝 Remarcando agendamento ${agendamento_id} para ${nova_data}`);
+    console.log(`📝 Remarcando agendamento ${agendamento_id} para ${nova_data} às ${nova_hora}`);
 
     // Verificar se agendamento existe COM filtro de cliente
     console.log(`🔍 Buscando agendamento ${agendamento_id}...`);
@@ -3573,13 +3337,11 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
       .select(`
         id,
         medico_id,
-        atendimento_id,
         data_agendamento,
         hora_agendamento,
         status,
         pacientes(nome_completo),
-        medicos(nome),
-        atendimentos(nome, tipo)
+        medicos(nome)
       `)
       .eq('id', agendamento_id)
       .eq('cliente_id', clienteId)
@@ -3598,7 +3360,6 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
     console.log('✅ Agendamento encontrado:', {
       paciente: agendamento.pacientes?.nome_completo,
       medico: agendamento.medicos?.nome,
-      atendimento: agendamento.atendimentos?.nome,
       data_atual: agendamento.data_agendamento,
       hora_atual: agendamento.hora_agendamento,
       status: agendamento.status
@@ -3609,226 +3370,8 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
       return errorResponse('Não é possível remarcar consulta cancelada');
     }
 
-    // 🆕 DETERMINAR TIPO DE AGENDAMENTO DO SERVIÇO
-    const regras = getMedicoRules(config, agendamento.medico_id, BUSINESS_RULES.medicos[agendamento.medico_id]);
-    let tipoAgendamento = 'hora_marcada'; // default
-    let servicoConfig: any = null;
-    let periodoConfig: any = null;
-    const atendimentoNome = agendamento.atendimentos?.nome || '';
-    
-    if (regras?.servicos) {
-      // Normalizar nome do atendimento para busca
-      const normalizarNome = (texto: string): string => 
-        texto.toLowerCase()
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .replace(/\b(de|da|do|das|dos)\b/g, '')
-          .replace(/[_\-\s]+/g, '')
-          .replace(/oi/g, 'o')
-          .replace(/ai/g, 'a');
-      
-      const atendimentoNorm = normalizarNome(atendimentoNome);
-      const servicoKey = Object.keys(regras.servicos).find(s => {
-        const servicoNorm = normalizarNome(s);
-        return servicoNorm.includes(atendimentoNorm) || 
-               atendimentoNorm.includes(servicoNorm) ||
-               servicoNorm === atendimentoNorm;
-      });
-      
-      if (servicoKey) {
-        servicoConfig = regras.servicos[servicoKey];
-        tipoAgendamento = getTipoAgendamentoEfetivo(servicoConfig, regras);
-        console.log(`✅ Tipo de agendamento detectado: ${tipoAgendamento} para serviço "${servicoKey}"`);
-      }
-    } else if (regras?.tipo_agendamento) {
-      tipoAgendamento = regras.tipo_agendamento;
-      console.log(`✅ Tipo de agendamento do médico: ${tipoAgendamento}`);
-    }
-    
-    const ehOrdemChegada = isOrdemChegada(tipoAgendamento);
-    console.log(`📋 É ordem de chegada: ${ehOrdemChegada}`);
-    
-    // 🆕 PARA ORDEM DE CHEGADA: nova_hora pode ser período ou opcional
-    let horarioFinal = nova_hora;
-    let periodoSolicitado: string | null = null;
-    
-    if (ehOrdemChegada) {
-      // Detectar se nova_hora é um período (manhã/tarde)
-      const isPeriodo = (h: string | null): boolean => {
-        if (!h) return false;
-        const hLower = h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        return ['manha', 'tarde', 'noite'].includes(hLower);
-      };
-      
-      const normalizarPeriodo = (h: string): string => {
-        const hLower = h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        if (hLower.includes('manha')) return 'manha';
-        if (hLower.includes('tarde')) return 'tarde';
-        if (hLower.includes('noite')) return 'noite';
-        return 'manha';
-      };
-      
-      // Determinar dia da semana da nova data
-      const diaSemana = new Date(nova_data + 'T00:00:00').getDay();
-      console.log(`📅 Dia da semana para ${nova_data}: ${diaSemana}`);
-      
-      if (isPeriodo(nova_hora)) {
-        periodoSolicitado = normalizarPeriodo(nova_hora);
-        console.log(`📋 Período solicitado explicitamente: ${periodoSolicitado}`);
-      } else if (!nova_hora && servicoConfig?.periodos) {
-        // Auto-detectar período baseado no dia da semana
-        const periodos = ['manha', 'tarde', 'noite'];
-        for (const p of periodos) {
-          const pConfig = servicoConfig.periodos[p];
-          if (pConfig?.dias_especificos?.includes(diaSemana)) {
-            periodoSolicitado = p;
-            console.log(`📋 Período auto-detectado para dia ${diaSemana}: ${p}`);
-            break;
-          }
-        }
-        
-        if (!periodoSolicitado) {
-          // Fallback: usar primeiro período ativo
-          for (const p of periodos) {
-            if (servicoConfig.periodos[p]?.ativo !== false) {
-              periodoSolicitado = p;
-              console.log(`📋 Período fallback: ${p}`);
-              break;
-            }
-          }
-        }
-      }
-      
-      // Obter configuração do período
-      if (servicoConfig?.periodos && periodoSolicitado) {
-        periodoConfig = servicoConfig.periodos[periodoSolicitado];
-      }
-      
-      if (!periodoConfig && servicoConfig?.periodos) {
-        // Tentar encontrar qualquer período válido para o dia
-        const periodos = ['manha', 'tarde', 'noite'];
-        for (const p of periodos) {
-          const pConfig = servicoConfig.periodos[p];
-          if (pConfig && (pConfig.dias_especificos?.includes(diaSemana) || pConfig.ativo !== false)) {
-            periodoConfig = pConfig;
-            periodoSolicitado = p;
-            console.log(`📋 Período encontrado para dia ${diaSemana}: ${p}`);
-            break;
-          }
-        }
-      }
-      
-      // 🔍 BUSCAR PRIMEIRO SLOT LIVRE NO PERÍODO (ordem de chegada)
-      if (periodoConfig) {
-        console.log(`🔍 Buscando slot livre para ordem de chegada no período ${periodoSolicitado}...`);
-        console.log(`📋 Config do período:`, JSON.stringify(periodoConfig, null, 2));
-        
-        // Validar limite de vagas do período
-        const { count: vagasOcupadas } = await supabase
-          .from('agendamentos')
-          .select('*', { count: 'exact', head: true })
-          .eq('medico_id', agendamento.medico_id)
-          .eq('data_agendamento', nova_data)
-          .eq('cliente_id', clienteId)
-          .gte('hora_agendamento', periodoConfig.inicio)
-          .lte('hora_agendamento', periodoConfig.fim)
-          .neq('id', agendamento_id) // Excluir o próprio agendamento
-          .is('excluido_em', null)
-          .in('status', ['agendado', 'confirmado']);
-        
-        const limiteVagas = periodoConfig.limite || 10;
-        console.log(`📊 Vagas ocupadas: ${vagasOcupadas} de ${limiteVagas}`);
-        
-        if (vagasOcupadas >= limiteVagas) {
-          // Buscar próximas datas disponíveis
-          const { data: dataAtualBrasil } = getDataHoraAtualBrasil();
-          const proximasDatas: string[] = [];
-          
-          for (let dias = 1; dias <= 30 && proximasDatas.length < 3; dias++) {
-            const dataFutura = new Date(nova_data + 'T00:00:00');
-            dataFutura.setDate(dataFutura.getDate() + dias);
-            const dataFuturaStr = dataFutura.toISOString().split('T')[0];
-            const diaSemanaFuturo = dataFutura.getDay();
-            
-            // Verificar se dia é permitido
-            if (periodoConfig.dias_especificos && !periodoConfig.dias_especificos.includes(diaSemanaFuturo)) {
-              continue;
-            }
-            
-            // Verificar vagas
-            const { count: vagasFuturas } = await supabase
-              .from('agendamentos')
-              .select('*', { count: 'exact', head: true })
-              .eq('medico_id', agendamento.medico_id)
-              .eq('data_agendamento', dataFuturaStr)
-              .eq('cliente_id', clienteId)
-              .gte('hora_agendamento', periodoConfig.inicio)
-              .lte('hora_agendamento', periodoConfig.fim)
-              .is('excluido_em', null)
-              .in('status', ['agendado', 'confirmado']);
-            
-            if ((vagasFuturas || 0) < limiteVagas) {
-              proximasDatas.push(formatarDataPorExtenso(dataFuturaStr));
-            }
-          }
-          
-          return businessErrorResponse({
-            codigo_erro: 'LIMITE_VAGAS',
-            mensagem_usuario: `❌ Todas as ${limiteVagas} vagas já foram ocupadas para ${formatarDataPorExtenso(nova_data)}.\n\n📅 Próximas datas disponíveis:\n${proximasDatas.map(d => `   • ${d}`).join('\n')}\n\n💡 Gostaria de remarcar para uma dessas datas?`,
-            detalhes: { vagas_ocupadas: vagasOcupadas, limite: limiteVagas, proximas_datas: proximasDatas }
-          });
-        }
-        
-        // Buscar primeiro minuto livre no período
-        const [horaInicio, minInicio] = periodoConfig.inicio.split(':').map(Number);
-        const [horaFim, minFim] = periodoConfig.fim.split(':').map(Number);
-        
-        let horaAtual = horaInicio * 60 + minInicio;
-        const horaLimite = horaFim * 60 + minFim;
-        let slotEncontrado = false;
-        
-        while (horaAtual < horaLimite) {
-          const h = Math.floor(horaAtual / 60);
-          const m = horaAtual % 60;
-          const horarioTeste = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:00`;
-          
-          const { count } = await supabase
-            .from('agendamentos')
-            .select('*', { count: 'exact', head: true })
-            .eq('medico_id', agendamento.medico_id)
-            .eq('data_agendamento', nova_data)
-            .eq('hora_agendamento', horarioTeste)
-            .eq('cliente_id', clienteId)
-            .neq('id', agendamento_id) // Excluir próprio agendamento
-            .is('excluido_em', null)
-            .in('status', ['agendado', 'confirmado']);
-          
-          if (count === 0) {
-            console.log(`✅ Primeiro slot livre encontrado: ${horarioTeste}`);
-            horarioFinal = horarioTeste;
-            slotEncontrado = true;
-            break;
-          }
-          
-          horaAtual += 1; // Incremento de 1 minuto para ordem de chegada
-        }
-        
-        if (!slotEncontrado) {
-          return errorResponse(`❌ Não foi possível encontrar horário disponível no período da ${periodoSolicitado} em ${formatarDataPorExtenso(nova_data)}.`);
-        }
-      } else if (!nova_hora) {
-        // Sem período configurado e sem hora informada
-        return errorResponse('❌ Para remarcar este tipo de consulta, informe o período (manhã ou tarde) ou um horário específico.');
-      }
-    } else {
-      // Para hora marcada, nova_hora é obrigatório
-      if (!nova_hora) {
-        return errorResponse('Campo obrigatório faltando: nova_hora');
-      }
-    }
-
     // 🚫 VALIDAR: Nova data/hora não pode ser no passado
-    const validacaoDataReschedule = validarDataHoraFutura(nova_data, horarioFinal);
+    const validacaoDataReschedule = validarDataHoraFutura(nova_data, nova_hora);
     if (!validacaoDataReschedule.valido) {
       const { data: dataAtualBrasil } = getDataHoraAtualBrasil();
       
@@ -3836,10 +3379,10 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
         codigo_erro: validacaoDataReschedule.erro,
         mensagem_usuario: validacaoDataReschedule.erro === 'DATA_PASSADA' 
           ? `❌ Não é possível remarcar para ${formatarDataPorExtenso(nova_data)} pois essa data já passou.\n\n📅 A data de hoje é ${formatarDataPorExtenso(dataAtualBrasil)}.\n\n💡 Por favor, escolha uma data futura.`
-          : `❌ Não é possível remarcar para ${horarioFinal} hoje pois esse horário já passou ou está muito próximo.\n\n⏰ Horário mínimo: ${validacaoDataReschedule.horaMinima}\n\n💡 Escolha um horário posterior ou remarque para outro dia.`,
+          : `❌ Não é possível remarcar para ${nova_hora} hoje pois esse horário já passou ou está muito próximo.\n\n⏰ Horário mínimo: ${validacaoDataReschedule.horaMinima}\n\n💡 Escolha um horário posterior ou remarque para outro dia.`,
         detalhes: { 
           nova_data,
-          nova_hora: horarioFinal,
+          nova_hora,
           data_atual: dataAtualBrasil
         }
       });
@@ -3856,35 +3399,33 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
       });
     }
 
-    // Verificar disponibilidade do novo horário COM filtro de cliente (para hora marcada)
-    if (!ehOrdemChegada) {
-      console.log(`🔍 Verificando disponibilidade em ${nova_data} às ${horarioFinal}...`);
-      const { data: conflitos, error: conflitosError } = await supabase
-        .from('agendamentos')
-        .select('id, pacientes(nome_completo)')
-        .eq('medico_id', agendamento.medico_id)
-        .eq('data_agendamento', nova_data)
-        .eq('hora_agendamento', horarioFinal)
-        .eq('cliente_id', clienteId)
-        .in('status', ['agendado', 'confirmado'])
-        .neq('id', agendamento_id);
+    // Verificar disponibilidade do novo horário COM filtro de cliente
+    console.log(`🔍 Verificando disponibilidade em ${nova_data} às ${nova_hora}...`);
+    const { data: conflitos, error: conflitosError } = await supabase
+      .from('agendamentos')
+      .select('id, pacientes(nome_completo)')
+      .eq('medico_id', agendamento.medico_id)
+      .eq('data_agendamento', nova_data)
+      .eq('hora_agendamento', nova_hora)
+      .eq('cliente_id', clienteId)
+      .in('status', ['agendado', 'confirmado'])
+      .neq('id', agendamento_id);
 
-      if (conflitosError) {
-        console.error('❌ Erro ao verificar conflitos:', conflitosError);
-      }
-
-      if (conflitos && conflitos.length > 0) {
-        console.error('❌ Horário já ocupado:', conflitos[0]);
-        return errorResponse(`Horário já ocupado para este médico (${conflitos[0].pacientes?.nome_completo})`);
-      }
-
-      console.log('✅ Horário disponível');
+    if (conflitosError) {
+      console.error('❌ Erro ao verificar conflitos:', conflitosError);
     }
+
+    if (conflitos && conflitos.length > 0) {
+      console.error('❌ Horário já ocupado:', conflitos[0]);
+      return errorResponse(`Horário já ocupado para este médico (${conflitos[0].pacientes?.nome_completo})`);
+    }
+
+    console.log('✅ Horário disponível');
 
     // Atualizar agendamento
     const updateData: any = {
       data_agendamento: nova_data,
-      hora_agendamento: horarioFinal,
+      hora_agendamento: nova_hora,
       updated_at: new Date().toISOString()
     };
 
@@ -3906,96 +3447,36 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
 
     console.log('✅ Agendamento remarcado com sucesso!');
 
-    // 🆕 MENSAGEM DINÂMICA BASEADA NO TIPO DE AGENDAMENTO
+    // Mensagem personalizada para Dra. Adriana
     let mensagem = `Consulta remarcada com sucesso`;
-    
-    // Formatar data para exibição
-    const dataFormatada = new Date(nova_data + 'T00:00:00').toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
-    const horaFormatada = horarioFinal.substring(0, 5);
 
-    if (ehOrdemChegada) {
-      // 🆕 MENSAGEM PARA ORDEM DE CHEGADA
-      let horarioDistribuicao = '';
-      let atendimentoInicio = '';
-      
-      // 🔧 Re-detectar período correto para a NOVA DATA (pode ser diferente da original)
-      let periodoParaMensagem = periodoConfig;
-      if (servicoConfig?.periodos) {
-        const diaSemanaNovaData = new Date(nova_data + 'T00:00:00').getDay();
-        const periodos = ['manha', 'tarde', 'noite'];
-        for (const p of periodos) {
-          const pConfig = servicoConfig.periodos[p];
-          if (pConfig?.dias_especificos?.includes(diaSemanaNovaData) && pConfig.ativo !== false) {
-            periodoParaMensagem = pConfig;
-            console.log(`📋 Período correto para ${nova_data} (dia ${diaSemanaNovaData}): ${p}`, JSON.stringify(pConfig));
-            break;
-          }
-        }
-      }
-      
-      // 🔧 PRIORIDADE: distribuicao_fichas > ordem_chegada_config > inicio/fim
-      if (periodoParaMensagem?.distribuicao_fichas) {
-        // ✅ Usar diretamente o campo distribuicao_fichas configurado
-        horarioDistribuicao = periodoParaMensagem.distribuicao_fichas;
-        atendimentoInicio = periodoParaMensagem.atendimento_inicio || '';
-        console.log(`✅ Usando distribuicao_fichas do período: ${horarioDistribuicao}`);
-      } else if (regras?.ordem_chegada_config) {
-        const ocConfig = regras.ordem_chegada_config;
-        horarioDistribuicao = `${ocConfig.hora_chegada_inicio || '08:00'} às ${ocConfig.hora_chegada_fim || '12:00'}`;
-        console.log(`⚠️ Usando ordem_chegada_config: ${horarioDistribuicao}`);
-      } else if (periodoParaMensagem) {
-        horarioDistribuicao = `${periodoParaMensagem.inicio?.substring(0,5) || '08:00'} às ${periodoParaMensagem.fim?.substring(0,5) || '12:00'}`;
-        atendimentoInicio = periodoParaMensagem.atendimento_inicio || '';
-        console.log(`⚠️ Usando inicio/fim do período: ${horarioDistribuicao}`);
-      } else {
-        // Fallback baseado no horário calculado
-        const [hora] = horarioFinal.split(':').map(Number);
-        if (hora < 12) {
-          horarioDistribuicao = '08:00 às 10:00';
-        } else {
-          horarioDistribuicao = '13:00 às 15:00';
-        }
-        console.log(`⚠️ Usando fallback por horário: ${horarioDistribuicao}`);
-      }
-      
-      // 🆕 Mensagem com horário de início de atendimento se disponível
-      const atendimentoInicioStr = atendimentoInicio 
-        ? `\n🕐 Atendimento inicia às ${atendimentoInicio}.` 
-        : '';
-      
-      mensagem = `✅ Consulta remarcada!\n\n📅 ${dataFormatada}\n⏰ Compareça das ${horarioDistribuicao} para fazer a ficha.${atendimentoInicioStr}\n📋 Atendimento por ordem de chegada.`;
-      
-      // Adicionar mensagem personalizada do médico se existir
-      if (regras?.ordem_chegada_config?.mensagem) {
-        mensagem += `\n\n${regras.ordem_chegada_config.mensagem}`;
-      }
-      
-      console.log(`💬 Mensagem de ordem de chegada gerada para ${agendamento.medicos?.nome}`);
-    } else {
-      // Mensagem para hora marcada (comportamento anterior)
-      const isDraAdriana = agendamento.medico_id === '32d30887-b876-4502-bf04-e55d7fb55b50';
+    const isDraAdriana = agendamento.medico_id === '32d30887-b876-4502-bf04-e55d7fb55b50';
 
-      if (isDraAdriana) {
-        const [hora] = horarioFinal.split(':').map(Number);
-        
-        let mensagemPeriodo = '';
-        if (hora >= 7 && hora < 12) {
-          mensagemPeriodo = `📅 ${dataFormatada} às ${horaFormatada}\n\n⏰ Das 08:00 às 10:00 para fazer a ficha. A Dra. começa a atender às 08:45`;
-        } else if (hora >= 13 && hora < 18) {
-          mensagemPeriodo = `📅 ${dataFormatada} às ${horaFormatada}\n\n⏰ Das 13:00 às 15:00 para fazer a ficha. A Dra. começa a atender às 14:45`;
-        } else {
-          mensagemPeriodo = `📅 ${dataFormatada} às ${horaFormatada}\n\n⏰ Compareça no horário marcado. A Dra. atende por ordem de chegada`;
-        }
-        
-        mensagem = `✅ Remarcada! ${mensagemPeriodo}, por ordem de chegada.\n\n💰 Caso o plano Unimed seja coparticipação ou particular, recebemos apenas em espécie.\n\nPosso ajudar em algo mais?`;
-        console.log(`💬 Mensagem personalizada Dra. Adriana (${dataFormatada} às ${horaFormatada})`);
+    if (isDraAdriana) {
+      // Formatar data e hora explicitamente
+      const dataFormatada = new Date(nova_data + 'T00:00:00').toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+      
+      const horaFormatada = nova_hora.substring(0, 5); // "08:00:00" → "08:00"
+      const [hora] = nova_hora.split(':').map(Number);
+      
+      let mensagemPeriodo = '';
+      if (hora >= 7 && hora < 12) {
+        // Manhã: 07:00-12:00
+        mensagemPeriodo = `📅 ${dataFormatada} às ${horaFormatada}\n\n⏰ Das 08:00 às 10:00 para fazer a ficha. A Dra. começa a atender às 08:45`;
+      } else if (hora >= 13 && hora < 18) {
+        // Tarde: 13:00-18:00
+        mensagemPeriodo = `📅 ${dataFormatada} às ${horaFormatada}\n\n⏰ Das 13:00 às 15:00 para fazer a ficha. A Dra. começa a atender às 14:45`;
       } else {
-        mensagem = `✅ Consulta remarcada!\n\n📅 ${dataFormatada} às ${horaFormatada}\n\nPosso ajudar em algo mais?`;
+        // Fallback com hora sempre visível
+        mensagemPeriodo = `📅 ${dataFormatada} às ${horaFormatada}\n\n⏰ Compareça no horário marcado. A Dra. atende por ordem de chegada`;
       }
+      
+      mensagem = `✅ Remarcada! ${mensagemPeriodo}, por ordem de chegada.\n\n💰 Caso o plano Unimed seja coparticipação ou particular, recebemos apenas em espécie.\n\nPosso ajudar em algo mais?`;
+      console.log(`💬 Mensagem personalizada Dra. Adriana (${dataFormatada} às ${horaFormatada})`);
     }
 
     return successResponse({
@@ -4003,12 +3484,10 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
       agendamento_id,
       paciente: agendamento.pacientes?.nome_completo,
       medico: agendamento.medicos?.nome,
-      atendimento: atendimentoNome,
-      tipo_agendamento: tipoAgendamento,
       data_anterior: agendamento.data_agendamento,
       hora_anterior: agendamento.hora_agendamento,
       nova_data,
-      nova_hora: horarioFinal,
+      nova_hora,
       validado: true
     });
 
@@ -4458,46 +3937,10 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       
       medico = medicosEncontrados[0];
       console.log(`✅ Médico encontrado: "${medico_nome}" → "${medico.nome}"`);
-      
-      // 🔍 DETECÇÃO DE AGENDA DEDICADA: Se o nome contém " - ", pode ser uma agenda virtual
-      // Ex: "Teste Ergométrico - Dr. Marcelo" ou "MAPA - Dr. Marcelo"
-      // Nesses casos, buscar o médico principal para as regras de negócio
-      // IMPORTANTE: Esta lógica DEVE estar dentro do bloco else onde todosMedicos está acessível
-      if (medico.nome.includes(' - ')) {
-        // Extrair nome do médico da agenda dedicada
-        // Padrão: "SERVIÇO - Dr. Nome" → extrair "Dr. Nome"
-        const partes = medico.nome.split(' - ');
-        const nomeMedicoNaAgenda = partes.slice(1).join(' - ').trim();
-        
-        console.log(`🔍 [AGENDA DEDICADA DETECTADA] Nome da agenda: "${medico.nome}"`);
-        console.log(`🔍 [AGENDA DEDICADA DETECTADA] Buscando médico principal: "${nomeMedicoNaAgenda}"`);
-        
-        // Buscar médico principal que NÃO seja agenda dedicada
-        const medicoPrincipalEncontrado = todosMedicos.find(m => {
-          const nomeNorm = normalizar(m.nome);
-          const buscaNorm = normalizar(nomeMedicoNaAgenda);
-          // Deve conter o nome E não ser uma agenda dedicada (não ter " - ")
-          return nomeNorm.includes(buscaNorm) && !m.nome.includes(' - ');
-        });
-        
-        if (medicoPrincipalEncontrado) {
-          // Guardar referência ao médico principal no objeto medico para uso posterior
-          (medico as any)._medicoPrincipal = medicoPrincipalEncontrado;
-          console.log(`✅ [AGENDA DEDICADA] Médico principal encontrado: "${medicoPrincipalEncontrado.nome}" (ID: ${medicoPrincipalEncontrado.id})`);
-          console.log(`ℹ️ [AGENDA DEDICADA] Regras de negócio serão buscadas do médico principal, queries de banco usarão agenda dedicada`);
-        } else {
-          console.log(`⚠️ [AGENDA DEDICADA] Médico principal não encontrado para "${nomeMedicoNaAgenda}", usando agenda dedicada para regras`);
-        }
-      }
     }
     
     // 🔍 BUSCAR REGRAS DE NEGÓCIO E CONFIGURAÇÃO DO SERVIÇO (declarar uma única vez)
-    // IMPORTANTE: Regras SEMPRE vêm do médico principal (não da agenda dedicada)
-    // Se foi detectada uma agenda dedicada, _medicoPrincipal contém o médico correto
-    const medicoPrincipal = (medico as any)._medicoPrincipal || medico;
-    let regras = getMedicoRules(config, medicoPrincipal.id, BUSINESS_RULES.medicos[medicoPrincipal.id]);
-    console.log(`📋 [REGRAS] Usando regras do médico: ${medicoPrincipal.nome} (ID: ${medicoPrincipal.id})`);
-    console.log(`📋 [REGRAS] permite_online: ${regras?.permite_online}`);
+    let regras = getMedicoRules(config, medico.id, BUSINESS_RULES.medicos[medico.id]);
     
     // Normalizar nome do atendimento para matching (remover espaços, underscores, acentos)
     const normalizarParaMatch = (texto: string) => 
@@ -4554,31 +3997,6 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
     if (servicoKey && servico) {
       console.log(`📋 [SERVICO] compartilha_limite_com: ${servico.compartilha_limite_com || 'N/A'}, limite_proprio: ${servico.limite_proprio || 'N/A'}`);
     }
-    
-    // 🎯 BUSCAR AGENDA DEDICADA: Verificar se este serviço tem uma agenda virtual separada
-    // Ex: "Teste Ergométrico" com "Dr. Marcelo D'Carli" → usa agenda "Teste Ergométrico - Dr. Marcelo"
-    let agendaDedicada: AgendaDedicada | null = null;
-    if (servicoKey && atendimento_nome) {
-      agendaDedicada = await buscarAgendaDedicada(
-        supabase,
-        medico.nome,
-        atendimento_nome,
-        clienteId
-      );
-      
-      if (agendaDedicada) {
-        console.log(`🎯 [AGENDA DEDICADA] Usando agenda "${agendaDedicada.nome}" (${agendaDedicada.id}) para queries de disponibilidade`);
-        
-        // IMPORTANTE: Regras de negócio (permite_online, horários, etc.) SEMPRE vêm do médico principal
-        // A agenda dedicada só afeta queries de banco (vagas, agendamentos, bloqueios)
-        // NÃO sobrescrever 'regras' aqui - manter as do médico principal
-        console.log(`ℹ️ [AGENDA DEDICADA] Mantendo regras de negócio do médico principal: ${medico.nome} (ID: ${medico.id})`);
-        console.log(`📋 [REGRAS] permite_online do médico principal: ${regras?.permite_online}`);
-      }
-    }
-    
-    // 🎯 DEFINIR medicoIdParaQueries: ID a ser usado em todas as queries de agendamento
-    const medicoIdParaQueries = getMedicoIdParaQueries(medico, agendaDedicada);
     
     // 🧠 ANÁLISE DE CONTEXTO: Usar mensagem original para inferir intenção
     let isPerguntaAberta = false;
@@ -4805,7 +4223,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
             const { data: agendados } = await supabase
               .from('agendamentos')
               .select('id')
-              .eq('medico_id', medicoIdParaQueries)
+              .eq('medico_id', medico.id)
               .eq('data_agendamento', dataCheckStr)
               .eq('cliente_id', clienteId)
               .gte('hora_agendamento', manha.inicio)
@@ -4818,10 +4236,10 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
             const disponiveis = manha.limite - ocupadas;
             
             if (disponiveis > 0) {
-              // 🆕 USAR ordem_chegada_config ou getHorarioParaPaciente
+              // 🆕 USAR ordem_chegada_config se disponível
               const horarioDistribuicao = ordemChegadaConfig 
                 ? `${ordemChegadaConfig.hora_chegada_inicio} às ${ordemChegadaConfig.hora_chegada_fim}` 
-                : getHorarioParaPaciente(manha);
+                : (manha.distribuicao_fichas || `${manha.inicio} às ${manha.fim}`);
               
               periodosDisponiveis.push({
                 periodo: 'Manhã',
@@ -4845,7 +4263,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
             const { data: agendados } = await supabase
               .from('agendamentos')
               .select('id')
-              .eq('medico_id', medicoIdParaQueries)
+              .eq('medico_id', medico.id)
               .eq('data_agendamento', dataCheckStr)
               .eq('cliente_id', clienteId)
               .gte('hora_agendamento', tarde.inicio)
@@ -4858,10 +4276,10 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
             const disponiveis = tarde.limite - ocupadas;
             
             if (disponiveis > 0) {
-              // 🆕 USAR ordem_chegada_config ou getHorarioParaPaciente
+              // 🆕 USAR ordem_chegada_config se disponível
               const horarioDistribuicao = ordemChegadaConfig 
                 ? `${ordemChegadaConfig.hora_chegada_inicio} às ${ordemChegadaConfig.hora_chegada_fim}` 
-                : getHorarioParaPaciente(tarde);
+                : (tarde.distribuicao_fichas || `${tarde.inicio} às ${tarde.fim}`);
               
               periodosDisponiveis.push({
                 periodo: 'Tarde',
@@ -4915,7 +4333,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           const { data: bloqueiosData } = await supabase
             .from('bloqueios_agenda')
             .select('id')
-            .eq('medico_id', medicoIdParaQueries)
+            .eq('medico_id', medico.id)
             .lte('data_inicio', dataCheckStr)
             .gte('data_fim', dataCheckStr)
             .eq('status', 'ativo')
@@ -4930,7 +4348,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           const { count: totalAgendamentos } = await supabase
             .from('agendamentos')
             .select('*', { count: 'exact', head: true })
-            .eq('medico_id', medicoIdParaQueries)
+            .eq('medico_id', medico.id)
             .eq('data_agendamento', dataCheckStr)
             .neq('status', 'cancelado')
             .eq('cliente_id', clienteId);
@@ -4944,7 +4362,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
             const { count: agendadosPeriodo } = await supabase
               .from('agendamentos')
               .select('*', { count: 'exact', head: true })
-              .eq('medico_id', medicoIdParaQueries)
+              .eq('medico_id', medico.id)
               .eq('data_agendamento', dataCheckStr)
               .gte('hora_agendamento', (config as any).inicio)
               .lt('hora_agendamento', (config as any).fim)
@@ -4956,7 +4374,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
             if (vagasDisponiveis > 0) {
               periodosDisponiveis.push({
                 periodo: periodo.charAt(0).toUpperCase() + periodo.slice(1),
-                horario_distribuicao: getHorarioParaPaciente(config),
+                horario_distribuicao: (config as any).distribuicao_fichas || `${(config as any).inicio} às ${(config as any).fim}`,
                 vagas_disponiveis: vagasDisponiveis,
                 limite_total: limite,
                 tipo: tipoAtendimento
@@ -5084,7 +4502,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         const { data: bloqueios } = await supabase
           .from('bloqueios_agenda')
           .select('id')
-          .eq('medico_id', medicoIdParaQueries)
+          .eq('medico_id', medico.id)
           .lte('data_inicio', dataFuturaStr)
           .gte('data_fim', dataFuturaStr)
           .eq('status', 'ativo')
@@ -5149,7 +4567,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       const { data: agendamentos } = await supabase
         .from('agendamentos')
         .select('hora_agendamento')
-        .eq('medico_id', medicoIdParaQueries)
+        .eq('medico_id', medico.id)
         .eq('data_agendamento', dataFuturaStr)
         .eq('cliente_id', clienteId)
         .is('excluido_em', null)
@@ -5405,7 +4823,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         const { data: bloqueios, error: bloqueioError } = await supabase
           .from('bloqueios_agenda')
           .select('id, motivo')
-          .eq('medico_id', medicoIdParaQueries)
+          .eq('medico_id', medico.id)
           .lte('data_inicio', dataFormatada)
           .gte('data_fim', dataFormatada)
           .eq('status', 'ativo')
@@ -5435,7 +4853,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
             const { data: atendData } = await supabase
               .from('atendimentos')
               .select('id')
-              .eq('medico_id', medicoIdParaQueries)
+              .eq('medico_id', medico.id)
               .eq('cliente_id', clienteId)
               .eq('ativo', true)
               .ilike('nome', `%${servicoKey.replace(/_/g, '%')}%`)
@@ -5449,7 +4867,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           const servicoConfigComAtendId = { ...servico, atendimento_id: atendimentoId };
           const vagasDisponiveis = await calcularVagasDisponiveisComLimites(
             supabase,
-            medicoIdParaQueries,
+            medico.id,
             clienteId,
             dataFormatada,
             servicoConfigComAtendId,
@@ -5465,7 +4883,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
               const { data: horariosVazios, error: horariosError } = await supabase
                 .from('horarios_vazios')
                 .select('hora')
-                .eq('medico_id', medicoIdParaQueries)
+                .eq('medico_id', medico.id)
                 .eq('cliente_id', clienteId)
                 .eq('data', dataFormatada)
                 .eq('status', 'disponivel')
@@ -5476,7 +4894,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
                 const { data: agendamentosExistentes } = await supabase
                   .from('agendamentos')
                   .select('hora_agendamento')
-                  .eq('medico_id', medicoIdParaQueries)
+                  .eq('medico_id', medico.id)
                   .eq('data_agendamento', dataFormatada)
                   .eq('cliente_id', clienteId)
                   .is('excluido_em', null)
@@ -5563,7 +4981,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           const { data: todosAgendamentos, error: countError } = await supabase
             .from('agendamentos')
             .select('hora_agendamento')
-            .eq('medico_id', medicoIdParaQueries)
+            .eq('medico_id', medico.id)
             .eq('data_agendamento', dataFormatada)
             .eq('cliente_id', clienteId)
             .is('excluido_em', null)
@@ -5601,7 +5019,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           if (vagasDisponiveis > 0) {
             periodosDisponiveis.push({
               periodo: periodo === 'manha' ? 'Manhã' : 'Tarde',
-              horario_distribuicao: getHorarioParaPaciente(config),
+              horario_distribuicao: (config as any).distribuicao_fichas || `${(config as any).inicio} às ${(config as any).fim}`,
               vagas_disponiveis: vagasDisponiveis,
               total_vagas: (config as any).limite
             });
@@ -5627,203 +5045,12 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         }
       }
 
-      console.log(`📊 Estatísticas da busca inicial (${dias_busca} dias):
+      console.log(`📊 Estatísticas da busca:
         - Datas verificadas: ${datasVerificadas}
         - Puladas (dia da semana): ${datasPuladasDiaSemana}
         - Puladas (bloqueio): ${datasPuladasBloqueio}
         - Sem vagas: ${datasSemVagas}
         - Datas disponíveis encontradas: ${proximasDatas.length}`);
-
-      // 🔄 BUSCA PROGRESSIVA: Se não encontrou vagas suficientes em 14 dias, expandir para 50
-      if (proximasDatas.length < MAX_DATAS_RETORNO && dias_busca < FALLBACK_DIAS_BUSCA_EXPANDIDA) {
-        console.log(`⚠️ Apenas ${proximasDatas.length} data(s) em ${dias_busca} dias. Expandindo busca para ${FALLBACK_DIAS_BUSCA_EXPANDIDA} dias...`);
-        
-        // Continuar de onde parou (dia 15 em diante)
-        for (let i = dias_busca; i < FALLBACK_DIAS_BUSCA_EXPANDIDA; i++) {
-          const dataAtual = new Date(hoje);
-          dataAtual.setDate(dataAtual.getDate() + i);
-          
-          const dataFormatada = dataAtual.toISOString().split('T')[0];
-          const diaSemana = dataAtual.getDay();
-          datasVerificadas++;
-          
-          // Verificar se o médico atende neste dia
-          if (servico.dias_semana && !servico.dias_semana.includes(diaSemana)) {
-            datasPuladasDiaSemana++;
-            continue;
-          }
-
-          // 🔒 Verificar se a data está bloqueada
-          const { data: bloqueios, error: bloqueioError } = await supabase
-            .from('bloqueios_agenda')
-            .select('id, motivo')
-            .eq('medico_id', medico.id)
-            .lte('data_inicio', dataFormatada)
-            .gte('data_fim', dataFormatada)
-            .eq('status', 'ativo')
-            .eq('cliente_id', clienteId);
-
-          if (!bloqueioError && bloqueios && bloqueios.length > 0) {
-            console.log(`⛔ [EXPANDIDA] Data ${dataFormatada} bloqueada:`, bloqueios[0].motivo);
-            datasPuladasBloqueio++;
-            continue;
-          }
-
-          // Verificar disponibilidade para esta data
-          const periodosDisponiveis: any[] = [];
-          
-          // 🔧 CORREÇÃO: Serviços sem periodos próprios que compartilham limite
-          const servicoSemPeriodos = !servico.periodos || Object.keys(servico.periodos).length === 0;
-          const compartilhaLimite = servico.compartilha_limite_com;
-          const ehHoraMarcada = (servico.tipo_agendamento === 'hora_marcada' || servico.tipo === 'procedimento');
-          
-          if (servicoSemPeriodos && compartilhaLimite) {
-            let atendimentoId: string | null = servico.atendimento_id || null;
-            if (!atendimentoId) {
-              const { data: atendData } = await supabase
-                .from('atendimentos')
-                .select('id')
-                .eq('medico_id', medico.id)
-                .eq('cliente_id', clienteId)
-                .eq('ativo', true)
-                .ilike('nome', `%${servicoKey.replace(/_/g, '%')}%`)
-                .maybeSingle();
-              atendimentoId = atendData?.id || null;
-            }
-            
-            const servicoConfigComAtendId = { ...servico, atendimento_id: atendimentoId };
-            const vagasDisponiveis = await calcularVagasDisponiveisComLimites(
-              supabase,
-              medico.id,
-              clienteId,
-              dataFormatada,
-              servicoConfigComAtendId,
-              regras
-            );
-            
-            if (vagasDisponiveis > 0) {
-              if (ehHoraMarcada) {
-                const { data: horariosVazios } = await supabase
-                  .from('horarios_vazios')
-                  .select('hora')
-                  .eq('medico_id', medico.id)
-                  .eq('cliente_id', clienteId)
-                  .eq('data', dataFormatada)
-                  .eq('status', 'disponivel')
-                  .order('hora', { ascending: true });
-                
-                if (horariosVazios && horariosVazios.length > 0) {
-                  const { data: agendamentosExistentes } = await supabase
-                    .from('agendamentos')
-                    .select('hora_agendamento')
-                    .eq('medico_id', medico.id)
-                    .eq('data_agendamento', dataFormatada)
-                    .eq('cliente_id', clienteId)
-                    .is('excluido_em', null)
-                    .in('status', ['agendado', 'confirmado']);
-                  
-                  const horariosOcupados = new Set(agendamentosExistentes?.map(a => a.hora_agendamento) || []);
-                  const horariosLivres = horariosVazios.filter(h => {
-                    const horaFormatada = h.hora.includes(':') ? h.hora : `${h.hora}:00:00`;
-                    return !horariosOcupados.has(horaFormatada);
-                  });
-                  
-                  if (horariosLivres.length > 0) {
-                    const primeiroHorario = horariosLivres[0].hora;
-                    const [horaH] = primeiroHorario.split(':').map(Number);
-                    const periodoNome = horaH < 12 ? 'Manhã' : 'Tarde';
-                    
-                    periodosDisponiveis.push({
-                      periodo: periodoNome,
-                      horario_distribuicao: `${horariosLivres.length} horário(s) específico(s) disponível(is)`,
-                      vagas_disponiveis: Math.min(vagasDisponiveis, horariosLivres.length),
-                      total_vagas: servico.limite_proprio || vagasDisponiveis,
-                      horarios: horariosLivres.map(h => h.hora)
-                    });
-                  }
-                }
-              } else {
-                periodosDisponiveis.push({
-                  periodo: 'Disponível',
-                  horario_distribuicao: 'Conforme disponibilidade',
-                  vagas_disponiveis: vagasDisponiveis,
-                  total_vagas: servico.limite_proprio || vagasDisponiveis
-                });
-              }
-            }
-          } else if (servicoSemPeriodos) {
-            datasSemVagas++;
-            continue;
-          }
-          
-          // Loop normal para serviços COM periodos definidos
-          if (servico.periodos && Object.keys(servico.periodos).length > 0) {
-            for (const [periodo, config] of Object.entries(servico.periodos)) {
-              if (periodoPreferido === 'tarde' && periodo === 'manha') continue;
-              if (periodoPreferido === 'manha' && periodo === 'tarde') continue;
-              
-              if ((config as any).dias_especificos && !(config as any).dias_especificos.includes(diaSemana)) {
-                continue;
-              }
-
-              const { data: todosAgendamentos } = await supabase
-                .from('agendamentos')
-                .select('hora_agendamento')
-                .eq('medico_id', medico.id)
-                .eq('data_agendamento', dataFormatada)
-                .eq('cliente_id', clienteId)
-                .is('excluido_em', null)
-                .in('status', ['agendado', 'confirmado']);
-
-              let vagasOcupadas = 0;
-              if (todosAgendamentos && todosAgendamentos.length > 0) {
-                vagasOcupadas = todosAgendamentos.filter(ag => {
-                  const periodoClassificado = classificarPeriodoAgendamento(
-                    ag.hora_agendamento, 
-                    { [periodo]: config }
-                  );
-                  return periodoClassificado === periodo;
-                }).length;
-              }
-
-              const vagasDisponiveis = (config as any).limite - vagasOcupadas;
-
-              if (vagasDisponiveis > 0) {
-                periodosDisponiveis.push({
-                  periodo: periodo === 'manha' ? 'Manhã' : 'Tarde',
-                  horario_distribuicao: getHorarioParaPaciente(config),
-                  vagas_disponiveis: vagasDisponiveis,
-                  total_vagas: (config as any).limite
-                });
-              }
-            }
-          }
-
-          // Se encontrou períodos disponíveis nesta data, adicionar
-          if (periodosDisponiveis.length > 0) {
-            const diasSemana = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
-            proximasDatas.push({
-              data: dataFormatada,
-              dia_semana: diasSemana[diaSemana],
-              periodos: periodosDisponiveis
-            });
-            
-            console.log(`✅ [EXPANDIDA] Data disponível encontrada: ${dataFormatada} (${diasSemana[diaSemana]})`);
-            
-            // Limitar a 5 datas
-            if (proximasDatas.length >= MAX_DATAS_RETORNO) break;
-          } else {
-            datasSemVagas++;
-          }
-        }
-        
-        console.log(`📊 Estatísticas da busca EXPANDIDA (${FALLBACK_DIAS_BUSCA_EXPANDIDA} dias total):
-          - Datas verificadas: ${datasVerificadas}
-          - Puladas (dia da semana): ${datasPuladasDiaSemana}
-          - Puladas (bloqueio): ${datasPuladasBloqueio}
-          - Sem vagas: ${datasSemVagas}
-          - Datas disponíveis encontradas: ${proximasDatas.length}`);
-      }
 
       // ✅ Validação: verificar total de vagas
       if (proximasDatas.length > 0) {
@@ -5842,11 +5069,11 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       if (proximasDatas.length === 0) {
         return businessErrorResponse({
           codigo_erro: 'SEM_VAGAS_DISPONIVEIS',
-          mensagem_usuario: `😔 Não encontrei vagas disponíveis para ${medico.nome} - ${servicoKey} nos próximos ${FALLBACK_DIAS_BUSCA_EXPANDIDA} dias.\n\n📞 Sugestões:\n   • Ligue para ${getClinicPhone(config)} para verificar outras opções\n   • Entre na fila de espera\n   • Consulte disponibilidade em outras especialidades`,
+          mensagem_usuario: `😔 Não encontrei vagas disponíveis para ${medico.nome} - ${servicoKey} nos próximos ${dias_busca} dias.\n\n📞 Sugestões:\n   • Ligue para ${getClinicPhone(config)} para verificar outras opções\n   • Entre na fila de espera\n   • Consulte disponibilidade em outras especialidades`,
           detalhes: {
             medico: medico.nome,
             servico: servicoKey,
-            dias_buscados: FALLBACK_DIAS_BUSCA_EXPANDIDA,
+            dias_buscados: dias_busca,
             periodo_solicitado: periodoPreferido || 'qualquer'
           }
         });
@@ -5925,7 +5152,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
     const { data: bloqueios, error: bloqueioError } = await supabase
       .from('bloqueios_agenda')
       .select('id, motivo')
-      .eq('medico_id', medicoIdParaQueries)
+      .eq('medico_id', medico.id)
       .lte('data_inicio', data_consulta)
       .gte('data_fim', data_consulta)
       .eq('status', 'ativo')
@@ -5993,7 +5220,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         const { data: atendData } = await supabase
           .from('atendimentos')
           .select('id')
-          .eq('medico_id', medicoIdParaQueries)
+          .eq('medico_id', medico.id)
           .eq('cliente_id', clienteId)
           .eq('ativo', true)
           .ilike('nome', `%${servicoKey.replace(/_/g, '%')}%`)
@@ -6007,7 +5234,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       const servicoConfigFluxo3 = { ...servico, atendimento_id: atendimentoIdFluxo3 };
       const vagasDisponiveisFluxo3 = await calcularVagasDisponiveisComLimites(
         supabase,
-        medicoIdParaQueries,
+        medico.id,
         clienteId,
         data_consulta,
         servicoConfigFluxo3,
@@ -6022,7 +5249,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           const { data: horariosVaziosFluxo3 } = await supabase
             .from('horarios_vazios')
             .select('hora')
-            .eq('medico_id', medicoIdParaQueries)
+            .eq('medico_id', medico.id)
             .eq('cliente_id', clienteId)
             .eq('data', data_consulta)
             .eq('status', 'disponivel')
@@ -6033,7 +5260,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
             const { data: agendamentosFluxo3 } = await supabase
               .from('agendamentos')
               .select('hora_agendamento')
-              .eq('medico_id', medicoIdParaQueries)
+              .eq('medico_id', medico.id)
               .eq('data_agendamento', data_consulta)
               .eq('cliente_id', clienteId)
               .is('excluido_em', null)
@@ -6112,7 +5339,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       const { data: todosAgendamentosData, error: countError } = await supabase
         .from('agendamentos')
         .select('hora_agendamento')
-        .eq('medico_id', medicoIdParaQueries)
+        .eq('medico_id', medico.id)
         .eq('data_agendamento', data_consulta)
         .eq('cliente_id', clienteId)
         .is('excluido_em', null)
@@ -6142,15 +5369,13 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
 
       periodosDisponiveis.push({
         periodo: periodo === 'manha' ? 'Manhã' : 'Tarde',
-        horario_distribuicao: getHorarioParaPaciente(config),
-        horario_comparecer: getHorarioParaPaciente(config),
-        hora_atendimento: getHorarioAtendimento(config),
+        horario_distribuicao: (config as any).distribuicao_fichas || `${(config as any).inicio} às ${(config as any).fim}`,
         vagas_ocupadas: vagasOcupadas,
         vagas_disponiveis: vagasDisponiveis,
         total_vagas: (config as any).limite,
         disponivel: vagasDisponiveis > 0,
-        hora_inicio: (config as any).horario_inicio || (config as any).inicio,
-        hora_fim: (config as any).horario_fim || (config as any).fim,
+        hora_inicio: (config as any).inicio,
+        hora_fim: (config as any).fim,
         intervalo_minutos: (config as any).intervalo_minutos
       });
     }
@@ -6158,11 +5383,6 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
 
     if (periodosDisponiveis.length === 0) {
       console.log(`❌ Nenhum período disponível para ${data_consulta}. Buscando alternativas...`);
-      
-      // 🆕 Determinar tipo de agendamento ANTES de buscar próximas datas
-      const tipoEfetivoProxDatas = getTipoAgendamentoEfetivo(servico, regras);
-      const ehOrdemChegadaProxDatas = isOrdemChegada(tipoEfetivoProxDatas);
-      console.log(`📋 [PRÓXIMAS DATAS] Tipo efetivo: ${tipoEfetivoProxDatas}, É ordem de chegada: ${ehOrdemChegadaProxDatas}`);
       
       // 🔍 Buscar próximas datas disponíveis mantendo período preferido
       const proximasDatas = await buscarProximasDatasDisponiveis(
@@ -6177,30 +5397,6 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         5   // Máximo 5 sugestões
       );
       
-      // 🆕 Enriquecer próximas datas com informações de ordem de chegada
-      const proximasDatasEnriquecidas = proximasDatas.map(d => {
-        const baseData: any = {
-          ...d,
-          tipo: ehOrdemChegadaProxDatas ? 'ordem_chegada' : 'hora_marcada'
-        };
-        
-        if (ehOrdemChegadaProxDatas && servico?.periodos) {
-          // Buscar horário de distribuição baseado no período
-          const periodoKey = d.periodo?.toLowerCase() === 'manhã' ? 'manha' : 
-                             d.periodo?.toLowerCase() === 'tarde' ? 'tarde' : 'manha';
-          const periodoConfig = servico.periodos[periodoKey];
-          
-          if (periodoConfig) {
-            baseData.horario_distribuicao = (periodoConfig as any).distribuicao_fichas || 
-              `${(periodoConfig as any).inicio || '08:00'} às ${(periodoConfig as any).fim || '12:00'}`;
-            baseData.atendimento_inicio = (periodoConfig as any).atendimento_inicio;
-            baseData.instrucao = `Comparecer ${baseData.horario_distribuicao} para retirar ficha`;
-          }
-        }
-        
-        return baseData;
-      });
-      
       // 🎯 Montar mensagem contextualizada
       const periodoTexto = periodoPreferido === 'manha' ? 'Manhã' : 
                            periodoPreferido === 'tarde' ? 'Tarde' : 
@@ -6214,7 +5410,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       
       mensagem += ` na data ${data_consulta}.\n\n`;
       
-      if (proximasDatasEnriquecidas.length > 0) {
+      if (proximasDatas.length > 0) {
         mensagem += `✅ Próximas datas disponíveis`;
         
         if (periodoTexto) {
@@ -6223,23 +5419,11 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         
         mensagem += `:\n\n`;
         
-        proximasDatasEnriquecidas.forEach(d => {
-          let linhaData = `📅 ${d.data} (${d.dia_semana}) - ${d.periodo || ''} - ${d.vagas_disponiveis} vaga(s)`;
-          if (ehOrdemChegadaProxDatas && d.horario_distribuicao) {
-            linhaData += `\n   🕐 Ficha: ${d.horario_distribuicao}`;
-            if (d.atendimento_inicio) {
-              linhaData += ` | Atendimento: ${d.atendimento_inicio}`;
-            }
-          }
-          mensagem += linhaData + '\n';
+        proximasDatas.forEach(d => {
+          mensagem += `📅 ${d.data} (${d.dia_semana}) - ${d.periodo || ''} - ${d.vagas_disponiveis} vaga(s)\n`;
         });
         
-        // 🆕 Adicionar aviso de ordem de chegada
-        if (ehOrdemChegadaProxDatas) {
-          mensagem += `\n⚠️ ORDEM DE CHEGADA: Compareça no horário indicado para pegar ficha.`;
-        }
-        
-        mensagem += `\n\n💡 Gostaria de agendar em uma destas datas?`;
+        mensagem += `\n💡 Gostaria de agendar em uma destas datas?`;
       } else {
         mensagem += `⚠️ Não encontramos vagas`;
         
@@ -6253,16 +5437,15 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         mensagem += `   • Opções: Fila de espera ou outros períodos`;
       }
       
-      // ✅ Retornar resposta estruturada (status 200) com informações de ordem de chegada
-      const respostaProxDatas: any = {
+      // ✅ Retornar resposta estruturada (status 200)
+      return successResponse({
         disponivel: false,
         motivo: 'periodo_data_nao_disponivel',
-        tipo_agendamento: tipoEfetivoProxDatas, // 🆕 Incluir tipo de agendamento
         medico: medico.nome,
         servico: servicoKey,
         data_solicitada: data_consulta,
         periodo_solicitado: periodoPreferido,
-        proximas_datas: proximasDatasEnriquecidas, // 🆕 Datas enriquecidas
+        proximas_datas: proximasDatas,
         message: mensagem,
         contexto: {
           medico_id: medico.id,
@@ -6270,18 +5453,9 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           servico: atendimento_nome,
           data_original: data_consulta,
           periodo_preferido: periodoPreferido,
-          total_alternativas: proximasDatasEnriquecidas.length
+          total_alternativas: proximasDatas.length
         }
-      };
-      
-      // 🆕 Adicionar campos específicos de ordem de chegada
-      if (ehOrdemChegadaProxDatas) {
-        respostaProxDatas.aviso_ordem_chegada = '⚠️ Compareça no horário indicado para pegar ficha. Atendimento por ordem de chegada.';
-        respostaProxDatas.instrucoes = regras?.ordem_chegada_config?.mensagem || 
-          'Paciente deve comparecer no horário de distribuição de fichas para garantir atendimento.';
-      }
-      
-      return successResponse(respostaProxDatas);
+      });
     }
 
     // 🎯 RESPOSTA DIFERENCIADA POR TIPO DE ATENDIMENTO
@@ -6309,45 +5483,14 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           5
         );
         
-        // 🆕 Enriquecer próximas datas com informações de ordem de chegada
-        const proximasDatasEnriquecidas = proximasDatas.map(d => {
-          const baseData: any = {
-            ...d,
-            tipo: 'ordem_chegada'
-          };
-          
-          if (servico?.periodos) {
-            const periodoKey = d.periodo?.toLowerCase() === 'manhã' ? 'manha' : 
-                               d.periodo?.toLowerCase() === 'tarde' ? 'tarde' : 'manha';
-            const periodoConfig = servico.periodos[periodoKey];
-            
-            if (periodoConfig) {
-              baseData.horario_distribuicao = (periodoConfig as any).distribuicao_fichas || 
-                `${(periodoConfig as any).inicio || '08:00'} às ${(periodoConfig as any).fim || '12:00'}`;
-              baseData.atendimento_inicio = (periodoConfig as any).atendimento_inicio;
-              baseData.instrucao = `Comparecer ${baseData.horario_distribuicao} para retirar ficha`;
-            }
-          }
-          
-          return baseData;
-        });
-        
         let mensagem = `❌ Sem vagas disponíveis para ${medico.nome} em ${data_consulta}.\n\n`;
         
-        if (proximasDatasEnriquecidas.length > 0) {
+        if (proximasDatas.length > 0) {
           mensagem += `✅ Próximas datas disponíveis:\n\n`;
-          proximasDatasEnriquecidas.forEach(d => {
-            let linhaData = `📅 ${d.data} (${d.dia_semana}) - ${d.periodo} - ${d.vagas_disponiveis} vaga(s)`;
-            if (d.horario_distribuicao) {
-              linhaData += `\n   🕐 Ficha: ${d.horario_distribuicao}`;
-              if (d.atendimento_inicio) {
-                linhaData += ` | Atendimento: ${d.atendimento_inicio}`;
-              }
-            }
-            mensagem += linhaData + '\n';
+          proximasDatas.forEach(d => {
+            mensagem += `📅 ${d.data} (${d.dia_semana}) - ${d.periodo} - ${d.vagas_disponiveis} vaga(s)\n`;
           });
-          mensagem += `\n⚠️ ORDEM DE CHEGADA: Compareça no horário indicado para pegar ficha.`;
-          mensagem += `\n\n💡 Gostaria de agendar em uma destas datas?`;
+          mensagem += `\n💡 Gostaria de agendar em uma destas datas?`;
         } else {
           mensagem += `⚠️ Não encontramos vagas nos próximos 60 dias.\n`;
           mensagem += `Por favor, entre em contato com a clínica.`;
@@ -6356,14 +5499,11 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         return successResponse({
           disponivel: false,
           tipo_agendamento: TIPO_ORDEM_CHEGADA,
-          aviso_ordem_chegada: '⚠️ Compareça no horário indicado para pegar ficha. Atendimento por ordem de chegada.',
           medico: medico.nome,
           servico: servicoKey,
           data: data_consulta,
           periodos: periodosDisponiveis,
-          proximas_datas: proximasDatasEnriquecidas,
-          instrucoes: regras?.ordem_chegada_config?.mensagem || 
-            'Paciente deve comparecer no horário de distribuição de fichas para garantir atendimento.',
+          proximas_datas: proximasDatas,
           mensagem_whatsapp: mensagem,
           message: mensagem
         });
@@ -6371,14 +5511,10 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       
       // Se tem vagas, retornar normalmente
       const mensagem = `✅ ${medico.nome} - ${servicoKey}\n📅 ${data_consulta}\n\n` +
-        periodosDisponiveis.filter(p => p.disponivel).map(p => {
-          let linha = `${p.periodo}: ${p.vagas_disponiveis} vaga(s) disponível(is) de ${p.total_vagas}\n` +
-            `🕐 Comparecer: ${p.horario_comparecer || p.horario_distribuicao}`;
-          if (p.hora_atendimento) {
-            linha += `\n⏰ Atendimento inicia às ${p.hora_atendimento}`;
-          }
-          return linha;
-        }).join('\n\n') +
+        periodosDisponiveis.filter(p => p.disponivel).map(p => 
+          `${p.periodo}: ${p.vagas_disponiveis} vaga(s) disponível(is) de ${p.total_vagas}\n` +
+          `Distribuição: ${p.horario_distribuicao}`
+        ).join('\n\n') +
         '\n\n⚠️ ORDEM DE CHEGADA: Não há horário marcado. Paciente deve chegar no período para pegar ficha.';
       
       return successResponse({
@@ -6421,7 +5557,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           const { count } = await supabase
             .from('agendamentos')
             .select('*', { count: 'exact', head: true })
-            .eq('medico_id', medicoIdParaQueries)
+            .eq('medico_id', medico.id)
             .eq('data_agendamento', data_consulta)
             .eq('hora_agendamento', horarioFormatado)
             .eq('cliente_id', clienteId)
@@ -6456,21 +5592,14 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           5
         );
         
-        // 🆕 Enriquecer próximas datas com tipo
-        const proximasDatasEnriquecidas = proximasDatas.map(d => ({
-          ...d,
-          tipo: 'estimativa_horario'
-        }));
-        
         let mensagem = `❌ Sem horários disponíveis para ${medico.nome} em ${data_consulta}.\n\n`;
         
-        if (proximasDatasEnriquecidas.length > 0) {
+        if (proximasDatas.length > 0) {
           mensagem += `✅ Próximas datas disponíveis:\n\n`;
-          proximasDatasEnriquecidas.forEach(d => {
+          proximasDatas.forEach(d => {
             mensagem += `📅 ${d.data} (${d.dia_semana}) - ${d.periodo} - ${d.vagas_disponiveis} vaga(s)\n`;
           });
-          mensagem += `\n⏰ ${mensagemEstimativa}`;
-          mensagem += `\n\n💡 Gostaria de agendar em uma destas datas?`;
+          mensagem += `\n💡 Gostaria de agendar em uma destas datas?`;
         } else {
           mensagem += `⚠️ Não encontramos vagas nos próximos 60 dias.\n`;
           mensagem += `Por favor, entre em contato com a clínica.`;
@@ -6484,7 +5613,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           data: data_consulta,
           horarios_estimados: [],
           total: 0,
-          proximas_datas: proximasDatasEnriquecidas,
+          proximas_datas: proximasDatas,
           mensagem_estimativa: mensagemEstimativa,
           mensagem_whatsapp: mensagem,
           message: mensagem
@@ -6537,7 +5666,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           const { count } = await supabase
             .from('agendamentos')
             .select('*', { count: 'exact', head: true })
-            .eq('medico_id', medicoIdParaQueries)
+            .eq('medico_id', medico.id)
             .eq('data_agendamento', data_consulta)
             .eq('hora_agendamento', horarioFormatado)
             .eq('cliente_id', clienteId)
@@ -6570,17 +5699,11 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           5
         );
         
-        // 🆕 Enriquecer próximas datas com tipo
-        const proximasDatasEnriquecidas = proximasDatas.map(d => ({
-          ...d,
-          tipo: 'hora_marcada'
-        }));
-        
         let mensagem = `❌ Sem horários disponíveis para ${medico.nome} em ${data_consulta}.\n\n`;
         
-        if (proximasDatasEnriquecidas.length > 0) {
+        if (proximasDatas.length > 0) {
           mensagem += `✅ Próximas datas disponíveis:\n\n`;
-          proximasDatasEnriquecidas.forEach(d => {
+          proximasDatas.forEach(d => {
             mensagem += `📅 ${d.data} (${d.dia_semana}) - ${d.periodo} - ${d.vagas_disponiveis} vaga(s)\n`;
           });
           mensagem += `\n💡 Gostaria de agendar em uma destas datas?`;
@@ -6597,7 +5720,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           data: data_consulta,
           horarios_disponiveis: [],
           total: 0,
-          proximas_datas: proximasDatasEnriquecidas,
+          proximas_datas: proximasDatas,
           mensagem_whatsapp: mensagem,
           message: mensagem
         });
@@ -6786,7 +5909,7 @@ async function buscarProximasDatasComPeriodo(
         dia_semana: diasSemana[diaSemanaNum],
         periodos: [{
           periodo: periodoNomes[periodo],
-          horario_distribuicao: getHorarioParaPaciente(configPeriodo),
+          horario_distribuicao: configPeriodo.distribuicao_fichas || `${configPeriodo.inicio} às ${configPeriodo.fim}`,
           vagas_disponiveis: disponiveis,
           total_vagas: configPeriodo.limite,
           tipo: 'ordem_chegada'

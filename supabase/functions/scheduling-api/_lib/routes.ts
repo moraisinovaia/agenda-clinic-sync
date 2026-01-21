@@ -301,10 +301,10 @@ export async function handleUpdateAppointment(supabase: any, appointmentId: stri
     );
   }
 
-  // Buscar agendamento atual (incluindo status para restaurar se necessário)
+  // Buscar agendamento atual
   const { data: currentAppointment } = await supabase
     .from('agendamentos')
-    .select('medico_id, status')
+    .select('medico_id')
     .eq('id', appointmentId)
     .single();
 
@@ -336,24 +336,15 @@ export async function handleUpdateAppointment(supabase: any, appointmentId: stri
     );
   }
 
-  // Preparar dados de atualização
-  const updateData: Record<string, any> = {
-    data_agendamento: dataAgendamento,
-    hora_agendamento: horaAgendamento,
-    observacoes: observacoes,
-    updated_at: new Date().toISOString(),
-  };
-
-  // Se estava cancelado por bloqueio, restaurar para agendado
-  if (currentAppointment.status === 'cancelado_bloqueio') {
-    updateData.status = 'agendado';
-    console.log('📤 Restaurando status de cancelado_bloqueio para agendado');
-  }
-
   // Atualizar agendamento
   const { data: updatedAppointment, error } = await supabase
     .from('agendamentos')
-    .update(updateData)
+    .update({
+      data_agendamento: dataAgendamento,
+      hora_agendamento: horaAgendamento,
+      observacoes: observacoes,
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', appointmentId)
     .select(`
       *,
