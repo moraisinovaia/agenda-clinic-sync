@@ -441,7 +441,7 @@ export function RelatorioAgenda({ doctors, appointments, onBack, preSelectedDoct
                                   {formatTime(appointment.hora_agendamento)}
                                 </TableCell>
                                 <TableCell className="print:py-0 print:px-0.5 print:text-[9px]">
-                                  <div className="font-medium print:text-[9px]">{appointment.pacientes?.nome_completo}</div>
+                                  <div className="font-medium print:text-[9px]">{appointment.pacientes?.nome_completo?.toUpperCase()}</div>
                                   {appointment.observacoes && (
                                     <div className="text-xs print:text-[7px] text-muted-foreground mt-0.5 print:mt-0 print:line-height-tight">
                                       {appointment.observacoes}
