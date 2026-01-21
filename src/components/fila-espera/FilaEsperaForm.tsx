@@ -112,9 +112,9 @@ export function FilaEsperaForm({
       const { data, error } = await supabase
         .from('pacientes')
         .insert({
-          nome_completo: pacienteData.nomeCompleto,
+          nome_completo: pacienteData.nomeCompleto.toUpperCase().trim(),
           data_nascimento: pacienteData.dataNascimento,
-          convenio: pacienteData.convenio,
+          convenio: pacienteData.convenio.toUpperCase().trim(),
           celular: pacienteData.celular,
           cliente_id: '00000000-0000-0000-0000-000000000000', // Usar ID padrão temporário
         })
@@ -227,7 +227,7 @@ export function FilaEsperaForm({
                           onClick={() => selectPatient(patient)}
                           className="w-full text-left p-2 hover:bg-muted rounded text-sm border border-transparent hover:border-primary/20"
                         >
-                          <div className="font-medium">{patient.nome_completo}</div>
+                          <div className="font-medium">{patient.nome_completo?.toUpperCase()}</div>
                            <div className="text-muted-foreground">
                              {patient.data_nascimento} • {patient.ultimo_convenio || 'Convênio não informado'}
                              {patient.celular && ` • ${patient.celular}`}
