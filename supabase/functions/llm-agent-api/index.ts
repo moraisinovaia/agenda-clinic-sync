@@ -1938,6 +1938,16 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
         });
       }
       console.log(`✅ Médico encontrado por ID: ${medico.nome}`);
+      
+      // 🆕 VERIFICAR AGENDA DEDICADA PARA O SERVIÇO (busca por ID)
+      if (atendimento_nome) {
+        const agendaDedicada = await buscarAgendaDedicada(supabase, clienteId, medico.nome, atendimento_nome);
+        if (agendaDedicada) {
+          console.log(`🔄 [SCHEDULE] Redirecionando para agenda dedicada "${agendaDedicada.nome}" (ID: ${agendaDedicada.id})`);
+          medico = { id: agendaDedicada.id, nome: agendaDedicada.nome, ativo: true };
+          console.log(`✅ [SCHEDULE] Agendamento será criado na agenda: ${medico.nome}`);
+        }
+      }
     } else {
       console.log(`🔍 Buscando médico por nome: ${medico_nome}`);
       
@@ -1994,6 +2004,16 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
       
       medico = medicosEncontrados[0];
       console.log(`✅ Médico encontrado por nome inteligente: "${medico_nome}" → "${medico.nome}" (ID: ${medico.id})`);
+      
+      // 🆕 VERIFICAR AGENDA DEDICADA PARA O SERVIÇO (busca por nome)
+      if (atendimento_nome) {
+        const agendaDedicada = await buscarAgendaDedicada(supabase, clienteId, medico.nome, atendimento_nome);
+        if (agendaDedicada) {
+          console.log(`🔄 [SCHEDULE] Redirecionando para agenda dedicada "${agendaDedicada.nome}" (ID: ${agendaDedicada.id})`);
+          medico = { id: agendaDedicada.id, nome: agendaDedicada.nome, ativo: true };
+          console.log(`✅ [SCHEDULE] Agendamento será criado na agenda: ${medico.nome}`);
+        }
+      }
     }
 
     console.log('🔍 Buscando regras de negócio...');
