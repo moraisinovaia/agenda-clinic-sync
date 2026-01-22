@@ -4866,7 +4866,12 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
     }
 
     // Verificar se permite agendamento online (aceita ambos os formatos)
-    const permiteOnlineCheck = servico.permite_online || servico.permite_agendamento_online;
+    // Para agendas dedicadas, verificar também no nível raiz das regras
+    const permiteOnlineCheck = 
+      servico.permite_online || 
+      servico.permite_agendamento_online ||
+      regras?.permite_agendamento_online ||  // Nível raiz das regras (agendas dedicadas)
+      (regras as any)?.config?.permite_agendamento_online;  // Fallback para config nested
     if (!permiteOnlineCheck) {
       console.log(`ℹ️ Serviço ${servicoKey} não permite agendamento online`);
       
