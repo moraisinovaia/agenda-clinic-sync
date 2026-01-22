@@ -128,6 +128,71 @@ async function withLogging<T>(
   }
 }
 
+// ============= FUNÇÃO: BUSCAR AGENDA DEDICADA =============
+/**
+ * Busca agenda dedicada (virtual) para um serviço específico
+ * Padrão de nome: "[Serviço] - [Nome do Médico]" ou "[Serviço] - Dr. [Nome]"
+ * Ex: "Teste Ergométrico - Dr. Marcelo" para serviço "Teste Ergométrico" do Dr. Marcelo
+ * 
+ * Casos suportados:
+ * - "Teste Ergométrico" + "Dr. Marcelo D'Carli" → "Teste Ergométrico - Dr. Marcelo"
+ * - "MAPA 24H" + "Dr. Marcelo D'Carli" → "MAPA - Dr. Marcelo"
+ */
+async function buscarAgendaDedicada(
+  supabase: any,
+  clienteId: string,
+  medicoNome: string,
+  servicoNome: string
+): Promise<{ id: string; nome: string } | null> {
+  
+  try {
+    // Extrair nome curto do médico (ex: "Dr. Marcelo D'Carli" → "Marcelo")
+    const partesNome = medicoNome.split(/[\s.]+/).filter(p => 
+      p.length > 2 && !['dra', 'dr', 'dro', 'de', 'da', 'do', 'dos', 'das'].includes(p.toLowerCase())
+    );
+    const nomeChave = partesNome[0] || medicoNome;
+    
+    // Extrair palavra-chave do serviço (primeira palavra significativa)
+    const servicoPalavras = servicoNome.split(/[\s-]+/).filter(p => p.length > 2);
+    const servicoChave = servicoPalavras[0] || servicoNome;
+    
+    console.log(`🔍 [AGENDA_DEDICADA] Buscando agenda para serviço="${servicoChave}" + médico="${nomeChave}"`);
+    
+    // Buscar agenda com padrão "[Serviço]%[Médico]"
+    const { data: agendas, error } = await supabase
+      .from('medicos')
+      .select('id, nome')
+      .eq('cliente_id', clienteId)
+      .eq('ativo', true)
+      .ilike('nome', `%${servicoChave}%${nomeChave}%`);
+      
+    if (error) {
+      console.error(`❌ [AGENDA_DEDICADA] Erro na busca:`, error);
+      return null;
+    }
+    
+    if (!agendas || agendas.length === 0) {
+      console.log(`📋 [AGENDA_DEDICADA] Sem agenda dedicada para "${servicoNome}" + "${medicoNome}"`);
+      return null;
+    }
+    
+    // Se encontrou múltiplas, preferir a que tem nome mais específico
+    const agendaSelecionada = agendas.sort((a: any, b: any) => {
+      // Preferir a que contém mais do nome do serviço
+      const aMatch = a.nome.toLowerCase().includes(servicoNome.toLowerCase()) ? 2 : 1;
+      const bMatch = b.nome.toLowerCase().includes(servicoNome.toLowerCase()) ? 2 : 1;
+      return bMatch - aMatch;
+    })[0];
+    
+    console.log(`✅ [AGENDA_DEDICADA] Agenda dedicada encontrada: "${agendaSelecionada.nome}" (ID: ${agendaSelecionada.id})`);
+    return agendaSelecionada;
+    
+  } catch (e) {
+    console.error(`❌ [AGENDA_DEDICADA] Erro inesperado:`, e);
+    return null;
+  }
+}
+
 // ============= SISTEMA DE CACHE E CONFIGURAÇÃO DINÂMICA =============
 
 interface DynamicConfig {
@@ -3987,6 +4052,29 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       
       medico = medicosEncontrados[0];
       console.log(`✅ Médico encontrado: "${medico_nome}" → "${medico.nome}"`);
+    }
+    
+    // 🆕 VERIFICAR AGENDA DEDICADA PARA O SERVIÇO
+    // Se o serviço solicitado tem uma agenda virtual separada (ex: "Teste Ergométrico - Dr. Marcelo"), usar ela
+    if (atendimento_nome && medico) {
+      const agendaDedicada = await buscarAgendaDedicada(
+        supabase, 
+        clienteId, 
+        medico.nome, 
+        atendimento_nome
+      );
+      
+      if (agendaDedicada) {
+        console.log(`🔄 [REDIRECIONAR] Usando agenda dedicada "${agendaDedicada.nome}" (ID: ${agendaDedicada.id}) ao invés de "${medico.nome}"`);
+        
+        // Atualizar medico para a agenda dedicada
+        // A agenda dedicada contém todas as configurações necessárias
+        medico = {
+          id: agendaDedicada.id,
+          nome: agendaDedicada.nome,
+          ativo: true
+        };
+      }
     }
     
     // 🔍 BUSCAR REGRAS DE NEGÓCIO E CONFIGURAÇÃO DO SERVIÇO (declarar uma única vez)
