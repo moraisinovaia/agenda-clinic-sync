@@ -2820,32 +2820,91 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
           
           // Verificar se conseguiu alocar
           if (horarioAlocado && resultadoFinal) {
-            // 🆕 Usar mensagens dinâmicas do banco
-            let mensagem = `✅ Consulta agendada com sucesso para ${paciente_nome}`;
+            // 🆕 Usar mesma lógica detalhada de mensagem (prefixo + período + orientações)
+            let mensagem = '';
+            let temOrientacoes = false;
             
             // Buscar mensagem de confirmação personalizada
             const msgConfirmacao = getMensagemPersonalizada(config, 'confirmacao_agendamento', medico.id);
             const msgPagamento = getMensagemPersonalizada(config, 'pagamento', medico.id);
             
+            const dataFormatada = new Date(data_consulta + 'T00:00:00').toLocaleDateString('pt-BR');
+            const [hAlocado] = horarioAlocado.split(':').map(Number);
+            
             if (msgConfirmacao) {
-              mensagem = msgConfirmacao;
+              mensagem = `✅ ${msgConfirmacao}`;
             } else {
-              // Mensagem padrão genérica com período detalhado
-              const dataFormatada = new Date(data_consulta + 'T00:00:00').toLocaleDateString('pt-BR');
+              // 🆕 USAR PREFIXO PERSONALIZADO E DISTRIBUICAO_FICHAS
+              let prefixoFinal = 'Consulta agendada';
+              let periodoNomeConf = '';
+              let periodoHorarioConf = '';
+              let atendimentoInicioConf = '';
               
-              // Determinar nome do período baseado no horário alocado
-              const [hAlocado] = horarioAlocado.split(':').map(Number);
-              let periodoNomeLoop = hAlocado >= 7 && hAlocado < 12 ? 'manhã' : hAlocado >= 13 && hAlocado < 18 ? 'tarde' : '';
-              
-              // Buscar horários do período se disponível
-              let periodoInfoLoop = '';
-              if (periodoNomeLoop && periodoConfig) {
-                periodoInfoLoop = ` no período da ${periodoNomeLoop} (${periodoConfig.inicio.substring(0,5)} às ${periodoConfig.fim.substring(0,5)})`;
-              } else if (periodoNomeLoop) {
-                periodoInfoLoop = ` no período da ${periodoNomeLoop}`;
+              // Buscar config do serviço para informações detalhadas
+              if (regrasMedicoSchedule?.servicos) {
+                const servicoAtualRaw = servicoConfigSchedule || Object.values(regrasMedicoSchedule.servicos)[0];
+                const servicoAtual = normalizarServicoPeriodos(servicoAtualRaw);
+                
+                // 1️⃣ PREFIXO PERSONALIZADO
+                prefixoFinal = servicoAtual?.prefixo_mensagem || 'Consulta agendada';
+                
+                if (servicoAtual?.periodos) {
+                  // 2️⃣ DETECTAR PERÍODO BASEADO NO HORÁRIO ALOCADO
+                  if (servicoAtual.periodos.manha) {
+                    const manha = servicoAtual.periodos.manha;
+                    const horaInicioM = manha.inicio || manha.horario_inicio;
+                    const horaFimM = manha.fim || manha.horario_fim;
+                    if (horaInicioM && horaFimM) {
+                      const [hInicioM] = horaInicioM.split(':').map(Number);
+                      const [hFimM] = horaFimM.split(':').map(Number);
+                      if (hAlocado >= hInicioM && hAlocado < hFimM) {
+                        periodoNomeConf = 'manhã';
+                        periodoHorarioConf = manha.distribuicao_fichas || `${horaInicioM.substring(0,5)} às ${horaFimM.substring(0,5)}`;
+                        atendimentoInicioConf = manha.atendimento_inicio || '';
+                      }
+                    }
+                  }
+                  if (!periodoNomeConf && servicoAtual.periodos.tarde) {
+                    const tarde = servicoAtual.periodos.tarde;
+                    const horaInicioT = tarde.inicio || tarde.horario_inicio;
+                    const horaFimT = tarde.fim || tarde.horario_fim;
+                    if (horaInicioT && horaFimT) {
+                      const [hInicioT] = horaInicioT.split(':').map(Number);
+                      const [hFimT] = horaFimT.split(':').map(Number);
+                      if (hAlocado >= hInicioT && hAlocado < hFimT) {
+                        periodoNomeConf = 'tarde';
+                        periodoHorarioConf = tarde.distribuicao_fichas || `${horaInicioT.substring(0,5)} às ${horaFimT.substring(0,5)}`;
+                        atendimentoInicioConf = tarde.atendimento_inicio || '';
+                      }
+                    }
+                  }
+                }
+                
+                // 3️⃣ VERIFICAR SE TEM ORIENTAÇÕES
+                if (servicoAtual?.orientacoes) {
+                  temOrientacoes = true;
+                }
               }
               
-              mensagem = `✅ Agendada para ${dataFormatada}${periodoInfoLoop}, por ordem de chegada.`;
+              // 4️⃣ GERAR MENSAGEM COM PREFIXO E PERÍODO DETALHADO
+              if (periodoNomeConf && periodoHorarioConf) {
+                if (atendimentoInicioConf) {
+                  mensagem = `✅ ${prefixoFinal} para ${paciente_nome} em ${dataFormatada} no período da ${periodoNomeConf} (${periodoHorarioConf}). Dr. começa a atender às ${atendimentoInicioConf}, por ordem de chegada.`;
+                } else {
+                  mensagem = `✅ ${prefixoFinal} para ${paciente_nome} em ${dataFormatada} no período da ${periodoNomeConf} (${periodoHorarioConf}), por ordem de chegada.`;
+                }
+              } else {
+                mensagem = `✅ ${prefixoFinal} para ${paciente_nome} em ${dataFormatada} por ordem de chegada.`;
+              }
+              
+              // 5️⃣ ANEXAR ORIENTAÇÕES AO FINAL
+              if (regrasMedicoSchedule?.servicos) {
+                const servicoAtualRaw = servicoConfigSchedule || Object.values(regrasMedicoSchedule.servicos)[0];
+                const servicoAtual = normalizarServicoPeriodos(servicoAtualRaw);
+                if (servicoAtual?.orientacoes) {
+                  mensagem += `\n\n${servicoAtual.orientacoes}`;
+                }
+              }
             }
             
             // Adicionar mensagem de pagamento se existir
@@ -2853,13 +2912,17 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
               mensagem += `\n\n💰 ${msgPagamento}`;
             }
             
-            mensagem += `\n\nPosso ajudar em algo mais?`;
+            // 6️⃣ SÓ ADICIONAR "POSSO AJUDAR..." SE NÃO TIVER ORIENTAÇÕES
+            if (!temOrientacoes) {
+              mensagem += `\n\nPosso ajudar em algo mais?`;
+            }
             
             return successResponse({
               message: mensagem,
               agendamento_id: resultadoFinal.agendamento_id,
               paciente_id: resultadoFinal.paciente_id,
               data: data_consulta,
+              hora: horarioAlocado,
               medico: medico.nome,
               atendimento: atendimento_nome || 'Consulta',
               validado: true,
