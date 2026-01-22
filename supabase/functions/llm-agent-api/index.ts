@@ -1436,6 +1436,7 @@ function normalizarNome(nome: string | null | undefined): string | null {
 /**
  * 🛡️ Sanitiza valores inválidos vindos do N8N/LLM
  * Converte: "indefinido", "undefined", "null", "", "None" → undefined
+ * Também trata textos conversacionais como "próximas datas disponíveis" → undefined
  */
 function sanitizarCampoOpcional(valor: any): any {
   if (valor === null || valor === undefined) return undefined;
@@ -1449,9 +1450,43 @@ function sanitizarCampoOpcional(valor: any): any {
       'n/a', 'na', '', 'empty'
     ];
     
+    // 🆕 Padrões de texto conversacional que indicam "buscar datas automaticamente"
+    const padroesConversacionais = [
+      'próximas datas',
+      'proximas datas',
+      'datas disponíveis',
+      'datas disponiveis',
+      'qualquer data',
+      'qualquer dia',
+      'primeiro horário',
+      'primeiro horario',
+      'próximo horário',
+      'proximo horario',
+      'mais próxima',
+      'mais proxima',
+      'próxima data',
+      'proxima data',
+      'próximo disponível',
+      'proximo disponivel',
+      'qualquer horário',
+      'qualquer horario',
+      'o mais rápido',
+      'o mais rapido',
+      'mais cedo possível',
+      'mais cedo possivel'
+    ];
+    
     if (valoresInvalidos.includes(valorTrim)) {
       console.log(`🧹 Campo com valor inválido "${valor}" convertido para undefined`);
       return undefined;
+    }
+    
+    // 🆕 Verificar se contém padrão conversacional
+    for (const padrao of padroesConversacionais) {
+      if (valorTrim.includes(padrao)) {
+        console.log(`🧹 Campo com texto conversacional "${valor}" convertido para undefined (trigger: "${padrao}")`);
+        return undefined;
+      }
     }
   }
   
