@@ -4599,7 +4599,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         }
       });
     }
-    console.log(`✅ Regras encontradas para ${regras.nome}`);
+    console.log(`✅ Regras encontradas para ${(regras as any)?.nome || medico.nome}`);
 
     // 🆕 FUNÇÃO AUXILIAR: Buscar próximas datas disponíveis
     async function buscarProximasDatasDisponiveis(
@@ -5051,8 +5051,8 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
                 
                 if (horariosLivres.length > 0) {
                   // Classificar o período (manhã/tarde) baseado no primeiro horário
-                  const primeiroHorario = horariosLivres[0].hora;
-                  const [horaH] = primeiroHorario.split(':').map(Number);
+                  const primeiroHorario = horariosLivres[0]?.hora;
+                  const [horaH] = primeiroHorario ? primeiroHorario.split(':').map(Number) : [8];
                   const periodoNome = horaH < 12 ? 'Manhã' : 'Tarde';
                   
                   periodosDisponiveis.push({
@@ -5105,7 +5105,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           // 🆕 FILTRAR PERÍODOS QUE JÁ PASSARAM NO DIA ATUAL
           const ehHoje = (i === 0);
           
-          if (ehHoje) {
+          if (ehHoje && (config as any)?.fim) {
             // Extrair horário de FIM do período
             const [horaFim, minFim] = (config as any).fim.split(':').map(Number);
             const horarioFimEmMinutos = horaFim * 60 + minFim;
@@ -5415,7 +5415,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
               return !horariosOcupadosFluxo3.has(horaFormatada);
             });
             
-            if (horariosLivresFluxo3.length > 0) {
+            if (horariosLivresFluxo3.length > 0 && horariosLivresFluxo3[0]?.hora) {
               const [horaH] = horariosLivresFluxo3[0].hora.split(':').map(Number);
               const periodoNome = horaH < 12 ? 'Manhã' : 'Tarde';
               
@@ -5467,7 +5467,7 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       // 🆕 SE A DATA FOR HOJE, VERIFICAR SE O PERÍODO JÁ PASSOU
       const ehHoje = (data_consulta === dataAtual);
       
-      if (ehHoje) {
+      if (ehHoje && (config as any)?.fim) {
         const [horaFim, minFim] = (config as any).fim.split(':').map(Number);
         const horarioFimEmMinutos = horaFim * 60 + minFim;
         
