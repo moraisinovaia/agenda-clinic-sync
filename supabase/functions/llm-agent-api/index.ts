@@ -2103,8 +2103,12 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
               });
               }
               
-              // 2.1 Verificar se permite agendamento online (aceita ambos os formatos)
-              const permiteOnline = servicoLocal.permite_online || servicoLocal.permite_agendamento_online;
+              // 2.1 Verificar se permite agendamento online (multi-nível: serviço, raiz, config nested)
+              const permiteOnline = 
+                servicoLocal.permite_online || 
+                servicoLocal.permite_agendamento_online ||
+                regras?.permite_agendamento_online ||      // Nível raiz das regras (agendas dedicadas)
+                (regras as any)?.config?.permite_agendamento_online;  // Fallback config nested
               if (!permiteOnline) {
                 console.log(`❌ Serviço ${servicoKeyValidacao} não permite agendamento online`);
                 return businessErrorResponse({
