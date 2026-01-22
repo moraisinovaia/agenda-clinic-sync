@@ -3618,16 +3618,20 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
     // Mensagem dinâmica baseada nas business_rules do médico
     let mensagem = `Consulta remarcada com sucesso`;
 
-    // Buscar regras dinâmicas do médico
-    const regrasRemarcar = await getMedicoRules(supabase, clienteId, agendamento.medico_id);
+    // Buscar regras dinâmicas do médico (usar config + hardcoded fallback)
+    const regrasRemarcar = getMedicoRules(config, agendamento.medico_id, BUSINESS_RULES.medicos[agendamento.medico_id]);
+    console.log(`🔍 [RESCHEDULE] Regras encontradas: ${regrasRemarcar ? 'SIM' : 'NÃO'}, tipo: ${regrasRemarcar?.tipo_agendamento || 'N/A'}`);
     
     if (regrasRemarcar && regrasRemarcar.tipo_agendamento === 'ordem_chegada') {
       const servicos = regrasRemarcar.servicos || {};
-      const primeiroServico = Object.values(servicos).find((s: any) => s.ativo !== false) as any;
+      // Buscar primeiro serviço com periodos definidos
+      const primeiroServico = Object.values(servicos).find((s: any) => s.periodos && Object.keys(s.periodos).length > 0) as any;
+      console.log(`🔍 [RESCHEDULE] Primeiro serviço com períodos: ${primeiroServico ? 'ENCONTRADO' : 'NÃO'}`);
       
       if (primeiroServico?.periodos) {
         const periodos = primeiroServico.periodos;
         const [hora] = nova_hora.split(':').map(Number);
+        console.log(`🔍 [RESCHEDULE] Hora: ${hora}, Períodos: manha=${!!periodos.manha}, tarde=${!!periodos.tarde}`);
         
         // Normalizar campos (aceitar inicio/fim OU horario_inicio/horario_fim)
         const manha = periodos.manha;
@@ -3636,23 +3640,28 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
         let periodoConfig: any = null;
         let periodoNome = '';
         
-        // Detectar período baseado na hora
+        // Detectar período baseado na hora (usar contagem_inicio/contagem_fim para range amplo)
         if (manha) {
-          const hIni = parseInt((manha.inicio || manha.horario_inicio || '00:00').split(':')[0]);
-          const hFim = parseInt((manha.fim || manha.horario_fim || '12:00').split(':')[0]);
-          if (hora >= hIni && hora <= hFim) {
+          // Usar contagem_inicio/fim se disponível, senão inicio/fim
+          const hIni = parseInt((manha.contagem_inicio || manha.inicio || manha.horario_inicio || '00:00').split(':')[0]);
+          const hFim = parseInt((manha.contagem_fim || manha.fim || manha.horario_fim || '12:00').split(':')[0]);
+          console.log(`🔍 [RESCHEDULE] Manha range: ${hIni}-${hFim}, hora=${hora}`);
+          if (hora >= hIni && hora < hFim) {
             periodoConfig = manha;
             periodoNome = 'manhã';
           }
         }
         if (tarde && !periodoConfig) {
-          const hIni = parseInt((tarde.inicio || tarde.horario_inicio || '12:00').split(':')[0]);
-          const hFim = parseInt((tarde.fim || tarde.horario_fim || '18:00').split(':')[0]);
-          if (hora >= hIni && hora <= hFim) {
+          const hIni = parseInt((tarde.contagem_inicio || tarde.inicio || tarde.horario_inicio || '12:00').split(':')[0]);
+          const hFim = parseInt((tarde.contagem_fim || tarde.fim || tarde.horario_fim || '18:00').split(':')[0]);
+          console.log(`🔍 [RESCHEDULE] Tarde range: ${hIni}-${hFim}, hora=${hora}`);
+          if (hora >= hIni && hora < hFim) {
             periodoConfig = tarde;
             periodoNome = 'tarde';
           }
         }
+        
+        console.log(`🔍 [RESCHEDULE] Período detectado: ${periodoNome || 'NENHUM'}`);
         
         if (periodoConfig) {
           // Verificar mensagem personalizada do serviço
@@ -3861,40 +3870,48 @@ async function handleConfirm(supabase: any, body: any, clienteId: string, config
     // Mensagem dinâmica baseada nas business_rules do médico
     let mensagemConfirmacao = 'Consulta confirmada com sucesso';
     
-    // Buscar regras dinâmicas do médico
-    const regrasConfirmar = await getMedicoRules(supabase, clienteId, agendamento.medico_id);
+    // Buscar regras dinâmicas do médico (usar config + hardcoded fallback)
+    const regrasConfirmar = getMedicoRules(config, agendamento.medico_id, BUSINESS_RULES.medicos[agendamento.medico_id]);
+    console.log(`🔍 [CONFIRM] Regras encontradas: ${regrasConfirmar ? 'SIM' : 'NÃO'}, tipo: ${regrasConfirmar?.tipo_agendamento || 'N/A'}`);
     
     if (regrasConfirmar && regrasConfirmar.tipo_agendamento === 'ordem_chegada') {
       const servicosConf = regrasConfirmar.servicos || {};
-      const primeiroServicoConf = Object.values(servicosConf).find((s: any) => s.ativo !== false) as any;
+      // Buscar primeiro serviço com periodos definidos
+      const primeiroServicoConf = Object.values(servicosConf).find((s: any) => s.periodos && Object.keys(s.periodos).length > 0) as any;
+      console.log(`🔍 [CONFIRM] Primeiro serviço com períodos: ${primeiroServicoConf ? 'ENCONTRADO' : 'NÃO'}`);
       
       if (primeiroServicoConf?.periodos) {
         const periodosConf = primeiroServicoConf.periodos;
         const [horaConf] = agendamento.hora_agendamento.split(':').map(Number);
+        console.log(`🔍 [CONFIRM] Hora: ${horaConf}, Períodos: manha=${!!periodosConf.manha}, tarde=${!!periodosConf.tarde}`);
         
         let periodoConfigConf: any = null;
         let periodoNomeConf = '';
         
-        // Detectar período (normalizar campos)
+        // Detectar período (usar contagem_inicio/fim para range amplo)
         const manhaConf = periodosConf.manha;
         const tardeConf = periodosConf.tarde;
         
         if (manhaConf) {
-          const hIniConf = parseInt((manhaConf.inicio || manhaConf.horario_inicio || '00:00').split(':')[0]);
-          const hFimConf = parseInt((manhaConf.fim || manhaConf.horario_fim || '12:00').split(':')[0]);
-          if (horaConf >= hIniConf && horaConf <= hFimConf) {
+          const hIniConf = parseInt((manhaConf.contagem_inicio || manhaConf.inicio || manhaConf.horario_inicio || '00:00').split(':')[0]);
+          const hFimConf = parseInt((manhaConf.contagem_fim || manhaConf.fim || manhaConf.horario_fim || '12:00').split(':')[0]);
+          console.log(`🔍 [CONFIRM] Manha range: ${hIniConf}-${hFimConf}, hora=${horaConf}`);
+          if (horaConf >= hIniConf && horaConf < hFimConf) {
             periodoConfigConf = manhaConf;
             periodoNomeConf = 'manhã';
           }
         }
         if (tardeConf && !periodoConfigConf) {
-          const hIniConf = parseInt((tardeConf.inicio || tardeConf.horario_inicio || '12:00').split(':')[0]);
-          const hFimConf = parseInt((tardeConf.fim || tardeConf.horario_fim || '18:00').split(':')[0]);
-          if (horaConf >= hIniConf && horaConf <= hFimConf) {
+          const hIniConf = parseInt((tardeConf.contagem_inicio || tardeConf.inicio || tardeConf.horario_inicio || '12:00').split(':')[0]);
+          const hFimConf = parseInt((tardeConf.contagem_fim || tardeConf.fim || tardeConf.horario_fim || '18:00').split(':')[0]);
+          console.log(`🔍 [CONFIRM] Tarde range: ${hIniConf}-${hFimConf}, hora=${horaConf}`);
+          if (horaConf >= hIniConf && horaConf < hFimConf) {
             periodoConfigConf = tardeConf;
             periodoNomeConf = 'tarde';
           }
         }
+        
+        console.log(`🔍 [CONFIRM] Período detectado: ${periodoNomeConf || 'NENHUM'}`);
         
         if (periodoConfigConf) {
           const horaInicioConf = periodoConfigConf.inicio || periodoConfigConf.horario_inicio || '';
