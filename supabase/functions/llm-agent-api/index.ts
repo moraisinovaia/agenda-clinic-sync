@@ -3043,6 +3043,15 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
           // Fallback simples se não encontrar config
           mensagem = `✅ Consulta agendada para ${paciente_nome} em ${dataFormatada} por ordem de chegada.`;
         }
+        
+        // 5️⃣ ANEXAR ORIENTAÇÕES DO SERVIÇO (se existirem)
+        if (regrasMedicoSchedule?.servicos) {
+          const servicoAtualRaw = servicoConfigSchedule || Object.values(regrasMedicoSchedule.servicos)[0];
+          const servicoAtual = normalizarServicoPeriodos(servicoAtualRaw);
+          if (servicoAtual?.orientacoes) {
+            mensagem += ` ${servicoAtual.orientacoes}`;
+          }
+        }
       } else {
         // Hora marcada
         mensagem = `✅ Consulta agendada para ${paciente_nome} em ${dataFormatada} às ${horaFormatada}.`;
