@@ -3615,36 +3615,77 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
 
     console.log('✅ Agendamento remarcado com sucesso!');
 
-    // Mensagem personalizada para Dra. Adriana
+    // Mensagem dinâmica baseada nas business_rules do médico
     let mensagem = `Consulta remarcada com sucesso`;
 
-    const isDraAdriana = agendamento.medico_id === '32d30887-b876-4502-bf04-e55d7fb55b50';
-
-    if (isDraAdriana) {
-      // Formatar data e hora explicitamente
-      const dataFormatada = new Date(nova_data + 'T00:00:00').toLocaleDateString('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      });
+    // Buscar regras dinâmicas do médico
+    const regrasRemarcar = await getMedicoRules(supabase, clienteId, agendamento.medico_id);
+    
+    if (regrasRemarcar && regrasRemarcar.tipo_agendamento === 'ordem_chegada') {
+      const servicos = regrasRemarcar.servicos || {};
+      const primeiroServico = Object.values(servicos).find((s: any) => s.ativo !== false) as any;
       
-      const horaFormatada = nova_hora.substring(0, 5); // "08:00:00" → "08:00"
-      const [hora] = nova_hora.split(':').map(Number);
-      
-      let mensagemPeriodo = '';
-      if (hora >= 7 && hora < 12) {
-        // Manhã: 07:00-12:00
-        mensagemPeriodo = `📅 ${dataFormatada} às ${horaFormatada}\n\n⏰ Das 08:00 às 10:00 para fazer a ficha. A Dra. começa a atender às 08:45`;
-      } else if (hora >= 13 && hora < 18) {
-        // Tarde: 13:00-18:00
-        mensagemPeriodo = `📅 ${dataFormatada} às ${horaFormatada}\n\n⏰ Das 13:00 às 15:00 para fazer a ficha. A Dra. começa a atender às 14:45`;
-      } else {
-        // Fallback com hora sempre visível
-        mensagemPeriodo = `📅 ${dataFormatada} às ${horaFormatada}\n\n⏰ Compareça no horário marcado. A Dra. atende por ordem de chegada`;
+      if (primeiroServico?.periodos) {
+        const periodos = primeiroServico.periodos;
+        const [hora] = nova_hora.split(':').map(Number);
+        
+        // Normalizar campos (aceitar inicio/fim OU horario_inicio/horario_fim)
+        const manha = periodos.manha;
+        const tarde = periodos.tarde;
+        
+        let periodoConfig: any = null;
+        let periodoNome = '';
+        
+        // Detectar período baseado na hora
+        if (manha) {
+          const hIni = parseInt((manha.inicio || manha.horario_inicio || '00:00').split(':')[0]);
+          const hFim = parseInt((manha.fim || manha.horario_fim || '12:00').split(':')[0]);
+          if (hora >= hIni && hora <= hFim) {
+            periodoConfig = manha;
+            periodoNome = 'manhã';
+          }
+        }
+        if (tarde && !periodoConfig) {
+          const hIni = parseInt((tarde.inicio || tarde.horario_inicio || '12:00').split(':')[0]);
+          const hFim = parseInt((tarde.fim || tarde.horario_fim || '18:00').split(':')[0]);
+          if (hora >= hIni && hora <= hFim) {
+            periodoConfig = tarde;
+            periodoNome = 'tarde';
+          }
+        }
+        
+        if (periodoConfig) {
+          // Verificar mensagem personalizada do serviço
+          if (primeiroServico.mensagem_apos_agendamento) {
+            mensagem = `✅ ${primeiroServico.mensagem_apos_agendamento}`;
+            console.log(`💬 Usando mensagem personalizada do serviço`);
+          } else {
+            // Priorizar distribuicao_fichas, fallback para inicio/fim
+            const horaInicio = periodoConfig.inicio || periodoConfig.horario_inicio || '';
+            const horaFim = periodoConfig.fim || periodoConfig.horario_fim || '';
+            const distribuicaoFichas = periodoConfig.distribuicao_fichas || 
+              `${horaInicio.substring(0,5)} às ${horaFim.substring(0,5)}`;
+            const atendimentoInicio = periodoConfig.atendimento_inicio;
+            
+            // Formatar data
+            const dataFormatadaRemar = new Date(nova_data + 'T00:00:00').toLocaleDateString('pt-BR', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric'
+            });
+            
+            // Montar mensagem dinâmica
+            mensagem = `✅ Consulta remarcada para ${agendamento.pacientes?.nome_completo} em ${dataFormatadaRemar} no período da ${periodoNome} (${distribuicaoFichas})`;
+            
+            if (atendimentoInicio) {
+              mensagem += `. Dr. começa a atender às ${atendimentoInicio}`;
+            }
+            
+            mensagem += `, por ordem de chegada.`;
+            console.log(`💬 Mensagem dinâmica ordem_chegada: ${periodoNome} (${distribuicaoFichas})`);
+          }
+        }
       }
-      
-      mensagem = `✅ Remarcada! ${mensagemPeriodo}, por ordem de chegada.\n\n💰 Caso o plano Unimed seja coparticipação ou particular, recebemos apenas em espécie.\n\nPosso ajudar em algo mais?`;
-      console.log(`💬 Mensagem personalizada Dra. Adriana (${dataFormatada} às ${horaFormatada})`);
     }
 
     return successResponse({
@@ -3817,8 +3858,71 @@ async function handleConfirm(supabase: any, body: any, clienteId: string, config
 
     console.log(`✅ Agendamento ${agendamento_id} confirmado com sucesso`);
 
+    // Mensagem dinâmica baseada nas business_rules do médico
+    let mensagemConfirmacao = 'Consulta confirmada com sucesso';
+    
+    // Buscar regras dinâmicas do médico
+    const regrasConfirmar = await getMedicoRules(supabase, clienteId, agendamento.medico_id);
+    
+    if (regrasConfirmar && regrasConfirmar.tipo_agendamento === 'ordem_chegada') {
+      const servicosConf = regrasConfirmar.servicos || {};
+      const primeiroServicoConf = Object.values(servicosConf).find((s: any) => s.ativo !== false) as any;
+      
+      if (primeiroServicoConf?.periodos) {
+        const periodosConf = primeiroServicoConf.periodos;
+        const [horaConf] = agendamento.hora_agendamento.split(':').map(Number);
+        
+        let periodoConfigConf: any = null;
+        let periodoNomeConf = '';
+        
+        // Detectar período (normalizar campos)
+        const manhaConf = periodosConf.manha;
+        const tardeConf = periodosConf.tarde;
+        
+        if (manhaConf) {
+          const hIniConf = parseInt((manhaConf.inicio || manhaConf.horario_inicio || '00:00').split(':')[0]);
+          const hFimConf = parseInt((manhaConf.fim || manhaConf.horario_fim || '12:00').split(':')[0]);
+          if (horaConf >= hIniConf && horaConf <= hFimConf) {
+            periodoConfigConf = manhaConf;
+            periodoNomeConf = 'manhã';
+          }
+        }
+        if (tardeConf && !periodoConfigConf) {
+          const hIniConf = parseInt((tardeConf.inicio || tardeConf.horario_inicio || '12:00').split(':')[0]);
+          const hFimConf = parseInt((tardeConf.fim || tardeConf.horario_fim || '18:00').split(':')[0]);
+          if (horaConf >= hIniConf && horaConf <= hFimConf) {
+            periodoConfigConf = tardeConf;
+            periodoNomeConf = 'tarde';
+          }
+        }
+        
+        if (periodoConfigConf) {
+          const horaInicioConf = periodoConfigConf.inicio || periodoConfigConf.horario_inicio || '';
+          const horaFimConf = periodoConfigConf.fim || periodoConfigConf.horario_fim || '';
+          const distribuicaoFichasConf = periodoConfigConf.distribuicao_fichas || 
+            `${horaInicioConf.substring(0,5)} às ${horaFimConf.substring(0,5)}`;
+          const atendimentoInicioConf = periodoConfigConf.atendimento_inicio;
+          
+          const dataFormatadaConf = new Date(agendamento.data_agendamento + 'T00:00:00').toLocaleDateString('pt-BR', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+          });
+          
+          mensagemConfirmacao = `✅ Consulta confirmada para ${dataFormatadaConf} no período da ${periodoNomeConf} (${distribuicaoFichasConf})`;
+          
+          if (atendimentoInicioConf) {
+            mensagemConfirmacao += `. Dr. começa a atender às ${atendimentoInicioConf}`;
+          }
+          
+          mensagemConfirmacao += `, por ordem de chegada.`;
+          console.log(`💬 Confirmação com período: ${periodoNomeConf} (${distribuicaoFichasConf})`);
+        }
+      }
+    }
+
     return successResponse({
-      message: 'Consulta confirmada com sucesso',
+      message: mensagemConfirmacao,
       agendamento_id,
       paciente: agendamento.pacientes?.nome_completo,
       celular: agendamento.pacientes?.celular,
