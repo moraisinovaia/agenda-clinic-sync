@@ -2982,35 +2982,64 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
         let periodoHorarioConf = '';
         
         // Buscar config do período para informações detalhadas
+        let atendimentoInicioConf = '';
+        
         if (regrasMedicoSchedule?.servicos) {
           const servicoAtualRaw = servicoConfigSchedule || Object.values(regrasMedicoSchedule.servicos)[0];
           const servicoAtual = normalizarServicoPeriodos(servicoAtualRaw);
-          if (servicoAtual?.periodos) {
+          
+          // 1️⃣ VERIFICAR MENSAGEM PERSONALIZADA DO SERVIÇO
+          if (servicoAtual?.mensagem_apos_agendamento) {
+            mensagem = `✅ ${servicoAtual.mensagem_apos_agendamento}`;
+          } else if (servicoAtual?.periodos) {
+            // 2️⃣ NORMALIZAR CAMPOS (aceitar ambas nomenclaturas)
             if (servicoAtual.periodos.manha) {
               const manha = servicoAtual.periodos.manha;
-              const [hInicioM] = manha.inicio.split(':').map(Number);
-              const [hFimM] = manha.fim.split(':').map(Number);
-              if (hora >= hInicioM && hora < hFimM) {
-                periodoNomeConf = 'manhã';
-                periodoHorarioConf = `${manha.inicio.substring(0,5)} às ${manha.fim.substring(0,5)}`;
+              const horaInicioM = manha.inicio || manha.horario_inicio;
+              const horaFimM = manha.fim || manha.horario_fim;
+              
+              if (horaInicioM && horaFimM) {
+                const [hInicioM] = horaInicioM.split(':').map(Number);
+                const [hFimM] = horaFimM.split(':').map(Number);
+                if (hora >= hInicioM && hora < hFimM) {
+                  periodoNomeConf = 'manhã';
+                  // 3️⃣ PRIORIZAR distribuicao_fichas para horário do paciente
+                  periodoHorarioConf = manha.distribuicao_fichas || 
+                                       `${horaInicioM.substring(0,5)} às ${horaFimM.substring(0,5)}`;
+                  // 4️⃣ CAPTURAR atendimento_inicio
+                  atendimentoInicioConf = manha.atendimento_inicio || '';
+                }
               }
             }
             if (!periodoNomeConf && servicoAtual.periodos.tarde) {
               const tarde = servicoAtual.periodos.tarde;
-              const [hInicioT] = tarde.inicio.split(':').map(Number);
-              const [hFimT] = tarde.fim.split(':').map(Number);
-              if (hora >= hInicioT && hora < hFimT) {
-                periodoNomeConf = 'tarde';
-                periodoHorarioConf = `${tarde.inicio.substring(0,5)} às ${tarde.fim.substring(0,5)}`;
+              const horaInicioT = tarde.inicio || tarde.horario_inicio;
+              const horaFimT = tarde.fim || tarde.horario_fim;
+              
+              if (horaInicioT && horaFimT) {
+                const [hInicioT] = horaInicioT.split(':').map(Number);
+                const [hFimT] = horaFimT.split(':').map(Number);
+                if (hora >= hInicioT && hora < hFimT) {
+                  periodoNomeConf = 'tarde';
+                  // 3️⃣ PRIORIZAR distribuicao_fichas para horário do paciente
+                  periodoHorarioConf = tarde.distribuicao_fichas || 
+                                       `${horaInicioT.substring(0,5)} às ${horaFimT.substring(0,5)}`;
+                  // 4️⃣ CAPTURAR atendimento_inicio
+                  atendimentoInicioConf = tarde.atendimento_inicio || '';
+                }
               }
             }
           }
         }
         
-        // Mensagem com período detalhado
-        if (periodoNomeConf && periodoHorarioConf) {
-          mensagem = `✅ Consulta agendada para ${paciente_nome} em ${dataFormatada} no período da ${periodoNomeConf} (${periodoHorarioConf}), por ordem de chegada.`;
-        } else {
+        // Mensagem com período detalhado (se não usou mensagem personalizada)
+        if (!mensagem && periodoNomeConf && periodoHorarioConf) {
+          if (atendimentoInicioConf) {
+            mensagem = `✅ Consulta agendada para ${paciente_nome} em ${dataFormatada} no período da ${periodoNomeConf} (${periodoHorarioConf}). Dr. começa a atender às ${atendimentoInicioConf}, por ordem de chegada.`;
+          } else {
+            mensagem = `✅ Consulta agendada para ${paciente_nome} em ${dataFormatada} no período da ${periodoNomeConf} (${periodoHorarioConf}), por ordem de chegada.`;
+          }
+        } else if (!mensagem) {
           // Fallback simples se não encontrar config
           mensagem = `✅ Consulta agendada para ${paciente_nome} em ${dataFormatada} por ordem de chegada.`;
         }
