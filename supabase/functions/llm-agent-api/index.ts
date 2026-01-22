@@ -2841,8 +2841,10 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
               let atendimentoInicioConf = '';
               
               // Buscar config do serviço para informações detalhadas
-              if (regrasMedicoSchedule?.servicos) {
-                const servicoAtualRaw = servicoConfigSchedule || Object.values(regrasMedicoSchedule.servicos)[0];
+              // 🔧 FIX: Usar regrasMedico (já declarado na linha 2724) ao invés de regrasMedicoSchedule
+              if (regrasMedico?.servicos) {
+                const servicoKey = Object.keys(regrasMedico.servicos)[0];
+                const servicoAtualRaw = regrasMedico.servicos[servicoKey];
                 const servicoAtual = normalizarServicoPeriodos(servicoAtualRaw);
                 
                 // 1️⃣ PREFIXO PERSONALIZADO
@@ -2884,6 +2886,11 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
                 if (servicoAtual?.orientacoes) {
                   temOrientacoes = true;
                 }
+                
+                // 5️⃣ ANEXAR ORIENTAÇÕES AO FINAL (movido para dentro do if)
+                if (servicoAtual?.orientacoes) {
+                  // Será anexado após gerar a mensagem base
+                }
               }
               
               // 4️⃣ GERAR MENSAGEM COM PREFIXO E PERÍODO DETALHADO
@@ -2898,8 +2905,9 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
               }
               
               // 5️⃣ ANEXAR ORIENTAÇÕES AO FINAL
-              if (regrasMedicoSchedule?.servicos) {
-                const servicoAtualRaw = servicoConfigSchedule || Object.values(regrasMedicoSchedule.servicos)[0];
+              if (regrasMedico?.servicos) {
+                const servicoKey = Object.keys(regrasMedico.servicos)[0];
+                const servicoAtualRaw = regrasMedico.servicos[servicoKey];
                 const servicoAtual = normalizarServicoPeriodos(servicoAtualRaw);
                 if (servicoAtual?.orientacoes) {
                   mensagem += `\n\n${servicoAtual.orientacoes}`;
