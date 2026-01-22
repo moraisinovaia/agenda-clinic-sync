@@ -2967,6 +2967,7 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
     const msgPagamento = getMensagemPersonalizada(config, 'pagamento', medico.id);
     
     let mensagem = '';
+    let temOrientacoes = false;
     
     if (msgConfirmacao) {
       // Usar mensagem personalizada do banco
@@ -2988,10 +2989,10 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
           const servicoAtualRaw = servicoConfigSchedule || Object.values(regrasMedicoSchedule.servicos)[0];
           const servicoAtual = normalizarServicoPeriodos(servicoAtualRaw);
           
-          // 1️⃣ VERIFICAR MENSAGEM PERSONALIZADA DO SERVIÇO
-          if (servicoAtual?.mensagem_apos_agendamento) {
-            mensagem = `✅ ${servicoAtual.mensagem_apos_agendamento}`;
-          } else if (servicoAtual?.periodos) {
+          // 1️⃣ BUSCAR PREFIXO PERSONALIZADO (ou usar padrão)
+          const prefixoMensagem = servicoAtual?.prefixo_mensagem || 'Consulta agendada';
+          
+          if (servicoAtual?.periodos) {
             // 2️⃣ NORMALIZAR CAMPOS (aceitar ambas nomenclaturas)
             if (servicoAtual.periodos.manha) {
               const manha = servicoAtual.periodos.manha;
@@ -3032,16 +3033,20 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
           }
         }
         
-        // Mensagem com período detalhado (se não usou mensagem personalizada)
+        // Mensagem com período detalhado - usar prefixo configurável
+        const prefixoFinal = (regrasMedicoSchedule?.servicos) 
+          ? (normalizarServicoPeriodos(servicoConfigSchedule || Object.values(regrasMedicoSchedule.servicos)[0])?.prefixo_mensagem || 'Consulta agendada')
+          : 'Consulta agendada';
+        
         if (!mensagem && periodoNomeConf && periodoHorarioConf) {
           if (atendimentoInicioConf) {
-            mensagem = `✅ Consulta agendada para ${paciente_nome} em ${dataFormatada} no período da ${periodoNomeConf} (${periodoHorarioConf}). Dr. começa a atender às ${atendimentoInicioConf}, por ordem de chegada.`;
+            mensagem = `✅ ${prefixoFinal} para ${paciente_nome} em ${dataFormatada} no período da ${periodoNomeConf} (${periodoHorarioConf}). Dr. começa a atender às ${atendimentoInicioConf}, por ordem de chegada.`;
           } else {
-            mensagem = `✅ Consulta agendada para ${paciente_nome} em ${dataFormatada} no período da ${periodoNomeConf} (${periodoHorarioConf}), por ordem de chegada.`;
+            mensagem = `✅ ${prefixoFinal} para ${paciente_nome} em ${dataFormatada} no período da ${periodoNomeConf} (${periodoHorarioConf}), por ordem de chegada.`;
           }
         } else if (!mensagem) {
           // Fallback simples se não encontrar config
-          mensagem = `✅ Consulta agendada para ${paciente_nome} em ${dataFormatada} por ordem de chegada.`;
+          mensagem = `✅ ${prefixoFinal} para ${paciente_nome} em ${dataFormatada} por ordem de chegada.`;
         }
         
         // 5️⃣ ANEXAR ORIENTAÇÕES DO SERVIÇO (se existirem)
@@ -3049,7 +3054,8 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
           const servicoAtualRaw = servicoConfigSchedule || Object.values(regrasMedicoSchedule.servicos)[0];
           const servicoAtual = normalizarServicoPeriodos(servicoAtualRaw);
           if (servicoAtual?.orientacoes) {
-            mensagem += ` ${servicoAtual.orientacoes}`;
+            mensagem += `\n\n${servicoAtual.orientacoes}`;
+            temOrientacoes = true;
           }
         }
       } else {
@@ -3071,7 +3077,10 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
       mensagem += `\n\n💰 ${msgPagamento}`;
     }
     
-    mensagem += `\n\nPosso ajudar em algo mais?`;
+    // Só adicionar "Posso ajudar..." se NÃO tiver orientações anexadas
+    if (!temOrientacoes) {
+      mensagem += `\n\nPosso ajudar em algo mais?`;
+    }
     
     console.log(`💬 Mensagem de confirmação: ${msgConfirmacao ? 'personalizada do banco' : 'genérica por tipo'}`);
     console.log(`💬 Tipo agendamento: ${tipoEfetivoSchedule}`);
