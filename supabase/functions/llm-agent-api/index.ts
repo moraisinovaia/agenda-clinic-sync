@@ -1004,14 +1004,29 @@ function classificarPeriodoAgendamento(
   const minutos = h * 60 + m;
 
   for (const [periodo, config] of Object.entries(periodosConfig)) {
-    const [hInicio, mInicio] = (config as any).inicio.split(':').map(Number);
-    const [hFim, mFim] = (config as any).fim.split(':').map(Number);
+    // Priorizar campos de contagem expandida, com fallbacks para formatos legados
+    // contagem_inicio/fim: intervalo completo para contar vagas (ex: 07:00-12:00)
+    // inicio/fim ou horario_inicio/fim: horário de distribuição de fichas (ex: 07:30-10:00)
+    const inicioStr = (config as any).contagem_inicio 
+      || (config as any).inicio 
+      || (config as any).horario_inicio;
+    const fimStr = (config as any).contagem_fim 
+      || (config as any).fim 
+      || (config as any).horario_fim;
+    
+    if (!inicioStr || !fimStr) {
+      console.warn(`⚠️ [CLASSIFICAR] Período ${periodo} sem horários definidos`);
+      continue;
+    }
+    
+    const [hInicio, mInicio] = inicioStr.split(':').map(Number);
+    const [hFim, mFim] = fimStr.split(':').map(Number);
     const inicioMinutos = hInicio * 60 + mInicio;
     const fimMinutos = hFim * 60 + mFim;
 
-    // Para ORDEM DE CHEGADA: considerar margem de 15 minutos
-    // Exemplo: período 07:00-12:00 aceita agendamentos desde 06:45
-    const margemMinutos = 15; // 15 minutos
+    // Para ORDEM DE CHEGADA: considerar margem de 15 minutos antes do início
+    // Exemplo: período de contagem 07:00-12:00 aceita agendamentos desde 06:45
+    const margemMinutos = 15;
     
     if (minutos >= (inicioMinutos - margemMinutos) && minutos <= fimMinutos) {
       return periodo;
