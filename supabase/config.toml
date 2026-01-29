@@ -97,3 +97,6 @@ verify_jwt = false
 
 [functions.create-test-user]
 verify_jwt = false
+
+[functions.llm-agent-api-marcelo]
+verify_jwt = false
