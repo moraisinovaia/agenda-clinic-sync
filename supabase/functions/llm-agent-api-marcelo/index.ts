@@ -78,8 +78,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
-// Config ID do "Consultório Dr. Marcelo D'Carli"
-const CONFIG_ID_MARCELO = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+// Config ID do "Consultório Dr. Marcelo D'Carli" (config real no banco)
+const CONFIG_ID_MARCELO = '20b48124-ae41-4e54-8a7e-3e236b8b4829';
 
 // Cliente ID do IPADO (para acessar mesmos pacientes/agendamentos)
 const CLIENTE_ID_IPADO = '2bfb98b5-ae41-4f96-8ba7-acc797c22054';
