@@ -100,3 +100,6 @@ verify_jwt = false
 
 [functions.llm-agent-api-marcelo]
 verify_jwt = false
+
+[functions.llm-agent-api-olhos]
+verify_jwt = false
