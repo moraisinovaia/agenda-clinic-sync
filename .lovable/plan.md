@@ -1,64 +1,68 @@
 
 
-# Correção Definitiva: Travamento ao Alterar Datas
+# Correção: Horários gerados/apagados só aparecem após recarregar
 
-## Problema Restante
+## Problema
 
-O cálculo `daysInPeriod` (linhas 634-639) executa `eachDayOfInterval()` **7 vezes por render** dentro do `.map()` da tabela de horários. Cada tecla digitada no campo de data causa re-render, disparando 7x esse cálculo pesado.
+O estado `emptySlots` vive em `Index.tsx` e é passado como prop para `DoctorSchedule.tsx`. Existem duas instâncias do `DoctorScheduleGenerator`:
+
+- **`Index.tsx` (linha 906)**: `onSuccess` recarrega `emptySlots` do banco -- funciona corretamente
+- **`DoctorSchedule.tsx` (linha 1054)**: `onSuccess` apenas incrementa `refreshTrigger` local -- NAO atualiza `emptySlots`
+
+Quando o usuário gera ou apaga horários de dentro da agenda do médico, a mudanca nunca sobe até `Index.tsx` para atualizar os dados.
 
 ## Solução
 
-### Arquivo: `src/components/scheduling/DoctorScheduleGenerator.tsx`
+### 1. `src/components/scheduling/DoctorSchedule.tsx`
 
-**A) Memoizar `daysInPeriod` fora do `.map()`** -- calcular uma única vez com `useMemo`:
+Adicionar prop `onSlotsChanged` e chamá-la no `onSuccess`:
 
 ```text
-// ANTES (dentro do .map, roda 7x por render):
-schedules.map((sched, idx) => {
-  const daysInPeriod = dataInicio && dataFim ? (() => {
-    const start = toZonedTime(parseISO(dataInicio + 'T12:00:00'), BRAZIL_TIMEZONE);
-    const end = toZonedTime(parseISO(dataFim + 'T12:00:00'), BRAZIL_TIMEZONE);
-    if (!isValid(start) || !isValid(end)) return [];
-    return eachDayOfInterval({ start, end }).map(d => getDay(d));
-  })() : [];
-  ...
-});
+// Na interface DoctorScheduleProps, adicionar:
+onSlotsChanged?: () => void;
 
-// DEPOIS (fora do .map, roda 1x e só quando datas mudam):
-const daysInPeriodSet = useMemo(() => {
-  if (!dataInicio || !dataFim || dataInicio.length !== 10 || dataFim.length !== 10) {
-    return new Set<number>();
-  }
-  try {
-    const start = toZonedTime(parseISO(dataInicio + 'T12:00:00'), BRAZIL_TIMEZONE);
-    const end = toZonedTime(parseISO(dataFim + 'T12:00:00'), BRAZIL_TIMEZONE);
-    if (!isValid(start) || !isValid(end) || start > end) return new Set<number>();
-    const days = eachDayOfInterval({ start, end });
-    return new Set(days.map(d => getDay(d)));
-  } catch {
-    return new Set<number>();
-  }
-}, [dataInicio, dataFim]);
-
-// No .map:
-schedules.map((sched, idx) => {
-  const dayExistsInPeriod = daysInPeriodSet.has(idx);
-  ...
-});
+// No onSuccess do DoctorScheduleGenerator (linha 1054):
+onSuccess={() => {
+  toast.success('Operação realizada com sucesso!');
+  setRefreshTrigger(prev => prev + 1);
+  onSlotsChanged?.();  // Notifica Index.tsx para recarregar
+}}
 ```
 
-Isso reduz de 7 chamadas `eachDayOfInterval` por render para apenas 1, e usando `Set` a busca é O(1). Além disso, com a validação de `length !== 10`, datas parciais nem disparam o cálculo.
+### 2. `src/pages/Index.tsx`
 
-**B) Usar `selectedDoctorData` no JSX** -- substituir as 3 ocorrências de `doctors.find(doc => doc.id === selectedDoctor)?.nome` pelo valor já memoizado `selectedDoctorData?.nome`.
+Extrair a lógica de recarga para um `useCallback` reutilizável e passá-la como prop:
 
-**C) Memoizar `getActiveDaysSummary`** com `useMemo` para evitar recriação a cada render.
+```text
+// Criar função reutilizável:
+const reloadEmptySlots = useCallback(async () => {
+  if (!userClienteId) return;
+  const { data, error } = await supabase
+    .from('horarios_vazios')
+    .select('*')
+    .eq('cliente_id', userClienteId)
+    .eq('status', 'disponivel')
+    .gte('data', format(new Date(), 'yyyy-MM-dd'));
+  if (!error && data) {
+    setEmptySlots(data);
+  }
+}, [userClienteId]);
+
+// Passar para DoctorSchedule:
+<DoctorSchedule
+  ...
+  onSlotsChanged={reloadEmptySlots}
+/>
+
+// Usar também no DoctorScheduleGenerator de Index.tsx:
+<DoctorScheduleGenerator
+  ...
+  onSuccess={reloadEmptySlots}
+/>
+```
 
 ## Impacto
-- **Nenhuma funcionalidade alterada** -- apenas otimização de renderização
-- **Campos de data** responderão instantaneamente
-- **Risco zero** -- são mudanças puramente de memoização
-
-## Resultado Esperado
-- Digitar datas será fluido, sem travamento
-- Render do componente será ~7x mais rápido ao alterar datas
+- Ao gerar ou apagar horários de qualquer lugar, a lista atualiza imediatamente
+- Código duplicado de recarga é eliminado com a função centralizada
+- Nenhuma funcionalidade existente é alterada
 
