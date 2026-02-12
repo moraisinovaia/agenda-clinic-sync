@@ -386,7 +386,7 @@ const Index = () => {
             <div className="absolute inset-0 h-12 w-12 animate-pulse rounded-full bg-primary/20 mx-auto"></div>
           </div>
           <div>
-            <p className="text-lg font-medium">INOVAIA</p>
+           <p className="text-lg font-medium">Carregando sistema...</p>
             <p className="text-muted-foreground">Verificando autenticação...</p>
           </div>
         </div>
