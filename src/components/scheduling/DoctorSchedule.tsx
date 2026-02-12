@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { format, addDays, startOfWeek, isSameDay, parse, startOfDay, differenceInYears, isValid, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatInTimeZone } from 'date-fns-tz';
@@ -227,44 +227,42 @@ export function DoctorSchedule({
     setShowSearchResults(true);
   };
   
-  const getAppointmentsForDate = (date: Date) => {
+  // Mapa pré-computado: data -> agendamentos (evita filtrar em cada render/dia do calendário)
+  const appointmentsByDate = useMemo(() => {
+    const map = new Map<string, typeof appointments>();
+    for (const apt of appointments) {
+      if (apt.medico_id === doctor.id && apt.status !== 'excluido') {
+        const existing = map.get(apt.data_agendamento);
+        if (existing) {
+          existing.push(apt);
+        } else {
+          map.set(apt.data_agendamento, [apt]);
+        }
+      }
+    }
+    return map;
+  }, [appointments, doctor.id]);
+
+  const getAppointmentsForDate = useCallback((date: Date) => {
     try {
       const normalizedDate = startOfDay(date);
       const dateStr = format(normalizedDate, 'yyyy-MM-dd');
-      
-      // Debug: Mostrar informações sobre os agendamentos carregados
-      const totalAppointments = appointments.length;
-      const doctorAppointments = appointments.filter(apt => apt.medico_id === doctor.id);
-      const filteredAppointments = appointments.filter(
-        appointment => 
-          appointment.medico_id === doctor.id && 
-          appointment.data_agendamento === dateStr &&
-          appointment.status !== 'excluido'
-      );
-      
-      console.log(`📅 Buscando agendamentos para ${dateStr}:`, {
-        totalCarregados: totalAppointments,
-        doMedico: doctorAppointments.length,
-        nessaData: filteredAppointments.length,
-        datas: [...new Set(appointments.map(a => a.data_agendamento))].sort()
-      });
-      
-      return filteredAppointments;
+      return appointmentsByDate.get(dateStr) || [];
     } catch (error) {
       console.error('❌ Erro ao buscar agendamentos:', error);
       return [];
     }
-  };
+  }, [appointmentsByDate]);
 
-  const hasAppointments = (date: Date) => {
+  const hasAppointments = useCallback((date: Date) => {
     try {
-      const appointmentsForDate = getAppointmentsForDate(date);
-      return appointmentsForDate.length > 0;
+      const normalizedDate = startOfDay(date);
+      const dateStr = format(normalizedDate, 'yyyy-MM-dd');
+      return appointmentsByDate.has(dateStr);
     } catch (error) {
-      console.error('❌ Erro em hasAppointments:', error);
       return false;
     }
-  };
+  }, [appointmentsByDate]);
 
   const hasBlocks = (date: Date) => {
     try {
