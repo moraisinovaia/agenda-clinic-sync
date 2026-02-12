@@ -1,71 +1,37 @@
 
 
-# Branding Dinamico por Clinica
+# Correcao: Permissao RLS na tabela clientes para branding
 
-## Resumo
-O sistema vai carregar automaticamente o nome e logo de cada clinica baseado no usuario logado. Clinicas sem personalizacao usam o branding INOVAIA como fallback.
+## Problema identificado
+A query do hook `useClinicBranding` para buscar `nome` e `logo_url` da tabela `clientes` retorna **HTTP 403** com erro `permission denied for table clientes`. A politica de RLS atual nao permite SELECT para usuarios autenticados nessa tabela.
 
-## O que muda para o usuario
+## Solucao
+Criar uma politica RLS de SELECT na tabela `clientes` que permita cada usuario ler apenas os dados da sua propria clinica (baseado no `cliente_id` do perfil).
 
-- Quando um usuario da **Clinica Olhos** logar, vera o logo "GT INOVA" e o nome "Clinica Olhos" no cabecalho
-- Todos os outros usuarios continuam vendo o branding INOVAIA normalmente
-- Nenhuma funcionalidade existente e afetada
+## Passo unico
 
-## Passos da implementacao
+### Adicionar politica RLS via migracao SQL
 
-### 1. Salvar o logo GT INOVA no projeto
-- Copiar a imagem enviada para `src/assets/gt-inova-logo.jpeg`
-- Sera usada como logo da Clinica Olhos
+Criar uma nova migracao que adiciona uma policy de SELECT na tabela `clientes`:
 
-### 2. Criar hook `useClinicBranding`
-Um novo hook (`src/hooks/useClinicBranding.ts`) que:
-- Busca o `cliente_id` do perfil do usuario logado
-- Consulta a tabela `clientes` para obter `nome` e `logo_url`
-- Retorna o branding da clinica ou fallback para INOVAIA
-- Inclui cache local para nao repetir consultas desnecessarias
-
-Retorno do hook:
 ```text
-{
-  clinicName: string      // "Clinica Olhos" ou "INOVAIA"
-  clinicSubtitle: string  // "Sistema de Agendamentos" (padrao)
-  logoSrc: string         // URL do logo ou logo INOVAIA
-  isLoading: boolean
-}
+CREATE POLICY "Users can read own clinic data"
+ON public.clientes
+FOR SELECT
+TO authenticated
+USING (id = get_user_cliente_id());
 ```
 
-### 3. Atualizar o DashboardHeader
-- Substituir o nome fixo "INOVAIA" e o logo fixo pelo retorno do hook
-- Manter fallback para branding INOVAIA quando nao houver personalizacao
+Isso garante que:
+- Cada usuario so consegue ler os dados da clinica a qual pertence
+- A funcao `get_user_cliente_id()` ja existe e e usada em outras tabelas
+- Nenhum dado de outras clinicas e exposto
+- O hook `useClinicBranding` vai funcionar sem alteracoes no codigo
 
-### 4. Atualizar tela de loading (Index.tsx)
-- O texto "INOVAIA" na tela de carregamento tambem usara o branding dinamico
-
-### 5. Atualizar `logo_url` da Clinica Olhos no banco
-- Usar o logo GT INOVA como asset estatico importado diretamente no codigo
-- Mapear o `cliente_id` da Clinica Olhos para o logo local
-- Alternativa futura: upload para Supabase Storage e salvar URL na tabela `clientes`
-
-## Detalhes tecnicos
-
-### Logica de resolucao do logo
-```text
-1. Buscar cliente_id do usuario logado (via profile)
-2. Se cliente_id == "d7d7b7cf-..." (Clinica Olhos) -> usar logo GT INOVA local
-3. Se cliente tem logo_url no banco -> usar essa URL
-4. Senao -> usar logo INOVAIA (fallback padrao)
-```
-
-### Arquivos modificados
+## Arquivos modificados
 | Arquivo | Alteracao |
 |---------|-----------|
-| `src/assets/gt-inova-logo.jpeg` | Novo - logo da Clinica Olhos |
-| `src/hooks/useClinicBranding.ts` | Novo - hook de branding dinamico |
-| `src/components/dashboard/DashboardHeader.tsx` | Usar branding dinamico |
-| `src/pages/Index.tsx` | Tela de loading com branding dinamico |
+| Nova migracao SQL | Adicionar RLS policy de SELECT na tabela `clientes` |
 
-### Fallback garantido
-- Clinicas sem `logo_url` e sem mapeamento local usam INOVAIA
-- Erros na consulta ao banco tambem retornam INOVAIA
-- Nenhum risco de quebra para usuarios existentes
-
+## Risco
+Nenhum - apenas adiciona permissao de leitura restrita ao proprio cliente, seguindo o mesmo padrao de RLS ja usado no sistema.
