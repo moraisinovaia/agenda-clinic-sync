@@ -1,47 +1,37 @@
 
 
-# Correcao: Botao "Gerar Horarios" sempre desabilitado
+# Correcao: Politica RLS da tabela `clientes` deve ser PERMISSIVE
 
 ## Problema
-O botao permanece cinza com "Nenhum horario sera gerado" mesmo com medico selecionado, datas preenchidas e dias da semana ativos. Isso acontece porque o calculo de preview esta "congelado" nos valores iniciais.
+Todas as politicas RLS na tabela `clientes` sao do tipo **RESTRICTIVE**. No PostgreSQL, politicas restrictive funcionam como um filtro AND **sobre** politicas permissive. Se nao existe nenhuma politica permissive, o acesso e sempre negado -- independente das politicas restrictive existentes.
 
-## Causa raiz
-Na linha 182-191 do `DoctorScheduleGenerator.tsx`, o `useMemo` tem dependencias vazias (`[]`). Isso faz a funcao `calculatePreview()` capturar o estado inicial (medico vazio, nenhum dia ativo) e nunca atualizar, retornando sempre 0.
+Isso explica por que a logo da Clinica Olhos nao aparece: a query ao `clientes` sempre retorna vazio/erro, e o hook `useClinicBranding` cai no fallback INOVAIA.
 
 ## Solucao
-Substituir o `useMemo` com dependencias vazias e o `useEffect` que o chama por um unico `useEffect` com debounce inline que acessa os valores atuais do estado.
+Remover a politica restrictive "Users can read own clinic data" e recria-la como **PERMISSIVE**. Isso resolve o acesso para usuarios autenticados lerem dados da sua propria clinica.
 
 ## Alteracao
 
-### Arquivo: `src/components/scheduling/DoctorScheduleGenerator.tsx`
+### Migracao SQL
 
-**Remover** (linhas 182-191):
 ```text
-const debouncedCalculatePreview = useMemo(() => {
-  let timeoutId: NodeJS.Timeout | null = null;
-  return () => {
-    if (timeoutId) clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => {
-      const count = calculatePreview();
-      setPreviewCount(count);
-    }, 300);
-  };
-}, []);
+-- Remover politica restrictive existente
+DROP POLICY IF EXISTS "Users can read own clinic data" ON public.clientes;
+
+-- Recriar como PERMISSIVE
+CREATE POLICY "Users can read own clinic data"
+ON public.clientes
+FOR SELECT
+TO authenticated
+USING (id = get_user_cliente_id());
 ```
 
-**Substituir o useEffect** (linhas 224-227) por:
-```text
-useEffect(() => {
-  const timeoutId = setTimeout(() => {
-    const count = calculatePreview();
-    setPreviewCount(count);
-  }, 300);
-  return () => clearTimeout(timeoutId);
-}, [selectedDoctor, dataInicio, dataFim, intervaloMinutos, schedules]);
-```
+Por padrao, `CREATE POLICY` cria politicas **PERMISSIVE**, que e o comportamento desejado.
 
 ## Resultado esperado
-- Ao selecionar medico, datas e dias da semana, o botao mostrara "Gerar X Horarios" com o numero correto
-- O botao ficara clicavel (azul) quando houver horarios a gerar
-- O debounce de 300ms e mantido para evitar lag ao digitar
+- Usuarios autenticados conseguirao ler os dados da sua clinica
+- O hook `useClinicBranding` vai retornar nome e logo corretos
+- A logo da Clinica Olhos (gt-inova-logo.jpeg) vai aparecer no dashboard
 
+## Risco
+Nenhum -- a politica continua restringindo leitura apenas ao proprio cliente via `get_user_cliente_id()`.
