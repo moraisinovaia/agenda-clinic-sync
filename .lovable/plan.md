@@ -1,37 +1,47 @@
 
 
-# Correcao: Permissao RLS na tabela clientes para branding
+# Correcao: Botao "Gerar Horarios" sempre desabilitado
 
-## Problema identificado
-A query do hook `useClinicBranding` para buscar `nome` e `logo_url` da tabela `clientes` retorna **HTTP 403** com erro `permission denied for table clientes`. A politica de RLS atual nao permite SELECT para usuarios autenticados nessa tabela.
+## Problema
+O botao permanece cinza com "Nenhum horario sera gerado" mesmo com medico selecionado, datas preenchidas e dias da semana ativos. Isso acontece porque o calculo de preview esta "congelado" nos valores iniciais.
+
+## Causa raiz
+Na linha 182-191 do `DoctorScheduleGenerator.tsx`, o `useMemo` tem dependencias vazias (`[]`). Isso faz a funcao `calculatePreview()` capturar o estado inicial (medico vazio, nenhum dia ativo) e nunca atualizar, retornando sempre 0.
 
 ## Solucao
-Criar uma politica RLS de SELECT na tabela `clientes` que permita cada usuario ler apenas os dados da sua propria clinica (baseado no `cliente_id` do perfil).
+Substituir o `useMemo` com dependencias vazias e o `useEffect` que o chama por um unico `useEffect` com debounce inline que acessa os valores atuais do estado.
 
-## Passo unico
+## Alteracao
 
-### Adicionar politica RLS via migracao SQL
+### Arquivo: `src/components/scheduling/DoctorScheduleGenerator.tsx`
 
-Criar uma nova migracao que adiciona uma policy de SELECT na tabela `clientes`:
-
+**Remover** (linhas 182-191):
 ```text
-CREATE POLICY "Users can read own clinic data"
-ON public.clientes
-FOR SELECT
-TO authenticated
-USING (id = get_user_cliente_id());
+const debouncedCalculatePreview = useMemo(() => {
+  let timeoutId: NodeJS.Timeout | null = null;
+  return () => {
+    if (timeoutId) clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => {
+      const count = calculatePreview();
+      setPreviewCount(count);
+    }, 300);
+  };
+}, []);
 ```
 
-Isso garante que:
-- Cada usuario so consegue ler os dados da clinica a qual pertence
-- A funcao `get_user_cliente_id()` ja existe e e usada em outras tabelas
-- Nenhum dado de outras clinicas e exposto
-- O hook `useClinicBranding` vai funcionar sem alteracoes no codigo
+**Substituir o useEffect** (linhas 224-227) por:
+```text
+useEffect(() => {
+  const timeoutId = setTimeout(() => {
+    const count = calculatePreview();
+    setPreviewCount(count);
+  }, 300);
+  return () => clearTimeout(timeoutId);
+}, [selectedDoctor, dataInicio, dataFim, intervaloMinutos, schedules]);
+```
 
-## Arquivos modificados
-| Arquivo | Alteracao |
-|---------|-----------|
-| Nova migracao SQL | Adicionar RLS policy de SELECT na tabela `clientes` |
+## Resultado esperado
+- Ao selecionar medico, datas e dias da semana, o botao mostrara "Gerar X Horarios" com o numero correto
+- O botao ficara clicavel (azul) quando houver horarios a gerar
+- O debounce de 300ms e mantido para evitar lag ao digitar
 
-## Risco
-Nenhum - apenas adiciona permissao de leitura restrita ao proprio cliente, seguindo o mesmo padrao de RLS ja usado no sistema.
