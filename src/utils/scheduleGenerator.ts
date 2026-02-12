@@ -13,28 +13,16 @@ export function generateTimeSlotsForPeriod(
   const slots: EmptyTimeSlot[] = [];
   const days = eachDayOfInterval({ start: startDate, end: endDate });
   
-  console.log('🔍 Iniciando geração de slots:', {
-    periodo: `${format(startDate, 'yyyy-MM-dd')} até ${format(endDate, 'yyyy-MM-dd')}`,
-    total_dias: days.length,
-    dia_semana_config: config.dia_semana,
-    periodo_config: config.periodo
-  });
+  // Usar Set para busca O(1) em vez de Array.some() O(n)
+  const appointmentSet = new Set(
+    existingAppointments.map(apt => `${apt.data_agendamento}|${apt.hora_agendamento}`)
+  );
   
   for (const day of days) {
     const dayOfWeek = getDay(day);
+    if (dayOfWeek !== config.dia_semana) continue;
+    
     const dateStr = format(day, 'yyyy-MM-dd');
-    
-    console.log(`📆 Processando ${dateStr}: getDay()=${dayOfWeek}, config=${config.dia_semana}, match=${dayOfWeek === config.dia_semana}`);
-    
-    // Verificar se é o dia da semana configurado
-    if (dayOfWeek !== config.dia_semana) {
-      console.log(`⏩ Pulando ${dateStr} - não é o dia da semana configurado`);
-      continue;
-    }
-    
-    console.log(`✅ ${dateStr} é o dia correto! Gerando slots...`);
-    
-    // Gerar slots de horário
     const timeSlots = generateTimeSlots(
       config.hora_inicio,
       config.hora_fim,
@@ -42,13 +30,7 @@ export function generateTimeSlotsForPeriod(
     );
     
     for (const time of timeSlots) {
-      // CRÍTICO: Verificar se já existe agendamento neste horário
-      const hasAppointment = existingAppointments.some(
-        apt => apt.data_agendamento === dateStr && apt.hora_agendamento === time
-      );
-      
-      // Só criar slot vazio se NÃO existe agendamento
-      if (!hasAppointment) {
+      if (!appointmentSet.has(`${dateStr}|${time}`)) {
         slots.push({
           medico_id: config.medico_id,
           data: dateStr,
@@ -67,13 +49,9 @@ export function generateTimeSlots(start: string, end: string, interval: number):
   // Criar chave única para cache
   const cacheKey = `${start}-${end}-${interval}`;
   
-  // Verificar se já existe no cache
   if (timeSlotsCache.has(cacheKey)) {
-    console.log(`✅ Cache hit: ${cacheKey}`);
     return timeSlotsCache.get(cacheKey)!;
   }
-  
-  console.log(`🔄 Calculando slots: ${cacheKey}`);
   const slots: string[] = [];
   const [startHour, startMinute] = start.split(':').map(Number);
   const [endHour, endMinute] = end.split(':').map(Number);
