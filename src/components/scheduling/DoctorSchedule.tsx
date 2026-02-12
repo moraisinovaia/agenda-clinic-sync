@@ -53,6 +53,7 @@ interface DoctorScheduleProps {
   adicionarFilaEspera: (data: FilaEsperaFormData) => Promise<boolean>;
   searchPatientsByBirthDate: (birthDate: string) => Promise<any[]>;
   emptySlots?: any[];
+  onSlotsChanged?: () => void;
 }
 
 // Função auxiliar para validar e formatar datas com segurança
@@ -144,7 +145,8 @@ export function DoctorSchedule({
   atendimentos, 
   adicionarFilaEspera, 
   searchPatientsByBirthDate, 
-  emptySlots = [] 
+  emptySlots = [],
+  onSlotsChanged
 }: DoctorScheduleProps) {
   
   // Estado para data selecionada com validação segura
@@ -1054,6 +1056,7 @@ export function DoctorSchedule({
         onSuccess={() => {
           toast.success('Operação realizada com sucesso!');
           setRefreshTrigger(prev => prev + 1);
+          onSlotsChanged?.();
         }}
       />
     </div>
