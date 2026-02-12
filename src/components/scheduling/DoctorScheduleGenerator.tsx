@@ -216,7 +216,7 @@ export function DoctorScheduleGenerator({
     const timeoutId = setTimeout(() => {
       const count = calculatePreview();
       setPreviewCount(count);
-    }, 300);
+    }, 500);
     return () => clearTimeout(timeoutId);
   }, [selectedDoctor, dataInicio, dataFim, intervaloMinutos, schedules]);
   

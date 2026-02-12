@@ -23,13 +23,6 @@ export function useScheduleGenerator() {
         throw new Error('Cliente ID não encontrado. Recarregue a página.');
       }
 
-      console.log('🎯 Iniciando geração de horários:', {
-        medico: config.medico_id,
-        cliente_id: userClienteId,
-        periodo: `${config.data_inicio} - ${config.data_fim}`,
-        configs_ativas: config.configuracoes.length
-      });
-
       // Validar configurações
       const validationErrors: string[] = [];
       config.configuracoes.forEach((cfg, idx) => {
@@ -45,7 +38,6 @@ export function useScheduleGenerator() {
       
       // 1. Buscar agendamentos existentes no período (CRÍTICO para não sobrescrever)
       setProgress(prev => ({ ...prev, message: 'Buscando agendamentos existentes...' }));
-      console.log('📋 Buscando agendamentos existentes...');
       const { data: appointments, error: aptError } = await supabase
         .from('agendamentos')
         .select('data_agendamento, hora_agendamento')
@@ -55,8 +47,6 @@ export function useScheduleGenerator() {
         .neq('status', 'cancelado');
       
       if (aptError) throw aptError;
-      
-      console.log(`✅ ${appointments?.length || 0} agendamentos existentes encontrados`);
       
       // 2. Gerar slots para cada configuração com cliente_id correto
       let allSlots: any[] = [];
@@ -75,17 +65,8 @@ export function useScheduleGenerator() {
           cliente_id: userClienteId // Usar cliente_id do usuário logado
         };
         
-        // ✅ FIX CRÍTICO: Usar toZonedTime com timezone do Brasil
         const startDateParsed = toZonedTime(parseISO(config.data_inicio + 'T12:00:00'), BRAZIL_TIMEZONE);
         const endDateParsed = toZonedTime(parseISO(config.data_fim + 'T12:00:00'), BRAZIL_TIMEZONE);
-        
-        console.log('🌍 Timezone Debug:', {
-          data_inicio_string: config.data_inicio,
-          data_inicio_parsed: startDateParsed,
-          dia_semana_detectado: startDateParsed.getDay(),
-          dia_semana_configurado: scheduleConfig.dia_semana,
-          match: startDateParsed.getDay() === scheduleConfig.dia_semana
-        });
         
         const slots = generateTimeSlotsForPeriod(
           configWithClienteId, // ✅ Usar config com cliente_id garantido
@@ -93,12 +74,10 @@ export function useScheduleGenerator() {
           endDateParsed,
           appointments || []
         );
-        console.log(`📅 Gerados ${slots.length} slots para ${['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][scheduleConfig.dia_semana]} (${scheduleConfig.periodo})`);
         allSlots = [...allSlots, ...slots];
       }
       
       setProgress(prev => ({ ...prev, message: 'Salvando no banco de dados...' }));
-      console.log(`🔢 Total de slots gerados ANTES da inserção: ${allSlots.length}`);
       
       if (allSlots.length === 0) {
         toast.warning(
@@ -114,26 +93,27 @@ export function useScheduleGenerator() {
         };
       }
       
-      // 3. Inserir slots no banco (upsert para evitar duplicatas)
-      console.log('💾 Inserindo slots no banco de dados...');
-      const { data: inserted, error: insertError } = await supabase
-        .from('horarios_vazios')
-        .upsert(allSlots, { 
-          onConflict: 'medico_id,data,hora,cliente_id',
-          ignoreDuplicates: true 
-        })
-        .select();
+      // 3. Inserir slots no banco em lotes para evitar timeout
+      const BATCH_SIZE = 500;
+      let insertedCount = 0;
       
-      if (insertError) throw insertError;
+      for (let i = 0; i < allSlots.length; i += BATCH_SIZE) {
+        const batch = allSlots.slice(i, i + BATCH_SIZE);
+        setProgress(prev => ({ ...prev, message: `Salvando lote ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(allSlots.length / BATCH_SIZE)}...` }));
+        
+        const { data: inserted, error: insertError } = await supabase
+          .from('horarios_vazios')
+          .upsert(batch, { 
+            onConflict: 'medico_id,data,hora,cliente_id',
+            ignoreDuplicates: true 
+          })
+          .select();
+        
+        if (insertError) throw insertError;
+        insertedCount += inserted?.length || 0;
+      }
       
-      const insertedCount = inserted?.length || 0;
       const ignoredCount = allSlots.length - insertedCount;
-      
-      console.log(`✅ Inserção concluída:`, {
-        inseridos: insertedCount,
-        ignorados: ignoredCount,
-        total: allSlots.length
-      });
       
       if (insertedCount === 0 && ignoredCount > 0) {
         toast.info(
@@ -154,7 +134,6 @@ export function useScheduleGenerator() {
       };
       
     } catch (err: any) {
-      console.error('❌ Erro ao gerar horários:', err);
       const errorMsg = err.message || 'Erro ao gerar horários';
       setError(errorMsg);
       toast.error(`❌ ${errorMsg}`);
