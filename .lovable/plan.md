@@ -1,84 +1,64 @@
 
 
-# Correcao de Performance: Travamento ao Alterar Datas
+# Correção Definitiva: Travamento ao Alterar Datas
 
-## Problema
-Ao digitar ou alterar datas nos campos "Data Inicio" e "Data Fim", o sistema trava porque:
-1. Cada tecla digitada dispara um setState, causando re-render de um componente com 1078 linhas
-2. Calculos pesados como agrupamento de slots e resumo de dias rodam em **cada render**, mesmo quando nao mudaram
-3. O `calculatePreview` dispara a cada mudanca de estado, mesmo com datas parciais/invalidas
+## Problema Restante
 
-## Impacto no Sistema
-- **Interface congela** por 200-500ms a cada tecla digitada no campo de data
-- **Experiencia do usuario** e severamente prejudicada -- parece que o sistema "travou"
-- **Nao afeta dados** -- o problema e puramente de renderizacao no navegador
-- **Outras funcionalidades nao sao afetadas** -- apenas a tela de geracao de horarios
+O cálculo `daysInPeriod` (linhas 634-639) executa `eachDayOfInterval()` **7 vezes por render** dentro do `.map()` da tabela de horários. Cada tecla digitada no campo de data causa re-render, disparando 7x esse cálculo pesado.
 
-## Solucao
+## Solução
 
 ### Arquivo: `src/components/scheduling/DoctorScheduleGenerator.tsx`
 
-**A) Memoizar calculos pesados** que rodam em cada render sem necessidade:
-
-Transformar `groupedSlots`, `sortedDates` e `hasActiveConfig` em `useMemo`:
+**A) Memoizar `daysInPeriod` fora do `.map()`** -- calcular uma única vez com `useMemo`:
 
 ```text
-// Antes (roda a cada render):
-const groupedSlots = slots.reduce(...)
-const sortedDates = Object.keys(groupedSlots).sort()
-const hasActiveConfig = schedules.some(...)
+// ANTES (dentro do .map, roda 7x por render):
+schedules.map((sched, idx) => {
+  const daysInPeriod = dataInicio && dataFim ? (() => {
+    const start = toZonedTime(parseISO(dataInicio + 'T12:00:00'), BRAZIL_TIMEZONE);
+    const end = toZonedTime(parseISO(dataFim + 'T12:00:00'), BRAZIL_TIMEZONE);
+    if (!isValid(start) || !isValid(end)) return [];
+    return eachDayOfInterval({ start, end }).map(d => getDay(d));
+  })() : [];
+  ...
+});
 
-// Depois (roda apenas quando dependencias mudam):
-const groupedSlots = useMemo(() => slots.reduce(...), [slots])
-const sortedDates = useMemo(() => Object.keys(groupedSlots).sort(), [groupedSlots])
-const hasActiveConfig = useMemo(() => schedules.some(...), [schedules])
-```
-
-**B) Validar datas antes de calcular preview** -- adicionar uma checagem rapida no `useEffect` para ignorar datas invalidas/parciais sem nem chamar `calculatePreview`:
-
-```text
-useEffect(() => {
-  // Validacao rapida antes do debounce
-  if (!selectedDoctor || !dataInicio || !dataFim || 
-      dataInicio.length !== 10 || dataFim.length !== 10) {
-    setPreviewCount(0);
-    return;
+// DEPOIS (fora do .map, roda 1x e só quando datas mudam):
+const daysInPeriodSet = useMemo(() => {
+  if (!dataInicio || !dataFim || dataInicio.length !== 10 || dataFim.length !== 10) {
+    return new Set<number>();
   }
-  
-  const timeoutId = setTimeout(() => {
-    const count = calculatePreview();
-    setPreviewCount(count);
-  }, 500);
-  return () => clearTimeout(timeoutId);
-}, [selectedDoctor, dataInicio, dataFim, intervaloMinutos, schedules]);
+  try {
+    const start = toZonedTime(parseISO(dataInicio + 'T12:00:00'), BRAZIL_TIMEZONE);
+    const end = toZonedTime(parseISO(dataFim + 'T12:00:00'), BRAZIL_TIMEZONE);
+    if (!isValid(start) || !isValid(end) || start > end) return new Set<number>();
+    const days = eachDayOfInterval({ start, end });
+    return new Set(days.map(d => getDay(d)));
+  } catch {
+    return new Set<number>();
+  }
+}, [dataInicio, dataFim]);
+
+// No .map:
+schedules.map((sched, idx) => {
+  const dayExistsInPeriod = daysInPeriodSet.has(idx);
+  ...
+});
 ```
 
-Isso evita que datas parciais como `"2026-0"` ou `"2026-02-"` disparem o calculo completo.
+Isso reduz de 7 chamadas `eachDayOfInterval` por render para apenas 1, e usando `Set` a busca é O(1). Além disso, com a validação de `length !== 10`, datas parciais nem disparam o cálculo.
 
-**C) Memoizar `calculatePreview` com useCallback** para evitar recriacao da funcao a cada render:
+**B) Usar `selectedDoctorData` no JSX** -- substituir as 3 ocorrências de `doctors.find(doc => doc.id === selectedDoctor)?.nome` pelo valor já memoizado `selectedDoctorData?.nome`.
 
-```text
-const calculatePreview = useCallback(() => {
-  if (!selectedDoctor) return 0;
-  // ... resto da logica
-}, [selectedDoctor, dataInicio, dataFim, intervaloMinutos, schedules]);
-```
+**C) Memoizar `getActiveDaysSummary`** com `useMemo` para evitar recriação a cada render.
 
-**D) Memoizar `selectedDoctorData`** (linha 433):
-
-```text
-const selectedDoctorData = useMemo(
-  () => doctors.find(d => d.id === selectedDoctor),
-  [doctors, selectedDoctor]
-);
-```
+## Impacto
+- **Nenhuma funcionalidade alterada** -- apenas otimização de renderização
+- **Campos de data** responderão instantaneamente
+- **Risco zero** -- são mudanças puramente de memoização
 
 ## Resultado Esperado
-- Campos de data respondem instantaneamente sem travar
-- Calculos pesados so executam quando seus dados realmente mudam
-- Preview so calcula com datas completas e validas (10 caracteres no formato YYYY-MM-DD)
-- Nenhuma funcionalidade sera alterada -- apenas a performance da renderizacao melhora
-
-## Riscos
-Nenhum risco funcional. As mudancas sao puramente de otimizacao de renderizacao usando `useMemo` e `useCallback`, que sao padroes estabelecidos do React.
+- Digitar datas será fluido, sem travamento
+- Render do componente será ~7x mais rápido ao alterar datas
 
