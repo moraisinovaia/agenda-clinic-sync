@@ -14,10 +14,11 @@ import { useAuth } from '@/hooks/useAuth';
 import { useRememberMe } from '@/hooks/useRememberMe';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import inovaiaLogo from '@/assets/inovaia-logo.jpeg';
+import { usePartnerBranding } from '@/hooks/usePartnerBranding';
 
 export default function Auth() {
   const { user, loading, signIn, signUp } = useAuth();
+  const { partnerName, logoSrc, subtitle } = usePartnerBranding();
   const { rememberMe, savedUsername, saveCredentials, clearSavedCredentials } = useRememberMe();
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
@@ -476,14 +477,14 @@ export default function Auth() {
           <div className="flex flex-col items-center space-y-4">
             <div className="auth-logo animate-logo-breathe">
               <img 
-                src={inovaiaLogo} 
-                alt="INOVAIA" 
+                src={logoSrc} 
+                alt={partnerName} 
                 className="h-16 w-auto object-contain rounded-lg shadow-lg"
               />
             </div>
             <div>
               <CardTitle className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">
-                Sistema de Agendamentos
+                {subtitle}
               </CardTitle>
               <p className="text-muted-foreground text-sm mt-1">Acesso para Recepcionistas</p>
             </div>

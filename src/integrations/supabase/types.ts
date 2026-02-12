@@ -478,6 +478,7 @@ export type Database = {
           id: string
           logo_url: string | null
           nome: string
+          parceiro: string | null
           telefone: string | null
           updated_at: string | null
           whatsapp: string | null
@@ -490,6 +491,7 @@ export type Database = {
           id?: string
           logo_url?: string | null
           nome: string
+          parceiro?: string | null
           telefone?: string | null
           updated_at?: string | null
           whatsapp?: string | null
@@ -502,6 +504,7 @@ export type Database = {
           id?: string
           logo_url?: string | null
           nome?: string
+          parceiro?: string | null
           telefone?: string | null
           updated_at?: string | null
           whatsapp?: string | null
@@ -1268,6 +1271,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      partner_branding: {
+        Row: {
+          created_at: string | null
+          domain_pattern: string
+          id: string
+          logo_url: string | null
+          partner_name: string
+          primary_color: string | null
+          subtitle: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          domain_pattern: string
+          id?: string
+          logo_url?: string | null
+          partner_name: string
+          primary_color?: string | null
+          subtitle?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          domain_pattern?: string
+          id?: string
+          logo_url?: string | null
+          partner_name?: string
+          primary_color?: string | null
+          subtitle?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       preparos: {
         Row: {
