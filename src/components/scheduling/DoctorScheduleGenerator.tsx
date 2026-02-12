@@ -180,24 +180,37 @@ export function DoctorScheduleGenerator({
 
   // Preview reativo - recalcula com debounce quando estado muda
 
-  const getActiveDaysSummary = () => {
-    const activeDays = schedules
+  const getActiveDaysSummary = useMemo(() => {
+    return schedules
       .map((sched, idx) => {
         const periods = [];
         if (sched.manha.ativo) periods.push(`Manhã (${sched.manha.hora_inicio}-${sched.manha.hora_fim})`);
         if (sched.tarde.ativo) periods.push(`Tarde (${sched.tarde.hora_inicio}-${sched.tarde.hora_fim})`);
-        
         if (periods.length > 0) {
           return `${DIAS_SEMANA[idx].label}: ${periods.join(' + ')}`;
         }
         return null;
       })
       .filter(Boolean);
-    
-    return activeDays;
-  };
+  }, [schedules]);
 
   const hasActiveConfig = useMemo(() => schedules.some(s => s.manha.ativo || s.tarde.ativo), [schedules]);
+
+  // [CORREÇÃO A] Memoizar daysInPeriod fora do .map - calcula 1x em vez de 7x
+  const daysInPeriodSet = useMemo(() => {
+    if (!dataInicio || !dataFim || dataInicio.length !== 10 || dataFim.length !== 10) {
+      return new Set<number>();
+    }
+    try {
+      const start = toZonedTime(parseISO(dataInicio + 'T12:00:00'), BRAZIL_TIMEZONE);
+      const end = toZonedTime(parseISO(dataFim + 'T12:00:00'), BRAZIL_TIMEZONE);
+      if (!isValid(start) || !isValid(end) || start > end) return new Set<number>();
+      const days = eachDayOfInterval({ start, end });
+      return new Set(days.map(d => getDay(d)));
+    } catch {
+      return new Set<number>();
+    }
+  }, [dataInicio, dataFim]);
 
   useEffect(() => {
     if (preSelectedDoctorId) {
@@ -503,7 +516,7 @@ export function DoctorScheduleGenerator({
                         }`}
                       >
                         {selectedDoctor
-                          ? doctors.find((doc) => doc.id === selectedDoctor)?.nome
+                           ? selectedDoctorData?.nome
                           : "Selecione o médico"}
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
@@ -631,14 +644,7 @@ export function DoctorScheduleGenerator({
                 
                 <div className="divide-y">
                   {schedules.map((sched, idx) => {
-                    const daysInPeriod = dataInicio && dataFim ? (() => {
-                      const start = toZonedTime(parseISO(dataInicio + 'T12:00:00'), BRAZIL_TIMEZONE);
-                      const end = toZonedTime(parseISO(dataFim + 'T12:00:00'), BRAZIL_TIMEZONE);
-                      if (!isValid(start) || !isValid(end)) return [];
-                      return eachDayOfInterval({ start, end }).map(d => getDay(d));
-                    })() : [];
-                    
-                    const dayExistsInPeriod = daysInPeriod.includes(idx);
+                    const dayExistsInPeriod = daysInPeriodSet.has(idx);
                     
                     return (
                       <div 
@@ -735,7 +741,7 @@ export function DoctorScheduleGenerator({
                         <p><strong>Intervalo:</strong> {intervaloMinutos} minutos</p>
                         <p><strong>Dias configurados:</strong></p>
                         <ul className="ml-4 list-disc">
-                          {getActiveDaysSummary().map((day, idx) => (
+                          {getActiveDaysSummary.map((day, idx) => (
                             <li key={idx}>{day}</li>
                           ))}
                         </ul>
@@ -802,7 +808,7 @@ export function DoctorScheduleGenerator({
                         className="w-full justify-between"
                       >
                         {selectedDoctor
-                          ? doctors.find((doc) => doc.id === selectedDoctor)?.nome
+                           ? selectedDoctorData?.nome
                           : "Selecione o médico"}
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
@@ -908,7 +914,7 @@ export function DoctorScheduleGenerator({
                         className="w-full justify-between"
                       >
                         {selectedDoctor
-                          ? doctors.find((doc) => doc.id === selectedDoctor)?.nome
+                           ? selectedDoctorData?.nome
                           : "Selecione o médico"}
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
