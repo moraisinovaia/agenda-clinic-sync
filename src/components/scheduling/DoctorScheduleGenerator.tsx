@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -146,7 +146,7 @@ export function DoctorScheduleGenerator({
     setSchedules(newSchedules);
   };
 
-  const calculatePreview = () => {
+  const calculatePreview = useCallback(() => {
     if (!selectedDoctor) return 0;
     
     const start = toZonedTime(parseISO(dataInicio + 'T12:00:00'), BRAZIL_TIMEZONE);
@@ -176,7 +176,7 @@ export function DoctorScheduleGenerator({
     });
     
     return totalSlots;
-  };
+  }, [selectedDoctor, dataInicio, dataFim, intervaloMinutos, schedules]);
 
   // Preview reativo - recalcula com debounce quando estado muda
 
@@ -197,7 +197,7 @@ export function DoctorScheduleGenerator({
     return activeDays;
   };
 
-  const hasActiveConfig = schedules.some(s => s.manha.ativo || s.tarde.ativo);
+  const hasActiveConfig = useMemo(() => schedules.some(s => s.manha.ativo || s.tarde.ativo), [schedules]);
 
   useEffect(() => {
     if (preSelectedDoctorId) {
@@ -212,13 +212,20 @@ export function DoctorScheduleGenerator({
   }, [open, preSelectedDoctorId, selectedDoctor]);
 
   // Recalcular preview quando mudar configurações (com debounce)
+  // Validação rápida: ignora datas parciais/inválidas para não travar ao digitar
   useEffect(() => {
+    if (!selectedDoctor || !dataInicio || !dataFim || 
+        dataInicio.length !== 10 || dataFim.length !== 10) {
+      setPreviewCount(0);
+      return;
+    }
+    
     const timeoutId = setTimeout(() => {
       const count = calculatePreview();
       setPreviewCount(count);
     }, 500);
     return () => clearTimeout(timeoutId);
-  }, [selectedDoctor, dataInicio, dataFim, intervaloMinutos, schedules]);
+  }, [selectedDoctor, dataInicio, dataFim, intervaloMinutos, schedules, calculatePreview]);
   
   useEffect(() => {
     if (open && activeTab === 'gerenciar' && selectedDoctor) {
@@ -359,15 +366,15 @@ export function DoctorScheduleGenerator({
     setDeleteConfirm({ type: 'period', value: null });
   };
 
-  const groupedSlots = slots.reduce((acc, slot) => {
+  const groupedSlots = useMemo(() => slots.reduce((acc, slot) => {
     if (!acc[slot.data]) {
       acc[slot.data] = [];
     }
     acc[slot.data].push(slot);
     return acc;
-  }, {} as Record<string, EmptySlot[]>);
+  }, {} as Record<string, EmptySlot[]>), [slots]);
 
-  const sortedDates = Object.keys(groupedSlots).sort();
+  const sortedDates = useMemo(() => Object.keys(groupedSlots).sort(), [groupedSlots]);
 
   const handleGenerate = async () => {
     if (!selectedDoctor) {
@@ -430,7 +437,7 @@ export function DoctorScheduleGenerator({
     }
   };
 
-  const selectedDoctorData = doctors.find(d => d.id === selectedDoctor);
+  const selectedDoctorData = useMemo(() => doctors.find(d => d.id === selectedDoctor), [doctors, selectedDoctor]);
 
   return (
     <>
