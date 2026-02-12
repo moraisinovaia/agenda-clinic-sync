@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useSupabaseScheduling } from '@/hooks/useSupabaseScheduling';
@@ -207,6 +207,21 @@ const Index = () => {
       clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
+  }, [userClienteId]);
+
+  // Função centralizada para recarregar horários vazios
+  const reloadEmptySlots = useCallback(async () => {
+    if (!userClienteId) return;
+    const { data, error } = await supabase
+      .from('horarios_vazios')
+      .select('*')
+      .eq('cliente_id', userClienteId)
+      .eq('status', 'disponivel')
+      .gte('data', format(new Date(), 'yyyy-MM-dd'));
+    if (!error && data) {
+      console.log('✅ Horários vazios recarregados:', data.length);
+      setEmptySlots(data);
+    }
   }, [userClienteId]);
 
   const {
@@ -709,6 +724,7 @@ const Index = () => {
               adicionarFilaEspera={adicionarFilaEspera}
               searchPatientsByBirthDate={searchPatientsByBirthDate}
               emptySlots={emptySlots}
+              onSlotsChanged={reloadEmptySlots}
             />
             </SchedulingErrorBoundary>
           </div>
@@ -907,36 +923,7 @@ const Index = () => {
         open={scheduleGenOpen}
         onOpenChange={setScheduleGenOpen}
         doctors={doctors}
-        onSuccess={async () => {
-          // Recarregar horários vazios após geração
-          if (!userClienteId) {
-            console.warn('⚠️ cliente_id não disponível para recarregar horários');
-            return;
-          }
-
-          console.log('🔄 Recarregando horários vazios após geração');
-          
-          const { data, error } = await supabase
-            .from('horarios_vazios')
-            .select('*')
-            .eq('cliente_id', userClienteId)
-            .eq('status', 'disponivel')
-            .gte('data', format(new Date(), 'yyyy-MM-dd'));
-          
-          if (error) {
-            if (error.code === '42501') {
-              console.error('🚫 Erro de permissão RLS ao recarregar horários:', error.message);
-            } else {
-              console.error('❌ Erro ao recarregar horários:', error);
-            }
-            return;
-          }
-
-          if (data) {
-            console.log('✅ Horários vazios recarregados:', data.length);
-            setEmptySlots(data);
-          }
-        }}
+        onSuccess={reloadEmptySlots}
       />
     </div>
   );
