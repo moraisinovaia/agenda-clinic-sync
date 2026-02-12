@@ -178,17 +178,7 @@ export function DoctorScheduleGenerator({
     return totalSlots;
   };
 
-  // Debounce do cálculo de preview para evitar lag
-  const debouncedCalculatePreview = useMemo(() => {
-    let timeoutId: NodeJS.Timeout | null = null;
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        const count = calculatePreview();
-        setPreviewCount(count);
-      }, 300);
-    };
-  }, []); // Função estável - não causa re-renders
+  // Preview reativo - recalcula com debounce quando estado muda
 
   const getActiveDaysSummary = () => {
     const activeDays = schedules
@@ -223,7 +213,11 @@ export function DoctorScheduleGenerator({
 
   // Recalcular preview quando mudar configurações (com debounce)
   useEffect(() => {
-    debouncedCalculatePreview();
+    const timeoutId = setTimeout(() => {
+      const count = calculatePreview();
+      setPreviewCount(count);
+    }, 300);
+    return () => clearTimeout(timeoutId);
   }, [selectedDoctor, dataInicio, dataFim, intervaloMinutos, schedules]);
   
   useEffect(() => {
