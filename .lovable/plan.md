@@ -1,68 +1,44 @@
 
 
-# Correção: Horários gerados/apagados só aparecem após recarregar
+# Configurar Logo e Dominio da GT INOVA
 
-## Problema
+## O que sera feito
 
-O estado `emptySlots` vive em `Index.tsx` e é passado como prop para `DoctorSchedule.tsx`. Existem duas instâncias do `DoctorScheduleGenerator`:
+### 1. Copiar a nova logo para o projeto
+A logo enviada sera salva em `src/assets/gt-inova-logo-new.jpeg` (substituindo a versao antiga usada como fallback no codigo).
 
-- **`Index.tsx` (linha 906)**: `onSuccess` recarrega `emptySlots` do banco -- funciona corretamente
-- **`DoctorSchedule.tsx` (linha 1054)**: `onSuccess` apenas incrementa `refreshTrigger` local -- NAO atualiza `emptySlots`
+### 2. Atualizar o arquivo de fallback local
+O arquivo `src/hooks/usePartnerBranding.ts` tem um mapeamento local de logos como fallback. Sera atualizado para usar a nova logo da GT INOVA.
 
-Quando o usuário gera ou apaga horários de dentro da agenda do médico, a mudanca nunca sobe até `Index.tsx` para atualizar os dados.
+### 3. Atualizar o `domain_pattern` no banco de dados
+O registro da GT INOVA na tabela `partner_branding` atualmente tem o pattern `gtinova`. Como o dominio sera `GT.inovaia-automacao.com.br`, o pattern precisa ser ajustado para detectar corretamente esse dominio. Sera atualizado para `gt.inovaia-automacao` (tudo minusculo, pois o hostname e comparado em lowercase).
 
-## Solução
+### 4. Atualizar o subtitle da GT INOVA
+Baseado na logo, o subtitle sera ajustado para "Solucoes Inovadoras" em vez do generico "Sistema de Agendamentos Medicos".
 
-### 1. `src/components/scheduling/DoctorSchedule.tsx`
+## Passos manuais que voce precisara fazer depois
 
-Adicionar prop `onSlotsChanged` e chamá-la no `onSuccess`:
+### Configurar o dominio no Lovable
+1. Abra seu projeto no Lovable
+2. Va em **Settings** (engrenagem no canto superior direito) > **Domains**
+3. Clique em **Connect Domain**
+4. Digite: `GT.inovaia-automacao.com.br`
+5. Siga as instrucoes na tela
 
-```text
-// Na interface DoctorScheduleProps, adicionar:
-onSlotsChanged?: () => void;
+### Configurar o DNS no registrador do dominio
+No painel onde voce comprou/gerencia o dominio `inovaia-automacao.com.br`:
+- Adicione um **registro A** com nome `GT` apontando para `185.158.133.1`
+- Adicione o **registro TXT** que o Lovable fornecer para verificacao
 
-// No onSuccess do DoctorScheduleGenerator (linha 1054):
-onSuccess={() => {
-  toast.success('Operação realizada com sucesso!');
-  setRefreshTrigger(prev => prev + 1);
-  onSlotsChanged?.();  // Notifica Index.tsx para recarregar
-}}
-```
+---
 
-### 2. `src/pages/Index.tsx`
+## Detalhes tecnicos
 
-Extrair a lógica de recarga para um `useCallback` reutilizável e passá-la como prop:
+**Arquivos modificados:**
+- `src/assets/gt-inova-logo-new.jpeg` -- nova logo copiada do upload
+- `src/hooks/usePartnerBranding.ts` -- atualizar import da logo GT INOVA
+- Migracao SQL -- atualizar `domain_pattern` e `subtitle` na tabela `partner_branding`
 
-```text
-// Criar função reutilizável:
-const reloadEmptySlots = useCallback(async () => {
-  if (!userClienteId) return;
-  const { data, error } = await supabase
-    .from('horarios_vazios')
-    .select('*')
-    .eq('cliente_id', userClienteId)
-    .eq('status', 'disponivel')
-    .gte('data', format(new Date(), 'yyyy-MM-dd'));
-  if (!error && data) {
-    setEmptySlots(data);
-  }
-}, [userClienteId]);
-
-// Passar para DoctorSchedule:
-<DoctorSchedule
-  ...
-  onSlotsChanged={reloadEmptySlots}
-/>
-
-// Usar também no DoctorScheduleGenerator de Index.tsx:
-<DoctorScheduleGenerator
-  ...
-  onSuccess={reloadEmptySlots}
-/>
-```
-
-## Impacto
-- Ao gerar ou apagar horários de qualquer lugar, a lista atualiza imediatamente
-- Código duplicado de recarga é eliminado com a função centralizada
-- Nenhuma funcionalidade existente é alterada
+**Logica de deteccao:**
+Quando alguem acessar `GT.inovaia-automacao.com.br`, o hostname sera `gt.inovaia-automacao.com.br`. O sistema buscara na tabela `partner_branding` um registro cujo `domain_pattern` apareca no hostname. Com o pattern `gt.inovaia-automacao`, tera match com GT INOVA e exibira a logo e branding corretos.
 
