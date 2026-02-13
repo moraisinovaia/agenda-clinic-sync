@@ -1,27 +1,36 @@
 
 
-# Corrigir detecção de parceiro GT INOVA
+# Corrigir migração do partner_branding para funcionar em produção
 
-## Problema
-O hostname `gt.inovaia-automacao.com.br` contém a string `inovaia`, que e o `domain_pattern` do parceiro INOVAIA. Como o codigo usa `data.find()` (retorna o primeiro match), o INOVAIA e encontrado antes do GT INOVA, exibindo a logo errada.
+## Problema raiz
+
+A migração que atualiza o `domain_pattern` da GT INOVA usa um UUID fixo (`WHERE id = '258368b8-...'`). Esse UUID foi gerado automaticamente no banco de **Test** e e diferente no banco de **Live** (producao). Como resultado, o UPDATE nao encontra nenhum registro em producao, e o `domain_pattern` continua como `'gtinova'` -- que nao faz match com o hostname `gt.inovaia-automacao.com.br`.
 
 ## Solucao
-Alterar a logica de matching em `src/hooks/usePartnerBranding.ts` para priorizar o match mais especifico (pattern mais longo). Assim, `gt.inovaia-automacao` (16 caracteres) vence `inovaia` (7 caracteres).
 
-## Arquivo alterado
-`src/hooks/usePartnerBranding.ts`
+Criar uma nova migracao que usa `WHERE partner_name = 'GT INOVA'` em vez do UUID. Isso garante que funcione em ambos os ambientes.
 
-## Mudanca tecnica
-Substituir:
-```typescript
-const matched = data.find(p => hostname.includes(p.domain_pattern));
+## Arquivo a criar
+
+`supabase/migrations/[timestamp]_fix_gt_inova_domain_pattern.sql`
+
+```sql
+UPDATE partner_branding 
+SET domain_pattern = 'gt.inovaia-automacao', 
+    subtitle = 'Soluções Inovadoras',
+    updated_at = now()
+WHERE partner_name = 'GT INOVA';
 ```
 
-Por:
-```typescript
-const matches = data.filter(p => hostname.includes(p.domain_pattern));
-const matched = matches.sort((a, b) => b.domain_pattern.length - a.domain_pattern.length)[0];
-```
+## Passos
 
-Isso filtra todos os patterns que aparecem no hostname e escolhe o mais longo (mais especifico), garantindo que `gt.inovaia-automacao` tenha prioridade sobre `inovaia`.
+1. Criar a migracao SQL acima
+2. Publicar o projeto
+3. Verificar no dominio `GT.inovaia-automacao.com.br` que a logo e o branding da GT INOVA aparecem corretamente
+
+## Detalhes tecnicos
+
+- A coluna `partner_name` tem constraint `UNIQUE`, entao o `WHERE partner_name = 'GT INOVA'` e seguro e especifico
+- A logica de matching no `usePartnerBranding.ts` (filter + sort por tamanho) ja esta correta e nao precisa de alteracao
+- Nao ha alteracao de codigo, apenas de dados no banco
 
