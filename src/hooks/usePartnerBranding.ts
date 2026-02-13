@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import inovaiaLogo from '@/assets/inovaia-logo.jpeg';
-import gtInovaLogo from '@/assets/gt-inova-logo.jpeg';
+import gtInovaLogo from '@/assets/gt-inova-logo-new.jpeg';
 
 // Mapeamento local de logos por parceiro (fallback enquanto logo_url não está no Storage)
 const LOCAL_PARTNER_LOGOS: Record<string, string> = {
