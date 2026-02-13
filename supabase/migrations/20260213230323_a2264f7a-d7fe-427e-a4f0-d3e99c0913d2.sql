@@ -1,0 +1,1 @@
+UPDATE clientes SET parceiro = 'GT INOVA', updated_at = now() WHERE id = '20747f3c-8fa1-4f7e-8817-a55a8a6c8e0a';
