@@ -12,6 +12,19 @@
     <link rel="icon" href="/icon-192.png" type="image/png">
     <link rel="apple-touch-icon" href="/icon-192.png" />
 
+    <script>
+      (function() {
+        var h = location.hostname.toLowerCase();
+        if (h.indexOf('gt.inovaia') !== -1) {
+          document.title = 'GT INOVA - Soluções Inovadoras';
+          var icon = document.querySelector('link[rel="icon"]');
+          if (icon) icon.href = '/gt-inova-icon.jpeg';
+          var apple = document.querySelector('link[rel="apple-touch-icon"]');
+          if (apple) apple.href = '/gt-inova-icon.jpeg';
+        }
+      })();
+    </script>
+
     <meta property="og:title" content="INOVAIA - Sistema de Agendamentos" />
     <meta property="og:description" content="Sistema de Agendamentos Médicos INOVAIA" />
     <meta property="og:type" content="website" />

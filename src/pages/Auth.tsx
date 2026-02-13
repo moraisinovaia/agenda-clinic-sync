@@ -19,7 +19,7 @@ import { validatePartnerForLogin } from '@/hooks/useDomainPartnerValidation';
 
 export default function Auth() {
   const { user, loading, signIn, signUp } = useAuth();
-  const { partnerName, logoSrc, subtitle } = usePartnerBranding();
+  const { partnerName, logoSrc, subtitle, isLoading: brandingLoading } = usePartnerBranding();
   const { rememberMe, savedUsername, saveCredentials, clearSavedCredentials } = useRememberMe();
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
@@ -408,7 +408,7 @@ export default function Auth() {
     }
   };
 
-  if (loading) {
+  if (loading || brandingLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
         <div className="text-center space-y-4">
