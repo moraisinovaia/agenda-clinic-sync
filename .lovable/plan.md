@@ -1,103 +1,38 @@
 
-# Corrigir Cloudflare Worker para Preview do WhatsApp
 
-## Diagnostico
+# Transferir Clinica Venus para GT INOVA
 
-O Facebook Sharing Debugger mostra **codigo 421 "Project not found"** ao acessar `https://gt.inovaia-automacao.com.br/`. Isso indica que o Cloudflare Worker esta interceptando a requisicao mas nao tem codigo correto para responder.
+## O que sera feito
 
-A Edge Function `og-metadata` do Supabase esta funcionando corretamente. O problema esta **no Cloudflare Worker**.
+Atualizar o campo `parceiro` da Clinica Venus de **INOVAIA** para **GT INOVA** na tabela `clientes`, exatamente como foi feito com a Clinica Olhos.
 
-## O que precisa ser feito (fora do Lovable)
+## Dados atuais
 
-### 1. Codigo do Cloudflare Worker
+| Clinica | ID | Parceiro atual |
+|---|---|---|
+| Clinica Olhos | d7d7b7cf-... | GT INOVA (ja transferida) |
+| Clinica Venus | 20747f3c-... | INOVAIA |
 
-No painel do Cloudflare, clique em **"Edit code"** no Worker `gtinovaia-automacaocombr` e cole este codigo:
+## Alteracao
 
-```javascript
-const EDGE_FUNCTION_URL = "https://qxlvzbvzajibdtlzngdy.supabase.co/functions/v1/og-metadata";
-const LOVABLE_ORIGIN = "https://agenda-clinic-sync.lovable.app";
+Uma unica operacao de UPDATE:
 
-const CRAWLER_PATTERNS = [
-  "WhatsApp", "facebookexternalhit", "Twitterbot", "TelegramBot",
-  "LinkedInBot", "Slackbot", "Discordbot", "Googlebot", "bingbot",
-  "Facebot", "Facebookbot"
-];
-
-function isCrawler(userAgent) {
-  if (!userAgent) return false;
-  return CRAWLER_PATTERNS.some(p => userAgent.includes(p));
-}
-
-export default {
-  async fetch(request) {
-    const userAgent = request.headers.get("user-agent") || "";
-    const url = new URL(request.url);
-
-    // Se for crawler, buscar meta tags da Edge Function
-    if (isCrawler(userAgent)) {
-      const edgeUrl = `${EDGE_FUNCTION_URL}?domain=gt.inovaia-automacao.com.br`;
-      const edgeResponse = await fetch(edgeUrl, {
-        headers: { "user-agent": userAgent }
-      });
-      return new Response(await edgeResponse.text(), {
-        status: 200,
-        headers: { "content-type": "text/html; charset=utf-8" }
-      });
-    }
-
-    // Para usuarios normais, fazer proxy para o Lovable
-    const lovableUrl = `${LOVABLE_ORIGIN}${url.pathname}${url.search}`;
-    const response = await fetch(lovableUrl, {
-      method: request.method,
-      headers: request.headers,
-      body: request.method !== "GET" && request.method !== "HEAD" ? request.body : undefined
-    });
-
-    // Retornar a resposta do Lovable
-    return new Response(response.body, {
-      status: response.status,
-      headers: response.headers
-    });
-  }
-};
+```sql
+UPDATE clientes 
+SET parceiro = 'GT INOVA', updated_at = now() 
+WHERE id = '20747f3c-8fa1-4f7e-8817-a55a8a6c8e0a';
 ```
 
-### 2. Deploy do Worker
+## Impacto
 
-Apos colar o codigo, clique em **"Save and Deploy"** no editor do Cloudflare.
+- Usuarios da Clinica Venus so poderao acessar o sistema pelo dominio do GT INOVA (`gt.inovaia-automacao.com.br`) ou por dominios genericos (localhost, lovable.app)
+- O branding exibido para usuarios da Venus sera o do GT INOVA (logo, titulo, favicon)
+- A validacao de dominio (`useDomainPartnerValidation`) bloqueara usuarios da Venus no dominio principal INOVAIA
+- Nenhuma alteracao de codigo necessaria -- apenas dados
 
-### 3. Verificar a rota
+## Secao tecnica
 
-Na aba Settings do Worker, confirme que a rota esta como:
-- **Route:** `https://gt.inovaia-automacao.com.br/*` (com `/*` no final para capturar todas as paginas)
+- Tabela: `clientes`
+- Coluna: `parceiro` (text, default 'INOVAIA')
+- O mesmo UPDATE precisa ser executado no ambiente **Live** tambem (via Cloud View > Run SQL com Live selecionado) apos publicacao
 
-### 4. Testar
-
-Apos o deploy do Worker:
-1. Acesse o [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/)
-2. Cole `https://gt.inovaia-automacao.com.br`
-3. Clique em "Depurar" e depois "Extrair novamente"
-4. Deve aparecer **"GT INOVA - Solucoes Inovadoras"** com o icone correto
-
-## Mudancas no Lovable
-
-### Atualizar a Edge Function `og-metadata`
-
-Uma pequena melhoria: garantir que a `og:image` use uma URL absoluta publica que o crawler consiga acessar, apontando para o dominio do Lovable (onde as imagens estao hospedadas):
-
-No arquivo `supabase/functions/og-metadata/index.ts`, alterar a logica de `og:image` para usar o URL publico do Lovable em vez do dominio do parceiro (que depende do Worker para servir assets):
-
-```
-og:image -> https://agenda-clinic-sync.lovable.app/gt-inova-icon-512.png
-```
-
-Isso garante que o crawler sempre consiga baixar a imagem, independente da configuracao do Worker.
-
-## Resumo
-
-| Onde | O que fazer |
-|------|------------|
-| **Cloudflare** | Colar o codigo do Worker acima e fazer deploy |
-| **Cloudflare** | Verificar que a rota inclui `/*` |
-| **Lovable** | Atualizar `og:image` na Edge Function para URL absoluta do Lovable |
-| **Teste** | Usar Facebook Sharing Debugger para validar |
