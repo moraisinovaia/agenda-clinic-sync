@@ -48,7 +48,8 @@ export function usePartnerBranding(): PartnerBranding {
         }
 
         // Encontrar o parceiro cujo domain_pattern aparece no hostname
-        const matched = data.find(p => hostname.includes(p.domain_pattern));
+        const matches = data.filter(p => hostname.includes(p.domain_pattern));
+        const matched = matches.sort((a, b) => b.domain_pattern.length - a.domain_pattern.length)[0];
         const partner = matched || data.find(p => p.partner_name === 'INOVAIA') || data[0];
 
         const logoSrc = partner.logo_url 
