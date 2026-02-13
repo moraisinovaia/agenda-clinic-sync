@@ -1,44 +1,27 @@
 
 
-# Configurar Logo e Dominio da GT INOVA
+# Corrigir detecção de parceiro GT INOVA
 
-## O que sera feito
+## Problema
+O hostname `gt.inovaia-automacao.com.br` contém a string `inovaia`, que e o `domain_pattern` do parceiro INOVAIA. Como o codigo usa `data.find()` (retorna o primeiro match), o INOVAIA e encontrado antes do GT INOVA, exibindo a logo errada.
 
-### 1. Copiar a nova logo para o projeto
-A logo enviada sera salva em `src/assets/gt-inova-logo-new.jpeg` (substituindo a versao antiga usada como fallback no codigo).
+## Solucao
+Alterar a logica de matching em `src/hooks/usePartnerBranding.ts` para priorizar o match mais especifico (pattern mais longo). Assim, `gt.inovaia-automacao` (16 caracteres) vence `inovaia` (7 caracteres).
 
-### 2. Atualizar o arquivo de fallback local
-O arquivo `src/hooks/usePartnerBranding.ts` tem um mapeamento local de logos como fallback. Sera atualizado para usar a nova logo da GT INOVA.
+## Arquivo alterado
+`src/hooks/usePartnerBranding.ts`
 
-### 3. Atualizar o `domain_pattern` no banco de dados
-O registro da GT INOVA na tabela `partner_branding` atualmente tem o pattern `gtinova`. Como o dominio sera `GT.inovaia-automacao.com.br`, o pattern precisa ser ajustado para detectar corretamente esse dominio. Sera atualizado para `gt.inovaia-automacao` (tudo minusculo, pois o hostname e comparado em lowercase).
+## Mudanca tecnica
+Substituir:
+```typescript
+const matched = data.find(p => hostname.includes(p.domain_pattern));
+```
 
-### 4. Atualizar o subtitle da GT INOVA
-Baseado na logo, o subtitle sera ajustado para "Solucoes Inovadoras" em vez do generico "Sistema de Agendamentos Medicos".
+Por:
+```typescript
+const matches = data.filter(p => hostname.includes(p.domain_pattern));
+const matched = matches.sort((a, b) => b.domain_pattern.length - a.domain_pattern.length)[0];
+```
 
-## Passos manuais que voce precisara fazer depois
-
-### Configurar o dominio no Lovable
-1. Abra seu projeto no Lovable
-2. Va em **Settings** (engrenagem no canto superior direito) > **Domains**
-3. Clique em **Connect Domain**
-4. Digite: `GT.inovaia-automacao.com.br`
-5. Siga as instrucoes na tela
-
-### Configurar o DNS no registrador do dominio
-No painel onde voce comprou/gerencia o dominio `inovaia-automacao.com.br`:
-- Adicione um **registro A** com nome `GT` apontando para `185.158.133.1`
-- Adicione o **registro TXT** que o Lovable fornecer para verificacao
-
----
-
-## Detalhes tecnicos
-
-**Arquivos modificados:**
-- `src/assets/gt-inova-logo-new.jpeg` -- nova logo copiada do upload
-- `src/hooks/usePartnerBranding.ts` -- atualizar import da logo GT INOVA
-- Migracao SQL -- atualizar `domain_pattern` e `subtitle` na tabela `partner_branding`
-
-**Logica de deteccao:**
-Quando alguem acessar `GT.inovaia-automacao.com.br`, o hostname sera `gt.inovaia-automacao.com.br`. O sistema buscara na tabela `partner_branding` um registro cujo `domain_pattern` apareca no hostname. Com o pattern `gt.inovaia-automacao`, tera match com GT INOVA e exibira a logo e branding corretos.
+Isso filtra todos os patterns que aparecem no hostname e escolhe o mais longo (mais especifico), garantindo que `gt.inovaia-automacao` tenha prioridade sobre `inovaia`.
 
