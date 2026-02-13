@@ -1,36 +1,84 @@
 
 
-# Corrigir Botao "Instalar App" para Usar Branding Dinamico
+# Corrigir Instalacao PWA do GT INOVA
 
-## Problema
+## Problema raiz
 
-O componente `InstallButton.tsx` tem o texto **hardcoded** "Instalar INOVAIA" no alert de fallback (linha 96). Quando acessado pelo dominio GT INOVA, o texto deveria dizer "Instalar GT INOVA".
+O GT INOVA nao e instalavel como PWA porque:
+1. Usa um unico arquivo JPEG (`gt-inova-icon.jpeg`) declarado como 192x192 E 512x512 -- o Chrome rejeita icones com dimensoes incorretas
+2. O formato JPEG nao e ideal para PWA (Chrome prefere PNG)
+3. O Service Worker (`sw.js`) so pre-cacheia assets da INOVAIA, ignorando completamente os assets do GT INOVA
 
 ## Solucao
 
-Usar o hook `usePartnerBranding()` (que ja existe no projeto) para obter o nome correto do parceiro e exibi-lo dinamicamente no alert.
+### Passo 1: Criar icones PNG com tamanhos corretos para GT INOVA
 
-## Alteracoes
+Voce precisa fornecer (ou eu posso gerar a partir do `gt-inova-icon.jpeg` existente):
+- `public/gt-inova-icon-192.png` — 192x192 pixels, formato PNG
+- `public/gt-inova-icon-512.png` — 512x512 pixels, formato PNG
 
-### Arquivo: `src/components/InstallButton.tsx`
+Como o Lovable nao tem ferramentas de redimensionamento de imagem, a abordagem sera:
+- Referenciar o JPEG existente mas com tamanhos declarados corretamente (se a imagem original for grande o suficiente)
+- OU pedir ao usuario que faca upload de icones PNG nos tamanhos corretos
 
-1. Importar o hook `usePartnerBranding` no topo do arquivo
-2. Dentro do componente, chamar `const { partnerName } = usePartnerBranding();`
-3. Substituir o texto fixo do alert (linha 96) para usar `partnerName`:
+### Passo 2: Atualizar `public/manifest-gt-inova.json`
 
-**Antes:**
+Trocar as referencias de icone para usar arquivos separados com tamanhos reais:
+
+```text
+"icons": [
+  { "src": "/gt-inova-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+  { "src": "/gt-inova-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+  { "src": "/gt-inova-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+  { "src": "/gt-inova-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+]
 ```
-alert('Para instalar o app:\n\n1. Chrome/Edge: Menu > Instalar INOVAIA\n2. Firefox: ...');
+
+### Passo 3: Atualizar `public/sw.js`
+
+Tornar o Service Worker ciente dos dois conjuntos de assets. O SW detectara o hostname e pre-cacheara os recursos corretos:
+
+```text
+const CACHE_NAME = 'app-v1.4';
+
+const commonUrls = ['/'];
+
+const inovaiaUrls = ['/manifest.json', '/icon-192.png', '/icon-512.png'];
+const gtInovaUrls = ['/manifest-gt-inova.json', '/gt-inova-icon-192.png', '/gt-inova-icon-512.png'];
+
+self.addEventListener('install', (event) => {
+  const isGtInova = self.location.hostname.includes('gt.inovaia');
+  const urlsToCache = [...commonUrls, ...(isGtInova ? gtInovaUrls : inovaiaUrls)];
+  // ... resto igual
+});
 ```
 
-**Depois:**
+### Passo 4: Atualizar `index.html`
+
+Ajustar o script inline para referenciar os novos icones PNG:
+
+```text
+if (h.indexOf('gt.inovaia') !== -1) {
+  document.title = 'GT INOVA - Solucoes Inovadoras';
+  var icon = document.querySelector('link[rel="icon"]');
+  if (icon) icon.href = '/gt-inova-icon-192.png';
+  var apple = document.querySelector('link[rel="apple-touch-icon"]');
+  if (apple) apple.href = '/gt-inova-icon-192.png';
+  var manifest = document.querySelector('link[rel="manifest"]');
+  if (manifest) manifest.href = '/manifest-gt-inova.json';
+}
 ```
-alert(`Para instalar o app:\n\n1. Chrome/Edge: Menu > Instalar ${partnerName}\n2. Firefox: ...');
-```
 
-4. Tambem atualizar o `title` do botao (linha 109) para usar o nome do parceiro.
+## Prerequisito do usuario
 
-## Sobre o prompt nativo nao aparecer
+Antes de implementar, o usuario precisa fornecer OU confirmar que posso usar o `gt-inova-icon.jpeg` existente como base (neste caso, o sistema usara o JPEG mas com type correto e um unico tamanho, o que pode funcionar se a imagem for grande o suficiente). 
 
-O Chrome so dispara o `beforeinstallprompt` em condicoes especificas (HTTPS, manifest valido, service worker, e o usuario ainda nao ter descartado o prompt). No dominio de producao (`gt.inovaia-automacao.com.br`), o manifest GT INOVA ja esta configurado corretamente via script no `index.html`. O prompt nativo depende do navegador do usuario -- esta correcao garante que, quando o fallback for exibido, o nome correto apareca.
+A melhor opcao e o usuario fazer upload de dois arquivos PNG: um de 192x192 e outro de 512x512 com o logo GT INOVA.
+
+## Arquivos alterados
+
+1. `public/manifest-gt-inova.json` — icones atualizados
+2. `public/sw.js` — cache dinamico por dominio
+3. `index.html` — referencias de icones atualizadas
+4. (Novos) `public/gt-inova-icon-192.png` e `public/gt-inova-icon-512.png` — fornecidos pelo usuario
 
