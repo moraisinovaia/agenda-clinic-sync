@@ -1,47 +1,51 @@
 
-# Corrigir logo e identidade visual por dominio (GT INOVA vs INOVAIA)
+
+# Eliminar flash de branding INOVAIA no dominio GT INOVA
 
 ## Problema
 
-Ao acessar `gt.inovaia-automacao.com.br`, o dashboard mostra a logo da INOVAIA em vez da GT INOVA. Isso acontece por dois motivos:
+O `index.html` tem titulo e favicon hardcoded como "INOVAIA". O React so atualiza esses valores depois de montar, carregar o hook `usePartnerBranding`, e fazer a query ao banco. Isso causa um flash visivel de "INOVAIA" antes de trocar para "GT INOVA".
 
-1. **Race condition no cache de branding**: O `useClinicBranding` faz cache do resultado usando apenas `clienteId` como chave. Se a consulta ao banco resolve antes do `usePartnerBranding` carregar, o logo do parceiro ainda esta com o valor default (INOVAIA). O resultado errado e cacheado e nunca corrigido.
-
-2. **Favicon e titulo da aba estaticos**: O `index.html`, `manifest.json` e favicon estao hardcoded como "INOVAIA". Nao ha logica dinamica para atualizar esses elementos com base no dominio.
+O mesmo problema ocorre no dashboard: o componente `DashboardHeader` mostra o logo default (INOVAIA) enquanto o `useClinicBranding` ainda esta carregando.
 
 ## Solucao
 
-### 1. Corrigir race condition no `useClinicBranding`
+### 1. Script inline no `index.html` para deteccao instantanea por hostname
 
-Incluir `partnerLogoSrc` na chave do cache para invalidar quando o parceiro muda. Tambem ignorar execucao enquanto o partner branding ainda esta carregando.
+Adicionar um `<script>` sincrono no `<head>` do `index.html` que verifica o hostname e atualiza titulo e favicon ANTES do React carregar. Isso elimina o flash completamente para a aba do navegador.
 
-**Arquivo**: `src/hooks/useClinicBranding.ts`
-- Mudar chave do cache para `clienteId + partnerLogoSrc`
-- Adicionar dependencia de `isLoading` do partner branding para so executar depois que o parceiro for detectado
+```javascript
+// Executa antes de qualquer render
+(function() {
+  var h = location.hostname.toLowerCase();
+  if (h.indexOf('gt.inovaia') !== -1) {
+    document.title = 'GT INOVA - Soluções Inovadoras';
+    var icon = document.querySelector('link[rel="icon"]');
+    if (icon) icon.href = '/gt-inova-icon.jpeg';
+    var apple = document.querySelector('link[rel="apple-touch-icon"]');
+    if (apple) apple.href = '/gt-inova-icon.jpeg';
+  }
+})();
+```
 
-### 2. Criar hook `useDynamicBranding` para favicon e titulo
+**Arquivo**: `index.html` - adicionar script sincrono apos as tags `<link>`
 
-Novo hook que atualiza dinamicamente o `<title>`, o favicon (`<link rel="icon">`), e o `<link rel="apple-touch-icon">` com base no parceiro detectado.
+### 2. Tela de loading no DashboardHeader enquanto branding carrega
 
-**Novo arquivo**: `src/hooks/useDynamicPageBranding.ts`
-- Quando parceiro = GT INOVA: titulo "GT INOVA - Solucoes Inovadoras", favicon da GT INOVA
-- Quando parceiro = INOVAIA: titulo "INOVAIA - Sistema de Agendamentos", favicon da INOVAIA
-- Atualiza `document.title` e os elementos `<link>` no `<head>` via DOM
+No `DashboardHeader`, verificar o `isLoading` do `useClinicBranding` e mostrar um skeleton/placeholder em vez do logo e nome enquanto o branding ainda nao foi resolvido. Isso evita o flash visual do logo errado no dashboard.
 
-### 3. Integrar o hook no App
+**Arquivo**: `src/components/dashboard/DashboardHeader.tsx` - adicionar estado de loading com skeleton
 
-**Arquivo**: `src/App.tsx` ou `src/pages/Index.tsx`
-- Chamar `useDynamicPageBranding()` para que o titulo e favicon sejam atualizados assim que o parceiro for detectado
+### 3. Tela de loading na pagina Auth
 
-### 4. Adicionar icone GT INOVA ao diretorio publico
+Na pagina de login (`Auth.tsx`), o logo do parceiro tambem pode piscar. Verificar se o `usePartnerBranding` ja tem `isLoading` e exibir um spinner ou skeleton ate o branding carregar.
 
-Para que o favicon funcione, a logo da GT INOVA precisa estar disponivel como arquivo estatico em `public/`.
-
-- Copiar `src/assets/gt-inova-logo-new.jpeg` para `public/gt-inova-icon.jpeg`
+**Arquivo**: `src/pages/Auth.tsx` - verificar se ja trata o loading do partner branding
 
 ## Resultado esperado
 
-- Dashboard em `gt.inovaia-automacao.com.br` mostra logo GT INOVA (nao INOVAIA)
-- Aba do navegador mostra "GT INOVA - Solucoes Inovadoras" e icone GT INOVA
-- Dashboard em `inovaia-automacao.com.br` continua mostrando logo e titulo INOVAIA
-- Cache de branding funciona corretamente sem race conditions
+- Ao abrir `gt.inovaia-automacao.com.br`, a aba do navegador ja mostra "GT INOVA" e o icone correto instantaneamente (sem flash)
+- O dashboard mostra um loading sutil ate o branding resolver, depois exibe o logo correto
+- A tela de login tambem espera o branding antes de exibir o logo
+- Nenhuma mudanca no dominio INOVAIA (continua funcionando normalmente)
+
