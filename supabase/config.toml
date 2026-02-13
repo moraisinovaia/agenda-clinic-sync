@@ -103,3 +103,6 @@ verify_jwt = false
 
 [functions.llm-agent-api-olhos]
 verify_jwt = false
+
+[functions.og-metadata]
+verify_jwt = false
