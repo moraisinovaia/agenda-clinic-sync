@@ -1,0 +1,1 @@
+DROP POLICY IF EXISTS "Super admin access" ON public.profiles;
