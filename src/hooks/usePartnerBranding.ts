@@ -32,6 +32,21 @@ const DEFAULT_BRANDING: PartnerBranding = {
  * - "agenda.gtinova.com.br" → pattern "gtinova"
  * - Qualquer outro domínio → fallback INOVAIA
  */
+/**
+ * Checks if the current hostname is a generic domain (no partner-specific validation).
+ * Generic domains: localhost, lovable.app, lovableproject.com, or any domain
+ * that doesn't match any partner_branding domain_pattern.
+ */
+export function isGenericDomain(): boolean {
+  const hostname = window.location.hostname.toLowerCase();
+  return (
+    hostname === 'localhost' ||
+    hostname.includes('lovable.app') ||
+    hostname.includes('lovableproject.com') ||
+    hostname.includes('127.0.0.1')
+  );
+}
+
 export function usePartnerBranding(): PartnerBranding {
   const [branding, setBranding] = useState<PartnerBranding>(DEFAULT_BRANDING);
 

@@ -14,7 +14,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useRememberMe } from '@/hooks/useRememberMe';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { usePartnerBranding } from '@/hooks/usePartnerBranding';
+import { usePartnerBranding, isGenericDomain } from '@/hooks/usePartnerBranding';
+import { validatePartnerForLogin } from '@/hooks/useDomainPartnerValidation';
 
 export default function Auth() {
   const { user, loading, signIn, signUp } = useAuth();
@@ -142,7 +143,37 @@ export default function Auth() {
         }
         // Não exibir toast aqui pois o useAuth já exibe
       } else {
-        console.log('🔐 Page: Login bem-sucedido, salvando credenciais se necessário');
+        console.log('🔐 Page: Login bem-sucedido, verificando domínio/parceiro...');
+        
+        // === VALIDAÇÃO DE DOMÍNIO/PARCEIRO ===
+        if (!isGenericDomain()) {
+          try {
+            // Buscar perfil do usuário para obter cliente_id
+            const { data: { user: loggedUser } } = await supabase.auth.getUser();
+            if (loggedUser) {
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('cliente_id')
+                .eq('user_id', loggedUser.id)
+                .maybeSingle();
+              
+              if (profile?.cliente_id) {
+                const userPartner = await validatePartnerForLogin(profile.cliente_id);
+                if (userPartner && userPartner !== partnerName) {
+                  console.log(`🚫 Parceiro mismatch: usuário=${userPartner}, domínio=${partnerName}`);
+                  await supabase.auth.signOut();
+                  setError('Usuário não autorizado neste domínio. Acesse pelo domínio correto do seu parceiro.');
+                  setIsLoading(false);
+                  return;
+                }
+              }
+            }
+          } catch (validationError) {
+            console.error('❌ Erro na validação de domínio:', validationError);
+            // Em caso de erro na validação, permitir login (fail-open para não bloquear)
+          }
+        }
+        
         // Apenas se login foi bem-sucedido - salvar apenas o username, NUNCA a senha
         saveCredentials(loginData.emailOrUsername, rememberMeChecked);
         // Não exibir toast aqui pois o useAuth já exibe
