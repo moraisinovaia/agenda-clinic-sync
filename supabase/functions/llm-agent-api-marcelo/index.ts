@@ -75,7 +75,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-api-key',
 }
 
 // Config ID do "Consultório Dr. Marcelo D'Carli" (config real no banco)
@@ -90,6 +90,17 @@ serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Validar API Key
+  const apiKey = req.headers.get('x-api-key');
+  const expectedApiKey = Deno.env.get('N8N_API_KEY');
+  if (!apiKey || apiKey !== expectedApiKey) {
+    console.error('❌ [MARCELO PROXY] Unauthorized: Invalid or missing API key');
+    return new Response(
+      JSON.stringify({ error: 'Unauthorized - Invalid API Key' }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 
   try {
