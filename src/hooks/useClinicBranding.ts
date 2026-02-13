@@ -19,7 +19,7 @@ const brandingCache = new Map<string, { clinicName: string; logoSrc: string }>()
  */
 export function useClinicBranding(): ClinicBranding {
   const { profile } = useAuth();
-  const { partnerName, logoSrc: partnerLogoSrc, subtitle } = usePartnerBranding();
+  const { partnerName, logoSrc: partnerLogoSrc, subtitle, isLoading: partnerLoading } = usePartnerBranding();
   
   const defaultBranding: ClinicBranding = {
     clinicName: partnerName,
@@ -31,14 +31,18 @@ export function useClinicBranding(): ClinicBranding {
   const [branding, setBranding] = useState<ClinicBranding>({ ...defaultBranding, isLoading: true });
 
   useEffect(() => {
+    // Wait for partner branding to finish loading to avoid caching wrong fallback
+    if (partnerLoading) return;
+
     const clienteId = profile?.cliente_id;
     if (!clienteId) {
       setBranding(defaultBranding);
       return;
     }
 
-    // Check cache first
-    const cached = brandingCache.get(clienteId);
+    // Include partnerLogoSrc in cache key to invalidate when partner changes
+    const cacheKey = `${clienteId}::${partnerLogoSrc}`;
+    const cached = brandingCache.get(cacheKey);
     if (cached) {
       setBranding({ ...cached, clinicSubtitle: subtitle, isLoading: false });
       return;
@@ -57,12 +61,11 @@ export function useClinicBranding(): ClinicBranding {
           return;
         }
 
-        // Prioridade: logo_url do banco → logo do parceiro (fallback)
         const logoSrc = data.logo_url || partnerLogoSrc;
         const clinicName = data.nome || partnerName;
 
         const result = { clinicName, logoSrc };
-        brandingCache.set(clienteId, result);
+        brandingCache.set(cacheKey, result);
 
         setBranding({
           clinicName,
@@ -71,7 +74,7 @@ export function useClinicBranding(): ClinicBranding {
           isLoading: false,
         });
       });
-  }, [profile?.cliente_id, partnerName, partnerLogoSrc, subtitle]);
+  }, [profile?.cliente_id, partnerName, partnerLogoSrc, subtitle, partnerLoading]);
 
   return branding;
 }

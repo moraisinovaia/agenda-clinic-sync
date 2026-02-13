@@ -7,12 +7,16 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { useDynamicPageBranding } from "./hooks/useDynamicPageBranding";
 
 // 🔑 Key única para forçar remontagem completa quando necessário
 const APP_MOUNT_KEY = 'v2025-11-22-realtime-v3.1-tolerant-reconnect';
 
+const DynamicBranding = () => { useDynamicPageBranding(); return null; };
+
 const App = () => (
   <ErrorBoundary>
+    <DynamicBranding />
     <TooltipProvider key={APP_MOUNT_KEY}>
       <Toaster />
       <Sonner />
