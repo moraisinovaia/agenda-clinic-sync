@@ -14,7 +14,7 @@ export function useDynamicPageBranding() {
     document.title = `${partnerName} - ${subtitle}`;
 
     // Update favicon
-    const faviconPath = partnerName === 'GT INOVA' ? '/gt-inova-icon.jpeg' : '/icon-192.png';
+    const faviconPath = partnerName === 'GT INOVA' ? '/gt-inova-icon-192.png' : '/icon-192.png';
 
     const updateLink = (selector: string, href: string) => {
       const el = document.querySelector(selector) as HTMLLinkElement | null;

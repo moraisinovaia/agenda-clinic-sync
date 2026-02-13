@@ -1,25 +1,25 @@
-const CACHE_NAME = 'inovaia-v1.3';
-const urlsToCache = [
-  '/',
-  '/manifest.json',
-  '/icon-192.png',
-  '/icon-512.png'
-];
+const CACHE_NAME = 'app-v1.4';
 
-// Install event - cache resources
+const commonUrls = ['/'];
+const inovaiaUrls = ['/manifest.json', '/icon-192.png', '/icon-512.png'];
+const gtInovaUrls = ['/manifest-gt-inova.json', '/gt-inova-icon-192.png', '/gt-inova-icon-512.png'];
+
+// Install event - cache resources based on hostname
 self.addEventListener('install', (event) => {
   console.log('Service Worker installing...');
+  const isGtInova = self.location.hostname.toLowerCase().includes('gt.inovaia');
+  const urlsToCache = [...commonUrls, ...(isGtInova ? gtInovaUrls : inovaiaUrls)];
+
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
-        console.log('Caching app shell');
+        console.log('Caching app shell for:', isGtInova ? 'GT INOVA' : 'INOVAIA');
         return cache.addAll(urlsToCache);
       })
       .catch((error) => {
         console.log('Cache install failed:', error);
       })
   );
-  // Force the waiting service worker to become the active service worker
   self.skipWaiting();
 });
 
@@ -38,7 +38,6 @@ self.addEventListener('activate', (event) => {
       );
     })
   );
-  // Ensure the new service worker takes control immediately
   self.clients.claim();
 });
 
@@ -47,12 +46,10 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Check if we received a valid response
         if (!response || response.status !== 200 || response.type !== 'basic') {
           return response;
         }
 
-        // Clone the response for caching
         const responseToCache = response.clone();
 
         caches.open(CACHE_NAME)
@@ -63,13 +60,11 @@ self.addEventListener('fetch', (event) => {
         return response;
       })
       .catch(() => {
-        // If network fails, try to get from cache
         return caches.match(event.request)
           .then((response) => {
             if (response) {
               return response;
             }
-            // If not in cache and it's a navigation request, return the index page
             if (event.request.destination === 'document') {
               return caches.match('/');
             }
