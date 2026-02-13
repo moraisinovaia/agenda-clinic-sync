@@ -1,99 +1,86 @@
 
 
-# Isolamento de Seguranca por Dominio/Parceiro
+# Correcao do Bug: Race Condition na Validacao de Dominio/Parceiro
 
-## Problema
-Atualmente, qualquer usuario pode acessar qualquer dominio (ex: gt.inovaia-automacao.com.br) e logar com credenciais de outro parceiro (INOVAIA), vendo dados normalmente. O filtro por `cliente_id` via RLS isola clinicas, mas nao isola parceiros entre dominios.
+## Causa raiz identificada
 
-## Cadeia de relacao existente
-A relacao usuario-parceiro ja existe no banco:
+O `usePartnerBranding` inicia com `partnerName: 'INOVAIA'` como valor DEFAULT (linha 20) enquanto a query ao banco ainda nao completou. Quando o usuario clica "Login", o `partnerName` ainda pode ser o default `'INOVAIA'` -- e nao `'GT INOVA'` (que so aparece apos a query ao `partner_branding` retornar).
+
+Resultado: no dominio `gt.inovaia-automacao.com.br`, a validacao compara `userPartner='INOVAIA'` com `partnerName='INOVAIA'` (default) e autoriza indevidamente.
+
+Segundo problema: no `useDomainPartnerValidation` (linha 65), a condicao `!userPartner` (null) retorna `isAuthorized = true`, permitindo acesso enquanto o parceiro do usuario ainda esta carregando.
+
+## Correcoes necessarias
+
+### 1. Auth.tsx -- Aguardar branding antes de validar
+
+No `handleLogin`, apos login bem-sucedido, verificar se o branding ja carregou (`isLoading === false`). Se ainda estiver carregando, buscar o `partnerName` diretamente do banco em vez de confiar no estado do hook.
+
 ```text
-profiles.cliente_id --> clientes.id --> clientes.parceiro
-```
-Nao e necessario criar novas tabelas ou colunas.
-
-## Solucao em 3 camadas
-
-### Camada 1: Validacao pos-login no Auth.tsx
-Apos o `signIn` retornar sucesso, antes de redirecionar:
-1. Buscar o `parceiro` da clinica do usuario via `clientes` usando o `cliente_id` do perfil
-2. Comparar com o `partnerName` detectado pelo `usePartnerBranding`
-3. Se nao corresponder, exibir erro "Usuario nao autorizado neste dominio" e fazer `signOut()`
-4. Dominios sem match (preview do Lovable, localhost) permitem qualquer parceiro (fallback INOVAIA)
-
-### Camada 2: Validacao no AuthGuard
-Adicionar a mesma verificacao no `AuthGuard` como segunda barreira:
-1. Importar `usePartnerBranding`
-2. Quando o perfil estiver carregado, buscar o `parceiro` da clinica do usuario
-3. Se o parceiro do usuario nao corresponder ao dominio, mostrar tela de "Acesso negado - dominio incorreto" com botao de logout
-4. Excepcao para super admins (que podem acessar de qualquer dominio)
-5. Excepcao para dominios genericos (preview, localhost)
-
-### Camada 3: Hook utilitario `useDomainPartnerValidation`
-Criar um hook reutilizavel que:
-- Recebe o `cliente_id` do perfil
-- Busca o `parceiro` correspondente na tabela `clientes`
-- Compara com o `partnerName` do `usePartnerBranding`
-- Retorna `{ isAuthorized, partnerMismatch, isLoading, userPartner, domainPartner }`
-- Trata dominios genericos como "qualquer parceiro permitido"
-
-## Detalhes tecnicos
-
-### Logica de dominio generico
-Dominios que NAO fazem validacao de parceiro (permitem todos):
-- `localhost`
-- `lovable.app` (preview)
-- Qualquer hostname que nao corresponda a nenhum `domain_pattern` na tabela
-
-### Novo hook: `src/hooks/useDomainPartnerValidation.ts`
-```text
-Entradas: cliente_id (do perfil), partnerName (do usePartnerBranding)
-Saida: { isAuthorized, isLoading, userPartner, domainPartner }
-
-Logica:
-1. Se partnerName == DEFAULT (INOVAIA) e hostname nao contem nenhum domain_pattern → autorizado (dominio generico)
-2. Se cliente_id nulo → autorizado (perfil ainda carregando)
-3. Buscar clientes.parceiro WHERE id = cliente_id
-4. Comparar com partnerName
-5. Se iguais → autorizado; se diferentes → NAO autorizado
+Alteracao no handleLogin (linha ~148-175):
+- Buscar partner_branding diretamente via query SQL no momento da validacao
+- NAO depender do estado do hook usePartnerBranding (que pode estar desatualizado)
+- Comparar hostname com domain_patterns da tabela diretamente
 ```
 
-### Alteracoes no Auth.tsx (handleLogin)
-Apos `signIn` com sucesso:
+### 2. usePartnerBranding.ts -- Expor funcao sincrona de deteccao
+
+Criar uma funcao async exportada `detectPartnerByHostname()` que faz a query ao banco e retorna o parceiro correto, sem depender de estado React:
+
 ```text
-1. Buscar perfil do usuario (ja disponivel via useAuth)
-2. Se perfil tem cliente_id, buscar clientes.parceiro
-3. Se dominio e especifico (nao generico) E parceiro != partnerName:
-   - signOut()
-   - setError('Usuario nao autorizado neste dominio')
-   - return
-4. Caso contrario, prosseguir normalmente
+export async function detectPartnerByHostname(): Promise<string> {
+  const hostname = window.location.hostname.toLowerCase();
+  const { data } = await supabase
+    .from('partner_branding')
+    .select('partner_name, domain_pattern');
+  
+  if (!data) return 'INOVAIA';
+  
+  const matches = data.filter(p => hostname.includes(p.domain_pattern));
+  const matched = matches.sort((a, b) => b.domain_pattern.length - a.domain_pattern.length)[0];
+  return matched?.partner_name || 'INOVAIA';
+}
 ```
 
-### Alteracoes no AuthGuard.tsx
-Adicionar verificacao apos a checagem de status aprovado:
+### 3. useDomainPartnerValidation.ts -- Corrigir logica de autorizacao
+
+Remover a condicao `!userPartner` que autoriza quando o parceiro ainda nao foi buscado. Em vez disso, manter `isLoading = true` ate que ambos os valores (userPartner E partnerName) estejam disponiveis:
+
 ```text
-1. Usar useDomainPartnerValidation(profile?.cliente_id)
-2. Se isLoading → mostrar spinner
-3. Se !isAuthorized → mostrar tela de acesso negado com botao de logout
-4. Se autorizado → renderizar children
+Antes (bugado):
+  isAuthorized = genericDomain || !clienteId || !userPartner || userPartner === partnerName
+
+Depois (corrigido):
+  isAuthorized = genericDomain || !clienteId || userPartner === partnerName
+  (e isLoading = true enquanto userPartner === null E clienteId existe)
 ```
 
-### Fluxo de verificacao no signup
-No formulario de cadastro, filtrar a lista de clinicas pelo parceiro do dominio:
-- Se dominio = gt.inovaia-automacao, mostrar apenas clinicas com parceiro = 'GT INOVA'
-- Se dominio generico, mostrar todas
+### 4. AuthGuard.tsx -- Aguardar branding carregado
 
-## Arquivos a modificar/criar
-| Arquivo | Acao |
-|---------|------|
-| `src/hooks/useDomainPartnerValidation.ts` | Criar (novo hook) |
-| `src/pages/Auth.tsx` | Modificar handleLogin + filtrar clinicas no signup |
-| `src/components/AuthGuard.tsx` | Adicionar validacao de dominio |
-| `src/hooks/usePartnerBranding.ts` | Exportar funcao auxiliar para detectar dominio generico |
+No `DomainGuard`, verificar tambem se o branding do `usePartnerBranding` ja terminou de carregar antes de tomar decisao. Enquanto `isLoading` no branding, mostrar spinner.
 
-## Nao necessario
-- Criar novas tabelas ou colunas no banco
-- Alterar RLS policies (o filtro por cliente_id ja isola dados entre clinicas)
-- Alterar edge functions
+### 5. Console.logs para debug
+
+Adicionar logs em todos os pontos de validacao:
+- `usePartnerBranding`: hostname, patterns encontrados, partnerName final
+- `handleLogin` no Auth.tsx: parceiro do usuario, parceiro do dominio, resultado da comparacao
+- `useDomainPartnerValidation`: todos os valores comparados e decisao final
+
+## Arquivos a modificar
+
+| Arquivo | Alteracao |
+|---------|-----------|
+| `src/hooks/usePartnerBranding.ts` | Adicionar `detectPartnerByHostname()` async + console.logs |
+| `src/pages/Auth.tsx` | Usar `detectPartnerByHostname()` no handleLogin em vez do estado do hook + logs |
+| `src/hooks/useDomainPartnerValidation.ts` | Corrigir logica `!userPartner` + aguardar branding carregado + logs |
+| `src/components/AuthGuard.tsx` | Verificar `isLoading` do branding no DomainGuard |
+
+## Resumo do fluxo corrigido
+
+1. Usuario acessa `gt.inovaia-automacao.com.br` e faz login
+2. `handleLogin` chama `detectPartnerByHostname()` (query direta ao banco)
+3. Retorna `'GT INOVA'` (match mais longo: `gt.inovaia-automacao`)
+4. Busca parceiro do usuario: `'INOVAIA'`
+5. `'INOVAIA' !== 'GT INOVA'` -- bloqueado, signOut automatico
+6. Mesmo se burlar o login, o AuthGuard/DomainGuard repete a verificacao como segunda barreira
 
