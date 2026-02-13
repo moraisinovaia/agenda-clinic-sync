@@ -18,9 +18,11 @@
         if (h.indexOf('gt.inovaia') !== -1) {
           document.title = 'GT INOVA - Soluções Inovadoras';
           var icon = document.querySelector('link[rel="icon"]');
-          if (icon) icon.href = '/gt-inova-icon.jpeg';
+      if (icon) icon.href = '/gt-inova-icon.jpeg';
           var apple = document.querySelector('link[rel="apple-touch-icon"]');
           if (apple) apple.href = '/gt-inova-icon.jpeg';
+          var manifest = document.querySelector('link[rel="manifest"]');
+          if (manifest) manifest.href = '/manifest-gt-inova.json';
         }
       })();
     </script>
