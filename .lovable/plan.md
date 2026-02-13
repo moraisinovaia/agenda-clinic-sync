@@ -1,49 +1,33 @@
 
 
-# Substituir Referencias Hardcoded de "INOVAIA" por Branding Dinamico
+# Corrigir Ultima Referencia Hardcoded de "INOVAIA"
 
 ## Problema
 
-Tres locais visiveis ao usuario ainda exibem "INOVAIA" de forma fixa, mesmo no dominio GT INOVA:
+Um unico local restante exibe "INOVAIA" fixo em contexto visivel ao usuario:
 
-1. **Tela de loading** (`src/pages/Index.tsx`, linha 575) -- exibe "INOVAIA" enquanto os dados carregam
-2. **Tela de erro global** (`src/components/error/GlobalErrorBoundary.tsx`, linha 93) -- exibe "sistema INOVAIA" na mensagem de erro
-3. **Alerta de sistema fora do ar** (`src/hooks/useAlertSystem.ts`, linha 128) -- envia email mencionando "O sistema INOVAIA"
+**`src/components/alerts/AlertSystem.tsx` (linha 161)** — A mensagem de teste de alertas envia: "Este e um teste do sistema de alertas da INOVAIA". Esse texto aparece no email quando o admin clica em "Testar Alerta".
 
-## Alteracoes
+## Alteracao
 
-### 1. `src/pages/Index.tsx` (linha 575)
+Substituir a string fixa pela deteccao de hostname, igual ao padrao ja usado nos outros arquivos:
 
-Usar o hook `usePartnerBranding` (ou `useClinicBranding` que ja esta disponivel no componente) para exibir o nome correto na tela de loading.
-
-**Antes:** `<p className="text-lg font-medium">INOVAIA</p>`
-**Depois:** `<p className="text-lg font-medium">{partnerName}</p>` (usando o valor do hook)
-
-Como o loading screen aparece antes de dados carregarem, o hook `usePartnerBranding` e o ideal aqui (detecta pelo hostname, sem depender do banco).
-
-### 2. `src/components/error/GlobalErrorBoundary.tsx` (linha 93)
-
-Este componente e um Class Component (Error Boundary), entao nao pode usar hooks. A solucao e usar a deteccao de hostname diretamente:
-
-**Antes:** `Encontramos um erro inesperado no sistema INOVAIA.`
-**Depois:** Detectar o hostname inline e exibir o nome correto:
-
+**Antes:**
 ```text
-const systemName = window.location.hostname.toLowerCase().includes('gt.inovaia') ? 'GT INOVA' : 'INOVAIA';
-// Na mensagem:
-`Encontramos um erro inesperado no sistema ${systemName}.`
+message: `Este é um teste do sistema de alertas da INOVAIA. O sistema está funcionando corretamente!`
 ```
 
-### 3. `src/hooks/useAlertSystem.ts` (linha 128)
+**Depois:**
+```text
+const systemName = window.location.hostname.toLowerCase().includes('gt.inovaia') ? 'GT INOVA' : 'INOVAIA';
+message: `Este é um teste do sistema de alertas da ${systemName}. O sistema está funcionando corretamente!`
+```
 
-Substituir a string fixa pela deteccao de hostname (ja que hooks customizados nao podem ser usados dentro de useCallback facilmente):
+## Arquivo alterado
 
-**Antes:** `'O sistema INOVAIA está apresentando problemas...'`
-**Depois:** Usar deteccao simples de hostname ou receber o nome do parceiro como parametro.
+1. `src/components/alerts/AlertSystem.tsx` — mensagem de teste dinamica
 
-## Arquivos alterados
+## Resultado
 
-1. `src/pages/Index.tsx` -- loading screen dinamico
-2. `src/components/error/GlobalErrorBoundary.tsx` -- mensagem de erro dinamica
-3. `src/hooks/useAlertSystem.ts` -- alerta de email dinamico
+Apos esta correcao, nao havera mais nenhuma referencia hardcoded de "INOVAIA" visivel ao usuario no dominio GT INOVA.
 
