@@ -1,108 +1,103 @@
 
+# Corrigir Cloudflare Worker para Preview do WhatsApp
 
-# Resolver Preview do WhatsApp para GT INOVA (Solucao Server-Side)
+## Diagnostico
 
-## O Problema Real
+O Facebook Sharing Debugger mostra **codigo 421 "Project not found"** ao acessar `https://gt.inovaia-automacao.com.br/`. Isso indica que o Cloudflare Worker esta interceptando a requisicao mas nao tem codigo correto para responder.
 
-O WhatsApp, Facebook, Telegram e outros apps **nao executam JavaScript** ao gerar previews de links. Eles leem apenas o HTML estatico. Por isso, nao importa quantas vezes reorganizemos o `index.html` -- o crawler sempre vera as meta tags estaticas com "INOVAIA".
+A Edge Function `og-metadata` do Supabase esta funcionando corretamente. O problema esta **no Cloudflare Worker**.
 
-## A Solucao: Edge Function "og-metadata"
+## O que precisa ser feito (fora do Lovable)
 
-Criar uma Edge Function no Supabase que, ao receber uma requisicao, verifica:
-- Se o **user-agent** e de um crawler (WhatsApp, Facebook, Telegram, Twitter)
-- Se sim, retorna um HTML minimo com as meta tags corretas do parceiro
-- Se nao, redireciona para o site normalmente
+### 1. Codigo do Cloudflare Worker
 
-### Como vai funcionar
+No painel do Cloudflare, clique em **"Edit code"** no Worker `gtinovaia-automacaocombr` e cole este codigo:
 
-```text
-Link compartilhado: gt.inovaia-automacao.com.br
-        |
-        v
-  [Proxy/DNS redireciona para Edge Function]
-        |
-        v
-  Edge Function verifica User-Agent
-        |
-   Crawler?  ----SIM----> Retorna HTML com meta tags "GT INOVA"
-        |
-       NAO
-        |
-        v
-  Redireciona para o site normal
+```javascript
+const EDGE_FUNCTION_URL = "https://qxlvzbvzajibdtlzngdy.supabase.co/functions/v1/og-metadata";
+const LOVABLE_ORIGIN = "https://agenda-clinic-sync.lovable.app";
+
+const CRAWLER_PATTERNS = [
+  "WhatsApp", "facebookexternalhit", "Twitterbot", "TelegramBot",
+  "LinkedInBot", "Slackbot", "Discordbot", "Googlebot", "bingbot",
+  "Facebot", "Facebookbot"
+];
+
+function isCrawler(userAgent) {
+  if (!userAgent) return false;
+  return CRAWLER_PATTERNS.some(p => userAgent.includes(p));
+}
+
+export default {
+  async fetch(request) {
+    const userAgent = request.headers.get("user-agent") || "";
+    const url = new URL(request.url);
+
+    // Se for crawler, buscar meta tags da Edge Function
+    if (isCrawler(userAgent)) {
+      const edgeUrl = `${EDGE_FUNCTION_URL}?domain=gt.inovaia-automacao.com.br`;
+      const edgeResponse = await fetch(edgeUrl, {
+        headers: { "user-agent": userAgent }
+      });
+      return new Response(await edgeResponse.text(), {
+        status: 200,
+        headers: { "content-type": "text/html; charset=utf-8" }
+      });
+    }
+
+    // Para usuarios normais, fazer proxy para o Lovable
+    const lovableUrl = `${LOVABLE_ORIGIN}${url.pathname}${url.search}`;
+    const response = await fetch(lovableUrl, {
+      method: request.method,
+      headers: request.headers,
+      body: request.method !== "GET" && request.method !== "HEAD" ? request.body : undefined
+    });
+
+    // Retornar a resposta do Lovable
+    return new Response(response.body, {
+      status: response.status,
+      headers: response.headers
+    });
+  }
+};
 ```
 
-## Implementacao
+### 2. Deploy do Worker
 
-### 1. Criar Edge Function `og-metadata`
+Apos colar o codigo, clique em **"Save and Deploy"** no editor do Cloudflare.
 
-Arquivo: `supabase/functions/og-metadata/index.ts`
+### 3. Verificar a rota
 
-A funcao vai:
-- Receber o hostname da requisicao (via header `Host` ou query param `domain`)
-- Consultar a tabela `partner_branding` para obter nome, subtitulo e logo do parceiro
-- Verificar se o user-agent e de um crawler
-- Se for crawler: retornar HTML minimo com meta tags OG corretas
-- Se nao for crawler: redirecionar (302) para o site
+Na aba Settings do Worker, confirme que a rota esta como:
+- **Route:** `https://gt.inovaia-automacao.com.br/*` (com `/*` no final para capturar todas as paginas)
 
-Lista de user-agents de crawlers a detectar:
-- `WhatsApp`, `facebookexternalhit`, `Twitterbot`, `TelegramBot`, `LinkedInBot`, `Slackbot`, `Discordbot`
+### 4. Testar
 
-HTML retornado para crawlers (exemplo):
-```html
-<!DOCTYPE html>
-<html>
-<head>
-  <meta property="og:title" content="GT INOVA - Solucoes Inovadoras" />
-  <meta property="og:description" content="GT INOVA - Solucoes Inovadoras" />
-  <meta property="og:image" content="https://gt.inovaia-automacao.com.br/gt-inova-icon-512.png" />
-  <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://gt.inovaia-automacao.com.br" />
-</head>
-<body></body>
-</html>
+Apos o deploy do Worker:
+1. Acesse o [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/)
+2. Cole `https://gt.inovaia-automacao.com.br`
+3. Clique em "Depurar" e depois "Extrair novamente"
+4. Deve aparecer **"GT INOVA - Solucoes Inovadoras"** com o icone correto
+
+## Mudancas no Lovable
+
+### Atualizar a Edge Function `og-metadata`
+
+Uma pequena melhoria: garantir que a `og:image` use uma URL absoluta publica que o crawler consiga acessar, apontando para o dominio do Lovable (onde as imagens estao hospedadas):
+
+No arquivo `supabase/functions/og-metadata/index.ts`, alterar a logica de `og:image` para usar o URL publico do Lovable em vez do dominio do parceiro (que depende do Worker para servir assets):
+
+```
+og:image -> https://agenda-clinic-sync.lovable.app/gt-inova-icon-512.png
 ```
 
-### 2. Configuracao no `supabase/config.toml`
+Isso garante que o crawler sempre consiga baixar a imagem, independente da configuracao do Worker.
 
-Desabilitar JWT para que crawlers possam acessar sem autenticacao:
+## Resumo
 
-```toml
-[functions.og-metadata]
-verify_jwt = false
-```
-
-## Limitacao Importante
-
-A Edge Function estara disponivel em:
-`https://<project-id>.supabase.co/functions/v1/og-metadata`
-
-Para que o WhatsApp use essa URL ao acessar `gt.inovaia-automacao.com.br`, voce precisa configurar um **proxy reverso** no DNS/Cloudflare do dominio. Isso e uma configuracao de infraestrutura **fora do Lovable** que envolve:
-
-- Criar um Cloudflare Worker (ou regra de Page Rules) no dominio `gt.inovaia-automacao.com.br`
-- Detectar crawlers pelo user-agent
-- Redirecionar crawlers para a Edge Function do Supabase
-- Deixar usuarios normais acessarem o site diretamente
-
-Sem essa configuracao de proxy, a Edge Function existira mas nao sera chamada automaticamente pelos crawlers.
-
-## Alternativa Mais Simples (sem proxy)
-
-Se configurar o proxy for complexo demais, uma alternativa e:
-- Ao compartilhar links do GT INOVA, usar a URL da Edge Function diretamente (ex: `https://<project>.supabase.co/functions/v1/og-metadata?domain=gt.inovaia-automacao.com.br`)
-- A Edge Function detecta o crawler e mostra as meta tags corretas, e redireciona usuarios normais para o site real
-
-Essa abordagem funciona **sem nenhuma configuracao de DNS**, mas exige que os links compartilhados usem a URL da Edge Function.
-
-## Arquivos a criar/editar
-
-1. **Criar** `supabase/functions/og-metadata/index.ts` -- a Edge Function
-2. **Editar** `supabase/config.toml` -- adicionar `verify_jwt = false`
-
-## Resultado esperado
-
-- Edge Function criada e deployada
-- Ao acessar a URL da funcao com user-agent de crawler: retorna HTML com branding GT INOVA
-- Ao acessar com navegador normal: redireciona para o site
-- Preview do WhatsApp mostrara "GT INOVA - Solucoes Inovadoras" com o icone correto (quando o proxy estiver configurado ou quando o link da Edge Function for usado diretamente)
-
+| Onde | O que fazer |
+|------|------------|
+| **Cloudflare** | Colar o codigo do Worker acima e fazer deploy |
+| **Cloudflare** | Verificar que a rota inclui `/*` |
+| **Lovable** | Atualizar `og:image` na Edge Function para URL absoluta do Lovable |
+| **Teste** | Usar Facebook Sharing Debugger para validar |
