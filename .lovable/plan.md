@@ -1,51 +1,46 @@
 
 
-# Eliminar flash de branding INOVAIA no dominio GT INOVA
+# Corrigir branding do PWA para GT INOVA
 
 ## Problema
 
-O `index.html` tem titulo e favicon hardcoded como "INOVAIA". O React so atualiza esses valores depois de montar, carregar o hook `usePartnerBranding`, e fazer a query ao banco. Isso causa um flash visivel de "INOVAIA" antes de trocar para "GT INOVA".
-
-O mesmo problema ocorre no dashboard: o componente `DashboardHeader` mostra o logo default (INOVAIA) enquanto o `useClinicBranding` ainda esta carregando.
+O arquivo `manifest.json` esta hardcoded com nome "INOVAIA". Quando o usuario instala o app como PWA no dominio GT INOVA, o navegador usa o manifest para definir o nome do aplicativo na barra de titulo. O resultado e a combinacao errada: "INOVAIA - Sistema de Agendamentos - GT INOVA - Solucoes Inovadoras".
 
 ## Solucao
 
-### 1. Script inline no `index.html` para deteccao instantanea por hostname
+### 1. Criar manifest separado para GT INOVA
 
-Adicionar um `<script>` sincrono no `<head>` do `index.html` que verifica o hostname e atualiza titulo e favicon ANTES do React carregar. Isso elimina o flash completamente para a aba do navegador.
+Criar `public/manifest-gt-inova.json` com branding GT INOVA:
+- `name`: "GT INOVA - Solucoes Inovadoras"
+- `short_name`: "GT INOVA"
+- `description`: "GT INOVA - Solucoes Inovadoras"
+- `theme_color`: cor adequada ao GT INOVA
+- `icons`: apontando para `/gt-inova-icon.jpeg`
 
-```javascript
-// Executa antes de qualquer render
-(function() {
-  var h = location.hostname.toLowerCase();
-  if (h.indexOf('gt.inovaia') !== -1) {
-    document.title = 'GT INOVA - Soluções Inovadoras';
-    var icon = document.querySelector('link[rel="icon"]');
-    if (icon) icon.href = '/gt-inova-icon.jpeg';
-    var apple = document.querySelector('link[rel="apple-touch-icon"]');
-    if (apple) apple.href = '/gt-inova-icon.jpeg';
+### 2. Trocar o manifest dinamicamente no `index.html`
+
+No script inline que ja existe no `<head>`, adicionar logica para trocar o `href` do `<link rel="manifest">` para `/manifest-gt-inova.json` quando o hostname contem `gt.inovaia`.
+
+```text
+Antes (hardcoded):
+  <link rel="manifest" href="/manifest.json" />
+
+Depois (dinamico no script existente):
+  if (hostname contem 'gt.inovaia') {
+    // troca titulo, favicon (ja feito)
+    // + troca manifest
+    document.querySelector('link[rel="manifest"]').href = '/manifest-gt-inova.json';
   }
-})();
 ```
 
-**Arquivo**: `index.html` - adicionar script sincrono apos as tags `<link>`
+## Detalhes tecnicos
 
-### 2. Tela de loading no DashboardHeader enquanto branding carrega
-
-No `DashboardHeader`, verificar o `isLoading` do `useClinicBranding` e mostrar um skeleton/placeholder em vez do logo e nome enquanto o branding ainda nao foi resolvido. Isso evita o flash visual do logo errado no dashboard.
-
-**Arquivo**: `src/components/dashboard/DashboardHeader.tsx` - adicionar estado de loading com skeleton
-
-### 3. Tela de loading na pagina Auth
-
-Na pagina de login (`Auth.tsx`), o logo do parceiro tambem pode piscar. Verificar se o `usePartnerBranding` ja tem `isLoading` e exibir um spinner ou skeleton ate o branding carregar.
-
-**Arquivo**: `src/pages/Auth.tsx` - verificar se ja trata o loading do partner branding
+- **Arquivo novo**: `public/manifest-gt-inova.json` - copia do manifest atual com branding GT INOVA
+- **Arquivo editado**: `index.html` - adicionar troca do manifest no script inline existente
+- **Nenhum arquivo React e alterado** - a mudanca e puramente no nivel de arquivos estaticos
 
 ## Resultado esperado
 
-- Ao abrir `gt.inovaia-automacao.com.br`, a aba do navegador ja mostra "GT INOVA" e o icone correto instantaneamente (sem flash)
-- O dashboard mostra um loading sutil ate o branding resolver, depois exibe o logo correto
-- A tela de login tambem espera o branding antes de exibir o logo
-- Nenhuma mudanca no dominio INOVAIA (continua funcionando normalmente)
+- Ao instalar o PWA em `gt.inovaia-automacao.com.br`, o app mostra "GT INOVA - Solucoes Inovadoras" na barra de titulo e o icone correto
+- Ao instalar no dominio INOVAIA, continua mostrando "INOVAIA - Sistema de Agendamentos"
 
