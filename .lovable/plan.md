@@ -1,84 +1,89 @@
 
 
-# Corrigir Instalacao PWA do GT INOVA
+# Corrigir Flash de "INOVAIA" no Sistema GT INOVA
 
-## Problema raiz
+## Problema
 
-O GT INOVA nao e instalavel como PWA porque:
-1. Usa um unico arquivo JPEG (`gt-inova-icon.jpeg`) declarado como 192x192 E 512x512 -- o Chrome rejeita icones com dimensoes incorretas
-2. O formato JPEG nao e ideal para PWA (Chrome prefere PNG)
-3. O Service Worker (`sw.js`) so pre-cacheia assets da INOVAIA, ignorando completamente os assets do GT INOVA
+Quando a pagina carrega ou recarrega no dominio GT INOVA, o nome "INOVAIA" aparece brevemente antes de trocar para "GT INOVA". Isso acontece por tres motivos:
+
+1. **O hook `usePartnerBranding` inicia com estado padrao "INOVAIA"** -- enquanto a consulta ao banco esta em andamento, qualquer componente que use esse hook ve "INOVAIA"
+2. **O hook `useDynamicPageBranding` sobrescreve o titulo correto** -- o script inline do `index.html` ja define o titulo correto ("GT INOVA"), mas quando o React monta, o hook redefine `document.title` para "INOVAIA" ate a consulta ao banco terminar
+3. **As meta tags do `index.html` sao fixas em "INOVAIA"** -- `og:title`, `og:description`, `meta description` e `meta author` nunca sao atualizadas pelo script inline
 
 ## Solucao
 
-### Passo 1: Criar icones PNG com tamanhos corretos para GT INOVA
+### 1. Melhorar o script inline do `index.html` (Passo 1 - mais impactante)
 
-Voce precisa fornecer (ou eu posso gerar a partir do `gt-inova-icon.jpeg` existente):
-- `public/gt-inova-icon-192.png` — 192x192 pixels, formato PNG
-- `public/gt-inova-icon-512.png` — 512x512 pixels, formato PNG
-
-Como o Lovable nao tem ferramentas de redimensionamento de imagem, a abordagem sera:
-- Referenciar o JPEG existente mas com tamanhos declarados corretamente (se a imagem original for grande o suficiente)
-- OU pedir ao usuario que faca upload de icones PNG nos tamanhos corretos
-
-### Passo 2: Atualizar `public/manifest-gt-inova.json`
-
-Trocar as referencias de icone para usar arquivos separados com tamanhos reais:
+Expandir o script inline para tambem atualizar as meta tags OG e description:
 
 ```text
-"icons": [
-  { "src": "/gt-inova-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-  { "src": "/gt-inova-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-  { "src": "/gt-inova-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
-  { "src": "/gt-inova-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
-]
+<script>
+(function() {
+  var h = location.hostname.toLowerCase();
+  if (h.indexOf('gt.inovaia') !== -1) {
+    document.title = 'GT INOVA - Solucoes Inovadoras';
+    // Favicon e manifest
+    var icon = document.querySelector('link[rel="icon"]');
+    if (icon) icon.href = '/gt-inova-icon-192.png';
+    var apple = document.querySelector('link[rel="apple-touch-icon"]');
+    if (apple) apple.href = '/gt-inova-icon-192.png';
+    var manifest = document.querySelector('link[rel="manifest"]');
+    if (manifest) manifest.href = '/manifest-gt-inova.json';
+    // Meta tags
+    var desc = document.querySelector('meta[name="description"]');
+    if (desc) desc.content = 'GT INOVA - Solucoes Inovadoras';
+    var author = document.querySelector('meta[name="author"]');
+    if (author) author.content = 'GT INOVA';
+    var ogTitle = document.querySelector('meta[property="og:title"]');
+    if (ogTitle) ogTitle.content = 'GT INOVA - Solucoes Inovadoras';
+    var ogDesc = document.querySelector('meta[property="og:description"]');
+    if (ogDesc) ogDesc.content = 'GT INOVA - Solucoes Inovadoras';
+    var ogImage = document.querySelector('meta[property="og:image"]');
+    if (ogImage) ogImage.content = '/gt-inova-icon-512.png';
+    var twImage = document.querySelector('meta[name="twitter:image"]');
+    if (twImage) twImage.content = '/gt-inova-icon-512.png';
+  }
+})();
+</script>
 ```
 
-### Passo 3: Atualizar `public/sw.js`
+### 2. Usar deteccao de hostname como fallback inicial no `usePartnerBranding` (Passo 2 - elimina o flash)
 
-Tornar o Service Worker ciente dos dois conjuntos de assets. O SW detectara o hostname e pre-cacheara os recursos corretos:
-
-```text
-const CACHE_NAME = 'app-v1.4';
-
-const commonUrls = ['/'];
-
-const inovaiaUrls = ['/manifest.json', '/icon-192.png', '/icon-512.png'];
-const gtInovaUrls = ['/manifest-gt-inova.json', '/gt-inova-icon-192.png', '/gt-inova-icon-512.png'];
-
-self.addEventListener('install', (event) => {
-  const isGtInova = self.location.hostname.includes('gt.inovaia');
-  const urlsToCache = [...commonUrls, ...(isGtInova ? gtInovaUrls : inovaiaUrls)];
-  // ... resto igual
-});
-```
-
-### Passo 4: Atualizar `index.html`
-
-Ajustar o script inline para referenciar os novos icones PNG:
+O estado inicial do hook deve usar o hostname para definir um default inteligente em vez de sempre comecar com "INOVAIA":
 
 ```text
-if (h.indexOf('gt.inovaia') !== -1) {
-  document.title = 'GT INOVA - Solucoes Inovadoras';
-  var icon = document.querySelector('link[rel="icon"]');
-  if (icon) icon.href = '/gt-inova-icon-192.png';
-  var apple = document.querySelector('link[rel="apple-touch-icon"]');
-  if (apple) apple.href = '/gt-inova-icon-192.png';
-  var manifest = document.querySelector('link[rel="manifest"]');
-  if (manifest) manifest.href = '/manifest-gt-inova.json';
+// Em usePartnerBranding.ts
+function getInitialBranding(): PartnerBranding {
+  const hostname = window.location.hostname.toLowerCase();
+  if (hostname.includes('gt.inovaia')) {
+    return {
+      partnerName: 'GT INOVA',
+      logoSrc: gtInovaLogo,
+      subtitle: 'Solucoes Inovadoras',
+      isLoading: true,
+    };
+  }
+  return DEFAULT_BRANDING; // INOVAIA como padrao
 }
+
+// No hook:
+const [branding, setBranding] = useState<PartnerBranding>(getInitialBranding());
 ```
 
-## Prerequisito do usuario
+Isso garante que, mesmo antes da consulta ao banco, o estado inicial ja reflete o parceiro correto baseado no hostname. A consulta ao banco depois confirma e pode adicionar detalhes extras (logo_url do banco, subtitle personalizado).
 
-Antes de implementar, o usuario precisa fornecer OU confirmar que posso usar o `gt-inova-icon.jpeg` existente como base (neste caso, o sistema usara o JPEG mas com type correto e um unico tamanho, o que pode funcionar se a imagem for grande o suficiente). 
+### 3. Evitar sobrescrita do titulo no `useDynamicPageBranding` (Passo 3 - prevencao)
 
-A melhor opcao e o usuario fazer upload de dois arquivos PNG: um de 192x192 e outro de 512x512 com o logo GT INOVA.
+O hook `useDynamicPageBranding` nao deve rodar enquanto `isLoading` for true (ja faz isso), mas o estado inicial "INOVAIA" do hook causa o problema. Com a correcao do Passo 2, isso se resolve automaticamente, pois o estado inicial ja sera "GT INOVA" no dominio correto.
 
 ## Arquivos alterados
 
-1. `public/manifest-gt-inova.json` — icones atualizados
-2. `public/sw.js` — cache dinamico por dominio
-3. `index.html` — referencias de icones atualizadas
-4. (Novos) `public/gt-inova-icon-192.png` e `public/gt-inova-icon-512.png` — fornecidos pelo usuario
+1. **`index.html`** -- expandir script inline para cobrir meta tags OG/description
+2. **`src/hooks/usePartnerBranding.ts`** -- estado inicial inteligente baseado no hostname
+
+## Resultado esperado
+
+- Zero flash de "INOVAIA" no dominio GT INOVA
+- Titulo, favicon, manifest, e meta tags corretos desde o primeiro frame
+- Funcionalidade existente preservada (a consulta ao banco continua funcionando para parceiros futuros)
 
