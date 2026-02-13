@@ -1,36 +1,54 @@
 
 
-# Corrigir migração do partner_branding para funcionar em produção
+# Corrigir parceiro da Clinica Orion e aplicar fix de RLS
 
-## Problema raiz
+## Problema
+A Clinica Orion esta marcada como `GT INOVA`, mas deveria ser `INOVAIA`. Apenas a Clinica Olhos pertence a GT INOVA.
 
-A migração que atualiza o `domain_pattern` da GT INOVA usa um UUID fixo (`WHERE id = '258368b8-...'`). Esse UUID foi gerado automaticamente no banco de **Test** e e diferente no banco de **Live** (producao). Como resultado, o UPDATE nao encontra nenhum registro em producao, e o `domain_pattern` continua como `'gtinova'` -- que nao faz match com o hostname `gt.inovaia-automacao.com.br`.
+## Alteracoes
 
-## Solucao
-
-Criar uma nova migracao que usa `WHERE partner_name = 'GT INOVA'` em vez do UUID. Isso garante que funcione em ambos os ambientes.
-
-## Arquivo a criar
-
-`supabase/migrations/[timestamp]_fix_gt_inova_domain_pattern.sql`
+### 1. Migracão SQL (um unico arquivo)
 
 ```sql
-UPDATE partner_branding 
-SET domain_pattern = 'gt.inovaia-automacao', 
-    subtitle = 'Soluções Inovadoras',
-    updated_at = now()
-WHERE partner_name = 'GT INOVA';
+-- Corrigir parceiro da Clinica Orion para INOVAIA
+UPDATE clientes 
+SET parceiro = 'INOVAIA', updated_at = now()
+WHERE nome = 'Clínica Orion';
+
+-- Corrigir RLS da partner_branding (politicas restritivas -> permissivas)
+DROP POLICY IF EXISTS "Anyone can read partner branding" ON public.partner_branding;
+DROP POLICY IF EXISTS "Super admin can manage partner branding" ON public.partner_branding;
+
+CREATE POLICY "Anyone can read partner branding"
+  ON public.partner_branding
+  FOR SELECT
+  TO public
+  USING (true);
+
+CREATE POLICY "Super admin can manage partner branding"
+  ON public.partner_branding
+  FOR ALL
+  TO authenticated
+  USING (is_super_admin())
+  WITH CHECK (is_super_admin());
 ```
 
+### Resultado esperado
+
+| Cliente | Parceiro |
+|---------|----------|
+| IPADO | INOVAIA |
+| ENDOGASTRO | INOVAIA |
+| Clinica Venus | INOVAIA |
+| Clinica Orion | INOVAIA |
+| Clinica Olhos | GT INOVA |
+
+### 2. Fix de RLS (incluso acima)
+A correcao das politicas da `partner_branding` de RESTRICTIVE para PERMISSIVE resolve o problema de branding na tela de login -- sem isso, o dominio `gt.inovaia-automacao.com.br` sempre mostra INOVAIA por erro de permissao.
+
 ## Passos
-
-1. Criar a migracao SQL acima
+1. Criar a migracao SQL com ambas as alteracoes
 2. Publicar o projeto
-3. Verificar no dominio `GT.inovaia-automacao.com.br` que a logo e o branding da GT INOVA aparecem corretamente
-
-## Detalhes tecnicos
-
-- A coluna `partner_name` tem constraint `UNIQUE`, entao o `WHERE partner_name = 'GT INOVA'` e seguro e especifico
-- A logica de matching no `usePartnerBranding.ts` (filter + sort por tamanho) ja esta correta e nao precisa de alteracao
-- Nao ha alteracao de codigo, apenas de dados no banco
+3. Verificar que Clinica Orion aparece sob INOVAIA
+4. Verificar que o dominio GT INOVA exibe o branding correto na tela de login
 
