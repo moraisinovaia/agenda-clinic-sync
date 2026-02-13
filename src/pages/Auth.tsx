@@ -180,6 +180,10 @@ export default function Auth() {
             }
           } catch (validationError) {
             console.error('❌ Erro na validação de domínio:', validationError);
+            await supabase.auth.signOut();
+            setError('Erro ao validar permissões de domínio. Tente novamente.');
+            setIsLoading(false);
+            return;
           }
         }
         

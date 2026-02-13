@@ -130,17 +130,28 @@ function DomainGuard({ clienteId, children }: { clienteId: string | null | undef
   }
 
   if (!isAuthorized) {
+    const isQueryError = userPartner === null && clienteId;
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-4 max-w-md mx-auto p-6">
           <ShieldAlert className="h-12 w-12 mx-auto text-red-500" />
-          <h2 className="text-2xl font-bold">Acesso Negado</h2>
-          <p className="text-muted-foreground">
-            Seu usuário pertence ao parceiro <strong>{userPartner}</strong>, mas você está acessando o domínio do parceiro <strong>{domainPartner}</strong>.
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Por favor, acesse pelo domínio correto do seu parceiro.
-          </p>
+          <h2 className="text-2xl font-bold">
+            {isQueryError ? 'Erro de Verificação' : 'Acesso Negado'}
+          </h2>
+          {isQueryError ? (
+            <p className="text-muted-foreground">
+              Não foi possível verificar suas permissões de acesso. Por favor, tente fazer login novamente.
+            </p>
+          ) : (
+            <>
+              <p className="text-muted-foreground">
+                Seu usuário pertence ao parceiro <strong>{userPartner}</strong>, mas você está acessando o domínio do parceiro <strong>{domainPartner}</strong>.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Por favor, acesse pelo domínio correto do seu parceiro.
+              </p>
+            </>
+          )}
           <Button
             variant="outline"
             onClick={async () => {
@@ -148,7 +159,7 @@ function DomainGuard({ clienteId, children }: { clienteId: string | null | undef
               window.location.href = '/auth';
             }}
           >
-            Sair e voltar ao login
+            {isQueryError ? 'Fazer login novamente' : 'Sair e voltar ao login'}
           </Button>
         </div>
       </div>
