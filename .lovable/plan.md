@@ -1,63 +1,47 @@
 
-# Correção Definitiva: "Erro de Verificação" em todos os domínios
+# Corrigir logo e identidade visual por dominio (GT INOVA vs INOVAIA)
 
-## Causa Raiz Identificada
+## Problema
 
-A política RLS **"Super admin access"** na tabela `profiles` contém uma consulta direta à tabela `auth.users`:
+Ao acessar `gt.inovaia-automacao.com.br`, o dashboard mostra a logo da INOVAIA em vez da GT INOVA. Isso acontece por dois motivos:
 
-```text
-EXISTS (SELECT 1 FROM auth.users WHERE users.id = auth.uid() AND users.email = 'gabworais@gmail.com')
-```
+1. **Race condition no cache de branding**: O `useClinicBranding` faz cache do resultado usando apenas `clienteId` como chave. Se a consulta ao banco resolve antes do `usePartnerBranding` carregar, o logo do parceiro ainda esta com o valor default (INOVAIA). O resultado errado e cacheado e nunca corrigido.
 
-O role `authenticated` **nao tem permissao SELECT em `auth.users`** (confirmado: `has_table_privilege = false`). O PostgreSQL avalia TODAS as politicas permissivas de uma tabela para cada consulta. Quando esta politica tenta acessar `auth.users`, ela gera um **ERROR** (nao apenas false), que derruba a consulta inteira.
-
-### Efeito Cascata
-
-O problema se propaga assim:
-
-```text
-DomainGuard
-  -> useDomainPartnerValidation
-    -> SELECT parceiro FROM clientes WHERE id = ?
-      -> RLS "Approved users can view clientes"
-        -> Subquery: SELECT 1 FROM profiles WHERE user_id = auth.uid()
-          -> RLS "Super admin access" em profiles
-            -> SELECT 1 FROM auth.users  (ERRO: permission denied)
-              -> Toda a cadeia falha
-                -> userPartner = null
-                  -> "Erro de Verificacao"
-```
-
-### Por que isto e redundante
-
-Ja existe a politica **"Super admin can access all profiles"** que usa `is_super_admin()`, uma funcao SECURITY DEFINER que consulta `user_roles` (tabela publica, sem problemas de permissao). Portanto a politica "Super admin access" e completamente desnecessaria.
+2. **Favicon e titulo da aba estaticos**: O `index.html`, `manifest.json` e favicon estao hardcoded como "INOVAIA". Nao ha logica dinamica para atualizar esses elementos com base no dominio.
 
 ## Solucao
 
-Uma unica migration SQL:
+### 1. Corrigir race condition no `useClinicBranding`
 
-1. **Remover** a politica "Super admin access" da tabela `profiles` (a que consulta `auth.users` diretamente)
-2. A politica "Super admin can access all profiles" (que usa `is_super_admin()`) continuara funcionando corretamente
+Incluir `partnerLogoSrc` na chave do cache para invalidar quando o parceiro muda. Tambem ignorar execucao enquanto o partner branding ainda esta carregando.
 
-## O que NAO precisa mudar
+**Arquivo**: `src/hooks/useClinicBranding.ts`
+- Mudar chave do cache para `clienteId + partnerLogoSrc`
+- Adicionar dependencia de `isLoading` do partner branding para so executar depois que o parceiro for detectado
 
-- Nenhum arquivo de codigo (Auth.tsx, AuthGuard.tsx, hooks) precisa ser alterado
-- As demais politicas RLS de `profiles` e `clientes` estao corretas
-- Os GRANTs estao corretos (SELECT em profiles e clientes para authenticated)
-- A funcao `is_super_admin()` e SECURITY DEFINER e funciona corretamente
+### 2. Criar hook `useDynamicBranding` para favicon e titulo
 
-## Resultado Esperado
+Novo hook que atualiza dinamicamente o `<title>`, o favicon (`<link rel="icon">`), e o `<link rel="apple-touch-icon">` com base no parceiro detectado.
 
-1. Todas as consultas que envolvem `profiles` (direta ou via subquery) param de dar erro
-2. Login funciona em `gt.inovaia-automacao.com.br` (GT INOVA)
-3. Login funciona em `inovaia-automacao.com.br` (INOVAIA)
-4. DomainGuard consegue buscar `clientes.parceiro` corretamente
-5. Isolamento entre parceiros continua funcionando
+**Novo arquivo**: `src/hooks/useDynamicPageBranding.ts`
+- Quando parceiro = GT INOVA: titulo "GT INOVA - Solucoes Inovadoras", favicon da GT INOVA
+- Quando parceiro = INOVAIA: titulo "INOVAIA - Sistema de Agendamentos", favicon da INOVAIA
+- Atualiza `document.title` e os elementos `<link>` no `<head>` via DOM
 
-## Detalhes Tecnicos
+### 3. Integrar o hook no App
 
-| Item | Alteracao |
-|------|-----------|
-| Migration SQL | `DROP POLICY "Super admin access" ON public.profiles;` |
-| Tabelas afetadas | `profiles` (e indiretamente `clientes` via subquery RLS) |
-| Risco | Nenhum - politica redundante com "Super admin can access all profiles" |
+**Arquivo**: `src/App.tsx` ou `src/pages/Index.tsx`
+- Chamar `useDynamicPageBranding()` para que o titulo e favicon sejam atualizados assim que o parceiro for detectado
+
+### 4. Adicionar icone GT INOVA ao diretorio publico
+
+Para que o favicon funcione, a logo da GT INOVA precisa estar disponivel como arquivo estatico em `public/`.
+
+- Copiar `src/assets/gt-inova-logo-new.jpeg` para `public/gt-inova-icon.jpeg`
+
+## Resultado esperado
+
+- Dashboard em `gt.inovaia-automacao.com.br` mostra logo GT INOVA (nao INOVAIA)
+- Aba do navegador mostra "GT INOVA - Solucoes Inovadoras" e icone GT INOVA
+- Dashboard em `inovaia-automacao.com.br` continua mostrando logo e titulo INOVAIA
+- Cache de branding funciona corretamente sem race conditions
