@@ -8,24 +8,27 @@ const CRAWLER_PATTERNS = [
   "LinkedInBot", "Slackbot", "Discordbot", "Googlebot", "bingbot",
 ];
 
+const LOVABLE_ORIGIN = "https://agenda-clinic-sync.lovable.app";
+
 const PARTNERS: Record<string, { name: string; subtitle: string; icon: string }> = {
   "gt.inovaia": {
     name: "GT INOVA",
     subtitle: "Soluções Inovadoras",
-    icon: "/gt-inova-icon-512.png",
+    icon: `${LOVABLE_ORIGIN}/gt-inova-icon-512.png`,
   },
 };
-
-function isCrawler(ua: string): boolean {
-  return CRAWLER_PATTERNS.some((p) => ua.includes(p));
-}
 
 function getPartner(domain: string) {
   for (const [pattern, data] of Object.entries(PARTNERS)) {
     if (domain.includes(pattern)) return data;
   }
-  return { name: "INOVAIA", subtitle: "Sistema de Agendamentos Médicos", icon: "/icon-512.png" };
+  return { name: "INOVAIA", subtitle: "Sistema de Agendamentos Médicos", icon: `${LOVABLE_ORIGIN}/icon-512.png` };
 }
+
+function isCrawler(ua: string): boolean {
+  return CRAWLER_PATTERNS.some((p) => ua.includes(p));
+}
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -45,12 +48,12 @@ Deno.serve(async (req) => {
 <meta charset="UTF-8"/>
 <meta property="og:title" content="${partner.name} - ${partner.subtitle}"/>
 <meta property="og:description" content="${partner.name} - ${partner.subtitle}"/>
-<meta property="og:image" content="${siteUrl}${partner.icon}"/>
+<meta property="og:image" content="${partner.icon}"/>
 <meta property="og:type" content="website"/>
 <meta property="og:url" content="${siteUrl}"/>
 <meta name="twitter:card" content="summary"/>
 <meta name="twitter:title" content="${partner.name} - ${partner.subtitle}"/>
-<meta name="twitter:image" content="${siteUrl}${partner.icon}"/>
+<meta name="twitter:image" content="${partner.icon}"/>
 <title>${partner.name} - ${partner.subtitle}</title>
 </head>
 <body></body>
