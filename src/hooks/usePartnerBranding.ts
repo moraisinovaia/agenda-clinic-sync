@@ -23,6 +23,19 @@ const DEFAULT_BRANDING: PartnerBranding = {
   isLoading: true,
 };
 
+function getInitialBranding(): PartnerBranding {
+  const hostname = window.location.hostname.toLowerCase();
+  if (hostname.includes('gt.inovaia')) {
+    return {
+      partnerName: 'GT INOVA',
+      logoSrc: gtInovaLogo,
+      subtitle: 'Soluções Inovadoras',
+      isLoading: true,
+    };
+  }
+  return DEFAULT_BRANDING;
+}
+
 /**
  * Checks if the current hostname is a generic domain (no partner-specific validation).
  */
@@ -66,7 +79,7 @@ export async function detectPartnerByHostname(): Promise<string> {
 }
 
 export function usePartnerBranding(): PartnerBranding {
-  const [branding, setBranding] = useState<PartnerBranding>(DEFAULT_BRANDING);
+  const [branding, setBranding] = useState<PartnerBranding>(getInitialBranding());
 
   useEffect(() => {
     const hostname = window.location.hostname.toLowerCase();
