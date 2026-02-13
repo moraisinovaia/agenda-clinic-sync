@@ -53,9 +53,11 @@ import PendingApproval from '@/components/PendingApproval';
 import { DoctorScheduleGenerator } from '@/components/scheduling/DoctorScheduleGenerator';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
+import { usePartnerBranding } from '@/hooks/usePartnerBranding';
 
 const Index = () => {
   const { user, profile, loading: authLoading, signOut, isAdmin, isClinicAdmin, clinicAdminClienteId } = useStableAuth();
+  const partnerBranding = usePartnerBranding();
   
   // Debug log
   console.log('🏠 Index: Estado atual -', {
@@ -572,7 +574,7 @@ const Index = () => {
             <div className="absolute inset-0 h-12 w-12 animate-pulse rounded-full bg-primary/20 mx-auto"></div>
           </div>
           <div>
-            <p className="text-lg font-medium">INOVAIA</p>
+            <p className="text-lg font-medium">{partnerBranding.partnerName}</p>
             <p className="text-muted-foreground">Carregando dados da clínica...</p>
             <div className="mt-2 w-64 mx-auto bg-secondary rounded-full h-2">
               <div className="bg-primary h-2 rounded-full animate-pulse w-3/4"></div>

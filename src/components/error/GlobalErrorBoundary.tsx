@@ -90,7 +90,7 @@ export class GlobalErrorBoundary extends Component<Props, State> {
               </div>
               <CardTitle className="text-xl">Ops! Algo deu errado</CardTitle>
               <CardDescription>
-                Encontramos um erro inesperado no sistema INOVAIA. Nossa equipe foi notificada automaticamente.
+                Encontramos um erro inesperado no sistema {window.location.hostname.toLowerCase().includes('gt.inovaia') ? 'GT INOVA' : 'INOVAIA'}. Nossa equipe foi notificada automaticamente.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
