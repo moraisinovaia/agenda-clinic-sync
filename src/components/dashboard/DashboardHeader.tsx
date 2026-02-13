@@ -3,6 +3,7 @@ import { InstallButton } from '@/components/InstallButton';
 import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { KeyboardShortcutsHelp } from '@/components/ui/keyboard-shortcuts-help';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useClinicBranding } from '@/hooks/useClinicBranding';
 
 type ViewMode = 'doctors' | 'schedule' | 'new-appointment' | 'appointments-list' | 'edit-appointment' | 'preparos' | 'fila-espera' | 'nova-fila' | 'bloqueio-agenda' | 'relatorio-agenda' | 'auth-test' | 'alertas' | 'multiple-appointment' | 'canceled-appointments' | 'whatsapp-agent';
@@ -26,31 +27,43 @@ export const DashboardHeader = ({
   onSignOut,
   notificationCenter
 }: DashboardHeaderProps) => {
-  const { clinicName, clinicSubtitle, logoSrc } = useClinicBranding();
+  const { clinicName, clinicSubtitle, logoSrc, isLoading } = useClinicBranding();
   
   return (
     <div className="border-b bg-card">
       <div className="container mx-auto px-4 py-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <img 
-              src={logoSrc} 
-              alt={`${clinicName} Logo`} 
-              className="h-16 w-auto"
-            />
-            <div>
-              <h1 className="text-3xl font-bold text-foreground">
-                {clinicName}
-              </h1>
-              <p className="text-muted-foreground mt-1">
-                {clinicSubtitle}
-              </p>
+            {isLoading ? (
+              <>
+                <Skeleton className="h-16 w-16 rounded" />
+                <div className="space-y-2">
+                  <Skeleton className="h-8 w-48" />
+                  <Skeleton className="h-4 w-64" />
+                </div>
+              </>
+            ) : (
+              <>
+                <img 
+                  src={logoSrc} 
+                  alt={`${clinicName} Logo`} 
+                  className="h-16 w-auto"
+                />
+                <div>
+                  <h1 className="text-3xl font-bold text-foreground">
+                    {clinicName}
+                  </h1>
+                  <p className="text-muted-foreground mt-1">
+                    {clinicSubtitle}
+                  </p>
               {profileName && (
                 <p className="text-sm text-primary font-medium">
                   {profileRole === 'admin' ? 'Administrador Global' : profileRole === 'admin_clinica' ? 'Admin da Clínica' : 'Recepcionista'}: {profileName}
                 </p>
               )}
             </div>
+          </>
+            )}
           </div>
           
           <div className="flex items-center gap-2">
