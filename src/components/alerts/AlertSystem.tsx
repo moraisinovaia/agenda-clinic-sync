@@ -154,11 +154,12 @@ export const AlertSystem = () => {
     try {
       setIsTesting(true);
 
+      const systemName = window.location.hostname.toLowerCase().includes('gt.inovaia') ? 'GT INOVA' : 'INOVAIA';
       const response = await supabase.functions.invoke('gmail-alerts', {
         body: {
           to: testEmail,
           subject: 'Teste do Sistema de Alertas',
-          message: `Este é um teste do sistema de alertas da INOVAIA. O sistema está funcionando corretamente!`,
+          message: `Este é um teste do sistema de alertas da ${systemName}. O sistema está funcionando corretamente!`,
           alertType: 'system',
           data: {
             timestamp: new Date().toISOString(),
