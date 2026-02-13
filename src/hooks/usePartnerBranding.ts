@@ -24,27 +24,45 @@ const DEFAULT_BRANDING: PartnerBranding = {
 };
 
 /**
- * Detecta o parceiro pelo hostname atual e retorna o branding correspondente.
- * Usado na tela de login (antes do usuário estar autenticado).
- * 
- * Lógica de detecção:
- * - "agenda.inovaia.com.br" → pattern "inovaia"
- * - "agenda.gtinova.com.br" → pattern "gtinova"
- * - Qualquer outro domínio → fallback INOVAIA
- */
-/**
  * Checks if the current hostname is a generic domain (no partner-specific validation).
- * Generic domains: localhost, lovable.app, lovableproject.com, or any domain
- * that doesn't match any partner_branding domain_pattern.
  */
 export function isGenericDomain(): boolean {
   const hostname = window.location.hostname.toLowerCase();
-  return (
+  const generic = (
     hostname === 'localhost' ||
     hostname.includes('lovable.app') ||
     hostname.includes('lovableproject.com') ||
     hostname.includes('127.0.0.1')
   );
+  console.log(`🌐 isGenericDomain: hostname="${hostname}" → ${generic}`);
+  return generic;
+}
+
+/**
+ * Detects the partner by hostname via direct DB query.
+ * Use this in imperative flows (e.g., handleLogin) to avoid race conditions with React state.
+ */
+export async function detectPartnerByHostname(): Promise<string> {
+  const hostname = window.location.hostname.toLowerCase();
+  console.log(`🔍 detectPartnerByHostname: hostname="${hostname}"`);
+  
+  const { data, error } = await supabase
+    .from('partner_branding')
+    .select('partner_name, domain_pattern');
+  
+  if (error || !data || data.length === 0) {
+    console.log('⚠️ detectPartnerByHostname: sem dados, fallback INOVAIA');
+    return 'INOVAIA';
+  }
+
+  const matches = data.filter(p => hostname.includes(p.domain_pattern));
+  console.log(`🔍 detectPartnerByHostname: patterns testados:`, data.map(p => `"${p.domain_pattern}"`).join(', '));
+  console.log(`🔍 detectPartnerByHostname: matches encontrados:`, matches.map(p => `${p.partner_name}(${p.domain_pattern})`).join(', '));
+  
+  const matched = matches.sort((a, b) => b.domain_pattern.length - a.domain_pattern.length)[0];
+  const result = matched?.partner_name || 'INOVAIA';
+  console.log(`✅ detectPartnerByHostname: resultado="${result}"`);
+  return result;
 }
 
 export function usePartnerBranding(): PartnerBranding {
@@ -52,20 +70,23 @@ export function usePartnerBranding(): PartnerBranding {
 
   useEffect(() => {
     const hostname = window.location.hostname.toLowerCase();
+    console.log(`🎨 usePartnerBranding: iniciando detecção para hostname="${hostname}"`);
 
     supabase
       .from('partner_branding')
       .select('partner_name, domain_pattern, logo_url, subtitle')
       .then(({ data, error }) => {
         if (error || !data || data.length === 0) {
+          console.log('⚠️ usePartnerBranding: sem dados do banco, usando default INOVAIA');
           setBranding({ ...DEFAULT_BRANDING, isLoading: false });
           return;
         }
 
-        // Encontrar o parceiro cujo domain_pattern aparece no hostname
         const matches = data.filter(p => hostname.includes(p.domain_pattern));
         const matched = matches.sort((a, b) => b.domain_pattern.length - a.domain_pattern.length)[0];
         const partner = matched || data.find(p => p.partner_name === 'INOVAIA') || data[0];
+
+        console.log(`🎨 usePartnerBranding: matches=[${matches.map(p => p.partner_name).join(',')}], escolhido="${partner.partner_name}"`);
 
         const logoSrc = partner.logo_url 
           || LOCAL_PARTNER_LOGOS[partner.partner_name] 
