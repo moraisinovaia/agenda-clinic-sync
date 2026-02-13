@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Download } from 'lucide-react';
+import { usePartnerBranding } from '@/hooks/usePartnerBranding';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -8,6 +9,7 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 export function InstallButton() {
+  const { partnerName } = usePartnerBranding();
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstallable, setIsInstallable] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
@@ -93,7 +95,7 @@ export function InstallButton() {
       setIsInstallable(false);
     } else {
       // Fallback para navegadores sem suporte ao beforeinstallprompt
-      alert('Para instalar o app:\n\n1. Chrome/Edge: Menu > Instalar INOVAIA\n2. Firefox: Menu > Adicionar à tela inicial\n3. Safari: Compartilhar > Adicionar à tela inicial');
+      alert(`Para instalar o app:\n\n1. Chrome/Edge: Menu > Instalar ${partnerName}\n2. Firefox: Menu > Adicionar à tela inicial\n3. Safari: Compartilhar > Adicionar à tela inicial`);
     }
   };
 
@@ -107,7 +109,7 @@ export function InstallButton() {
       variant="outline"
       size="sm"
       className="flex items-center gap-2"
-      title={deferredPrompt ? "Instalar aplicativo" : "Instruções de instalação"}
+      title={deferredPrompt ? `Instalar ${partnerName}` : "Instruções de instalação"}
     >
       <Download className="h-4 w-4" />
       Instalar App
