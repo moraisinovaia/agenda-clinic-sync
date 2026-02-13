@@ -1,53 +1,108 @@
 
-# Corrigir Preview do WhatsApp para GT INOVA
 
-## Problema
+# Resolver Preview do WhatsApp para GT INOVA (Solucao Server-Side)
 
-Ao compartilhar o link `gt.inovaia-automacao.com.br` no WhatsApp, o preview mostra "INOVAIA" com o logo errado porque:
+## O Problema Real
 
-1. As meta tags Open Graph (`og:title`, `og:image`) estao definidas DEPOIS do script de deteccao no `index.html`, entao o script nao consegue modifica-las (os elementos ainda nao existem no DOM)
-2. Crawlers do WhatsApp/redes sociais NAO executam JavaScript — eles leem apenas o HTML estatico
+O WhatsApp, Facebook, Telegram e outros apps **nao executam JavaScript** ao gerar previews de links. Eles leem apenas o HTML estatico. Por isso, nao importa quantas vezes reorganizemos o `index.html` -- o crawler sempre vera as meta tags estaticas com "INOVAIA".
 
-## Solucao
+## A Solucao: Edge Function "og-metadata"
 
-Corrigir em duas etapas:
+Criar uma Edge Function no Supabase que, ao receber uma requisicao, verifica:
+- Se o **user-agent** e de um crawler (WhatsApp, Facebook, Telegram, Twitter)
+- Se sim, retorna um HTML minimo com as meta tags corretas do parceiro
+- Se nao, redireciona para o site normalmente
 
-### Etapa 1 — Mover meta tags OG para ANTES do script (correcao imediata)
+### Como vai funcionar
 
-Reorganizar o `index.html` para que as meta tags OG fiquem antes do script de deteccao. Isso resolve o problema para navegadores que executam o JS.
-
-**Ordem atual (incorreta):**
 ```text
-<title>INOVAIA...</title>
-<meta description>
-<script>  (tenta mudar og:title, mas ele ainda nao existe)  </script>
-<meta og:title>  (definido tarde demais)
+Link compartilhado: gt.inovaia-automacao.com.br
+        |
+        v
+  [Proxy/DNS redireciona para Edge Function]
+        |
+        v
+  Edge Function verifica User-Agent
+        |
+   Crawler?  ----SIM----> Retorna HTML com meta tags "GT INOVA"
+        |
+       NAO
+        |
+        v
+  Redireciona para o site normal
 ```
 
-**Ordem corrigida:**
-```text
-<title>INOVAIA...</title>
-<meta description>
-<meta og:title>   (agora existe antes do script)
-<meta og:image>
-<meta twitter:*>
-<script>  (agora consegue encontrar e mudar as tags)  </script>
+## Implementacao
+
+### 1. Criar Edge Function `og-metadata`
+
+Arquivo: `supabase/functions/og-metadata/index.ts`
+
+A funcao vai:
+- Receber o hostname da requisicao (via header `Host` ou query param `domain`)
+- Consultar a tabela `partner_branding` para obter nome, subtitulo e logo do parceiro
+- Verificar se o user-agent e de um crawler
+- Se for crawler: retornar HTML minimo com meta tags OG corretas
+- Se nao for crawler: redirecionar (302) para o site
+
+Lista de user-agents de crawlers a detectar:
+- `WhatsApp`, `facebookexternalhit`, `Twitterbot`, `TelegramBot`, `LinkedInBot`, `Slackbot`, `Discordbot`
+
+HTML retornado para crawlers (exemplo):
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <meta property="og:title" content="GT INOVA - Solucoes Inovadoras" />
+  <meta property="og:description" content="GT INOVA - Solucoes Inovadoras" />
+  <meta property="og:image" content="https://gt.inovaia-automacao.com.br/gt-inova-icon-512.png" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://gt.inovaia-automacao.com.br" />
+</head>
+<body></body>
+</html>
 ```
 
-### Etapa 2 — Edge Function "og-proxy" para crawlers (solucao definitiva)
+### 2. Configuracao no `supabase/config.toml`
 
-Criar uma Edge Function que detecta user-agents de crawlers (WhatsApp, Facebook, Twitter, Telegram) e retorna HTML minimo com as meta tags corretas do parceiro. Para requisicoes normais, redireciona para o site.
+Desabilitar JWT para que crawlers possam acessar sem autenticacao:
 
-Porem, essa etapa requer configuracao de proxy no DNS/Cloudflare do dominio `gt.inovaia-automacao.com.br` para direcionar crawlers para a Edge Function, o que esta fora do escopo do Lovable.
+```toml
+[functions.og-metadata]
+verify_jwt = false
+```
 
-**Para esta implementacao, faremos apenas a Etapa 1**, que ja resolve o problema para usuarios que abrem o link (verao o titulo e icone corretos) e corrige o script que hoje nao funciona.
+## Limitacao Importante
 
-## Arquivo alterado
+A Edge Function estara disponivel em:
+`https://<project-id>.supabase.co/functions/v1/og-metadata`
 
-1. `index.html` — mover os blocos de meta OG e Twitter para antes do script de deteccao
+Para que o WhatsApp use essa URL ao acessar `gt.inovaia-automacao.com.br`, voce precisa configurar um **proxy reverso** no DNS/Cloudflare do dominio. Isso e uma configuracao de infraestrutura **fora do Lovable** que envolve:
+
+- Criar um Cloudflare Worker (ou regra de Page Rules) no dominio `gt.inovaia-automacao.com.br`
+- Detectar crawlers pelo user-agent
+- Redirecionar crawlers para a Edge Function do Supabase
+- Deixar usuarios normais acessarem o site diretamente
+
+Sem essa configuracao de proxy, a Edge Function existira mas nao sera chamada automaticamente pelos crawlers.
+
+## Alternativa Mais Simples (sem proxy)
+
+Se configurar o proxy for complexo demais, uma alternativa e:
+- Ao compartilhar links do GT INOVA, usar a URL da Edge Function diretamente (ex: `https://<project>.supabase.co/functions/v1/og-metadata?domain=gt.inovaia-automacao.com.br`)
+- A Edge Function detecta o crawler e mostra as meta tags corretas, e redireciona usuarios normais para o site real
+
+Essa abordagem funciona **sem nenhuma configuracao de DNS**, mas exige que os links compartilhados usem a URL da Edge Function.
+
+## Arquivos a criar/editar
+
+1. **Criar** `supabase/functions/og-metadata/index.ts` -- a Edge Function
+2. **Editar** `supabase/config.toml` -- adicionar `verify_jwt = false`
 
 ## Resultado esperado
 
-- O script de branding passara a funcionar corretamente para usuarios que visitam o site
-- O titulo da aba, favicon, manifest e meta tags serao atualizados para "GT INOVA" no dominio correto
-- Para o preview do WhatsApp especificamente: como crawlers nao executam JS, o preview ainda mostrara o default (INOVAIA). Para resolver isso definitivamente, seria necessario um proxy server-side (Cloudflare Worker ou similar) no dominio `gt.inovaia-automacao.com.br`, o que e uma configuracao de infraestrutura fora do Lovable
+- Edge Function criada e deployada
+- Ao acessar a URL da funcao com user-agent de crawler: retorna HTML com branding GT INOVA
+- Ao acessar com navegador normal: redireciona para o site
+- Preview do WhatsApp mostrara "GT INOVA - Solucoes Inovadoras" com o icone correto (quando o proxy estiver configurado ou quando o link da Edge Function for usado diretamente)
+
