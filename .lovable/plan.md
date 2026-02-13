@@ -1,43 +1,63 @@
 
+# Correção Definitiva: "Erro de Verificação" em todos os domínios
 
-# Correção: "permission denied" nas tabelas profiles e clientes
+## Causa Raiz Identificada
 
-## Causa raiz real
-
-Os logs do PostgreSQL mostram repetidamente:
-- `permission denied for table profiles`
-- `permission denied for table clientes`
-
-Isso **não é um problema de RLS**. As políticas RLS que corrigimos estão corretas, mas o role `authenticated` não possui `GRANT SELECT` nessas tabelas. Sem o GRANT, o PostgreSQL nem avalia as políticas RLS — simplesmente nega o acesso.
-
-Provavelmente os GRANTs foram removidos durante uma hardening de segurança anterior.
-
-## Solução
-
-Executar uma migration SQL com:
+A política RLS **"Super admin access"** na tabela `profiles` contém uma consulta direta à tabela `auth.users`:
 
 ```text
--- Permitir que usuários autenticados acessem as tabelas
-GRANT SELECT ON public.profiles TO authenticated;
-GRANT SELECT ON public.clientes TO authenticated;
-
--- Manter permissões de INSERT/UPDATE que já existiam para profiles
-GRANT INSERT ON public.profiles TO authenticated;
-GRANT UPDATE ON public.profiles TO authenticated;
+EXISTS (SELECT 1 FROM auth.users WHERE users.id = auth.uid() AND users.email = 'gabworais@gmail.com')
 ```
 
-Isso é seguro porque as políticas RLS continuam filtrando quais linhas cada usuário pode ver (própria clínica, próprio perfil, etc.). O GRANT apenas permite que o PostgreSQL chegue até a avaliação das políticas.
+O role `authenticated` **nao tem permissao SELECT em `auth.users`** (confirmado: `has_table_privilege = false`). O PostgreSQL avalia TODAS as politicas permissivas de uma tabela para cada consulta. Quando esta politica tenta acessar `auth.users`, ela gera um **ERROR** (nao apenas false), que derruba a consulta inteira.
 
-## Arquivos a modificar
+### Efeito Cascata
 
-| Arquivo | Alteração |
-|---------|-----------|
-| Nova migration SQL | Adicionar GRANT SELECT em profiles e clientes para authenticated |
+O problema se propaga assim:
 
-## Resultado esperado
+```text
+DomainGuard
+  -> useDomainPartnerValidation
+    -> SELECT parceiro FROM clientes WHERE id = ?
+      -> RLS "Approved users can view clientes"
+        -> Subquery: SELECT 1 FROM profiles WHERE user_id = auth.uid()
+          -> RLS "Super admin access" em profiles
+            -> SELECT 1 FROM auth.users  (ERRO: permission denied)
+              -> Toda a cadeia falha
+                -> userPartner = null
+                  -> "Erro de Verificacao"
+```
 
-1. Usuários autenticados conseguem consultar `clientes.parceiro` (validação de domínio funciona)
-2. Usuários conseguem carregar seu próprio perfil (`profiles`)
-3. GT INOVA entra em `gt.inovaia-automacao.com.br`
-4. INOVAIA entra em `inovaia-automacao.com.br`
-5. Isolamento entre parceiros continua funcionando via RLS
+### Por que isto e redundante
+
+Ja existe a politica **"Super admin can access all profiles"** que usa `is_super_admin()`, uma funcao SECURITY DEFINER que consulta `user_roles` (tabela publica, sem problemas de permissao). Portanto a politica "Super admin access" e completamente desnecessaria.
+
+## Solucao
+
+Uma unica migration SQL:
+
+1. **Remover** a politica "Super admin access" da tabela `profiles` (a que consulta `auth.users` diretamente)
+2. A politica "Super admin can access all profiles" (que usa `is_super_admin()`) continuara funcionando corretamente
+
+## O que NAO precisa mudar
+
+- Nenhum arquivo de codigo (Auth.tsx, AuthGuard.tsx, hooks) precisa ser alterado
+- As demais politicas RLS de `profiles` e `clientes` estao corretas
+- Os GRANTs estao corretos (SELECT em profiles e clientes para authenticated)
+- A funcao `is_super_admin()` e SECURITY DEFINER e funciona corretamente
+
+## Resultado Esperado
+
+1. Todas as consultas que envolvem `profiles` (direta ou via subquery) param de dar erro
+2. Login funciona em `gt.inovaia-automacao.com.br` (GT INOVA)
+3. Login funciona em `inovaia-automacao.com.br` (INOVAIA)
+4. DomainGuard consegue buscar `clientes.parceiro` corretamente
+5. Isolamento entre parceiros continua funcionando
+
+## Detalhes Tecnicos
+
+| Item | Alteracao |
+|------|-----------|
+| Migration SQL | `DROP POLICY "Super admin access" ON public.profiles;` |
+| Tabelas afetadas | `profiles` (e indiretamente `clientes` via subquery RLS) |
+| Risco | Nenhum - politica redundante com "Super admin can access all profiles" |
