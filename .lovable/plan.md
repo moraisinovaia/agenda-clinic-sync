@@ -1,33 +1,53 @@
 
-
-# Corrigir Ultima Referencia Hardcoded de "INOVAIA"
+# Corrigir Preview do WhatsApp para GT INOVA
 
 ## Problema
 
-Um unico local restante exibe "INOVAIA" fixo em contexto visivel ao usuario:
+Ao compartilhar o link `gt.inovaia-automacao.com.br` no WhatsApp, o preview mostra "INOVAIA" com o logo errado porque:
 
-**`src/components/alerts/AlertSystem.tsx` (linha 161)** — A mensagem de teste de alertas envia: "Este e um teste do sistema de alertas da INOVAIA". Esse texto aparece no email quando o admin clica em "Testar Alerta".
+1. As meta tags Open Graph (`og:title`, `og:image`) estao definidas DEPOIS do script de deteccao no `index.html`, entao o script nao consegue modifica-las (os elementos ainda nao existem no DOM)
+2. Crawlers do WhatsApp/redes sociais NAO executam JavaScript — eles leem apenas o HTML estatico
 
-## Alteracao
+## Solucao
 
-Substituir a string fixa pela deteccao de hostname, igual ao padrao ja usado nos outros arquivos:
+Corrigir em duas etapas:
 
-**Antes:**
+### Etapa 1 — Mover meta tags OG para ANTES do script (correcao imediata)
+
+Reorganizar o `index.html` para que as meta tags OG fiquem antes do script de deteccao. Isso resolve o problema para navegadores que executam o JS.
+
+**Ordem atual (incorreta):**
 ```text
-message: `Este é um teste do sistema de alertas da INOVAIA. O sistema está funcionando corretamente!`
+<title>INOVAIA...</title>
+<meta description>
+<script>  (tenta mudar og:title, mas ele ainda nao existe)  </script>
+<meta og:title>  (definido tarde demais)
 ```
 
-**Depois:**
+**Ordem corrigida:**
 ```text
-const systemName = window.location.hostname.toLowerCase().includes('gt.inovaia') ? 'GT INOVA' : 'INOVAIA';
-message: `Este é um teste do sistema de alertas da ${systemName}. O sistema está funcionando corretamente!`
+<title>INOVAIA...</title>
+<meta description>
+<meta og:title>   (agora existe antes do script)
+<meta og:image>
+<meta twitter:*>
+<script>  (agora consegue encontrar e mudar as tags)  </script>
 ```
+
+### Etapa 2 — Edge Function "og-proxy" para crawlers (solucao definitiva)
+
+Criar uma Edge Function que detecta user-agents de crawlers (WhatsApp, Facebook, Twitter, Telegram) e retorna HTML minimo com as meta tags corretas do parceiro. Para requisicoes normais, redireciona para o site.
+
+Porem, essa etapa requer configuracao de proxy no DNS/Cloudflare do dominio `gt.inovaia-automacao.com.br` para direcionar crawlers para a Edge Function, o que esta fora do escopo do Lovable.
+
+**Para esta implementacao, faremos apenas a Etapa 1**, que ja resolve o problema para usuarios que abrem o link (verao o titulo e icone corretos) e corrige o script que hoje nao funciona.
 
 ## Arquivo alterado
 
-1. `src/components/alerts/AlertSystem.tsx` — mensagem de teste dinamica
+1. `index.html` — mover os blocos de meta OG e Twitter para antes do script de deteccao
 
-## Resultado
+## Resultado esperado
 
-Apos esta correcao, nao havera mais nenhuma referencia hardcoded de "INOVAIA" visivel ao usuario no dominio GT INOVA.
-
+- O script de branding passara a funcionar corretamente para usuarios que visitam o site
+- O titulo da aba, favicon, manifest e meta tags serao atualizados para "GT INOVA" no dominio correto
+- Para o preview do WhatsApp especificamente: como crawlers nao executam JS, o preview ainda mostrara o default (INOVAIA). Para resolver isso definitivamente, seria necessario um proxy server-side (Cloudflare Worker ou similar) no dominio `gt.inovaia-automacao.com.br`, o que e uma configuracao de infraestrutura fora do Lovable
