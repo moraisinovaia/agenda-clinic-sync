@@ -14,7 +14,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useRememberMe } from '@/hooks/useRememberMe';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { usePartnerBranding, isGenericDomain } from '@/hooks/usePartnerBranding';
+import { usePartnerBranding, isGenericDomain, detectPartnerByHostname } from '@/hooks/usePartnerBranding';
 import { validatePartnerForLogin } from '@/hooks/useDomainPartnerValidation';
 
 export default function Auth() {
@@ -146,8 +146,15 @@ export default function Auth() {
         console.log('🔐 Page: Login bem-sucedido, verificando domínio/parceiro...');
         
         // === VALIDAÇÃO DE DOMÍNIO/PARCEIRO ===
-        if (!isGenericDomain()) {
+        const generic = isGenericDomain();
+        console.log(`🔐 handleLogin: isGenericDomain=${generic}`);
+        
+        if (!generic) {
           try {
+            // Buscar parceiro do domínio diretamente (evita race condition do hook)
+            const domainPartner = await detectPartnerByHostname();
+            console.log(`🔐 handleLogin: domainPartner="${domainPartner}" (via detectPartnerByHostname)`);
+            
             // Buscar perfil do usuário para obter cliente_id
             const { data: { user: loggedUser } } = await supabase.auth.getUser();
             if (loggedUser) {
@@ -159,18 +166,20 @@ export default function Auth() {
               
               if (profile?.cliente_id) {
                 const userPartner = await validatePartnerForLogin(profile.cliente_id);
-                if (userPartner && userPartner !== partnerName) {
-                  console.log(`🚫 Parceiro mismatch: usuário=${userPartner}, domínio=${partnerName}`);
+                console.log(`🔐 handleLogin: userPartner="${userPartner}", domainPartner="${domainPartner}"`);
+                
+                if (userPartner && userPartner !== domainPartner) {
+                  console.log(`🚫 BLOQUEADO: parceiro mismatch! usuário="${userPartner}" ≠ domínio="${domainPartner}"`);
                   await supabase.auth.signOut();
-                  setError('Usuário não autorizado neste domínio. Acesse pelo domínio correto do seu parceiro.');
+                  setError(`Usuário não autorizado neste domínio. Seu parceiro é ${userPartner}, mas este domínio pertence a ${domainPartner}.`);
                   setIsLoading(false);
                   return;
                 }
+                console.log(`✅ handleLogin: parceiros correspondem (${userPartner})`);
               }
             }
           } catch (validationError) {
             console.error('❌ Erro na validação de domínio:', validationError);
-            // Em caso de erro na validação, permitir login (fail-open para não bloquear)
           }
         }
         
