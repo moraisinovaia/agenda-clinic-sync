@@ -1101,125 +1101,128 @@ function classificarPeriodoAgendamento(
   return null;
 }
 
-// Regras de negócio para agendamento via LLM Agent (N8N/WhatsApp)
-// Sistema web NÃO usa essas regras - funciona sem restrições
-const BUSINESS_RULES = {
-  medicos: {
-    // Dr. Marcelo D'Carli - Cardiologista - ORDEM DE CHEGADA
-    '1e110923-50df-46ff-a57a-29d88e372900': {
-      nome: 'DR. MARCELO D\'CARLI',
-      tipo_agendamento: 'ordem_chegada',
-      servicos: {
-        'Consulta Cardiológica': {
-          permite_online: true,
-          tipo: 'ordem_chegada',
-          dias_semana: [1, 2, 3, 4, 5], // seg-sex
-          periodos: {
-            manha: { inicio: '07:00', fim: '12:00', limite: 9, atendimento_inicio: '07:45', distribuicao_fichas: '07:00 às 09:30' },
-            tarde: { inicio: '13:00', fim: '17:00', limite: 9, dias_especificos: [1, 3], atendimento_inicio: '13:45', distribuicao_fichas: '13:00 às 15:00' } // seg e qua
-          }
-        },
-        'Teste Ergométrico': {
-          permite_online: true,
-          tipo: 'ordem_chegada',
-          dias_semana: [2, 3, 4], // ter, qua, qui
-          periodos: {
-            manha: { inicio: '07:00', fim: '12:00', limite: 9, dias_especificos: [3], atendimento_inicio: '07:45', distribuicao_fichas: '07:00 às 09:30' }, // qua
-            tarde: { inicio: '13:00', fim: '17:00', limite: 9, dias_especificos: [2, 4], atendimento_inicio: '13:45', distribuicao_fichas: '13:00 às 15:00' } // ter e qui
-          }
-        },
-        'ECG': {
-          permite_online: false,
-          mensagem: 'O ECG de rotina não precisa de agendamento. Compareça à clínica de segunda a sexta (8h-10h) ou quarta à tarde (14h-15h), por ordem de chegada.'
+// 🆕 FUNÇÃO UTILITÁRIA: Buscar próximas datas disponíveis (extraída do handler para nível do módulo)
+async function buscarProximasDatasDisponiveis(
+  supabase: any,
+  medico: any,
+  servicoKey: string,
+  servico: any,
+  dataInicial: string,
+  clienteId: string,
+  periodoPreferido?: string,
+  diasBusca: number = 60,
+  maxResultados: number = 5
+): Promise<Array<{
+  data: string;
+  dia_semana: string;
+  vagas_disponiveis: number;
+  total_vagas: number;
+  periodo?: string;
+}>> {
+  
+  const proximasDatas = [];
+  const diasNomes = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  
+  console.log(`🔍 Buscando próximas datas disponíveis para ${medico.nome} - ${servicoKey}`);
+  console.log(`📅 Data inicial: ${dataInicial}, Dias de busca: ${diasBusca}, Max resultados: ${maxResultados}`);
+  
+  for (let i = 0; i < diasBusca && proximasDatas.length < maxResultados; i++) {
+    const dataFutura = new Date(dataInicial);
+    dataFutura.setDate(dataFutura.getDate() + i);
+    const dataFuturaStr = dataFutura.toISOString().split('T')[0];
+    const diaSemana = dataFutura.getDay();
+    
+    // Pular finais de semana
+    if (diaSemana === 0 || diaSemana === 6) continue;
+    
+    // Verificar se o dia é permitido para o serviço
+    if (servico.dias_semana && !servico.dias_semana.includes(diaSemana)) continue;
+    if (servico.dias && !servico.dias.includes(diaSemana)) continue;
+    
+    // Verificar bloqueios
+    const { data: bloqueios } = await supabase
+      .from('bloqueios_agenda')
+      .select('id')
+      .eq('medico_id', medico.id)
+      .eq('cliente_id', clienteId)
+      .eq('status', 'ativo')
+      .lte('data_inicio', dataFuturaStr)
+      .gte('data_fim', dataFuturaStr);
+    
+    if (bloqueios && bloqueios.length > 0) continue;
+    
+    // Verificar disponibilidade por período
+    const periodos = servico.periodos || {};
+    const periodosParaVerificar = periodoPreferido 
+      ? (periodos[periodoPreferido] ? [periodoPreferido] : Object.keys(periodos))
+      : Object.keys(periodos);
+    
+    for (const periodo of periodosParaVerificar) {
+      const config = periodos[periodo];
+      if (!config) continue;
+      
+      // Verificar dias específicos do período
+      if (config.dias_especificos && !config.dias_especificos.includes(diaSemana)) continue;
+      
+      // Contar agendamentos existentes
+      const { data: agendamentos } = await supabase
+        .from('agendamentos')
+        .select('hora_agendamento')
+        .eq('medico_id', medico.id)
+        .eq('cliente_id', clienteId)
+        .eq('data_agendamento', dataFuturaStr)
+        .in('status', ['agendado', 'confirmado']);
+      
+      let vagasOcupadas = 0;
+      if (agendamentos && agendamentos.length > 0) {
+        // Usar contagem_inicio/contagem_fim se configurados, senão hora_inicio/hora_fim
+        const horaInicioContagem = (config as any).contagem_inicio || (config as any).hora_inicio;
+        const horaFimContagem = (config as any).contagem_fim || (config as any).hora_fim;
+        
+        if (horaInicioContagem && horaFimContagem) {
+          const [horaInicio] = horaInicioContagem.split(':').map(Number);
+          const [horaFim] = horaFimContagem.split(':').map(Number);
+          
+          vagasOcupadas = agendamentos.filter(ag => {
+            const [horaAg] = ag.hora_agendamento.split(':').map(Number);
+            return horaAg >= horaInicio && horaAg < horaFim;
+          }).length;
+        } else {
+          vagasOcupadas = agendamentos.length;
         }
       }
-    },
-    
-    // Dra. Adriana Carla de Sena - Endocrinologista - ORDEM DE CHEGADA
-    '32d30887-b876-4502-bf04-e55d7fb55b50': {
-      nome: 'DRA. ADRIANA CARLA DE SENA',
-      tipo_agendamento: 'ordem_chegada',
-      idade_minima: 18,
-      servicos: {
-        'Consulta Endocrinológica': {
-          permite_online: true,
-          tipo: 'ordem_chegada',
-          dias_semana: [1, 2, 3, 4, 5], // Segunda a sexta
-          periodos: {
-            manha: { inicio: '08:00', fim: '10:00', limite: 9, atendimento_inicio: '08:45', distribuicao_fichas: '08:00 às 10:00' },
-            tarde: { inicio: '13:00', fim: '15:00', limite: 9, dias_especificos: [2, 3], atendimento_inicio: '14:45', distribuicao_fichas: '13:00 às 15:00' }
-          }
+          
+      const vagasDisponiveis = (config as any).limite - vagasOcupadas;
+      
+      if (vagasDisponiveis > 0) {
+        const periodoNome = periodo === 'manha' ? 'Manhã' : 'Tarde';
+        console.log(`✅ ${dataFuturaStr} (${diasNomes[diaSemana]}) - ${vagasDisponiveis} vaga(s) - ${periodoNome}`);
+        
+        proximasDatas.push({
+          data: dataFuturaStr,
+          dia_semana: diasNomes[diaSemana],
+          vagas_disponiveis: vagasDisponiveis,
+          total_vagas: (config as any).limite,
+          periodo: periodoNome
+        });
+        
+        if (proximasDatas.length >= maxResultados) {
+          return proximasDatas;
         }
-      }
-    },
-    
-    // Dr. Pedro Francisco - Clínico Geral (Consulta e Retorno) - ORDEM DE CHEGADA
-    '66e9310d-34cd-4005-8937-74e87125dc03': {
-      nome: 'DR. PEDRO FRANCISCO',
-      tipo_agendamento: 'ordem_chegada',
-      servicos: {
-        'Consulta': {
-          permite_online: true,
-          tipo: 'ordem_chegada',
-          dias_semana: [2, 4], // terça e quinta
-          periodos: {
-            manha: { 
-              inicio: '09:30', 
-              fim: '10:00', 
-              limite: 4, 
-              atendimento_inicio: null, // Começa quando termina os exames
-              distribuicao_fichas: '09:30 às 10:00',
-              observacao: 'O Dr. começa a atender quando termina os exames'
-            }
-          },
-          convenios_aceitos: ['UNIMED NACIONAL', 'UNIMED REGIONAL', 'UNIMED 40%', 'UNIMED 20%', 'UNIMED INTERCAMBIO', 'MEDPREV']
-        },
-        'Retorno': {
-          permite_online: true,
-          tipo: 'ordem_chegada',
-          dias_semana: [2, 4], // terça e quinta
-          periodos: {
-            manha: { 
-              inicio: '09:30', 
-              fim: '10:00', 
-              limite: 4,
-              atendimento_inicio: null,
-              distribuicao_fichas: '09:30 às 10:00',
-              observacao: 'O Dr. começa a atender quando termina os exames'
-            }
-          },
-          convenios_aceitos: ['UNIMED NACIONAL', 'UNIMED REGIONAL', 'UNIMED 40%', 'UNIMED 20%', 'UNIMED INTERCAMBIO', 'MEDPREV']
-        }
-      }
-    },
-    
-    // Dr. Alessandro Dias - Cardiologista (Ecocardiograma) - ORDEM DE CHEGADA
-    'c192e08e-e216-4c22-99bf-b5992ce05e17': {
-      nome: 'DR. ALESSANDRO DIAS',
-      tipo_agendamento: 'ordem_chegada',
-      servicos: {
-        'Ecocardiograma': {
-          permite_online: true,
-          tipo: 'ordem_chegada',
-          dias_semana: [1], // apenas segunda
-          periodos: {
-            manha: { 
-              inicio: '08:00', 
-              fim: '09:00', 
-              limite: 10, 
-              atendimento_inicio: '08:00', 
-              distribuicao_fichas: '08:00 às 09:00' 
-            }
-          },
-          convenios_aceitos: ['UNIMED NACIONAL', 'UNIMED REGIONAL', 'UNIMED 40%', 'UNIMED 20%', 'UNIMED INTERCAMBIO', 'MEDPREV']
-        },
-        'Consulta Cardiológica': {
-          permite_online: false,
-          mensagem: 'Consultas devem ser agendadas por ligação' // Telefone será injetado dinamicamente
-        }
+        
+        // Não buscar outros períodos da mesma data
+        break;
       }
     }
   }
+  
+  return proximasDatas;
+}
+
+// Regras de negócio FALLBACK genérico (usado apenas se não houver regras no banco)
+// As regras específicas de cada clínica (incluindo IPADO) estão na tabela business_rules
+const BUSINESS_RULES = {
+  medicos: {} as Record<string, any>
 };
 
 /**
@@ -4875,168 +4878,6 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
     }
     console.log(`✅ Regras encontradas para ${(regras as any)?.nome || medico.nome}`);
 
-    // 🆕 FUNÇÃO AUXILIAR: Buscar próximas datas disponíveis
-    async function buscarProximasDatasDisponiveis(
-      supabase: any,
-      medico: any,
-      servicoKey: string,
-      servico: any,
-      dataInicial: string,
-      clienteId: string,
-      periodoPreferido?: string,
-      diasBusca: number = 60,
-      maxResultados: number = 5
-    ): Promise<Array<{
-      data: string;
-      dia_semana: string;
-      vagas_disponiveis: number;
-      total_vagas: number;
-      periodo?: string;
-    }>> {
-      
-      const proximasDatas = [];
-      const diasNomes = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-      
-      console.log(`🔍 Buscando próximas datas disponíveis para ${medico.nome} - ${servicoKey}`);
-      
-      for (let dias = 1; dias <= diasBusca; dias++) {
-        const dataFutura = new Date(dataInicial + 'T00:00:00');
-        dataFutura.setDate(dataFutura.getDate() + dias);
-        const dataFuturaStr = dataFutura.toISOString().split('T')[0];
-        const diaSemana = dataFutura.getDay();
-        
-        // Pular finais de semana
-        if (diaSemana === 0 || diaSemana === 6) {
-          continue;
-        }
-        
-        // Verificar se a data está bloqueada
-        const { data: bloqueios } = await supabase
-          .from('bloqueios_agenda')
-          .select('id')
-          .eq('medico_id', medico.id)
-          .lte('data_inicio', dataFuturaStr)
-          .gte('data_fim', dataFuturaStr)
-          .eq('status', 'ativo')
-          .eq('cliente_id', clienteId);
-        
-        if (bloqueios && bloqueios.length > 0) {
-          console.log(`⏭️ ${dataFuturaStr} bloqueada, pulando...`);
-          continue;
-        }
-        
-        // 🔧 CORREÇÃO: Verificar se serviço tem periodos definidos
-        const servicoTemPeriodos = servico.periodos && Object.keys(servico.periodos).length > 0;
-        const compartilhaLimiteFunc = servico.compartilha_limite_com;
-        
-        // Se não tem periodos mas compartilha limite (ex: ligadura_hemorroidas)
-        if (!servicoTemPeriodos && compartilhaLimiteFunc) {
-          console.log(`🔄 [buscarProximasDatas] ${servicoKey} sem periodos, usa limite compartilhado`);
-          
-          // Para serviços que compartilham limite, verificar dias permitidos
-          if (servico.dias && !servico.dias.includes(diaSemana)) {
-            continue;
-          }
-          
-          // Calcular vagas disponíveis usando função de limites compartilhados
-          // Nota: aqui usamos uma lógica simplificada para não duplicar muito código
-          const vagasDisponiveis = 1; // Simplificado - retorna pelo menos 1 vaga se o dia é permitido
-          
-          if (vagasDisponiveis > 0) {
-            proximasDatas.push({
-              data: dataFuturaStr,
-              dia_semana: diasNomes[diaSemana],
-              vagas_disponiveis: vagasDisponiveis,
-              total_vagas: servico.limite_proprio || 1,
-              periodo: 'Horário Marcado'
-            });
-            
-            if (proximasDatas.length >= maxResultados) {
-              return proximasDatas;
-            }
-          }
-          continue;
-        }
-        
-        // Se não tem periodos e não compartilha limite, pular
-        if (!servicoTemPeriodos) {
-          console.warn(`⚠️ [buscarProximasDatas] ${servicoKey} sem periodos e sem limite compartilhado`);
-          continue;
-        }
-        
-        // Verificar disponibilidade por período (loop normal)
-        for (const [periodo, config] of Object.entries(servico.periodos)) {
-          // Filtrar por período preferido
-          if (periodoPreferido === 'tarde' && periodo === 'manha') continue;
-          if (periodoPreferido === 'manha' && periodo === 'tarde') continue;
-          
-          // Verificar dias específicos do período
-          if ((config as any).dias_especificos && !(config as any).dias_especificos.includes(diaSemana)) {
-            continue;
-          }
-          
-      // Buscar agendamentos existentes
-      const { data: agendamentos } = await supabase
-        .from('agendamentos')
-        .select('hora_agendamento')
-        .eq('medico_id', medico.id)
-        .eq('data_agendamento', dataFuturaStr)
-        .eq('cliente_id', clienteId)
-        .is('excluido_em', null)
-        .in('status', ['agendado', 'confirmado']);
-      
-      // Classificar agendamentos no período correto
-      let vagasOcupadas = 0;
-      if (agendamentos && agendamentos.length > 0) {
-        // 🆕 Usar contagem_inicio/contagem_fim se configurados, senão hora_inicio/hora_fim
-        const horaInicioContagem = (config as any).contagem_inicio || (config as any).hora_inicio;
-        const horaFimContagem = (config as any).contagem_fim || (config as any).hora_fim;
-        
-        // 🛡️ Verificar se os campos existem antes de processar
-        if (horaInicioContagem && horaFimContagem) {
-          const [horaInicio] = horaInicioContagem.split(':').map(Number);
-          const [horaFim] = horaFimContagem.split(':').map(Number);
-          
-          console.log(`🔢 [CONTAGEM DISPONIBILIDADE] ${servicoKey}/${periodo}: contagem ${horaInicioContagem}-${horaFimContagem}`);
-          
-          vagasOcupadas = agendamentos.filter(ag => {
-            const [horaAg] = ag.hora_agendamento.split(':').map(Number);
-            return horaAg >= horaInicio && horaAg < horaFim;
-          }).length;
-        } else {
-          // Se não tem hora_inicio/hora_fim configurado, contar todos os agendamentos do dia
-          console.warn(`⚠️ hora_inicio ou hora_fim não configurados para ${servicoKey} - ${periodo}`);
-          vagasOcupadas = agendamentos.length;
-        }
-      }
-          
-          const vagasDisponiveis = (config as any).limite - vagasOcupadas;
-          
-          if (vagasDisponiveis > 0) {
-            const periodoNome = periodo === 'manha' ? 'Manhã' : 'Tarde';
-            console.log(`✅ ${dataFuturaStr} (${diasNomes[diaSemana]}) - ${vagasDisponiveis} vaga(s) - ${periodoNome}`);
-            
-            proximasDatas.push({
-              data: dataFuturaStr,
-              dia_semana: diasNomes[diaSemana],
-              vagas_disponiveis: vagasDisponiveis,
-              total_vagas: (config as any).limite,
-              periodo: periodoNome
-            });
-            
-            if (proximasDatas.length >= maxResultados) {
-              return proximasDatas;
-            }
-            
-            // Não buscar outros períodos da mesma data
-            break;
-          }
-        }
-      }
-      
-      return proximasDatas;
-    }
-
     // Buscar serviço nas regras com matching inteligente MELHORADO (só se ainda não encontrado)
     if (!servicoKey) {
       const servicoKeyMelhorado = Object.keys(regras.servicos || {}).find(s => {
@@ -5284,9 +5125,10 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           const servicoConfigComAtendId = { ...servico, atendimento_id: atendimentoId };
           const vagasDisponiveis = await calcularVagasDisponiveisComLimites(
             supabase,
-            medico.id,
             clienteId,
+            medico.id,
             dataFormatada,
+            servicoKey,
             servicoConfigComAtendId,
             regras
           );
@@ -5651,9 +5493,10 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       const servicoConfigFluxo3 = { ...servico, atendimento_id: atendimentoIdFluxo3 };
       const vagasDisponiveisFluxo3 = await calcularVagasDisponiveisComLimites(
         supabase,
-        medico.id,
         clienteId,
+        medico.id,
         data_consulta,
+        servicoKey,
         servicoConfigFluxo3,
         regras
       );
