@@ -683,33 +683,15 @@ async function calcularVagasDisponiveisComLimites(
 }
 
 // 🚨 VALORES HARDCODED (fallback quando banco não disponível)
-const FALLBACK_MINIMUM_BOOKING_DATE = '2026-01-01';
 const FALLBACK_PHONE = ''; // Vazio para forçar uso de mensagem genérica
 const FALLBACK_DIAS_BUSCA_INICIAL = 14;
 const FALLBACK_DIAS_BUSCA_EXPANDIDA = 45;
 
 /**
- * Retorna data mínima de agendamento (dinâmica ou fallback)
+ * Retorna data mínima de agendamento (null = sem restrição)
  */
-function getMinimumBookingDate(config: DynamicConfig | null): string {
-  return config?.clinic_info?.data_minima_agendamento || FALLBACK_MINIMUM_BOOKING_DATE;
-}
-
-/**
- * Retorna texto formatado da data mínima para exibição ao usuário
- * Ex: "dezembro/2025" ou "janeiro/2026"
- */
-function getMinDateDisplayText(config: DynamicConfig | null): string {
-  const minDate = getMinimumBookingDate(config);
-  const [year, month] = minDate.split('-');
-  
-  const meses: Record<string, string> = {
-    '01': 'janeiro', '02': 'fevereiro', '03': 'março', '04': 'abril',
-    '05': 'maio', '06': 'junho', '07': 'julho', '08': 'agosto',
-    '09': 'setembro', '10': 'outubro', '11': 'novembro', '12': 'dezembro'
-  };
-  
-  return `${meses[month] || month}/${year}`;
+function getMinimumBookingDate(config: DynamicConfig | null): string | null {
+  return config?.clinic_info?.data_minima_agendamento || null;
 }
 
 /**
@@ -2106,16 +2088,6 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
               const servicoLocal = regras.servicos[servicoKeyValidacao];
               console.log(`🔍 Validando serviço: ${servicoKeyValidacao}`);
               
-              // ⚠️ MIGRAÇÃO: Bloquear agendamentos antes da data mínima
-              const minBookingDate = getMinimumBookingDate(config);
-              if (data_consulta && data_consulta < minBookingDate) {
-                console.log(`🚫 Tentativa de agendar antes da data mínima: ${data_consulta}`);
-              return businessErrorResponse({
-                codigo_erro: 'DATA_BLOQUEADA',
-                mensagem_usuario: getMigrationBlockMessage(config, medico_id, medico_nome),
-                detalhes: { data_solicitada: data_consulta, data_minima: minBookingDate }
-              });
-              }
               
               // 2.1 Verificar se permite agendamento online (multi-nível: serviço, raiz, config nested)
               const permiteOnline = 
@@ -2334,12 +2306,6 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
                             continue;
                           }
                           
-                          // Verificar se está dentro do período permitido
-                          const minDate = getMinimumBookingDate(config);
-                          if (dataFuturaStr < minDate) {
-                            console.log(`⏭️  Pulando ${dataFuturaStr} (antes da data mínima ${minDate})`);
-                            continue;
-                          }
                           
                           // ✅ Buscar agendamentos do período específico (incluindo recentes)
                           const cincMinutosAtras = new Date(Date.now() - 5 * 60 * 1000).toISOString();
@@ -3385,16 +3351,14 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string, c
       return errorResponse(`Erro ao buscar paciente: ${pacienteError.message}`);
     }
 
-    // Se não encontrou NENHUM paciente com esses dados, é caso de migração
+    // Se não encontrou NENHUM paciente com esses dados
     if (!pacientesEncontrados || pacientesEncontrados.length === 0) {
-      console.log('❌ Paciente não encontrado no sistema novo - possível caso de migração');
+      console.log('❌ Paciente não encontrado no sistema');
       const clinicPhone = getClinicPhone(config);
-      const minDateText = getMinDateDisplayText(config);
       return successResponse({
         encontrado: false,
         consultas: [],
-        message: `Não encontrei agendamentos no sistema novo. Se sua consulta é anterior a ${minDateText}, os dados estão no sistema anterior. Entre em contato: ${clinicPhone}`,
-        observacao: `Sistema em migração - dados anteriores a ${minDateText} não disponíveis`,
+        message: `Não encontrei agendamentos para este paciente. Para mais informações, entre em contato: ${clinicPhone}`,
         contato: clinicPhone,
         total: 0
       });
@@ -3659,16 +3623,6 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
       });
     }
 
-    // ⚠️ MIGRAÇÃO: Bloquear remarcações antes da data mínima
-    const minBookingDate = getMinimumBookingDate(config);
-    if (nova_data < minBookingDate) {
-      console.log(`🚫 Tentativa de remarcar para antes da data mínima: ${nova_data}`);
-    return businessErrorResponse({
-        codigo_erro: 'DATA_BLOQUEADA',
-        mensagem_usuario: getMigrationBlockMessage(config, agendamento.medico_id, agendamento.medicos?.nome),
-        detalhes: { data_solicitada: nova_data, data_minima: minBookingDate }
-      });
-    }
 
     // Verificar disponibilidade do novo horário COM filtro de cliente
     console.log(`🔍 Verificando disponibilidade em ${nova_data} às ${nova_hora}...`);
@@ -4172,18 +4126,6 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       const dataConsulta = new Date(data_consulta + 'T00:00:00');
       const hoje = new Date(dataAtual + 'T00:00:00');
       
-      // ⚠️ MIGRAÇÃO: Ajustar data mínima e continuar busca
-      const minBookingDate = getMinimumBookingDate(config);
-      if (data_consulta < minBookingDate) {
-        console.log(`🚫 Data solicitada (${data_consulta}) é anterior à data mínima (${minBookingDate})`);
-        console.log(`📅 Ajustando para buscar a partir de: ${minBookingDate}`);
-        
-        // Salvar mensagem especial mas continuar o fluxo para buscar datas disponíveis
-        mensagemEspecial = getMigrationBlockMessage(config, medico_id, medico_nome);
-        
-        // Ajustar a data para iniciar a busca a partir da data mínima
-        data_consulta = minBookingDate;
-      }
       
       // Calcular diferença em dias entre data solicitada e hoje
       const diferencaDias = Math.floor((hoje.getTime() - dataConsulta.getTime()) / (1000 * 60 * 60 * 24));
@@ -4848,8 +4790,6 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         tipo_atendimento: 'ordem_chegada',
         proximas_datas: proximasDatas,
         data_solicitada: data_consulta_original || data_consulta,
-        data_minima: mensagemEspecial ? getMinimumBookingDate(config) : undefined,
-        observacao: mensagemEspecial ? `Sistema em migração - sugestões a partir de ${getMinDateDisplayText(config)}` : undefined,
         contexto: {
           medico_id: medico.id,
           medico_nome: medico.nome,
@@ -6490,7 +6430,7 @@ async function handleClinicInfo(supabase: any, body: any, clienteId: string, con
         telefone: config.clinic_info.telefone,
         whatsapp: config.clinic_info.whatsapp,
         endereco: config.clinic_info.endereco,
-        data_minima_agendamento: config.clinic_info.data_minima_agendamento || getMinimumBookingDate(config),
+        data_minima_agendamento: config.clinic_info.data_minima_agendamento || null,
         dias_busca_inicial: config.clinic_info.dias_busca_inicial || getDiasBuscaInicial(config),
         dias_busca_expandida: config.clinic_info.dias_busca_expandida || getDiasBuscaExpandida(config)
       };
@@ -6523,7 +6463,7 @@ async function handleClinicInfo(supabase: any, body: any, clienteId: string, con
           id: clienteId,
           nome: 'Clínica',
           telefone: getClinicPhone(config),
-          data_minima_agendamento: getMinimumBookingDate(config),
+          data_minima_agendamento: null,
           dias_busca_inicial: getDiasBuscaInicial(config),
           dias_busca_expandida: getDiasBuscaExpandida(config)
         },
@@ -6538,7 +6478,7 @@ async function handleClinicInfo(supabase: any, body: any, clienteId: string, con
       telefone: cliente?.telefone,
       whatsapp: cliente?.whatsapp,
       endereco: cliente?.endereco,
-      data_minima_agendamento: getMinimumBookingDate(config),
+      data_minima_agendamento: null,
       dias_busca_inicial: getDiasBuscaInicial(config),
       dias_busca_expandida: getDiasBuscaExpandida(config)
     };
