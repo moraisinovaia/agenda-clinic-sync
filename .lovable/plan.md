@@ -1,81 +1,103 @@
 
-
-## Corrigir filtro fuzzy de celular no check-patient
+## Correcao: check-patient mostrando hora exata em vez do periodo para ordem de chegada
 
 ### Problema
-O filtro fuzzy de celular no endpoint `/check-patient` está descartando pacientes que foram encontrados por nome + data de nascimento, apenas porque o numero de WhatsApp usado e diferente do cadastrado. Isso causa falsos negativos -- o sistema diz "sem consultas futuras" mesmo quando existem agendamentos.
+O endpoint `/check-patient` retorna `"hora_agendamento": "08:05:00"` e mensagem `"Consulta agendada para 03/03/2026 as 08:05:00"` para Dr. Hermann Madeiro, que usa **ordem de chegada**. Isso confunde o paciente, que pensa ter hora marcada.
 
-### Caso concreto
-- Paciente: GABRIELA LIMA DE MORAIS (03/04/2001)
-- Celular no banco: (87) 9913-1191 (ultimos 4: 1191)
-- WhatsApp de origem: 558792017974 (ultimos 4: 7974)
-- Diferenca: 6783 (muito acima da tolerancia de 5)
-- Resultado: paciente descartada, agendamento de 03/03/2026 nao apareceu
+### Causa raiz
+A funcao `formatarConsultaComContexto` (linha 1256) tenta encontrar o servico do agendamento nas regras de negocio do medico (linha 1270-1273). O atendimento e "Retorno", mas nas business_rules do Dr. Hermann nao existe um servico chamado "Retorno" -- so existem "Consulta Completa Eletiva", "Curva Tensional", etc.
+
+Quando o servico nao e encontrado, a funcao cai no fallback (linha 1276) que simplesmente mostra a hora exata:
+```
+mensagem: "Consulta agendada para 03/03/2026 as 08:05:00"
+```
 
 ### Solucao
-Mudar a logica do filtro fuzzy de celular para que ele **nao elimine** pacientes quando ja houve match por **nome + data de nascimento**. O celular passa a ser usado apenas como criterio de **desempate/ranking**, nao como filtro eliminatorio.
+Quando o servico especifico nao for encontrado nas regras, verificar se o medico tem `tipo_agendamento: ordem_chegada` no nivel geral. Se sim, usar o periodo correspondente ao horario do agendamento (manha/tarde) de **qualquer** servico configurado como fallback, em vez de mostrar a hora exata.
 
 ### Mudancas no codigo
 
-**Arquivo:** `supabase/functions/llm-agent-api/index.ts` (linhas ~3369-3406)
+**Arquivo:** `supabase/functions/llm-agent-api/index.ts`
 
-Logica atual:
+**Funcao `formatarConsultaComContexto`** (linhas ~1275-1297):
+
+Logica atual nos fallbacks:
 ```
-Se celular fornecido E celular >= 10 digitos:
-  Filtrar pacientes removendo os que tem diff > 5 nos ultimos 4 digitos
-  → Pode zerar a lista mesmo com match de nome+nascimento
+Se servicoKey nao encontrado → mostra hora exata
+Se periodo nao encontrado → mostra hora exata
 ```
 
 Nova logica:
 ```
-Se celular fornecido E celular >= 10 digitos:
-  SE tem match por nome + nascimento (nome E data_nascimento fornecidos):
-    → NAO eliminar ninguem pelo celular
-    → Apenas ordenar: pacientes com celular mais proximo ficam primeiro
-    → Log: "Celular diferente mas mantido por match nome+nascimento"
-  SENAO (busca apenas por celular ou sem nome/nascimento):
-    → Manter o filtro fuzzy atual (diff <= 5)
+Se servicoKey nao encontrado:
+  1. Verificar se regras.tipo_agendamento === 'ordem_chegada'
+  2. Se sim: buscar primeiro servico que tenha periodos configurados
+  3. Classificar periodo pelo horario do agendamento
+  4. Montar mensagem com distribuicao_fichas e atendimento_inicio
+  5. Se nao encontrar nenhum periodo: fallback para hora exata
+
+Se periodo nao encontrado:
+  (mesma logica acima como fallback)
 ```
 
 ### Detalhes da implementacao
 
-1. Verificar se a busca original incluiu `pacienteNomeNormalizado` E `dataNascimento` (ambos presentes)
-2. Se sim: o filtro fuzzy de celular vira apenas um **sort** (ordenacao), nao um **filter** (eliminacao)
-3. Se nao: manter comportamento atual para evitar falsos positivos em buscas apenas por celular
-4. Adicionar log explicativo quando celular difere mas paciente e mantido
+No bloco que hoje retorna o fallback simples (linha 1275-1281), substituir por:
+
+```
+if (!servicoKey) {
+  // Fallback: se medico e ordem_chegada, tentar usar periodos de qualquer servico
+  if (regras.tipo_agendamento === 'ordem_chegada') {
+    // Buscar primeiro servico com periodos configurados
+    const primeiroServicoComPeriodos = Object.values(regras.servicos)
+      .find(s => s.periodos && Object.keys(s.periodos).length > 0);
+    
+    if (primeiroServicoComPeriodos) {
+      const periodo = classificarPeriodoAgendamento(
+        agendamento.hora_agendamento, 
+        primeiroServicoComPeriodos.periodos
+      );
+      if (periodo) {
+        const periodoConfig = primeiroServicoComPeriodos.periodos[periodo];
+        const mensagem = montarMensagemConsulta(agendamento, regras, periodoConfig, true);
+        return {
+          ...agendamento,
+          periodo: periodoConfig.distribuicao_fichas || ...,
+          atendimento_inicio: periodoConfig.atendimento_inicio,
+          tipo_agendamento: 'ordem_chegada',
+          mensagem
+        };
+      }
+    }
+  }
+  // Fallback final: hora exata (para hora_marcada ou sem config)
+  return { ...agendamento, horario_formatado: ..., mensagem: ... };
+}
+```
 
 ### Resultado esperado
 
 Antes:
 ```json
 {
-  "encontrado": true,
-  "paciente_cadastrado": true,
-  "consultas": {
-    "message": "nao possui consultas futuras agendadas",
-    "total": 0
-  }
+  "hora_agendamento": "08:05:00",
+  "horario_formatado": "08:05:00",
+  "mensagem": "Consulta agendada para 03/03/2026 as 08:05:00."
 }
 ```
 
 Depois:
 ```json
 {
-  "encontrado": true,
-  "paciente_cadastrado": true,
-  "consultas": {
-    "total": 1,
-    "futuras": [{
-      "agendamento_id": "e475ec15-...",
-      "data": "2026-03-03",
-      "hora": "08:05",
-      "status": "agendado"
-    }]
-  }
+  "hora_agendamento": "08:05:00",
+  "periodo": "a partir das 08:00",
+  "atendimento_inicio": "08:00",
+  "tipo_agendamento": "ordem_chegada",
+  "mensagem": "O(a) paciente GABRIELA LIMA DE MORAIS tem uma consulta agendada para o dia 03/03/2026 no horario de a partir das 08:00. Dr. Hermann Madeiro comeca a atender as 08:00, por ordem de chegada."
 }
 ```
 
 ### Impacto
-- Pacientes que mandam mensagem de numeros diferentes do cadastrado serao encontrados corretamente
-- Buscas apenas por celular (sem nome/nascimento) continuam com filtro rigoroso
+- Todos os atendimentos de medicos com ordem_chegada mostrarao o periodo correto, mesmo que o tipo de atendimento especifico nao esteja listado nas business_rules
+- Medicos com hora_marcada continuam mostrando a hora exata normalmente
 - Nenhuma mudanca de banco de dados necessaria
