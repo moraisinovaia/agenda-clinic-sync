@@ -1231,10 +1231,18 @@ function montarMensagemConsulta(
   let mensagem = `O(a) paciente ${agendamento.paciente_nome} tem uma consulta agendada para o dia ${dataFormatada}`;
   
   if (isOrdemChegada) {
-    mensagem += ` no horário de ${periodo}`;
+    // Horário de chegada para fazer a ficha (contagem_inicio)
+    const horarioFicha = periodoConfig.contagem_inicio || periodoConfig.inicio;
+    if (horarioFicha) {
+      mensagem += `. Chegar a partir das ${horarioFicha} para fazer a ficha`;
+    } else {
+      mensagem += ` no horário de ${periodo}`;
+    }
     
+    // Nome do médico com fallback
+    const nomeMedico = agendamento.medico_nome || regras.nome || 'O médico';
     if (periodoConfig.atendimento_inicio) {
-      mensagem += `. ${regras.nome} começa a atender às ${periodoConfig.atendimento_inicio}, por ordem de chegada`;
+      mensagem += `. ${nomeMedico} começa a atender às ${periodoConfig.atendimento_inicio}, por ordem de chegada`;
     } else {
       mensagem += `, por ordem de chegada`;
     }
