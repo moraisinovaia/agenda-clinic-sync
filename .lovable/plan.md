@@ -1,103 +1,74 @@
 
-## Correcao: check-patient mostrando hora exata em vez do periodo para ordem de chegada
+
+## Correção: Incluir horário de chegada para fazer a ficha na mensagem
 
 ### Problema
-O endpoint `/check-patient` retorna `"hora_agendamento": "08:05:00"` e mensagem `"Consulta agendada para 03/03/2026 as 08:05:00"` para Dr. Hermann Madeiro, que usa **ordem de chegada**. Isso confunde o paciente, que pensa ter hora marcada.
-
-### Causa raiz
-A funcao `formatarConsultaComContexto` (linha 1256) tenta encontrar o servico do agendamento nas regras de negocio do medico (linha 1270-1273). O atendimento e "Retorno", mas nas business_rules do Dr. Hermann nao existe um servico chamado "Retorno" -- so existem "Consulta Completa Eletiva", "Curva Tensional", etc.
-
-Quando o servico nao e encontrado, a funcao cai no fallback (linha 1276) que simplesmente mostra a hora exata:
+A mensagem atual do check-patient para ordem de chegada diz apenas:
 ```
-mensagem: "Consulta agendada para 03/03/2026 as 08:05:00"
+"...no horário de a partir das 08:00. undefined começa a atender às 08:00, por ordem de chegada."
 ```
 
-### Solucao
-Quando o servico especifico nao for encontrado nas regras, verificar se o medico tem `tipo_agendamento: ordem_chegada` no nivel geral. Se sim, usar o periodo correspondente ao horario do agendamento (manha/tarde) de **qualquer** servico configurado como fallback, em vez de mostrar a hora exata.
+Faltam duas coisas:
+1. O horário que o paciente deve chegar para fazer a ficha (`contagem_inicio`, ex: 07:00)
+2. O nome do médico aparece como "undefined" (bug do `regras.nome`)
 
-### Mudancas no codigo
+### Dados disponíveis no config do Dr. Hermann (manhã)
+- `contagem_inicio`: **07:00** (horário para chegar e fazer a ficha)
+- `distribuicao_fichas`: **a partir das 08:00** (distribuição de fichas)
+- `atendimento_inicio`: **08:00** (médico começa a atender)
 
-**Arquivo:** `supabase/functions/llm-agent-api/index.ts`
+### Correção na função `montarMensagemConsulta`
 
-**Funcao `formatarConsultaComContexto`** (linhas ~1275-1297):
+**Arquivo:** `supabase/functions/llm-agent-api/index.ts` (linhas 1221-1250)
 
-Logica atual nos fallbacks:
+Duas mudanças:
+
+1. **Incluir `contagem_inicio` na mensagem** como horário de chegada para fazer a ficha
+2. **Corrigir "undefined"** usando `agendamento.medico_nome` como fallback para `regras.nome`
+
+Mensagem atual (ordem de chegada):
 ```
-Se servicoKey nao encontrado → mostra hora exata
-Se periodo nao encontrado → mostra hora exata
-```
-
-Nova logica:
-```
-Se servicoKey nao encontrado:
-  1. Verificar se regras.tipo_agendamento === 'ordem_chegada'
-  2. Se sim: buscar primeiro servico que tenha periodos configurados
-  3. Classificar periodo pelo horario do agendamento
-  4. Montar mensagem com distribuicao_fichas e atendimento_inicio
-  5. Se nao encontrar nenhum periodo: fallback para hora exata
-
-Se periodo nao encontrado:
-  (mesma logica acima como fallback)
+O(a) paciente GABRIELA... para o dia 03/03/2026 no horário de a partir das 08:00. undefined começa a atender às 08:00, por ordem de chegada.
 ```
 
-### Detalhes da implementacao
-
-No bloco que hoje retorna o fallback simples (linha 1275-1281), substituir por:
-
+Nova mensagem:
 ```
-if (!servicoKey) {
-  // Fallback: se medico e ordem_chegada, tentar usar periodos de qualquer servico
-  if (regras.tipo_agendamento === 'ordem_chegada') {
-    // Buscar primeiro servico com periodos configurados
-    const primeiroServicoComPeriodos = Object.values(regras.servicos)
-      .find(s => s.periodos && Object.keys(s.periodos).length > 0);
-    
-    if (primeiroServicoComPeriodos) {
-      const periodo = classificarPeriodoAgendamento(
-        agendamento.hora_agendamento, 
-        primeiroServicoComPeriodos.periodos
-      );
-      if (periodo) {
-        const periodoConfig = primeiroServicoComPeriodos.periodos[periodo];
-        const mensagem = montarMensagemConsulta(agendamento, regras, periodoConfig, true);
-        return {
-          ...agendamento,
-          periodo: periodoConfig.distribuicao_fichas || ...,
-          atendimento_inicio: periodoConfig.atendimento_inicio,
-          tipo_agendamento: 'ordem_chegada',
-          mensagem
-        };
-      }
+O(a) paciente GABRIELA... para o dia 03/03/2026. Chegar a partir das 07:00 para fazer a ficha. Dr. Hermann Madeiro começa a atender às 08:00, por ordem de chegada.
+```
+
+### Código
+
+```typescript
+if (isOrdemChegada) {
+    // Horário de chegada para ficha (contagem_inicio)
+    const horarioFicha = periodoConfig.contagem_inicio || periodoConfig.inicio;
+    if (horarioFicha) {
+      mensagem += `. Chegar a partir das ${horarioFicha} para fazer a ficha`;
+    } else {
+      mensagem += ` no horário de ${periodo}`;
     }
-  }
-  // Fallback final: hora exata (para hora_marcada ou sem config)
-  return { ...agendamento, horario_formatado: ..., mensagem: ... };
+    
+    // Nome do médico com fallback
+    const nomeMedico = agendamento.medico_nome || regras.nome || 'O médico';
+    if (periodoConfig.atendimento_inicio) {
+      mensagem += `. ${nomeMedico} começa a atender às ${periodoConfig.atendimento_inicio}, por ordem de chegada`;
+    } else {
+      mensagem += `, por ordem de chegada`;
+    }
 }
 ```
 
 ### Resultado esperado
 
-Antes:
 ```json
 {
-  "hora_agendamento": "08:05:00",
-  "horario_formatado": "08:05:00",
-  "mensagem": "Consulta agendada para 03/03/2026 as 08:05:00."
-}
-```
-
-Depois:
-```json
-{
-  "hora_agendamento": "08:05:00",
-  "periodo": "a partir das 08:00",
-  "atendimento_inicio": "08:00",
-  "tipo_agendamento": "ordem_chegada",
-  "mensagem": "O(a) paciente GABRIELA LIMA DE MORAIS tem uma consulta agendada para o dia 03/03/2026 no horario de a partir das 08:00. Dr. Hermann Madeiro comeca a atender as 08:00, por ordem de chegada."
+  "mensagem": "O(a) paciente GABRIELA LIMA DE MORAIS tem uma consulta agendada para o dia 03/03/2026. Chegar a partir das 07:00 para fazer a ficha. Dr. Hermann Madeiro começa a atender às 08:00, por ordem de chegada."
 }
 ```
 
 ### Impacto
-- Todos os atendimentos de medicos com ordem_chegada mostrarao o periodo correto, mesmo que o tipo de atendimento especifico nao esteja listado nas business_rules
-- Medicos com hora_marcada continuam mostrando a hora exata normalmente
-- Nenhuma mudanca de banco de dados necessaria
+- Corrige o "undefined" no nome do médico
+- Inclui horário de chegada para ficha usando `contagem_inicio` do período
+- Aplica-se a todos os endpoints que usam `montarMensagemConsulta` (check-patient, schedule, confirm, etc.)
+- Sem mudança de banco de dados
+
