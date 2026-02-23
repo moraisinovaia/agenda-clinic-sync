@@ -1273,6 +1273,29 @@ function formatarConsultaComContexto(agendamento: any, config: DynamicConfig | n
   });
   
   if (!servicoKey) {
+    // Fallback: se médico é ordem_chegada, tentar usar períodos de qualquer serviço
+    if (regras.tipo_agendamento === 'ordem_chegada') {
+      const primeiroServicoComPeriodos = Object.values(regras.servicos)
+        .find((s: any) => s.periodos && Object.keys(s.periodos).length > 0);
+      
+      if (primeiroServicoComPeriodos) {
+        const periodoFallback = classificarPeriodoAgendamento(
+          agendamento.hora_agendamento, 
+          (primeiroServicoComPeriodos as any).periodos
+        );
+        if (periodoFallback) {
+          const periodoConfigFallback = (primeiroServicoComPeriodos as any).periodos[periodoFallback];
+          const mensagemFallback = montarMensagemConsulta(agendamento, regras, periodoConfigFallback, true);
+          return {
+            ...agendamento,
+            periodo: periodoConfigFallback.distribuicao_fichas || `${periodoConfigFallback.inicio} às ${periodoConfigFallback.fim}`,
+            atendimento_inicio: periodoConfigFallback.atendimento_inicio,
+            tipo_agendamento: 'ordem_chegada',
+            mensagem: mensagemFallback
+          };
+        }
+      }
+    }
     return {
       ...agendamento,
       horario_formatado: agendamento.hora_agendamento,
@@ -1289,6 +1312,28 @@ function formatarConsultaComContexto(agendamento: any, config: DynamicConfig | n
   );
   
   if (!periodo) {
+    // Mesmo fallback para período não encontrado em ordem_chegada
+    if (regras.tipo_agendamento === 'ordem_chegada' || servico.tipo === 'ordem_chegada') {
+      const primeiroServicoComPeriodos2 = Object.values(regras.servicos)
+        .find((s: any) => s.periodos && Object.keys(s.periodos).length > 0);
+      if (primeiroServicoComPeriodos2) {
+        const periodoFallback2 = classificarPeriodoAgendamento(
+          agendamento.hora_agendamento,
+          (primeiroServicoComPeriodos2 as any).periodos
+        );
+        if (periodoFallback2) {
+          const pc2 = (primeiroServicoComPeriodos2 as any).periodos[periodoFallback2];
+          const msg2 = montarMensagemConsulta(agendamento, regras, pc2, true);
+          return {
+            ...agendamento,
+            periodo: pc2.distribuicao_fichas || `${pc2.inicio} às ${pc2.fim}`,
+            atendimento_inicio: pc2.atendimento_inicio,
+            tipo_agendamento: 'ordem_chegada',
+            mensagem: msg2
+          };
+        }
+      }
+    }
     return {
       ...agendamento,
       horario_formatado: agendamento.hora_agendamento,
