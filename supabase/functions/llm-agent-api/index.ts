@@ -3367,40 +3367,54 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string, c
     console.log(`🔍 Encontrados ${pacientesEncontrados.length} registros de pacientes antes do filtro de celular`);
 
     // 🎯 FILTRO FUZZY DE CELULAR (em memória, após busca)
-    // Se celular foi fornecido, aplicar tolerância de 1-2 dígitos nos últimos dígitos
+    // Se celular foi fornecido, aplicar tolerância nos últimos dígitos
+    // IMPORTANTE: Se houve match por nome + nascimento, NÃO eliminar — apenas ordenar
     let pacientesFiltrados = pacientesEncontrados;
     
     if (celularNormalizado && celularNormalizado.length >= 10) {
-      console.log('🔍 Aplicando filtro fuzzy de celular com tolerância nos últimos dígitos...');
-      
-      // Extrair últimos 4 dígitos do celular fornecido
       const sufixoFornecido = celularNormalizado.slice(-4);
+      const temMatchNomeNascimento = !!(pacienteNomeNormalizado && dataNascimentoNormalizada);
       
-      pacientesFiltrados = pacientesEncontrados.filter((p: any) => {
-        if (!p.celular) return true; // Se não tem celular, mantém no resultado
+      if (temMatchNomeNascimento) {
+        // Match por nome + nascimento: celular é apenas critério de ORDENAÇÃO, não eliminação
+        console.log('🔍 Match por nome+nascimento detectado — celular usado apenas para ordenação (não elimina)');
         
-        // Normalizar celular do paciente
-        const celularPaciente = normalizarTelefone(p.celular);
-        if (!celularPaciente || celularPaciente.length < 10) return true;
+        pacientesFiltrados = [...pacientesEncontrados].sort((a: any, b: any) => {
+          const celA = normalizarTelefone(a.celular);
+          const celB = normalizarTelefone(b.celular);
+          const diffA = celA && celA.length >= 4 ? Math.abs(parseInt(celA.slice(-4)) - parseInt(sufixoFornecido)) : 9999;
+          const diffB = celB && celB.length >= 4 ? Math.abs(parseInt(celB.slice(-4)) - parseInt(sufixoFornecido)) : 9999;
+          return diffA - diffB;
+        });
         
-        // Extrair últimos 4 dígitos do celular do paciente
-        const sufixoPaciente = celularPaciente.slice(-4);
+        // Log informativo sobre diferenças de celular
+        pacientesFiltrados.forEach((p: any) => {
+          const celP = normalizarTelefone(p.celular);
+          if (celP && celP.length >= 4) {
+            const sufP = celP.slice(-4);
+            const diff = Math.abs(parseInt(sufP) - parseInt(sufixoFornecido));
+            if (diff > 5) {
+              console.log(`📱 Celular diferente mas MANTIDO por match nome+nascimento: ${sufP} vs ${sufixoFornecido} (diff=${diff}) - Paciente: ${p.nome_completo}`);
+            }
+          }
+        });
+      } else {
+        // Sem match nome+nascimento: manter filtro rigoroso original
+        console.log('🔍 Aplicando filtro fuzzy de celular RIGOROSO (sem match nome+nascimento)...');
         
-        // Calcular diferença entre os últimos 4 dígitos
-        const diff = Math.abs(parseInt(sufixoPaciente) - parseInt(sufixoFornecido));
-        
-        // Tolerância: aceitar diferença de até 5 nos últimos dígitos
-        // Ex: 1991 vs 1992 (diff=1) ✅ | 1991 vs 1995 (diff=4) ✅ | 1991 vs 1998 (diff=7) ❌
-        const tolerado = diff <= 5;
-        
-        if (!tolerado) {
-          console.log(`⚠️ Celular rejeitado por diferença: ${sufixoPaciente} vs ${sufixoFornecido} (diff=${diff})`);
-        } else if (diff > 0) {
-          console.log(`✅ Celular aceito com diferença tolerada: ${sufixoPaciente} vs ${sufixoFornecido} (diff=${diff})`);
-        }
-        
-        return tolerado;
-      });
+        pacientesFiltrados = pacientesEncontrados.filter((p: any) => {
+          if (!p.celular) return true;
+          const celularPaciente = normalizarTelefone(p.celular);
+          if (!celularPaciente || celularPaciente.length < 10) return true;
+          const sufixoPaciente = celularPaciente.slice(-4);
+          const diff = Math.abs(parseInt(sufixoPaciente) - parseInt(sufixoFornecido));
+          const tolerado = diff <= 5;
+          if (!tolerado) {
+            console.log(`⚠️ Celular rejeitado por diferença: ${sufixoPaciente} vs ${sufixoFornecido} (diff=${diff})`);
+          }
+          return tolerado;
+        });
+      }
       
       console.log(`🔍 Após filtro fuzzy: ${pacientesFiltrados.length} de ${pacientesEncontrados.length} pacientes mantidos`);
     }
