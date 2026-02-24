@@ -1,50 +1,162 @@
 
 
-## Correção: Busca de disponibilidade retornando "sem vagas" para serviços não cadastrados
+## Análise: Serviços por Médico - Clínica Olhos
 
-### Problema
+Comparação entre o que o documento especifica e o que está cadastrado nas `business_rules`.
 
-Quando o paciente pede disponibilidade para "Retorno" com Dr. Hermann Madeiro, a API retorna "sem vagas nos próximos 45 dias" mesmo havendo vagas. Isso acontece porque:
+---
 
-1. O serviço "Retorno" **não existe** nas `business_rules` do Dr. Hermann (só existem "Consulta Completa Eletiva", "Curva Tensional", etc.)
-2. A variável `servico` fica `null`
-3. Todo o loop de busca de períodos depende de `servico?.periodos?.manha` e `servico?.periodos?.tarde`, que são `null`
-4. Nenhum período é encontrado em nenhum dia, resultando em 0 datas
+### DR. JOÃO MIRANDA FILHO
 
-### Solução
+| Documento | Cadastrado | Status |
+|-----------|-----------|--------|
+| Teste do Olhinho (a partir de 20 dias) | Teste do Olhinho | OK |
+| Curvas de tensão (até 05) | Curva Tensional | OK |
+| Gonioscopia | Gonioscopia | OK |
+| YAG Laser | YAG Laser | OK |
+| Mapeamento de retina | Mapeamento de Retina | OK |
+| Acuidade visual para laudo de concurso | Consulta Acuidade Visual - Laudo Concurso | OK |
+| — | Cirurgia de Catarata | Extra (cirurgia, OK manter) |
+| — | Cirurgia de Pterígio | Extra (cirurgia, OK manter) |
+| — | Consulta Completa Eletiva | Extra (consulta padrão, OK) |
 
-Quando `servico` é `null` (serviço não encontrado nas regras) e o médico é `ordem_chegada`, usar os períodos de **qualquer serviço configurado** como fallback -- exatamente a mesma lógica já aplicada com sucesso no `formatarConsultaComContexto`.
+**Resultado: Completo.** Todos os serviços do documento estão cadastrados.
 
-### Mudanças no código
+---
 
-**Arquivo:** `supabase/functions/llm-agent-api/index.ts`
+### DR. MANOEL ALENCAR
 
-**Após a resolução do serviço (linha ~4415-4420):** Adicionar bloco de fallback:
+| Documento | Cadastrado | Status |
+|-----------|-----------|--------|
+| Teste do Olhinho (a partir de 20 dias) | Teste do Olhinho | OK |
+| Curvas de tensão (até 05 por turno) | Curva Tensional | OK |
+| Gonioscopia | Gonioscopia | OK |
+| Mapeamento de retina | Mapeamento de Retina | OK |
+| Acuidade visual para laudo de concurso | Consulta Acuidade Visual - Laudo Concurso | OK |
+| — | Cirurgia de Catarata | Extra (cirurgia, OK manter) |
+| — | Consulta Completa Eletiva | Extra (consulta padrão, OK) |
 
-```typescript
-// Se serviço não encontrado e médico é ordem_chegada, usar períodos de qualquer serviço
-if (!servico && regras?.tipo_agendamento === 'ordem_chegada' && regras?.servicos) {
-  const primeiroServicoComPeriodos = Object.values(regras.servicos)
-    .find((s: any) => s?.periodos && Object.keys(s.periodos).length > 0);
-  
-  if (primeiroServicoComPeriodos) {
-    servico = normalizarServicoPeriodos(primeiroServicoComPeriodos);
-    console.log(`🔄 [FALLBACK] Serviço "${atendimento_nome}" não encontrado. Usando períodos de outro serviço configurado para ordem de chegada.`);
-  }
-}
-```
+**Resultado: Completo.** Todos os serviços do documento estão cadastrados.
 
-Isso resolve o problema na raiz: tanto o loop principal (linhas 4642-4719) quanto o loop de retry (linhas 4782-4807) passarão a ter `servico.periodos` preenchido, encontrando as vagas corretamente.
+---
 
-### Impacto
+### DRA. CAMILA LEITE DE CARVALHO
 
-- Corrige a busca de disponibilidade para qualquer serviço não cadastrado explicitamente (ex: "Retorno", "Revisão") em médicos com ordem de chegada
-- Não afeta médicos com hora marcada (que continuam exigindo serviço específico)
-- Não afeta serviços que já existem nas business_rules
-- Aplica-se a todas as clínicas automaticamente
-- Sem mudança de banco de dados
+| Documento | Cadastrado | Status |
+|-----------|-----------|--------|
+| Teste de lentes de contato | Teste de Lentes de Contato | OK |
+| Teste do Olhinho (a partir de 20 dias) | Teste do Olhinho | OK |
+| Curvas de tensão (até 03 por turno) | Curva Tensional | OK |
+| Gonioscopia | Gonioscopia | OK |
+| YAG Laser | YAG Laser | OK |
+| Mapeamento de retina | Mapeamento de Retina | OK |
+| Acuidade visual para laudo de concurso | Consulta Acuidade Visual - Laudo Concurso | OK |
+| Pentacam (no ato da consulta) | **Não cadastrado como serviço separado** | **FALTA** |
+| — | Avaliação Refrativa | Extra (OK) |
+| — | Cirurgia Refrativa | Extra (OK) |
+| — | Crosslinking Corneano | Extra (OK) |
+| — | Tratamento Ceratocone | Extra (OK) |
+| — | Consulta Completa Eletiva | Extra (OK) |
 
-### Resultado esperado
+**Resultado: Falta 1 serviço.**
+- **Pentacam** -- segundo o documento, é feito "no ato da consulta para avaliação refrativa e ceratocone". Pode ser cadastrado como serviço separado ou mantido como observação na Avaliação Refrativa. Recomendo adicionar como observação, já que não é agendado separadamente.
 
-Em vez de "sem vagas nos próximos 45 dias", retornará as próximas datas disponíveis com os períodos corretos do médico.
+---
+
+### DRA. MARINA TOZZI
+
+| Documento | Cadastrado | Status |
+|-----------|-----------|--------|
+| Teste do Olhinho (a partir de 15 dias) | Teste do Olhinho | OK |
+| YAG Laser | Yag Laser | OK |
+| Mapeamento de retina | Mapeamento de Retina | OK |
+| Acuidade visual para laudo de concurso | Consulta Acuidade Visual (Laudo Concurso) | OK |
+| — | Cirurgia de Estrabismo | Extra (cirurgia, OK) |
+| — | Consulta Completa Eletiva | Extra (OK) |
+
+**Resultado: Completo.** Nota: o documento diz idade mínima de **15 dias** (diferente dos 20 dias dos outros médicos). Verificar se está configurado assim.
+
+---
+
+### DRA. ISABELLE GUERRA
+
+| Documento | Cadastrado | Status |
+|-----------|-----------|--------|
+| Teste do Olhinho (a partir de 20 dias) | Teste do Olhinho | OK |
+| Curvas de tensão (até 03) | Curva Tensional | OK |
+| Gonioscopia | Gonioscopia | OK |
+| Acuidade visual para laudo de concurso | Consulta Acuidade Visual - Laudo Concurso | OK |
+| — | Consulta Completa Eletiva | Extra (OK) |
+
+**Resultado: Completo.** Nota: o documento **não lista Mapeamento de Retina** para Isabelle, e ele **não está cadastrado**. Correto.
+
+---
+
+### DR. GUILHERME LUCENA MOURA
+
+| Documento | Cadastrado | Status |
+|-----------|-----------|--------|
+| Ultrassonografia do globo ocular | Ultrassonografia do Globo Ocular | OK |
+| Teste do Olhinho (não é sempre) | Teste do Olhinho | OK |
+| Curvas de tensão (até 03, sob solicitação própria) | Curva Tensional | OK |
+| Gonioscopia (sob solicitação própria) | Gonioscopia | OK |
+| YAG Laser | YAG Laser | OK |
+| Mapeamento de retina | Mapeamento de Retina | OK |
+| Fotocoagulação a laser (retina) | Fotocoagulação a Laser | OK |
+| Acuidade visual para laudo de concurso | Consulta Acuidade Visual - Laudo Concurso | OK |
+| — | Cirurgia de Catarata | Extra (OK) |
+| — | Cirurgia de Retina | Extra (OK) |
+| — | Consulta Diabetes Mellitus | Extra (OK) |
+| — | Tratamento Retina | Extra (OK) |
+| — | Tratamento Uveíte | Extra (OK) |
+| — | Consulta Completa Eletiva | Extra (OK) |
+
+**Resultado: Completo.** Todos os serviços do documento estão cadastrados.
+
+---
+
+### DR. HERMANN MADEIRO
+
+| Documento | Cadastrado | Status |
+|-----------|-----------|--------|
+| Teste do Olhinho (a partir de 20 dias) | Teste do Olhinho | OK |
+| Curvas de tensão (até 05) | Curva Tensional | OK |
+| Gonioscopia | Gonioscopia | OK |
+| YAG Laser | YAG Laser | OK |
+| Mapeamento de retina | Mapeamento de Retina | OK |
+| Acuidade visual para laudo de concurso | Consulta Acuidade Visual - Laudo Concurso | OK |
+| — | Cirurgia de Pterígio | Extra (cirurgia, OK) |
+| — | Consulta Completa Eletiva | Extra (OK) |
+
+**Resultado: Completo.** Todos os serviços do documento estão cadastrados.
+
+---
+
+## Resumo Geral
+
+| Médico | Status | Pendências |
+|--------|--------|------------|
+| Dr. João Miranda Filho | Completo | Nenhuma |
+| Dr. Manoel Alencar | Completo | Nenhuma |
+| Dra. Camila Leite | Quase completo | Pentacam (é feito no ato da consulta, não precisa ser serviço separado) |
+| Dra. Marina Tozzi | Completo | Verificar idade mínima: 15 dias (não 20) |
+| Dra. Isabelle Guerra | Completo | Nenhuma |
+| Dr. Guilherme Lucena Moura | Completo | Nenhuma |
+| Dr. Hermann Madeiro | Completo | Nenhuma |
+
+## Pontos de atenção para ajustar
+
+1. **Pentacam da Dra. Camila**: O documento diz que é feito "no ato da consulta para avaliação refrativa e ceratocone". Como não é agendado separadamente, recomendo apenas adicionar uma observação no serviço "Avaliação Refrativa" mencionando que inclui Pentacam quando necessário.
+
+2. **Idade mínima da Dra. Marina para Teste do Olhinho**: O documento especifica **15 dias**, enquanto os outros médicos aceitam a partir de **20 dias**. Precisa verificar se a `idade_minima` na business_rule dela está configurada como 15 dias para este serviço.
+
+3. **Limites de curvas de tensão**: Verificar se os limites estão corretos nas business_rules:
+   - João: até 05
+   - Manoel: até 05 por turno
+   - Camila: até 03 por turno
+   - Isabelle: até 03
+   - Guilherme: até 03, sob solicitação própria
+   - Hermann: até 05
+
+4. **Serviços extras** (cirurgias, tratamentos especializados): Estão cadastrados a mais, mas são corretos pois representam procedimentos reais que esses médicos fazem. Não precisam ser removidos.
 
