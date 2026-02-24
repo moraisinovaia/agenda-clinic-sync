@@ -1,74 +1,50 @@
 
 
-## Correção: Incluir horário de chegada para fazer a ficha na mensagem
+## Correção: Busca de disponibilidade retornando "sem vagas" para serviços não cadastrados
 
 ### Problema
-A mensagem atual do check-patient para ordem de chegada diz apenas:
-```
-"...no horário de a partir das 08:00. undefined começa a atender às 08:00, por ordem de chegada."
-```
 
-Faltam duas coisas:
-1. O horário que o paciente deve chegar para fazer a ficha (`contagem_inicio`, ex: 07:00)
-2. O nome do médico aparece como "undefined" (bug do `regras.nome`)
+Quando o paciente pede disponibilidade para "Retorno" com Dr. Hermann Madeiro, a API retorna "sem vagas nos próximos 45 dias" mesmo havendo vagas. Isso acontece porque:
 
-### Dados disponíveis no config do Dr. Hermann (manhã)
-- `contagem_inicio`: **07:00** (horário para chegar e fazer a ficha)
-- `distribuicao_fichas`: **a partir das 08:00** (distribuição de fichas)
-- `atendimento_inicio`: **08:00** (médico começa a atender)
+1. O serviço "Retorno" **não existe** nas `business_rules` do Dr. Hermann (só existem "Consulta Completa Eletiva", "Curva Tensional", etc.)
+2. A variável `servico` fica `null`
+3. Todo o loop de busca de períodos depende de `servico?.periodos?.manha` e `servico?.periodos?.tarde`, que são `null`
+4. Nenhum período é encontrado em nenhum dia, resultando em 0 datas
 
-### Correção na função `montarMensagemConsulta`
+### Solução
 
-**Arquivo:** `supabase/functions/llm-agent-api/index.ts` (linhas 1221-1250)
+Quando `servico` é `null` (serviço não encontrado nas regras) e o médico é `ordem_chegada`, usar os períodos de **qualquer serviço configurado** como fallback -- exatamente a mesma lógica já aplicada com sucesso no `formatarConsultaComContexto`.
 
-Duas mudanças:
+### Mudanças no código
 
-1. **Incluir `contagem_inicio` na mensagem** como horário de chegada para fazer a ficha
-2. **Corrigir "undefined"** usando `agendamento.medico_nome` como fallback para `regras.nome`
+**Arquivo:** `supabase/functions/llm-agent-api/index.ts`
 
-Mensagem atual (ordem de chegada):
-```
-O(a) paciente GABRIELA... para o dia 03/03/2026 no horário de a partir das 08:00. undefined começa a atender às 08:00, por ordem de chegada.
-```
-
-Nova mensagem:
-```
-O(a) paciente GABRIELA... para o dia 03/03/2026. Chegar a partir das 07:00 para fazer a ficha. Dr. Hermann Madeiro começa a atender às 08:00, por ordem de chegada.
-```
-
-### Código
+**Após a resolução do serviço (linha ~4415-4420):** Adicionar bloco de fallback:
 
 ```typescript
-if (isOrdemChegada) {
-    // Horário de chegada para ficha (contagem_inicio)
-    const horarioFicha = periodoConfig.contagem_inicio || periodoConfig.inicio;
-    if (horarioFicha) {
-      mensagem += `. Chegar a partir das ${horarioFicha} para fazer a ficha`;
-    } else {
-      mensagem += ` no horário de ${periodo}`;
-    }
-    
-    // Nome do médico com fallback
-    const nomeMedico = agendamento.medico_nome || regras.nome || 'O médico';
-    if (periodoConfig.atendimento_inicio) {
-      mensagem += `. ${nomeMedico} começa a atender às ${periodoConfig.atendimento_inicio}, por ordem de chegada`;
-    } else {
-      mensagem += `, por ordem de chegada`;
-    }
+// Se serviço não encontrado e médico é ordem_chegada, usar períodos de qualquer serviço
+if (!servico && regras?.tipo_agendamento === 'ordem_chegada' && regras?.servicos) {
+  const primeiroServicoComPeriodos = Object.values(regras.servicos)
+    .find((s: any) => s?.periodos && Object.keys(s.periodos).length > 0);
+  
+  if (primeiroServicoComPeriodos) {
+    servico = normalizarServicoPeriodos(primeiroServicoComPeriodos);
+    console.log(`🔄 [FALLBACK] Serviço "${atendimento_nome}" não encontrado. Usando períodos de outro serviço configurado para ordem de chegada.`);
+  }
 }
 ```
+
+Isso resolve o problema na raiz: tanto o loop principal (linhas 4642-4719) quanto o loop de retry (linhas 4782-4807) passarão a ter `servico.periodos` preenchido, encontrando as vagas corretamente.
+
+### Impacto
+
+- Corrige a busca de disponibilidade para qualquer serviço não cadastrado explicitamente (ex: "Retorno", "Revisão") em médicos com ordem de chegada
+- Não afeta médicos com hora marcada (que continuam exigindo serviço específico)
+- Não afeta serviços que já existem nas business_rules
+- Aplica-se a todas as clínicas automaticamente
+- Sem mudança de banco de dados
 
 ### Resultado esperado
 
-```json
-{
-  "mensagem": "O(a) paciente GABRIELA LIMA DE MORAIS tem uma consulta agendada para o dia 03/03/2026. Chegar a partir das 07:00 para fazer a ficha. Dr. Hermann Madeiro começa a atender às 08:00, por ordem de chegada."
-}
-```
-
-### Impacto
-- Corrige o "undefined" no nome do médico
-- Inclui horário de chegada para ficha usando `contagem_inicio` do período
-- Aplica-se a todos os endpoints que usam `montarMensagemConsulta` (check-patient, schedule, confirm, etc.)
-- Sem mudança de banco de dados
+Em vez de "sem vagas nos próximos 45 dias", retornará as próximas datas disponíveis com os períodos corretos do médico.
 
