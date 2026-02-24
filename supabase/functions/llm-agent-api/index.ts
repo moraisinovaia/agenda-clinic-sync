@@ -4414,6 +4414,17 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
     }
     let servico = servicoKey ? normalizarServicoPeriodos(regras.servicos[servicoKey]) : null;
     
+    // 🔄 FALLBACK: Se serviço não encontrado e médico é ordem_chegada, usar períodos de qualquer serviço configurado
+    if (!servico && regras?.tipo_agendamento === 'ordem_chegada' && regras?.servicos) {
+      const primeiroServicoComPeriodos = Object.values(regras.servicos)
+        .find((s: any) => s?.periodos && Object.keys(s.periodos).length > 0);
+      
+      if (primeiroServicoComPeriodos) {
+        servico = normalizarServicoPeriodos(primeiroServicoComPeriodos as any);
+        console.log(`🔄 [FALLBACK] Serviço "${atendimento_nome}" não encontrado. Usando períodos de outro serviço configurado para ordem de chegada.`);
+      }
+    }
+    
     // Não retornar erro ainda - busca melhorada será feita depois se necessário
     
     const tipoAtendimento = servico?.tipo || regras?.tipo_agendamento || 'ordem_chegada';
