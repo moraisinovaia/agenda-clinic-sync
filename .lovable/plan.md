@@ -1,57 +1,46 @@
 
 
-## Separar "MAPA MRPA" em "MRPA MANHÃ" e "MRPA TARDE" na agenda MAPA do Dr. Marcelo
+## Adicionar tipos específicos de UNIMED na Clínica Olhos
 
-### Contexto
+### Situação atual
 
-Atualmente, na agenda virtual "MAPA - Dr. Marcelo" (medico_id: `e6453b94`), existe apenas um atendimento chamado "MAPA MRPA". O usuário quer separar em dois: **MRPA MANHÃ** e **MRPA TARDE**, para que as recepcionistas possam selecionar o turno correto ao agendar.
+Apenas 2 médicos da Clínica Olhos têm "UNIMED" (genérico) no `convenios_aceitos`:
+- **Dra. Camila Leite** (`e61c3063`)
+- **Dr. Guilherme Lucena** (`f9a5aab1`)
 
-### Dados atuais
+Os outros 5 médicos (João, Manoel, Hermann, Isabelle, Marina) **não** têm UNIMED.
 
-- Atendimento existente: `MAPA MRPA` (id: `7fd294e3-74a6-40cb-83c8-56f4aeb38a04`)
-- Médico virtual: `MAPA - Dr. Marcelo` (id: `e6453b94-840d-4adf-ab0f-fc22be7cd7f5`)
-- Cliente: IPADO (`2bfb98b5-ae41-4f96-8ba7-acc797c22054`)
-- 309 agendamentos existentes vinculados ao atendimento atual
+### O que será feito
 
-### Mudanças necessárias
+Substituir o "UNIMED" genérico pelos 5 tipos específicos nos 2 médicos que aceitam UNIMED:
 
-**1. Renomear atendimento existente**
+| Antes | Depois |
+|-------|--------|
+| UNIMED | UNIMED NACIONAL |
+| | UNIMED REGIONAL |
+| | UNIMED INTERCAMBIO |
+| | UNIMED 20% |
+| | UNIMED 40% |
 
-Renomear "MAPA MRPA" para "MRPA MANHÃ" (mantém o id `7fd294e3` e preserva os 309 agendamentos históricos).
+### Mudanças no banco (2 UPDATEs)
 
-**2. Criar novo atendimento "MRPA TARDE"**
-
-Novo registro na tabela `atendimentos` com:
-- nome: "MRPA TARDE"
-- tipo: "Exame"
-- medico_id: `e6453b94-840d-4adf-ab0f-fc22be7cd7f5`
-- cliente_id: `2bfb98b5-ae41-4f96-8ba7-acc797c22054`
-
-**3. Atualizar business_rules do MAPA**
-
-Na config do médico virtual MAPA (`e6453b94`), substituir o serviço "MAPA MRPA" por dois serviços:
-
-```text
-servicos:
-  MAPA 24H: (sem alteração)
-  MRPA MANHÃ:
-    mensagem: "Para marcar MRPA manhã com o Dr. Marcelo..."
-    permite_online: false
-  MRPA TARDE:
-    mensagem: "Para marcar MRPA tarde com o Dr. Marcelo..."
-    permite_online: false
+**Dra. Camila** — remover "UNIMED", adicionar os 5 tipos:
+```
+convenios_aceitos = [UNIMED NACIONAL, UNIMED REGIONAL, UNIMED INTERCAMBIO, UNIMED 20%, UNIMED 40%, MEDSAUDE, MEDCLIN, MEDREV, CASSI, GEAP, CPP, SAUDE CAIXA, MINERAÇÃO, CARAÍBA, CAMED, PARTICULAR]
 ```
 
-### Resultado esperado
-
-O dropdown de "Tipo de Atendimento" na agenda MAPA mostrará:
-- MAPA 24H - Exame
-- MRPA MANHÃ - Exame
-- MRPA TARDE - Exame
+**Dr. Guilherme** — remover "UNIMED", adicionar os 5 tipos:
+```
+convenios_aceitos = [UNIMED NACIONAL, UNIMED REGIONAL, UNIMED INTERCAMBIO, UNIMED 20%, UNIMED 40%, MEDSAUDE, MEDCLIN, CASSI, GEAP, CPP, SAUDE CAIXA, MINERAÇÃO, CARAÍBA, CAMED, PARTICULAR, DR VISÃO, HGU]
+```
 
 ### Impacto
 
-- Os 309 agendamentos existentes passam a aparecer como "MRPA MANHÃ" (sem perda de dados)
-- Nenhuma alteração de código necessária -- apenas dados no banco
-- A LLM API continuará funcionando normalmente pois lê os serviços dinamicamente
+- O trigger `validate_patient_insurance` já faz match exato normalizado — com os tipos específicos cadastrados, "UNIMED NACIONAL" do paciente vai bater com "UNIMED NACIONAL" do médico
+- Nenhuma alteração de código ou trigger necessária
+- A LLM API lê dinamicamente os convênios aceitos, então já refletirá automaticamente
+
+### Detalhes técnicos
+
+Serão 2 comandos UPDATE na tabela `medicos` usando o insert tool (operação de dados, não de schema).
 
