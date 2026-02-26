@@ -1,46 +1,43 @@
 
 
-## Adicionar tipos específicos de UNIMED na Clínica Olhos
+## Configurar proxy do Dr. Marcelo para usar config_id próprio
 
 ### Situação atual
 
-Apenas 2 médicos da Clínica Olhos têm "UNIMED" (genérico) no `convenios_aceitos`:
-- **Dra. Camila Leite** (`e61c3063`)
-- **Dr. Guilherme Lucena** (`f9a5aab1`)
+| Item | Config ID atual | Config ID correto |
+|------|----------------|-------------------|
+| Proxy `llm-agent-api-marcelo` | `20b48124` (IPADO geral) | `a1b2c3d4` (Consultório Marcelo) |
+| Business rules (Dr. Marcelo principal) | Tem nos DOIS config_ids | OK - já existe em `a1b2c3d4` |
+| Business rules (MAPA e Teste Ergométrico) | `20b48124` (IPADO geral) | `a1b2c3d4` (Consultório Marcelo) |
+| LLM mensagens do Dr. Marcelo | Mistas (algumas em cada) | `a1b2c3d4` |
 
-Os outros 5 médicos (João, Manoel, Hermann, Isabelle, Marina) **não** têm UNIMED.
+O `llm_clinic_config` com id `a1b2c3d4-e5f6-7890-abcd-ef1234567890` já tem o WhatsApp correto: **(87) 98112-6744**.
 
-### O que será feito
+### Mudanças
 
-Substituir o "UNIMED" genérico pelos 5 tipos específicos nos 2 médicos que aceitam UNIMED:
+**1. Atualizar proxy Edge Function** (`llm-agent-api-marcelo/index.ts`)
+- Trocar `CONFIG_ID_MARCELO` de `20b48124-ae41-4e54-8a7e-3e236b8b4829` para `a1b2c3d4-e5f6-7890-abcd-ef1234567890`
 
-| Antes | Depois |
-|-------|--------|
-| UNIMED | UNIMED NACIONAL |
-| | UNIMED REGIONAL |
-| | UNIMED INTERCAMBIO |
-| | UNIMED 20% |
-| | UNIMED 40% |
+**2. Atualizar business_rules no banco** (3 UPDATEs via insert tool)
+- MAPA - Dr. Marcelo (`0175d73b`): `config_id` → `a1b2c3d4`
+- Teste Ergométrico - Dr. Marcelo (`7273a6cc`): `config_id` → `a1b2c3d4`
+- Dr. Marcelo D'Carli duplicado em `20b48124` (`7e08a5cd`): desativar (já existe em `a1b2c3d4`)
 
-### Mudanças no banco (2 UPDATEs)
+**3. Atualizar llm_mensagens no banco** (2 UPDATEs via insert tool)
+- As 2 mensagens do Dr. Marcelo com `config_id: 20b48124` (bloqueio_agenda e encaixe): trocar para `a1b2c3d4`
 
-**Dra. Camila** — remover "UNIMED", adicionar os 5 tipos:
-```
-convenios_aceitos = [UNIMED NACIONAL, UNIMED REGIONAL, UNIMED INTERCAMBIO, UNIMED 20%, UNIMED 40%, MEDSAUDE, MEDCLIN, MEDREV, CASSI, GEAP, CPP, SAUDE CAIXA, MINERAÇÃO, CARAÍBA, CAMED, PARTICULAR]
-```
+### Resultado
 
-**Dr. Guilherme** — remover "UNIMED", adicionar os 5 tipos:
-```
-convenios_aceitos = [UNIMED NACIONAL, UNIMED REGIONAL, UNIMED INTERCAMBIO, UNIMED 20%, UNIMED 40%, MEDSAUDE, MEDCLIN, CASSI, GEAP, CPP, SAUDE CAIXA, MINERAÇÃO, CARAÍBA, CAMED, PARTICULAR, DR VISÃO, HGU]
-```
+Quando o N8N chamar `llm-agent-api-marcelo`, a API vai:
+- Usar o `config_id: a1b2c3d4` → carregar telefone/WhatsApp do consultório do Dr. Marcelo
+- Usar o `cliente_id: 2bfb98b5` (IPADO) → acessar mesmos pacientes e agendamentos
+- Carregar business_rules e mensagens específicas do Dr. Marcelo
 
-### Impacto
-
-- O trigger `validate_patient_insurance` já faz match exato normalizado — com os tipos específicos cadastrados, "UNIMED NACIONAL" do paciente vai bater com "UNIMED NACIONAL" do médico
-- Nenhuma alteração de código ou trigger necessária
-- A LLM API lê dinamicamente os convênios aceitos, então já refletirá automaticamente
+Fluxo IPADO normal continua usando `config_id: 20b48124` sem alteração.
 
 ### Detalhes técnicos
 
-Serão 2 comandos UPDATE na tabela `medicos` usando o insert tool (operação de dados, não de schema).
+- 1 arquivo editado: `supabase/functions/llm-agent-api-marcelo/index.ts` (1 linha)
+- 5 operações de dados no banco (insert tool)
+- Deploy da Edge Function após edição
 
