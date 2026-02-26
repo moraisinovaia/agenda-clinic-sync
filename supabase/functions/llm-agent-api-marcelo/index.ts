@@ -79,7 +79,7 @@ const corsHeaders = {
 }
 
 // Config ID do "Consultório Dr. Marcelo D'Carli" (config real no banco)
-const CONFIG_ID_MARCELO = '20b48124-ae41-4e54-8a7e-3e236b8b4829';
+const CONFIG_ID_MARCELO = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 
 // Cliente ID do IPADO (para acessar mesmos pacientes/agendamentos)
 const CLIENTE_ID_IPADO = '2bfb98b5-ae41-4f96-8ba7-acc797c22054';
