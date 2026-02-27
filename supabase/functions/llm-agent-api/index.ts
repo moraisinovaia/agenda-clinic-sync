@@ -1795,6 +1795,15 @@ serve(async (req) => {
         case 'horarios-medicos':
           return await withLogging('doctor-schedules', CLIENTE_ID, requestId, body,
             () => handleDoctorSchedules(supabase, body, CLIENTE_ID, dynamicConfig));
+        case 'consultar-fila':
+          return await withLogging('consultar-fila', CLIENTE_ID, requestId, body,
+            () => handleConsultarFila(supabase, body, CLIENTE_ID, dynamicConfig));
+        case 'adicionar-fila':
+          return await withLogging('adicionar-fila', CLIENTE_ID, requestId, body,
+            () => handleAdicionarFila(supabase, body, CLIENTE_ID, dynamicConfig));
+        case 'responder-fila':
+          return await withLogging('responder-fila', CLIENTE_ID, requestId, body,
+            () => handleResponderFila(supabase, body, CLIENTE_ID, dynamicConfig));
         default:
           structuredLog({
             timestamp: new Date().toISOString(),
@@ -1807,7 +1816,7 @@ serve(async (req) => {
             success: false,
             error_code: 'UNKNOWN_ACTION'
           });
-          return errorResponse('Ação não reconhecida. Ações disponíveis: schedule/agendar, check-patient/verificar-paciente, reschedule/remarcar, cancel/cancelar, confirm/confirmar, availability/disponibilidade, patient-search/pesquisa-pacientes, list-appointments/lista-consultas, list-doctors/lista-medicos, clinic-info/info-clinica, doctor-schedules/horarios-medicos');
+          return errorResponse('Ação não reconhecida. Ações disponíveis: schedule, check-patient, reschedule, cancel, confirm, availability, patient-search, list-appointments, list-doctors, clinic-info, doctor-schedules, consultar-fila, adicionar-fila, responder-fila');
       }
     }
 
@@ -3858,7 +3867,9 @@ async function handleCancel(supabase: any, body: any, clienteId: string, config:
         data_agendamento,
         hora_agendamento,
         observacoes,
-        pacientes(nome_completo),
+        medico_id,
+        atendimento_id,
+        pacientes(nome_completo, celular),
         medicos(nome)
       `)
       .eq('id', agendamento_id)
@@ -3891,7 +3902,98 @@ async function handleCancel(supabase: any, body: any, clienteId: string, config:
       return errorResponse(`Erro ao cancelar: ${updateError.message}`);
     }
 
-    return successResponse({
+    // ============= TRIGGER FILA DE ESPERA (ISOLADO) =============
+    // Se o cancelamento foi bem-sucedido, verificar se há alguém na fila de espera
+    // para o mesmo médico/atendimento. NUNCA bloqueia o retorno do cancelamento.
+    let filaEsperaNotificado: any = null;
+    try {
+      console.log(`🔍 [FILA-ESPERA] Verificando fila para médico ${agendamento.medico_id} / atendimento ${agendamento.atendimento_id}`);
+      
+      const { data: candidatoFila, error: filaError } = await supabase
+        .from('fila_espera')
+        .select(`
+          id,
+          paciente_id,
+          medico_id,
+          atendimento_id,
+          data_preferida,
+          periodo_preferido,
+          observacoes,
+          prioridade,
+          pacientes(nome_completo, celular, data_nascimento, convenio)
+        `)
+        .eq('medico_id', agendamento.medico_id)
+        .eq('atendimento_id', agendamento.atendimento_id)
+        .eq('status', 'aguardando')
+        .eq('cliente_id', clienteId)
+        .order('prioridade', { ascending: false })
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (filaError) {
+        console.error('⚠️ [FILA-ESPERA] Erro ao buscar fila (ignorado):', filaError.message);
+      } else if (candidatoFila) {
+        console.log(`✅ [FILA-ESPERA] Candidato encontrado: ${candidatoFila.pacientes?.nome_completo} (fila_id: ${candidatoFila.id})`);
+        
+        // Atualizar status do candidato para 'notificado'
+        const { error: updateFilaError } = await supabase
+          .from('fila_espera')
+          .update({ 
+            status: 'notificado',
+            ultimo_contato: new Date().toISOString(),
+            tentativas_contato: 1,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', candidatoFila.id);
+
+        if (updateFilaError) {
+          console.error('⚠️ [FILA-ESPERA] Erro ao atualizar status (ignorado):', updateFilaError.message);
+        } else {
+          // Criar registro de notificação com tempo limite de 2h
+          const tempoLimite = new Date();
+          tempoLimite.setHours(tempoLimite.getHours() + 2);
+
+          const { error: notifError } = await supabase
+            .from('fila_notificacoes')
+            .insert({
+              fila_id: candidatoFila.id,
+              cliente_id: clienteId,
+              data_agendamento: agendamento.data_agendamento,
+              hora_agendamento: agendamento.hora_agendamento,
+              horario_disponivel: new Date().toISOString(),
+              tempo_limite: tempoLimite.toISOString(),
+              status_envio: 'pendente',
+              resposta_paciente: 'sem_resposta',
+              canal_notificacao: 'whatsapp'
+            });
+
+          if (notifError) {
+            console.error('⚠️ [FILA-ESPERA] Erro ao criar notificação (ignorado):', notifError.message);
+          } else {
+            console.log(`📱 [FILA-ESPERA] Notificação criada para ${candidatoFila.pacientes?.nome_completo}, tempo limite: ${tempoLimite.toISOString()}`);
+            
+            filaEsperaNotificado = {
+              fila_id: candidatoFila.id,
+              paciente_nome: candidatoFila.pacientes?.nome_completo,
+              paciente_celular: candidatoFila.pacientes?.celular,
+              medico_nome: agendamento.medicos?.nome,
+              data_disponivel: agendamento.data_agendamento,
+              hora_disponivel: agendamento.hora_agendamento,
+              tempo_limite: tempoLimite.toISOString(),
+              atendimento_id: agendamento.atendimento_id
+            };
+          }
+        }
+      } else {
+        console.log('ℹ️ [FILA-ESPERA] Nenhum candidato na fila para este médico/atendimento');
+      }
+    } catch (filaErr: any) {
+      console.error('⚠️ [FILA-ESPERA] Erro geral no trigger de fila (ignorado):', filaErr?.message);
+      // NUNCA bloqueia — o cancelamento já foi feito com sucesso
+    }
+
+    const responseData: any = {
       message: `Consulta cancelada com sucesso`,
       agendamento_id,
       paciente: agendamento.pacientes?.nome_completo,
@@ -3900,10 +4002,444 @@ async function handleCancel(supabase: any, body: any, clienteId: string, config:
       hora: agendamento.hora_agendamento,
       motivo,
       validado: true
-    });
+    };
+
+    // Adicionar dados da fila se alguém foi notificado
+    if (filaEsperaNotificado) {
+      responseData.fila_espera_notificado = filaEsperaNotificado;
+      responseData.message += `. Paciente da fila de espera notificado: ${filaEsperaNotificado.paciente_nome}`;
+    }
+
+    return successResponse(responseData);
 
   } catch (error: any) {
     return errorResponse(`Erro ao cancelar consulta: ${error?.message || 'Erro desconhecido'}`);
+  }
+}
+
+// ============= HANDLERS: FILA DE ESPERA INTELIGENTE =============
+
+// Consultar fila de espera
+async function handleConsultarFila(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
+  try {
+    const { medico_id, atendimento_id, status: statusFiltro } = body;
+    
+    console.log(`📋 [CONSULTAR-FILA] medico_id=${medico_id}, atendimento_id=${atendimento_id}, status=${statusFiltro || 'aguardando'}`);
+
+    let query = supabase
+      .from('fila_espera')
+      .select(`
+        id,
+        status,
+        prioridade,
+        data_preferida,
+        periodo_preferido,
+        observacoes,
+        tentativas_contato,
+        ultimo_contato,
+        created_at,
+        pacientes(id, nome_completo, celular, convenio, data_nascimento),
+        medicos(id, nome, especialidade),
+        atendimentos(id, nome, tipo)
+      `)
+      .eq('cliente_id', clienteId)
+      .eq('status', statusFiltro || 'aguardando')
+      .order('prioridade', { ascending: false })
+      .order('created_at', { ascending: true });
+
+    if (medico_id) {
+      query = query.eq('medico_id', medico_id);
+    }
+    if (atendimento_id) {
+      query = query.eq('atendimento_id', atendimento_id);
+    }
+
+    const { data: filaItems, error } = await query;
+
+    if (error) {
+      console.error('❌ [CONSULTAR-FILA] Erro:', error.message);
+      return errorResponse(`Erro ao consultar fila: ${error.message}`);
+    }
+
+    console.log(`✅ [CONSULTAR-FILA] ${filaItems?.length || 0} pacientes encontrados`);
+
+    return successResponse({
+      message: `Fila de espera: ${filaItems?.length || 0} paciente(s) encontrado(s)`,
+      total: filaItems?.length || 0,
+      fila: (filaItems || []).map((item: any) => ({
+        fila_id: item.id,
+        status: item.status,
+        prioridade: item.prioridade,
+        data_preferida: item.data_preferida,
+        periodo_preferido: item.periodo_preferido,
+        observacoes: item.observacoes,
+        tentativas_contato: item.tentativas_contato,
+        ultimo_contato: item.ultimo_contato,
+        criado_em: item.created_at,
+        paciente: {
+          id: item.pacientes?.id,
+          nome: item.pacientes?.nome_completo,
+          celular: item.pacientes?.celular,
+          convenio: item.pacientes?.convenio,
+          data_nascimento: item.pacientes?.data_nascimento
+        },
+        medico: {
+          id: item.medicos?.id,
+          nome: item.medicos?.nome,
+          especialidade: item.medicos?.especialidade
+        },
+        atendimento: {
+          id: item.atendimentos?.id,
+          nome: item.atendimentos?.nome,
+          tipo: item.atendimentos?.tipo
+        }
+      }))
+    });
+
+  } catch (error: any) {
+    return errorResponse(`Erro ao consultar fila: ${error?.message || 'Erro desconhecido'}`);
+  }
+}
+
+// Adicionar paciente à fila de espera
+async function handleAdicionarFila(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
+  try {
+    const { 
+      nomeCompleto, dataNascimento, convenio, celular,
+      medicoId, atendimentoId, dataPreferida, periodoPreferido, observacoes,
+      prioridade
+    } = body;
+
+    // Validações
+    if (!nomeCompleto || !medicoId || !atendimentoId || !dataPreferida) {
+      return errorResponse('Campos obrigatórios: nomeCompleto, medicoId, atendimentoId, dataPreferida');
+    }
+
+    console.log(`📥 [ADICIONAR-FILA] Paciente: ${nomeCompleto}, Médico: ${medicoId}, Atendimento: ${atendimentoId}`);
+
+    // ============= RESOLVER PACIENTE_ID =============
+    // Mesmo padrão do handleSchedule: buscar por nome + data_nascimento + celular
+    const nomeNormalizado = nomeCompleto.toUpperCase().trim();
+    let pacienteId: string | null = null;
+
+    // Buscar paciente existente
+    let queryPaciente = supabase
+      .from('pacientes')
+      .select('id, nome_completo, celular, data_nascimento')
+      .eq('cliente_id', clienteId)
+      .eq('nome_completo', nomeNormalizado);
+    
+    if (dataNascimento) {
+      queryPaciente = queryPaciente.eq('data_nascimento', dataNascimento);
+    }
+
+    const { data: pacientesExistentes, error: searchError } = await queryPaciente;
+
+    if (searchError) {
+      console.error('⚠️ [ADICIONAR-FILA] Erro ao buscar paciente:', searchError.message);
+    }
+
+    if (pacientesExistentes && pacientesExistentes.length > 0) {
+      // Paciente encontrado — usar o primeiro match
+      pacienteId = pacientesExistentes[0].id;
+      console.log(`✅ [ADICIONAR-FILA] Paciente existente: ${pacienteId}`);
+    } else {
+      // Criar novo paciente
+      console.log(`🆕 [ADICIONAR-FILA] Criando novo paciente: ${nomeNormalizado}`);
+      const { data: novoPaciente, error: createError } = await supabase
+        .from('pacientes')
+        .insert({
+          cliente_id: clienteId,
+          nome_completo: nomeNormalizado,
+          data_nascimento: dataNascimento || null,
+          convenio: formatarConvenioParaBanco(convenio || 'PARTICULAR'),
+          celular: celular || '',
+        })
+        .select('id')
+        .single();
+
+      if (createError) {
+        return errorResponse(`Erro ao criar paciente: ${createError.message}`);
+      }
+      pacienteId = novoPaciente.id;
+      console.log(`✅ [ADICIONAR-FILA] Novo paciente criado: ${pacienteId}`);
+    }
+
+    // Verificar se já está na fila para o mesmo médico/atendimento
+    const { data: jaExiste, error: checkError } = await supabase
+      .from('fila_espera')
+      .select('id, status')
+      .eq('cliente_id', clienteId)
+      .eq('paciente_id', pacienteId)
+      .eq('medico_id', medicoId)
+      .eq('atendimento_id', atendimentoId)
+      .in('status', ['aguardando', 'notificado'])
+      .maybeSingle();
+
+    if (jaExiste) {
+      return errorResponse(`Paciente ${nomeNormalizado} já está na fila de espera para este médico/atendimento (status: ${jaExiste.status})`);
+    }
+
+    // Inserir na fila de espera
+    const { data: novaFila, error: insertError } = await supabase
+      .from('fila_espera')
+      .insert({
+        cliente_id: clienteId,
+        paciente_id: pacienteId,
+        medico_id: medicoId,
+        atendimento_id: atendimentoId,
+        data_preferida: dataPreferida,
+        periodo_preferido: periodoPreferido || 'qualquer',
+        observacoes: observacoes || null,
+        prioridade: prioridade || 1,
+        status: 'aguardando'
+      })
+      .select('id')
+      .single();
+
+    if (insertError) {
+      return errorResponse(`Erro ao adicionar na fila: ${insertError.message}`);
+    }
+
+    console.log(`✅ [ADICIONAR-FILA] Paciente adicionado à fila: ${novaFila.id}`);
+
+    return successResponse({
+      message: `Paciente ${nomeNormalizado} adicionado à fila de espera com sucesso`,
+      fila_id: novaFila.id,
+      paciente_id: pacienteId,
+      paciente_nome: nomeNormalizado,
+      medico_id: medicoId,
+      atendimento_id: atendimentoId,
+      data_preferida: dataPreferida,
+      periodo_preferido: periodoPreferido || 'qualquer',
+      prioridade: prioridade || 1,
+      status: 'aguardando'
+    });
+
+  } catch (error: any) {
+    return errorResponse(`Erro ao adicionar à fila: ${error?.message || 'Erro desconhecido'}`);
+  }
+}
+
+// Responder fila de espera (paciente aceita ou recusa a vaga)
+async function handleResponderFila(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
+  try {
+    const { fila_id, resposta, data_agendamento, hora_agendamento } = body;
+
+    if (!fila_id || !resposta) {
+      return errorResponse('Campos obrigatórios: fila_id, resposta (SIM/NAO)');
+    }
+
+    const respostaNormalizada = resposta.toUpperCase().trim();
+    console.log(`📥 [RESPONDER-FILA] fila_id=${fila_id}, resposta=${respostaNormalizada}`);
+
+    // Buscar dados da fila
+    const { data: filaItem, error: filaError } = await supabase
+      .from('fila_espera')
+      .select(`
+        id, status, paciente_id, medico_id, atendimento_id,
+        pacientes(id, nome_completo, celular, data_nascimento, convenio),
+        medicos(id, nome),
+        atendimentos(id, nome)
+      `)
+      .eq('id', fila_id)
+      .eq('cliente_id', clienteId)
+      .single();
+
+    if (filaError || !filaItem) {
+      return errorResponse('Item da fila não encontrado');
+    }
+
+    if (filaItem.status !== 'notificado') {
+      return errorResponse(`Status atual da fila é "${filaItem.status}", esperado "notificado"`);
+    }
+
+    // ============= RESPOSTA SIM =============
+    if (respostaNormalizada === 'SIM') {
+      if (!data_agendamento || !hora_agendamento) {
+        return errorResponse('Para aceitar a vaga, informe: data_agendamento e hora_agendamento');
+      }
+
+      console.log(`✅ [RESPONDER-FILA] Paciente ACEITOU. Agendando via RPC atômica...`);
+
+      // Usar RPC criar_agendamento_atomico_externo (garante validação de conflito + atomicidade)
+      const { data: result, error: agendamentoError } = await supabase
+        .rpc('criar_agendamento_atomico_externo', {
+          p_cliente_id: clienteId,
+          p_nome_completo: filaItem.pacientes?.nome_completo?.toUpperCase(),
+          p_data_nascimento: filaItem.pacientes?.data_nascimento,
+          p_convenio: filaItem.pacientes?.convenio || 'PARTICULAR',
+          p_telefone: null,
+          p_celular: filaItem.pacientes?.celular || '',
+          p_medico_id: filaItem.medico_id,
+          p_atendimento_id: filaItem.atendimento_id,
+          p_data_agendamento: data_agendamento,
+          p_hora_agendamento: hora_agendamento,
+          p_observacoes: 'AGENDAMENTO VIA FILA DE ESPERA - WHATSAPP',
+          p_criado_por: 'Fila de Espera WhatsApp',
+          p_force_conflict: false
+        });
+
+      if (agendamentoError) {
+        console.error('❌ [RESPONDER-FILA] Erro na RPC:', agendamentoError.message);
+        return errorResponse(`Erro ao agendar: ${agendamentoError.message}`);
+      }
+
+      if (!result?.success) {
+        console.error('❌ [RESPONDER-FILA] RPC retornou erro:', result);
+        return errorResponse(`Não foi possível agendar: ${result?.message || 'Horário pode estar ocupado'}`);
+      }
+
+      // Atualizar fila para 'agendado'
+      await supabase
+        .from('fila_espera')
+        .update({ 
+          status: 'agendado',
+          agendamento_id: result.agendamento_id,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', fila_id);
+
+      // Atualizar notificação
+      await supabase
+        .from('fila_notificacoes')
+        .update({ 
+          resposta_paciente: 'aceito',
+          status_envio: 'respondido'
+        })
+        .eq('fila_id', fila_id)
+        .eq('resposta_paciente', 'sem_resposta');
+
+      console.log(`✅ [RESPONDER-FILA] Agendamento criado: ${result.agendamento_id}`);
+
+      return successResponse({
+        message: `Vaga confirmada! Agendamento criado para ${filaItem.pacientes?.nome_completo}`,
+        agendamento_id: result.agendamento_id,
+        paciente: filaItem.pacientes?.nome_completo,
+        medico: filaItem.medicos?.nome,
+        data: data_agendamento,
+        hora: hora_agendamento,
+        fila_id,
+        acao: 'agendado'
+      });
+    }
+
+    // ============= RESPOSTA NÃO / TIMEOUT =============
+    if (respostaNormalizada === 'NAO' || respostaNormalizada === 'NÃO' || respostaNormalizada === 'TIMEOUT') {
+      console.log(`❌ [RESPONDER-FILA] Paciente RECUSOU/TIMEOUT. Buscando próximo da fila...`);
+
+      // Voltar status da fila para 'aguardando'
+      await supabase
+        .from('fila_espera')
+        .update({ 
+          status: 'aguardando',
+          tentativas_contato: (filaItem.tentativas_contato || 0) + 1,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', fila_id);
+
+      // Atualizar notificação
+      const respostaNotif = respostaNormalizada === 'TIMEOUT' ? 'sem_resposta' : 'recusado';
+      await supabase
+        .from('fila_notificacoes')
+        .update({ 
+          resposta_paciente: respostaNotif,
+          status_envio: 'respondido'
+        })
+        .eq('fila_id', fila_id)
+        .eq('resposta_paciente', 'sem_resposta');
+
+      // ============= BUSCAR PRÓXIMO CANDIDATO (CASCATA) =============
+      let proximoNotificado: any = null;
+      try {
+        const { data: proximoCandidato, error: proxError } = await supabase
+          .from('fila_espera')
+          .select(`
+            id, paciente_id,
+            pacientes(nome_completo, celular)
+          `)
+          .eq('medico_id', filaItem.medico_id)
+          .eq('atendimento_id', filaItem.atendimento_id)
+          .eq('status', 'aguardando')
+          .eq('cliente_id', clienteId)
+          .neq('id', fila_id) // Excluir o que acabou de recusar
+          .order('prioridade', { ascending: false })
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+
+        if (proxError) {
+          console.error('⚠️ [RESPONDER-FILA] Erro ao buscar próximo (ignorado):', proxError.message);
+        } else if (proximoCandidato && data_agendamento && hora_agendamento) {
+          console.log(`🔄 [RESPONDER-FILA] Próximo candidato: ${proximoCandidato.pacientes?.nome_completo}`);
+
+          // Atualizar próximo para 'notificado'
+          await supabase
+            .from('fila_espera')
+            .update({ 
+              status: 'notificado',
+              ultimo_contato: new Date().toISOString(),
+              tentativas_contato: 1,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', proximoCandidato.id);
+
+          // Criar notificação para o próximo
+          const tempoLimite = new Date();
+          tempoLimite.setHours(tempoLimite.getHours() + 2);
+
+          await supabase
+            .from('fila_notificacoes')
+            .insert({
+              fila_id: proximoCandidato.id,
+              cliente_id: clienteId,
+              data_agendamento,
+              hora_agendamento,
+              horario_disponivel: new Date().toISOString(),
+              tempo_limite: tempoLimite.toISOString(),
+              status_envio: 'pendente',
+              resposta_paciente: 'sem_resposta',
+              canal_notificacao: 'whatsapp'
+            });
+
+          proximoNotificado = {
+            fila_id: proximoCandidato.id,
+            paciente_nome: proximoCandidato.pacientes?.nome_completo,
+            paciente_celular: proximoCandidato.pacientes?.celular,
+            data_disponivel: data_agendamento,
+            hora_disponivel: hora_agendamento,
+            tempo_limite: tempoLimite.toISOString()
+          };
+
+          console.log(`📱 [RESPONDER-FILA] Próximo notificado: ${proximoNotificado.paciente_nome}`);
+        } else {
+          console.log('ℹ️ [RESPONDER-FILA] Nenhum próximo candidato na fila');
+        }
+      } catch (cascataErr: any) {
+        console.error('⚠️ [RESPONDER-FILA] Erro na cascata (ignorado):', cascataErr?.message);
+      }
+
+      const responseData: any = {
+        message: `Resposta registrada: ${respostaNormalizada}`,
+        fila_id,
+        paciente: filaItem.pacientes?.nome_completo,
+        acao: respostaNormalizada === 'TIMEOUT' ? 'timeout' : 'recusado'
+      };
+
+      if (proximoNotificado) {
+        responseData.proximo_notificado = proximoNotificado;
+        responseData.message += `. Próximo paciente da fila notificado: ${proximoNotificado.paciente_nome}`;
+      } else {
+        responseData.message += `. Nenhum outro paciente na fila.`;
+      }
+
+      return successResponse(responseData);
+    }
+
+    return errorResponse('Resposta inválida. Use: SIM, NAO ou TIMEOUT');
+
+  } catch (error: any) {
+    return errorResponse(`Erro ao processar resposta da fila: ${error?.message || 'Erro desconhecido'}`);
   }
 }
 
