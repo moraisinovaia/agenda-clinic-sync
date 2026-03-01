@@ -3902,94 +3902,59 @@ async function handleCancel(supabase: any, body: any, clienteId: string, config:
       return errorResponse(`Erro ao cancelar: ${updateError.message}`);
     }
 
-    // ============= TRIGGER FILA DE ESPERA (ISOLADO) =============
-    // Se o cancelamento foi bem-sucedido, verificar se há alguém na fila de espera
-    // para o mesmo médico/atendimento. NUNCA bloqueia o retorno do cancelamento.
+    // ============= LER RESULTADO DO TRIGGER PG (FILA DE ESPERA) =============
+    // O trigger processar_fila_cancelamento já processou a fila no UPDATE acima.
+    // Aqui apenas lemos o resultado para incluir na resposta da API (para n8n/WhatsApp).
     let filaEsperaNotificado: any = null;
     try {
-      console.log(`🔍 [FILA-ESPERA] Verificando fila para médico ${agendamento.medico_id} / atendimento ${agendamento.atendimento_id}`);
+      console.log(`🔍 [FILA-ESPERA] Verificando se trigger PG notificou alguém da fila...`);
       
-      const { data: candidatoFila, error: filaError } = await supabase
-        .from('fila_espera')
+      const { data: notifCriada, error: notifError } = await supabase
+        .from('fila_notificacoes')
         .select(`
           id,
-          paciente_id,
-          medico_id,
-          atendimento_id,
-          data_preferida,
-          periodo_preferido,
-          observacoes,
-          prioridade,
-          pacientes(nome_completo, celular, data_nascimento, convenio)
+          fila_id,
+          data_agendamento,
+          hora_agendamento,
+          tempo_limite,
+          fila_espera!inner(
+            id,
+            paciente_id,
+            medico_id,
+            atendimento_id,
+            pacientes(nome_completo, celular)
+          )
         `)
-        .eq('medico_id', agendamento.medico_id)
-        .eq('atendimento_id', agendamento.atendimento_id)
-        .eq('status', 'aguardando')
+        .eq('data_agendamento', agendamento.data_agendamento)
+        .eq('hora_agendamento', agendamento.hora_agendamento)
+        .eq('fila_espera.medico_id', agendamento.medico_id)
         .eq('cliente_id', clienteId)
-        .order('prioridade', { ascending: false })
-        .order('created_at', { ascending: true })
+        .gte('created_at', new Date(Date.now() - 5000).toISOString())
+        .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      if (filaError) {
-        console.error('⚠️ [FILA-ESPERA] Erro ao buscar fila (ignorado):', filaError.message);
-      } else if (candidatoFila) {
-        console.log(`✅ [FILA-ESPERA] Candidato encontrado: ${candidatoFila.pacientes?.nome_completo} (fila_id: ${candidatoFila.id})`);
+      if (notifError) {
+        console.error('⚠️ [FILA-ESPERA] Erro ao consultar resultado do trigger (ignorado):', notifError.message);
+      } else if (notifCriada?.fila_espera) {
+        const fe = notifCriada.fila_espera as any;
+        console.log(`✅ [FILA-ESPERA] Trigger PG notificou: ${fe.pacientes?.nome_completo} (fila_id: ${notifCriada.fila_id})`);
         
-        // Atualizar status do candidato para 'notificado'
-        const { error: updateFilaError } = await supabase
-          .from('fila_espera')
-          .update({ 
-            status: 'notificado',
-            ultimo_contato: new Date().toISOString(),
-            tentativas_contato: 1,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', candidatoFila.id);
-
-        if (updateFilaError) {
-          console.error('⚠️ [FILA-ESPERA] Erro ao atualizar status (ignorado):', updateFilaError.message);
-        } else {
-          // Criar registro de notificação com tempo limite de 2h
-          const tempoLimite = new Date();
-          tempoLimite.setHours(tempoLimite.getHours() + 2);
-
-          const { error: notifError } = await supabase
-            .from('fila_notificacoes')
-            .insert({
-              fila_id: candidatoFila.id,
-              cliente_id: clienteId,
-              data_agendamento: agendamento.data_agendamento,
-              hora_agendamento: agendamento.hora_agendamento,
-              horario_disponivel: new Date().toISOString(),
-              tempo_limite: tempoLimite.toISOString(),
-              status_envio: 'pendente',
-              resposta_paciente: 'sem_resposta',
-              canal_notificacao: 'whatsapp'
-            });
-
-          if (notifError) {
-            console.error('⚠️ [FILA-ESPERA] Erro ao criar notificação (ignorado):', notifError.message);
-          } else {
-            console.log(`📱 [FILA-ESPERA] Notificação criada para ${candidatoFila.pacientes?.nome_completo}, tempo limite: ${tempoLimite.toISOString()}`);
-            
-            filaEsperaNotificado = {
-              fila_id: candidatoFila.id,
-              paciente_nome: candidatoFila.pacientes?.nome_completo,
-              paciente_celular: candidatoFila.pacientes?.celular,
-              medico_nome: agendamento.medicos?.nome,
-              data_disponivel: agendamento.data_agendamento,
-              hora_disponivel: agendamento.hora_agendamento,
-              tempo_limite: tempoLimite.toISOString(),
-              atendimento_id: agendamento.atendimento_id
-            };
-          }
-        }
+        filaEsperaNotificado = {
+          fila_id: notifCriada.fila_id,
+          paciente_nome: fe.pacientes?.nome_completo,
+          paciente_celular: fe.pacientes?.celular,
+          medico_nome: agendamento.medicos?.nome,
+          data_disponivel: notifCriada.data_agendamento,
+          hora_disponivel: notifCriada.hora_agendamento,
+          tempo_limite: notifCriada.tempo_limite,
+          atendimento_id: fe.atendimento_id
+        };
       } else {
-        console.log('ℹ️ [FILA-ESPERA] Nenhum candidato na fila para este médico/atendimento');
+        console.log('ℹ️ [FILA-ESPERA] Trigger PG não encontrou candidato na fila');
       }
     } catch (filaErr: any) {
-      console.error('⚠️ [FILA-ESPERA] Erro geral no trigger de fila (ignorado):', filaErr?.message);
+      console.error('⚠️ [FILA-ESPERA] Erro ao ler resultado do trigger (ignorado):', filaErr?.message);
       // NUNCA bloqueia — o cancelamento já foi feito com sucesso
     }
 
