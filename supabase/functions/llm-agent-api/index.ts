@@ -4109,16 +4109,84 @@ async function handleAdicionarFila(supabase: any, body: any, clienteId: string, 
     const dataNascimento = body.data_nascimento || body.dataNascimento;
     const convenio = body.convenio;
     const celular = body.celular;
-    const medicoId = body.medico_id || body.medicoId;
-    const atendimentoId = body.atendimento_id || body.atendimentoId;
+    let medicoId = body.medico_id || body.medicoId;
+    let atendimentoId = body.atendimento_id || body.atendimentoId;
+    const medicoNome = body.medico_nome || body.medicoNome;
+    const atendimentoNome = body.atendimento_nome || body.atendimentoNome;
     const dataPreferida = body.data_preferida || body.dataPreferida;
     const periodoPreferido = body.periodo_preferido || body.periodoPreferido;
     const observacoes = body.observacoes;
     const prioridade = body.prioridade;
 
-    // Validações
-    if (!nomeCompleto || !medicoId || !atendimentoId || !dataPreferida) {
-      return errorResponse('Campos obrigatórios: nome_completo, medico_id, atendimento_id, data_preferida');
+    // Validações — aceita UUID ou nome para médico e atendimento
+    if (!nomeCompleto || (!medicoId && !medicoNome) || (!atendimentoId && !atendimentoNome) || !dataPreferida) {
+      return errorResponse('Campos obrigatórios: nome_completo, (medico_id ou medico_nome), (atendimento_id ou atendimento_nome), data_preferida');
+    }
+
+    // ============= RESOLVER MÉDICO POR NOME (se não veio UUID) =============
+    let medicoNomeResolvido = '';
+    if (!medicoId && medicoNome) {
+      console.log(`🔍 [ADICIONAR-FILA] Resolvendo médico por nome: "${medicoNome}"`);
+      const { data: todosMedicos, error: medicosError } = await supabase
+        .from('medicos')
+        .select('id, nome')
+        .eq('cliente_id', clienteId)
+        .eq('ativo', true);
+
+      if (medicosError || !todosMedicos || todosMedicos.length === 0) {
+        return errorResponse('Erro ao buscar médicos ou nenhum médico ativo encontrado');
+      }
+
+      const normalizarNomeFuzzy = (texto: string): string =>
+        texto.toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+          .replace(/[.,\-']/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+      const nomeNorm = normalizarNomeFuzzy(medicoNome);
+      const medicosEncontrados = todosMedicos.filter((m: any) => {
+        const nomeComplNorm = normalizarNomeFuzzy(m.nome);
+        return nomeComplNorm.includes(nomeNorm) || nomeNorm.includes(nomeComplNorm);
+      });
+
+      if (medicosEncontrados.length === 0) {
+        const sugestoes = todosMedicos.map((m: any) => m.nome).slice(0, 10);
+        return errorResponse(`Médico "${medicoNome}" não encontrado. Disponíveis: ${sugestoes.join(', ')}`);
+      }
+
+      medicoId = medicosEncontrados[0].id;
+      medicoNomeResolvido = medicosEncontrados[0].nome;
+      console.log(`✅ [ADICIONAR-FILA] Médico resolvido: "${medicoNome}" → "${medicoNomeResolvido}" (${medicoId})`);
+    }
+
+    // ============= RESOLVER ATENDIMENTO POR NOME (se não veio UUID) =============
+    let atendimentoNomeResolvido = '';
+    if (!atendimentoId && atendimentoNome) {
+      console.log(`🔍 [ADICIONAR-FILA] Resolvendo atendimento por nome: "${atendimentoNome}"`);
+      const { data: atendimentos, error: atendError } = await supabase
+        .from('atendimentos')
+        .select('id, nome')
+        .eq('cliente_id', clienteId)
+        .eq('medico_id', medicoId)
+        .eq('ativo', true)
+        .ilike('nome', `%${atendimentoNome}%`);
+
+      if (atendError || !atendimentos || atendimentos.length === 0) {
+        // Buscar lista de serviços disponíveis para sugerir
+        const { data: servicosDisponiveis } = await supabase
+          .from('atendimentos')
+          .select('nome')
+          .eq('cliente_id', clienteId)
+          .eq('medico_id', medicoId)
+          .eq('ativo', true);
+        const sugestoes = servicosDisponiveis?.map((s: any) => s.nome) || [];
+        return errorResponse(`Atendimento "${atendimentoNome}" não encontrado para este médico. Disponíveis: ${sugestoes.join(', ')}`);
+      }
+
+      atendimentoId = atendimentos[0].id;
+      atendimentoNomeResolvido = atendimentos[0].nome;
+      console.log(`✅ [ADICIONAR-FILA] Atendimento resolvido: "${atendimentoNome}" → "${atendimentoNomeResolvido}" (${atendimentoId})`);
     }
 
     console.log(`📥 [ADICIONAR-FILA] Paciente: ${nomeCompleto}, Médico: ${medicoId}, Atendimento: ${atendimentoId}`);
@@ -4215,7 +4283,9 @@ async function handleAdicionarFila(supabase: any, body: any, clienteId: string, 
       paciente_id: pacienteId,
       paciente_nome: nomeNormalizado,
       medico_id: medicoId,
+      medico_nome: medicoNomeResolvido || medicoNome || medicoId,
       atendimento_id: atendimentoId,
+      atendimento_nome: atendimentoNomeResolvido || atendimentoNome || atendimentoId,
       data_preferida: dataPreferida,
       periodo_preferido: periodoPreferido || 'qualquer',
       prioridade: prioridade || 1,
