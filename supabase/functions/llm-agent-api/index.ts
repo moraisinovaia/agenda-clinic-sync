@@ -4104,15 +4104,21 @@ async function handleConsultarFila(supabase: any, body: any, clienteId: string, 
 // Adicionar paciente à fila de espera
 async function handleAdicionarFila(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
-    const { 
-      nomeCompleto, dataNascimento, convenio, celular,
-      medicoId, atendimentoId, dataPreferida, periodoPreferido, observacoes,
-      prioridade
-    } = body;
+    // Normalização: aceita snake_case (padrão) e camelCase (retrocompatibilidade)
+    const nomeCompleto = body.nome_completo || body.nomeCompleto;
+    const dataNascimento = body.data_nascimento || body.dataNascimento;
+    const convenio = body.convenio;
+    const celular = body.celular;
+    const medicoId = body.medico_id || body.medicoId;
+    const atendimentoId = body.atendimento_id || body.atendimentoId;
+    const dataPreferida = body.data_preferida || body.dataPreferida;
+    const periodoPreferido = body.periodo_preferido || body.periodoPreferido;
+    const observacoes = body.observacoes;
+    const prioridade = body.prioridade;
 
     // Validações
     if (!nomeCompleto || !medicoId || !atendimentoId || !dataPreferida) {
-      return errorResponse('Campos obrigatórios: nomeCompleto, medicoId, atendimentoId, dataPreferida');
+      return errorResponse('Campos obrigatórios: nome_completo, medico_id, atendimento_id, data_preferida');
     }
 
     console.log(`📥 [ADICIONAR-FILA] Paciente: ${nomeCompleto}, Médico: ${medicoId}, Atendimento: ${atendimentoId}`);
