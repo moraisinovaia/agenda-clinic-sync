@@ -1,46 +1,46 @@
 
 
-## Plano: Fila de Espera Inteligente na LLM Agent API
+## Problema: Inconsistência de Naming entre Handlers
 
-Incorporando os 3 pontos reforçados pelo usuário.
+O `handleAdicionarFila` espera **camelCase** mas o `handleResponderFila` e todos os outros endpoints da API usam **snake_case**. A documentação que foi fornecida também usava snake_case. Isso vai causar campos vazios no n8n.
 
-### Arquivo editado: `supabase/functions/llm-agent-api/index.ts`
+### Solução: Normalizar `handleAdicionarFila` para snake_case
 
-**1. `handleCancel` — trigger de fila isolado com try/catch**
-- Após linha 3902 (resposta de sucesso já montada), adicionar bloco try/catch isolado
-- Busca `fila_espera` por `medico_id` + `atendimento_id` + `status = 'aguardando'`, ordenado por `prioridade DESC, created_at ASC`
-- Se encontrar candidato: atualiza status para `notificado`, cria registro em `fila_notificacoes` com `tempo_limite` de 2h
-- Adiciona campo `fila_espera_notificado` na resposta (dados do paciente da fila para o Noah enviar WhatsApp)
-- Se falhar: `console.error` e retorna o sucesso do cancelamento normalmente — nunca bloqueia
+Alinhar com o padrão do resto da API e da documentação.
 
-**2. `handleAdicionarFila` — resolver paciente_id antes de inserir**
-- Reutilizar o mesmo padrão do `handleSchedule`: buscar paciente por `nome_completo + data_nascimento + celular` com `cliente_id`
-- Se não existir, criar via a mesma lógica (INSERT em `pacientes`)
-- Depois inserir na `fila_espera` com o `paciente_id` resolvido
-- Campos: `nomeCompleto`, `dataNascimento`, `convenio`, `celular`, `medicoId`, `atendimentoId`, `dataPreferida`, `periodoPreferido`, `observacoes`
+### Mudança no `supabase/functions/llm-agent-api/index.ts`
 
-**3. `handleResponderFila` — usar RPC `criar_agendamento_atomico_externo`**
-- Quando resposta = SIM: chamar `supabase.rpc('criar_agendamento_atomico_externo', {...})` com os dados do paciente e horário vago
-- Isso garante validação de conflito, criação/busca de paciente, e atomicidade
-- Atualizar `fila_espera.status = 'agendado'` e `fila_notificacoes.resposta_paciente = 'aceito'`
-- Quando resposta = NÃO ou timeout: voltar `fila_espera.status = 'aguardando'`, buscar próximo candidato, repetir ciclo de notificação (mesma lógica do trigger no handleCancel)
+**Linhas 4107-4116** — alterar o destructuring e validação:
 
-**4. `handleConsultarFila` — consulta simples**
-- Listar `fila_espera` com joins em `pacientes`, `medicos`, `atendimentos`
-- Filtros: `medico_id`, `atendimento_id`, `status` (default: `aguardando`)
-- Ordenado por `prioridade DESC, created_at ASC`
+```
+// DE:
+const { nomeCompleto, dataNascimento, convenio, celular, medicoId, atendimentoId, dataPreferida, periodoPreferido, observacoes, prioridade } = body;
+if (!nomeCompleto || !medicoId || !atendimentoId || !dataPreferida) {
+  return errorResponse('Campos obrigatórios: nomeCompleto, medicoId, atendimentoId, dataPreferida');
+}
 
-**5. Registrar no switch/case principal (~linha 1773)**
-- 3 novos cases: `consultar-fila`, `adicionar-fila`, `responder-fila`
-- Atualizar documentação do `info_clinica` com descrição das novas tools
+// PARA:
+const nomeCompleto = body.nome_completo || body.nomeCompleto;
+const dataNascimento = body.data_nascimento || body.dataNascimento;
+const convenio = body.convenio;
+const celular = body.celular;
+const medicoId = body.medico_id || body.medicoId;
+const atendimentoId = body.atendimento_id || body.atendimentoId;
+const dataPreferida = body.data_preferida || body.dataPreferida;
+const periodoPreferido = body.periodo_preferido || body.periodoPreferido;
+const observacoes = body.observacoes;
+const prioridade = body.prioridade;
 
-### Resumo de segurança
-- Trigger no cancelamento isolado com try/catch — zero risco de regressão
-- Agendamento via RPC atômica — sem INSERT direto, sem duplicatas
-- Resolução de paciente antes da fila — mesmo padrão existente
-- Filtro por `cliente_id` em todas as queries — isolamento multi-tenant mantido
+if (!nomeCompleto || !medicoId || !atendimentoId || !dataPreferida) {
+  return errorResponse('Campos obrigatórios: nome_completo, medico_id, atendimento_id, data_preferida');
+}
+```
 
-### Deploy
-- 1 arquivo editado, deploy automático da edge function
-- Sem alterações de schema no banco
+Aceita **ambos os formatos** (snake_case e camelCase) com prioridade para snake_case. Assim o n8n pode mandar `nome_completo` e funciona, mas se alguém já mandou `nomeCompleto` também não quebra.
+
+O resto do código interno continua usando as variáveis locais — zero impacto nas queries ao banco.
+
+### Escopo
+- 1 arquivo, ~15 linhas alteradas
+- Deploy automático da edge function
 
