@@ -1,60 +1,125 @@
 
 
-## Plano: Aceitar `medico_nome` e `atendimento_nome` no `handleAdicionarFila`
+## Código atual do trigger `processar_fila_cancelamento`
 
-Reutilizar a mesma lógica de resolução por nome do `handleSchedule` para que o agente possa enviar nomes em vez de UUIDs.
-
-### Mudança no `supabase/functions/llm-agent-api/index.ts`
-
-**No `handleAdicionarFila` (linhas 4108-4124):**
-
-1. Aceitar `medico_nome` e `atendimento_nome` além de `medico_id` e `atendimento_id`
-2. Se `medico_id` não vier, resolver via fuzzy match no banco (mesma lógica do handleSchedule: buscar todos médicos ativos do cliente, normalizar nome, fazer includes bidirecional)
-3. Se `atendimento_id` não vier, resolver via `ilike` no banco filtrando por `medico_id` + `cliente_id` (mesma lógica do handleSchedule)
-4. Ajustar validação: exigir `medico_id || medico_nome` e `atendimento_id || atendimento_nome`
-5. Na resposta, incluir `medico_nome` e `atendimento_nome` resolvidos
-
-### Detalhes técnicos
-
-Extração dos novos campos:
-```
-const medicoNome = body.medico_nome || body.medicoNome;
-const atendimentoNome = body.atendimento_nome || body.atendimentoNome;
-```
-
-Resolução de médico (se não vier `medico_id`):
-- Buscar todos médicos ativos com `cliente_id`
-- Normalizar nome (remover acentos, pontuação, lowercase)
-- `includes` bidirecional — mesmo código das linhas 2032-2063
-
-Resolução de atendimento (se não vier `atendimento_id`):
-- `ilike` em `atendimentos.nome` com `%nome%`, filtrado por `medico_id` + `cliente_id` + `ativo = true`
-- Se não encontrar, retornar erro com lista de serviços disponíveis
-
-Validação atualizada:
-```
-if (!nomeCompleto || (!medicoId && !medicoNome) || (!atendimentoId && !atendimentoNome) || !dataPreferida)
-```
-
-### Body aceito pelo n8n após a mudança
-
-```json
-{
-  "cliente_id": "...",
-  "nome_completo": "Nome do Paciente",
-  "data_nascimento": "01/01/1990",
-  "celular": "87999999999",
-  "convenio": "SUS",
-  "medico_nome": "Dr. Marcelo D'Carli",
-  "atendimento_nome": "Consulta Cardiológica",
-  "data_preferida": "2025-02-15",
-  "periodo_preferido": "manha"
-}
+```sql
+CREATE OR REPLACE FUNCTION public.processar_fila_cancelamento()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  fila_record RECORD;
+BEGIN
+  IF NEW.status = 'cancelado' AND OLD.status != 'cancelado' THEN
+    
+    SELECT fe.*, p.nome_completo, p.celular, m.nome as medico_nome, a.nome as atendimento_nome
+    INTO fila_record
+    FROM public.fila_espera fe
+    JOIN public.pacientes p ON fe.paciente_id = p.id
+    JOIN public.medicos m ON fe.medico_id = m.id
+    JOIN public.atendimentos a ON fe.atendimento_id = a.id
+    WHERE fe.medico_id = NEW.medico_id
+      AND fe.data_preferida <= NEW.data_agendamento
+      AND fe.status = 'aguardando'
+      AND (fe.data_limite IS NULL OR fe.data_limite >= NEW.data_agendamento)
+    ORDER BY fe.prioridade DESC, fe.created_at ASC
+    LIMIT 1;
+    
+    IF FOUND THEN
+      INSERT INTO public.fila_notificacoes (
+        fila_id, horario_disponivel, data_agendamento,
+        hora_agendamento, tempo_limite
+      ) VALUES (
+        fila_record.id, now(), NEW.data_agendamento,
+        NEW.hora_agendamento, now() + interval '2 hours'
+      );
+      
+      UPDATE public.fila_espera 
+      SET status = 'notificado', 
+          ultimo_contato = now(),
+          tentativas_contato = tentativas_contato + 1
+      WHERE id = fila_record.id;
+    END IF;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$;
 ```
 
-UUIDs continuam funcionando se enviados — prioridade para `medico_id`/`atendimento_id` quando presentes.
+## Problemas identificados
+
+1. **Sem `cliente_id`**: A query filtra apenas por `fe.medico_id = NEW.medico_id` — sem isolar por cliente. Cross-tenant leak possível.
+2. **Sem `atendimento_id`**: Notifica paciente da fila de qualquer serviço do mesmo médico, não necessariamente o mesmo exame que foi cancelado.
+3. **Sem `cliente_id` no INSERT de `fila_notificacoes`**: A coluna `cliente_id` fica NULL, quebrando RLS e queries posteriores.
+
+## Plano
+
+### 1. Migração SQL — corrigir o trigger
+
+Adicionar três filtros na query do trigger:
+- `AND fe.cliente_id = NEW.cliente_id`
+- `AND fe.atendimento_id = NEW.atendimento_id`
+- Incluir `cliente_id` no INSERT de `fila_notificacoes`
+
+```sql
+CREATE OR REPLACE FUNCTION public.processar_fila_cancelamento()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  fila_record RECORD;
+BEGIN
+  IF NEW.status = 'cancelado' AND OLD.status != 'cancelado' THEN
+    
+    SELECT fe.*, p.nome_completo, p.celular, m.nome as medico_nome, a.nome as atendimento_nome
+    INTO fila_record
+    FROM public.fila_espera fe
+    JOIN public.pacientes p ON fe.paciente_id = p.id
+    JOIN public.medicos m ON fe.medico_id = m.id
+    JOIN public.atendimentos a ON fe.atendimento_id = a.id
+    WHERE fe.medico_id = NEW.medico_id
+      AND fe.atendimento_id = NEW.atendimento_id    -- NOVO
+      AND fe.cliente_id = NEW.cliente_id             -- NOVO
+      AND fe.data_preferida <= NEW.data_agendamento
+      AND fe.status = 'aguardando'
+      AND (fe.data_limite IS NULL OR fe.data_limite >= NEW.data_agendamento)
+    ORDER BY fe.prioridade DESC, fe.created_at ASC
+    LIMIT 1;
+    
+    IF FOUND THEN
+      INSERT INTO public.fila_notificacoes (
+        fila_id, cliente_id, horario_disponivel,     -- cliente_id NOVO
+        data_agendamento, hora_agendamento, tempo_limite
+      ) VALUES (
+        fila_record.id, NEW.cliente_id, now(),       -- cliente_id NOVO
+        NEW.data_agendamento, NEW.hora_agendamento,
+        now() + interval '2 hours'
+      );
+      
+      UPDATE public.fila_espera 
+      SET status = 'notificado', 
+          ultimo_contato = now(),
+          tentativas_contato = tentativas_contato + 1
+      WHERE id = fila_record.id;
+    END IF;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$;
+```
+
+### 2. Edge function — substituir lógica duplicada
+
+Substituir o bloco `TRIGGER FILA DE ESPERA (ISOLADO)` (linhas 3905-3994) no `handleCancel` por uma consulta que lê o resultado do trigger PG (query dos últimos 5s, conforme aprovado para MVP).
 
 ### Escopo
-- 1 arquivo, ~50 linhas adicionadas no `handleAdicionarFila`
-- Deploy automático da edge function
+- 1 migração SQL (corrigir trigger)
+- 1 edição na edge function (linhas 3905-3994)
+- Deploy automático
 
