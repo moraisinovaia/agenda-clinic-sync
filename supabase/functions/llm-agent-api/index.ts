@@ -4450,14 +4450,40 @@ async function handleAdicionarFila(supabase: any, body: any, clienteId: string, 
 // Responder fila de espera (paciente aceita ou recusa a vaga)
 async function handleResponderFila(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
-    const { fila_id, resposta, data_agendamento, hora_agendamento } = body;
+    const { fila_id, notif_id, resposta, data_agendamento, hora_agendamento } = body;
 
-    if (!fila_id || !resposta) {
-      return errorResponse('Campos obrigatórios: fila_id, resposta (SIM/NAO)');
+    if (!fila_id || !notif_id || !resposta) {
+      return errorResponse('Campos obrigatórios: fila_id, notif_id, resposta (SIM/NAO)');
     }
 
     const respostaNormalizada = resposta.toUpperCase().trim();
-    console.log(`📥 [RESPONDER-FILA] fila_id=${fila_id}, resposta=${respostaNormalizada}`);
+    console.log(`📥 [RESPONDER-FILA] fila_id=${fila_id}, notif_id=${notif_id}, resposta=${respostaNormalizada}`);
+
+    // ============= LOCK POR NOTIF_ID =============
+    // Buscar notificação específica e validar antes de processar
+    const { data: notif, error: notifErr } = await supabase
+      .from('fila_notificacoes')
+      .select('id, fila_id, tempo_limite, resposta_paciente, status_envio')
+      .eq('id', notif_id)
+      .single();
+
+    if (notifErr || !notif) {
+      return errorResponse('Notificação não encontrada');
+    }
+
+    if (notif.fila_id !== fila_id) {
+      return errorResponse('notif_id não pertence a este fila_id');
+    }
+
+    // Verificar se o tempo expirou
+    if (new Date(notif.tempo_limite).getTime() < Date.now()) {
+      return errorResponse('Tempo da vaga expirou. Aguarde a próxima oportunidade.');
+    }
+
+    // Verificar concorrência: já respondida por outra tentativa
+    if (notif.resposta_paciente !== 'sem_resposta' || notif.status_envio !== 'pendente') {
+      return errorResponse('Esta vaga já foi processada (respondida/expirada).');
+    }
 
     // Buscar dados da fila
     const { data: filaItem, error: filaError } = await supabase
@@ -4533,7 +4559,7 @@ async function handleResponderFila(supabase: any, body: any, clienteId: string, 
           resposta_paciente: 'aceito',
           status_envio: 'respondido'
         })
-        .eq('fila_id', fila_id)
+        .eq('id', notif_id)
         .eq('resposta_paciente', 'sem_resposta');
 
       console.log(`✅ [RESPONDER-FILA] Agendamento criado: ${result.agendamento_id}`);
@@ -4572,7 +4598,7 @@ async function handleResponderFila(supabase: any, body: any, clienteId: string, 
           resposta_paciente: respostaNotif,
           status_envio: 'respondido'
         })
-        .eq('fila_id', fila_id)
+        .eq('id', notif_id)
         .eq('resposta_paciente', 'sem_resposta');
 
       // ============= BUSCAR PRÓXIMO CANDIDATO (CASCATA) =============
@@ -4614,7 +4640,7 @@ async function handleResponderFila(supabase: any, body: any, clienteId: string, 
           const tempoLimite = new Date();
           tempoLimite.setHours(tempoLimite.getHours() + 2);
 
-          await supabase
+          const { data: notifNova, error: notifInsertErr } = await supabase
             .from('fila_notificacoes')
             .insert({
               fila_id: proximoCandidato.id,
@@ -4626,10 +4652,17 @@ async function handleResponderFila(supabase: any, body: any, clienteId: string, 
               status_envio: 'pendente',
               resposta_paciente: 'sem_resposta',
               canal_notificacao: 'whatsapp'
-            });
+            })
+            .select('id')
+            .single();
+
+          if (notifInsertErr) {
+            console.error('⚠️ [RESPONDER-FILA] Erro ao inserir notificação cascata:', notifInsertErr.message);
+          }
 
           proximoNotificado = {
             fila_id: proximoCandidato.id,
+            notif_id: notifNova?.id || '',
             paciente_nome: proximoCandidato.pacientes?.nome_completo,
             paciente_celular: proximoCandidato.pacientes?.celular,
             data_disponivel: data_agendamento,
@@ -4640,7 +4673,7 @@ async function handleResponderFila(supabase: any, body: any, clienteId: string, 
           // Disparar webhook para n8n (WhatsApp) - nunca bloqueia
           try {
             await dispararWebhookFilaEspera(supabase, config, clienteId, filaItem.medico_id, filaItem.atendimento_id, {
-              notif_id: '', // notificação acabou de ser inserida, não temos o ID aqui
+              notif_id: notifNova?.id || '',
               fila_id: proximoCandidato.id,
               paciente_nome: proximoCandidato.pacientes?.nome_completo,
               paciente_celular: proximoCandidato.pacientes?.celular,
