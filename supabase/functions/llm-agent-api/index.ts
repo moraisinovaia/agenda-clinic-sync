@@ -3849,6 +3849,140 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
   }
 }
 
+// ============= WEBHOOK FILA DE ESPERA =============
+async function dispararWebhookFilaEspera(
+  supabase: any,
+  config: DynamicConfig | null,
+  clienteId: string,
+  medicoId: string,
+  atendimentoId: string,
+  notifData: {
+    notif_id: string;
+    fila_id: string;
+    paciente_nome: string;
+    paciente_celular: string;
+    medico_nome: string;
+    atendimento_nome: string;
+    data_agendamento: string;
+    hora_agendamento: string;
+    tempo_limite: string;
+  }
+): Promise<void> {
+  try {
+    console.log(`📤 [WEBHOOK-FILA] Disparando webhook para paciente: ${notifData.paciente_nome}`);
+
+    // 1. Determinar tipo de agenda
+    const regras = getMedicoRules(config, medicoId, BUSINESS_RULES.medicos[medicoId]);
+    let tipo_agenda = 'hora_marcada';
+    let horario_inicio: string | null = null;
+    let horario_fim: string | null = null;
+
+    if (regras) {
+      // Determinar dia da semana (0=domingo, 6=sábado)
+      const dataObj = new Date(notifData.data_agendamento + 'T12:00:00');
+      const diaSemana = dataObj.getDay();
+      const diasNomes = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
+      const diaNome = diasNomes[diaSemana];
+
+      // Determinar período baseado na hora
+      const horaNum = parseInt(notifData.hora_agendamento.split(':')[0], 10);
+      const periodoNome = horaNum < 12 ? 'manha' : 'tarde';
+
+      // Buscar serviço e período correspondente
+      const servicos = regras.servicos || {};
+      let periodoConfig: any = null;
+      let servicoConfig: any = null;
+
+      // Tentar encontrar pelo atendimento_nome ou usar o primeiro serviço
+      for (const [_nomeServico, sConfig] of Object.entries(servicos) as any[]) {
+        if (sConfig?.periodos) {
+          for (const [pKey, pConfig] of Object.entries(sConfig.periodos) as any[]) {
+            const pKeyNorm = pKey.toLowerCase();
+            if (pKeyNorm.includes(diaNome) && pKeyNorm.includes(periodoNome)) {
+              periodoConfig = pConfig;
+              servicoConfig = sConfig;
+              break;
+            }
+          }
+          if (periodoConfig) break;
+
+          // Fallback: buscar pelo dia sem período específico
+          for (const [pKey, pConfig] of Object.entries(sConfig.periodos) as any[]) {
+            const pKeyNorm = pKey.toLowerCase();
+            if (pKeyNorm.includes(diaNome)) {
+              periodoConfig = pConfig;
+              servicoConfig = sConfig;
+              break;
+            }
+          }
+          if (periodoConfig) break;
+        }
+      }
+
+      // Determinar tipo efetivo
+      const tipoEfetivo = getTipoAgendamentoEfetivo(servicoConfig, regras);
+
+      if (tipoEfetivo === 'ordem_chegada') {
+        tipo_agenda = 'ordem_chegada';
+        if (periodoConfig) {
+          horario_inicio = periodoConfig.inicio || periodoConfig.horario_inicio || null;
+          horario_fim = periodoConfig.fim || periodoConfig.horario_fim || null;
+        }
+      } else {
+        tipo_agenda = 'hora_marcada';
+      }
+    }
+
+    // 2. Buscar evolution_instance_name
+    let evolution_instance_name: string | null = null;
+    try {
+      const { data: configRow } = await supabase
+        .from('configuracoes_clinica')
+        .select('valor')
+        .eq('cliente_id', clienteId)
+        .eq('chave', 'evolution_instance_name')
+        .eq('ativo', true)
+        .maybeSingle();
+      evolution_instance_name = configRow?.valor || null;
+    } catch (e) {
+      console.warn('⚠️ [WEBHOOK-FILA] Erro ao buscar evolution_instance_name (ignorado)');
+    }
+
+    // 3. Montar payload e disparar
+    const payload = {
+      notif_id: notifData.notif_id,
+      fila_id: notifData.fila_id,
+      cliente_id: clienteId,
+      paciente_nome: notifData.paciente_nome,
+      paciente_celular: notifData.paciente_celular,
+      medico_nome: notifData.medico_nome,
+      atendimento_nome: notifData.atendimento_nome,
+      data_agendamento: notifData.data_agendamento,
+      hora_agendamento: notifData.hora_agendamento,
+      tempo_limite: notifData.tempo_limite,
+      tipo_agenda,
+      horario_inicio,
+      horario_fim,
+      evolution_instance_name
+    };
+
+    console.log(`📤 [WEBHOOK-FILA] Payload:`, JSON.stringify(payload));
+
+    const webhookResponse = await fetch(
+      'https://n8n-medical.inovaia-automacao.com.br/webhook/fila-espera-notificar',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }
+    );
+
+    console.log(`📤 [WEBHOOK-FILA] Resposta: ${webhookResponse.status} ${webhookResponse.statusText}`);
+  } catch (err: any) {
+    console.error(`⚠️ [WEBHOOK-FILA] Erro ao disparar webhook (ignorado):`, err?.message);
+  }
+}
+
 // Cancelar consulta
 async function handleCancel(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
@@ -3870,7 +4004,8 @@ async function handleCancel(supabase: any, body: any, clienteId: string, config:
         medico_id,
         atendimento_id,
         pacientes(nome_completo, celular),
-        medicos(nome)
+        medicos(nome),
+        atendimentos(nome)
       `)
       .eq('id', agendamento_id)
       .eq('cliente_id', clienteId)
@@ -3950,6 +4085,23 @@ async function handleCancel(supabase: any, body: any, clienteId: string, config:
           tempo_limite: notifCriada.tempo_limite,
           atendimento_id: fe.atendimento_id
         };
+
+        // Disparar webhook para n8n (WhatsApp) - nunca bloqueia
+        try {
+          await dispararWebhookFilaEspera(supabase, config, clienteId, agendamento.medico_id, fe.atendimento_id, {
+            notif_id: notifCriada.id,
+            fila_id: notifCriada.fila_id,
+            paciente_nome: fe.pacientes?.nome_completo,
+            paciente_celular: fe.pacientes?.celular,
+            medico_nome: agendamento.medicos?.nome,
+            atendimento_nome: (agendamento as any).atendimentos?.nome || '',
+            data_agendamento: notifCriada.data_agendamento,
+            hora_agendamento: notifCriada.hora_agendamento,
+            tempo_limite: notifCriada.tempo_limite
+          });
+        } catch (webhookErr: any) {
+          console.error('⚠️ [WEBHOOK-FILA] Erro ao disparar webhook (ignorado):', webhookErr?.message);
+        }
       } else {
         console.log('ℹ️ [FILA-ESPERA] Trigger PG não encontrou candidato na fila');
       }
@@ -4451,6 +4603,23 @@ async function handleResponderFila(supabase: any, body: any, clienteId: string, 
             hora_disponivel: hora_agendamento,
             tempo_limite: tempoLimite.toISOString()
           };
+
+          // Disparar webhook para n8n (WhatsApp) - nunca bloqueia
+          try {
+            await dispararWebhookFilaEspera(supabase, config, clienteId, filaItem.medico_id, filaItem.atendimento_id, {
+              notif_id: '', // notificação acabou de ser inserida, não temos o ID aqui
+              fila_id: proximoCandidato.id,
+              paciente_nome: proximoCandidato.pacientes?.nome_completo,
+              paciente_celular: proximoCandidato.pacientes?.celular,
+              medico_nome: filaItem.medicos?.nome,
+              atendimento_nome: filaItem.atendimentos?.nome || '',
+              data_agendamento,
+              hora_agendamento,
+              tempo_limite: tempoLimite.toISOString()
+            });
+          } catch (webhookErr: any) {
+            console.error('⚠️ [WEBHOOK-FILA] Erro ao disparar webhook cascata (ignorado):', webhookErr?.message);
+          }
 
           console.log(`📱 [RESPONDER-FILA] Próximo notificado: ${proximoNotificado.paciente_nome}`);
         } else {
