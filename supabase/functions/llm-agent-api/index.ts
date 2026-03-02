@@ -3872,7 +3872,28 @@ async function dispararWebhookFilaEspera(
     console.log(`📤 [WEBHOOK-FILA] Disparando webhook para paciente: ${notifData.paciente_nome}`);
 
     // 1. Determinar tipo de agenda
-    const regras = getMedicoRules(config, medicoId, BUSINESS_RULES.medicos[medicoId]);
+    let regras = getMedicoRules(config, medicoId, BUSINESS_RULES.medicos[medicoId]);
+    
+    // Fallback: buscar direto do banco se não encontrou no cache
+    if (!regras) {
+      try {
+        console.log(`🔍 [WEBHOOK-FILA] Regras não encontradas no cache para médico ${medicoId}, buscando no banco...`);
+        const { data: brData } = await supabase
+          .from('business_rules')
+          .select('config')
+          .eq('medico_id', medicoId)
+          .eq('cliente_id', clienteId)
+          .eq('ativo', true)
+          .maybeSingle();
+        if (brData?.config) {
+          regras = brData.config;
+          console.log(`✅ [WEBHOOK-FILA] Regras encontradas no banco para médico ${medicoId}`);
+        }
+      } catch (e) {
+        console.warn('⚠️ [WEBHOOK-FILA] Erro ao buscar business_rules fallback:', e?.message);
+      }
+    }
+    
     let tipo_agenda = 'hora_marcada';
     let horario_inicio: string | null = null;
     let horario_fim: string | null = null;
@@ -3916,6 +3937,18 @@ async function dispararWebhookFilaEspera(
             }
           }
           if (periodoConfig) break;
+        }
+      }
+
+      // Fallback final: match apenas pelo período (chaves simples como "manha", "tarde")
+      if (!periodoConfig) {
+        for (const [_nomeServico, sConfig] of Object.entries(servicos) as any[]) {
+          if (sConfig?.periodos?.[periodoNome]) {
+            periodoConfig = sConfig.periodos[periodoNome];
+            servicoConfig = sConfig;
+            console.log(`🔍 [WEBHOOK-FILA] Fallback: match por período simples "${periodoNome}"`);
+            break;
+          }
         }
       }
 
