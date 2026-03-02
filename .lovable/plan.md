@@ -1,67 +1,60 @@
 
 
-## Plan: Webhook dispatch + SQL cleanup for fila de espera
+## Bug: `dispararWebhookFilaEspera` retorna `hora_marcada` para Dr. Marcelo (deveria ser `ordem_chegada`)
 
-### 1. SQL Migration: Drop old trigger
+### Causa raiz
 
-Single migration to remove the `trigger_notificar_fila_webhook` and `notificar_fila_webhook()` function that were replaced by the Edge Function logic.
+A função `dispararWebhookFilaEspera` usa `getMedicoRules(config, medicoId, BUSINESS_RULES.medicos[medicoId])` para buscar as regras do médico. No entanto:
 
-```sql
-DROP TRIGGER IF EXISTS trigger_notificar_fila_webhook ON fila_notificacoes;
-DROP FUNCTION IF EXISTS notificar_fila_webhook();
-```
+1. O `BUSINESS_RULES.medicos` é um objeto vazio `{}` (fallback desativado), então o hardcoded é sempre `undefined`
+2. O `config` (DynamicConfig) carrega apenas os médicos do `config_id` padrão (`20b48124-...`), que contém apenas 3 médicos
+3. Dr. Marcelo está cadastrado com outro `config_id` (`a1b2c3d4-...`), então **não está presente** no `config.business_rules`
+4. `getMedicoRules` retorna `undefined` → o bloco `if (regras)` é pulado → `tipo_agenda` fica no default `'hora_marcada'`
 
-### 2. SQL Migration: Add `evolution_instance_name` to `configuracoes_clinica`
+### Correção
 
-The payload requires `evolution_instance_name` per `cliente_id`, but this field doesn't exist in any table. A new row per clinic in `configuracoes_clinica` will store it (chave = `evolution_instance_name`, categoria = `integracao`). No schema change needed — just INSERT seed data if you provide the values, or the code will send `null` when not configured.
-
-### 3. Edge Function changes (`supabase/functions/llm-agent-api/index.ts`)
-
-**3a. New helper function `dispararWebhookFilaEspera`**
-
-A reusable async function that:
-- Receives: supabase client, clienteId, medicoId, atendimentoId, notif data (notif_id, fila_id, paciente_nome, paciente_celular, medico_nome, atendimento_nome, data_agendamento, hora_agendamento, tempo_limite)
-- Looks up business rules via `getMedicoRules` to determine `tipo_agendamento` for the relevant day/period
-- If `ordem_chegada`: extracts `horario_inicio`/`horario_fim` from the period config
-- If `hora_marcada`: sets hora exact, no horario_inicio/fim
-- Queries `configuracoes_clinica` for `evolution_instance_name` by `cliente_id`
-- Sends POST to `https://n8n-medical.inovaia-automacao.com.br/webhook/fila-espera-notificar` with full payload
-- Wrapped entirely in try/catch — never blocks caller
-
-**3b. handleCancel modifications**
-
-- Add `atendimentos(nome)` to the agendamento select query (line ~3864)
-- After building `filaEsperaNotificado` (line ~3952), if not null, call `dispararWebhookFilaEspera` with the gathered data
-
-**3c. handleResponderFila modifications**
-
-- After building `proximoNotificado` (line ~4453), if not null, call `dispararWebhookFilaEspera` with the next candidate's data
-- The medico_nome and atendimento_nome are already available from `filaItem.medicos.nome` and `filaItem.atendimentos.nome`
-
-### Technical details
-
-The helper function signature:
+Na função `dispararWebhookFilaEspera`, quando `getMedicoRules` retorna null, fazer uma consulta direta à tabela `business_rules` para buscar as regras do médico:
 
 ```typescript
-async function dispararWebhookFilaEspera(
-  supabase: any, config: DynamicConfig | null,
-  clienteId: string, medicoId: string, atendimentoId: string,
-  notifData: {
-    notif_id: string, fila_id: string,
-    paciente_nome: string, paciente_celular: string,
-    medico_nome: string, atendimento_nome: string,
-    data_agendamento: string, hora_agendamento: string,
-    tempo_limite: string
+let regras = getMedicoRules(config, medicoId, BUSINESS_RULES.medicos[medicoId]);
+
+// Fallback: buscar direto do banco se não encontrou no cache
+if (!regras) {
+  try {
+    const { data: brData } = await supabase
+      .from('business_rules')
+      .select('config')
+      .eq('medico_id', medicoId)
+      .eq('cliente_id', clienteId)
+      .eq('ativo', true)
+      .maybeSingle();
+    if (brData?.config) {
+      regras = brData.config;
+    }
+  } catch (e) {
+    console.warn('⚠️ [WEBHOOK-FILA] Erro ao buscar business_rules fallback');
   }
-)
+}
 ```
 
-Inside:
-1. `getMedicoRules(config, medicoId, BUSINESS_RULES.medicos[medicoId])` to get rules
-2. Determine day-of-week from `data_agendamento`, map `hora_agendamento` to period (manhã/tarde)
-3. Find matching period config → check `tipo_agendamento`
-4. Query `configuracoes_clinica` where `cliente_id` = clienteId and `chave` = 'evolution_instance_name'
-5. Build payload, fetch webhook URL, log result
+Adicionalmente, a lógica de matching de períodos precisa de um fallback para chaves simples (`"manha"`, `"tarde"`) quando as chaves não contêm o nome do dia. Atualmente, ela busca `pKeyNorm.includes(diaNome)` que falha para chaves como `"manha"`. Adicionar um fallback final que faz match apenas pelo período:
 
-Both call sites (handleCancel and handleResponderFila) will call this with `await` but inside try/catch so it never blocks the response.
+```typescript
+// Fallback final: match apenas pelo período (chaves simples como "manha", "tarde")
+if (!periodoConfig) {
+  for (const [_nomeServico, sConfig] of Object.entries(servicos)) {
+    if (sConfig?.periodos?.[periodoNome]) {
+      periodoConfig = sConfig.periodos[periodoNome];
+      servicoConfig = sConfig;
+      break;
+    }
+  }
+}
+```
+
+### Escopo
+- 1 arquivo: `supabase/functions/llm-agent-api/index.ts`
+- Adicionar query fallback ao banco na `dispararWebhookFilaEspera`
+- Adicionar fallback de matching por período simples
+- Nenhuma migração SQL necessária
 
