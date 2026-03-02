@@ -1,60 +1,29 @@
 
 
-## Bug: `dispararWebhookFilaEspera` retorna `hora_marcada` para Dr. Marcelo (deveria ser `ordem_chegada`)
+## Plano: Blindagem de concorrência no `handleResponderFila`
 
-### Causa raiz
+### Mudanças no arquivo `supabase/functions/llm-agent-api/index.ts`
 
-A função `dispararWebhookFilaEspera` usa `getMedicoRules(config, medicoId, BUSINESS_RULES.medicos[medicoId])` para buscar as regras do médico. No entanto:
+**A) Receber e validar `notif_id`** (linha ~4453)
+- Extrair `notif_id` do body junto com os demais campos
+- Tornar `notif_id` obrigatório na validação
 
-1. O `BUSINESS_RULES.medicos` é um objeto vazio `{}` (fallback desativado), então o hardcoded é sempre `undefined`
-2. O `config` (DynamicConfig) carrega apenas os médicos do `config_id` padrão (`20b48124-...`), que contém apenas 3 médicos
-3. Dr. Marcelo está cadastrado com outro `config_id` (`a1b2c3d4-...`), então **não está presente** no `config.business_rules`
-4. `getMedicoRules` retorna `undefined` → o bloco `if (regras)` é pulado → `tipo_agenda` fica no default `'hora_marcada'`
+**B) Lock por `notif_id` + `tempo_limite`** (após buscar `filaItem`, ~linha 4477)
+- Buscar notificação por `id = notif_id` com `.single()`
+- Validar: `fila_id` bate, `tempo_limite >= now()`, `resposta_paciente = 'sem_resposta'`, `status_envio = 'pendente'`
+- Retornar erro específico se expirou ou já foi processada
 
-### Correção
+**C) Atualizar `fila_notificacoes` por `notif_id`** (não mais por `fila_id`)
+- No caminho SIM (~linha 4530-4537): trocar `.eq('fila_id', fila_id)` por `.eq('id', notif_id)`
+- No caminho NAO/TIMEOUT (~linha 4569-4576): trocar `.eq('fila_id', fila_id)` por `.eq('id', notif_id)`
+- Manter `.eq('resposta_paciente', 'sem_resposta')` como guard de concorrência
 
-Na função `dispararWebhookFilaEspera`, quando `getMedicoRules` retorna null, fazer uma consulta direta à tabela `business_rules` para buscar as regras do médico:
+**D) Cascata: capturar ID da notificação inserida** (~linha 4617-4629)
+- Adicionar `.select('id').single()` no insert de `fila_notificacoes`
+- Usar `notifNova.id` no payload do webhook em vez de `notif_id: ''`
+- Incluir `notif_id` no objeto `proximoNotificado` retornado ao cliente
 
-```typescript
-let regras = getMedicoRules(config, medicoId, BUSINESS_RULES.medicos[medicoId]);
+### Detalhes técnicos
 
-// Fallback: buscar direto do banco se não encontrou no cache
-if (!regras) {
-  try {
-    const { data: brData } = await supabase
-      .from('business_rules')
-      .select('config')
-      .eq('medico_id', medicoId)
-      .eq('cliente_id', clienteId)
-      .eq('ativo', true)
-      .maybeSingle();
-    if (brData?.config) {
-      regras = brData.config;
-    }
-  } catch (e) {
-    console.warn('⚠️ [WEBHOOK-FILA] Erro ao buscar business_rules fallback');
-  }
-}
-```
-
-Adicionalmente, a lógica de matching de períodos precisa de um fallback para chaves simples (`"manha"`, `"tarde"`) quando as chaves não contêm o nome do dia. Atualmente, ela busca `pKeyNorm.includes(diaNome)` que falha para chaves como `"manha"`. Adicionar um fallback final que faz match apenas pelo período:
-
-```typescript
-// Fallback final: match apenas pelo período (chaves simples como "manha", "tarde")
-if (!periodoConfig) {
-  for (const [_nomeServico, sConfig] of Object.entries(servicos)) {
-    if (sConfig?.periodos?.[periodoNome]) {
-      periodoConfig = sConfig.periodos[periodoNome];
-      servicoConfig = sConfig;
-      break;
-    }
-  }
-}
-```
-
-### Escopo
-- 1 arquivo: `supabase/functions/llm-agent-api/index.ts`
-- Adicionar query fallback ao banco na `dispararWebhookFilaEspera`
-- Adicionar fallback de matching por período simples
-- Nenhuma migração SQL necessária
+Todas as alterações são no mesmo arquivo. Nenhuma migração SQL necessária. A mudança garante que dois eventos concorrentes (ex: TIMEOUT + resposta manual) não processem a mesma notificação duas vezes, pois o update com `eq('resposta_paciente', 'sem_resposta')` funciona como lock otimista.
 
