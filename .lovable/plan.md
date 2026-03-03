@@ -1,25 +1,41 @@
 
 
-## Problema: Limite de 1000 linhas do Supabase
+## Plano: Intervalo independente por periodo (Manha / Tarde)
 
-A Clínica Olhos tem **24.014 horários futuros** no banco de dados, distribuídos por 7 médicos. Porém, a query no `Index.tsx` não especifica limite, então o Supabase aplica o **limite padrão de 1000 linhas**. Isso retorna slots apenas dos primeiros médicos (ordem alfabética do banco), deixando os demais sem horários visíveis.
+### Problema
+O campo "Intervalo entre horarios" e unico e global. O mesmo valor se aplica a todos os periodos. Para configurar intervalos diferentes entre manha e tarde, o usuario precisa gerar um periodo por vez.
 
-### Solução
+### Solucao
+Mover o intervalo de global para **por periodo, por dia**, permitindo configurar valores independentes para manha e tarde.
 
-Carregar os slots **apenas do médico selecionado** em vez de todos os médicos de uma vez. Isso resolve o problema de limite e também melhora a performance (buscar 1000-5000 slots de um médico vs 24.000+ de todos).
+### Alteracoes
 
-### Alterações em `src/pages/Index.tsx`
+**1. `src/types/schedule-generator.ts`** -- Adicionar `intervalo_minutos` ao `DaySchedule`
+- Adicionar campo `intervalo_minutos` dentro de cada periodo do `DaySchedule` (manha/tarde), com valor padrao 15
 
-1. **Modificar `fetchEmptySlots` e `reloadEmptySlots`**: Adicionar filtro por `medico_id` do médico atualmente selecionado na agenda
-2. **Adicionar dependência do médico selecionado** no useEffect para recarregar ao trocar de médico
-3. **Fallback**: Se nenhum médico estiver selecionado, buscar com `.limit(5000)` para cobrir cenários sem médico específico
+**2. `src/components/scheduling/DoctorScheduleGenerator.tsx`**
 
-### Detalhes técnicos
+- Remover o state global `intervaloMinutos` (linha 83)
+- Remover o Select global de intervalo (linhas 558-579)
+- Adicionar ao estado inicial de cada periodo em `schedules`: `intervalo_minutos: 15`
+- Adicionar um mini-select de intervalo ao lado dos inputs de horario de cada periodo (dentro do grid de cada dia, linhas ~667-720), visivel apenas quando o periodo esta ativo
+- Atualizar `updateSchedule` para suportar o campo `intervalo_minutos`
+- Atualizar `handleGenerate` (linha ~418-433) para usar `sched[periodo].intervalo_minutos` em vez do global
+- Atualizar `calculatePreview` (linha ~149-179) para usar o intervalo do periodo correspondente
+- Atualizar `applyQuickConfig` para incluir `intervalo_minutos: 15` nos presets
 
-Nas duas queries (useEffect e reloadEmptySlots), adicionar:
-- `.eq('medico_id', selectedDoctorId)` quando há médico selecionado
-- `.limit(5000)` como safety net quando não há filtro por médico
-- Adicionar `selectedDoctorId` como dependência do useEffect
+**3. Layout do grid por dia**
 
-Isso reduz drasticamente o volume de dados (de 24k para ~1k-5k por médico) e garante que todos os slots do médico visualizado sejam carregados.
+Cada linha de periodo (manha/tarde) ficara assim:
+
+```text
+[x] 08:00  ate  12:00  | a cada [15 min v]
+```
+
+O select de intervalo sera compacto (dropdown pequeno) ao lado dos horarios, ocupando espaço minimo.
+
+### Impacto
+- Nenhuma alteracao no banco de dados (o intervalo ja e resolvido no frontend antes do insert)
+- O hook `useScheduleGenerator` ja recebe `intervalo_minutos` por configuracao individual, entao funciona sem mudancas
+- A funcao `generateTimeSlotsForPeriod` ja recebe intervalo por config, sem mudancas
 
