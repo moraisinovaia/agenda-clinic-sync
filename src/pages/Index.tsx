@@ -164,12 +164,21 @@ const Index = () => {
         data_inicio: format(new Date(), 'yyyy-MM-dd')
       });
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('horarios_vazios')
         .select('*')
         .eq('cliente_id', userClienteId)
         .eq('status', 'disponivel')
         .gte('data', format(new Date(), 'yyyy-MM-dd'));
+
+      // Filtrar por médico selecionado para evitar limite de 1000 linhas do Supabase
+      if (selectedDoctor?.id) {
+        query = query.eq('medico_id', selectedDoctor.id);
+      } else {
+        query = query.limit(5000);
+      }
+
+      const { data, error } = await query;
       
       if (error) {
         if (error.code === '42501') {
@@ -209,22 +218,30 @@ const Index = () => {
       clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [userClienteId]);
+  }, [userClienteId, selectedDoctor?.id]);
 
   // Função centralizada para recarregar horários vazios
   const reloadEmptySlots = useCallback(async () => {
     if (!userClienteId) return;
-    const { data, error } = await supabase
+    let query = supabase
       .from('horarios_vazios')
       .select('*')
       .eq('cliente_id', userClienteId)
       .eq('status', 'disponivel')
       .gte('data', format(new Date(), 'yyyy-MM-dd'));
+
+    if (selectedDoctor?.id) {
+      query = query.eq('medico_id', selectedDoctor.id);
+    } else {
+      query = query.limit(5000);
+    }
+
+    const { data, error } = await query;
     if (!error && data) {
       console.log('✅ Horários vazios recarregados:', data.length);
       setEmptySlots(data);
     }
-  }, [userClienteId]);
+  }, [userClienteId, selectedDoctor?.id]);
 
   const {
     filaEspera,
