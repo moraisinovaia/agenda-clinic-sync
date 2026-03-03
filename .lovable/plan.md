@@ -1,29 +1,25 @@
 
 
-## Plano: Blindagem de concorrência no `handleResponderFila`
+## Problema: Limite de 1000 linhas do Supabase
 
-### Mudanças no arquivo `supabase/functions/llm-agent-api/index.ts`
+A Clínica Olhos tem **24.014 horários futuros** no banco de dados, distribuídos por 7 médicos. Porém, a query no `Index.tsx` não especifica limite, então o Supabase aplica o **limite padrão de 1000 linhas**. Isso retorna slots apenas dos primeiros médicos (ordem alfabética do banco), deixando os demais sem horários visíveis.
 
-**A) Receber e validar `notif_id`** (linha ~4453)
-- Extrair `notif_id` do body junto com os demais campos
-- Tornar `notif_id` obrigatório na validação
+### Solução
 
-**B) Lock por `notif_id` + `tempo_limite`** (após buscar `filaItem`, ~linha 4477)
-- Buscar notificação por `id = notif_id` com `.single()`
-- Validar: `fila_id` bate, `tempo_limite >= now()`, `resposta_paciente = 'sem_resposta'`, `status_envio = 'pendente'`
-- Retornar erro específico se expirou ou já foi processada
+Carregar os slots **apenas do médico selecionado** em vez de todos os médicos de uma vez. Isso resolve o problema de limite e também melhora a performance (buscar 1000-5000 slots de um médico vs 24.000+ de todos).
 
-**C) Atualizar `fila_notificacoes` por `notif_id`** (não mais por `fila_id`)
-- No caminho SIM (~linha 4530-4537): trocar `.eq('fila_id', fila_id)` por `.eq('id', notif_id)`
-- No caminho NAO/TIMEOUT (~linha 4569-4576): trocar `.eq('fila_id', fila_id)` por `.eq('id', notif_id)`
-- Manter `.eq('resposta_paciente', 'sem_resposta')` como guard de concorrência
+### Alterações em `src/pages/Index.tsx`
 
-**D) Cascata: capturar ID da notificação inserida** (~linha 4617-4629)
-- Adicionar `.select('id').single()` no insert de `fila_notificacoes`
-- Usar `notifNova.id` no payload do webhook em vez de `notif_id: ''`
-- Incluir `notif_id` no objeto `proximoNotificado` retornado ao cliente
+1. **Modificar `fetchEmptySlots` e `reloadEmptySlots`**: Adicionar filtro por `medico_id` do médico atualmente selecionado na agenda
+2. **Adicionar dependência do médico selecionado** no useEffect para recarregar ao trocar de médico
+3. **Fallback**: Se nenhum médico estiver selecionado, buscar com `.limit(5000)` para cobrir cenários sem médico específico
 
 ### Detalhes técnicos
 
-Todas as alterações são no mesmo arquivo. Nenhuma migração SQL necessária. A mudança garante que dois eventos concorrentes (ex: TIMEOUT + resposta manual) não processem a mesma notificação duas vezes, pois o update com `eq('resposta_paciente', 'sem_resposta')` funciona como lock otimista.
+Nas duas queries (useEffect e reloadEmptySlots), adicionar:
+- `.eq('medico_id', selectedDoctorId)` quando há médico selecionado
+- `.limit(5000)` como safety net quando não há filtro por médico
+- Adicionar `selectedDoctorId` como dependência do useEffect
+
+Isso reduz drasticamente o volume de dados (de 24k para ~1k-5k por médico) e garante que todos os slots do médico visualizado sejam carregados.
 
