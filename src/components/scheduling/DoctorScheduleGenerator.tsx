@@ -80,15 +80,14 @@ export function DoctorScheduleGenerator({
   // States da aba "Gerar em Lote"
   const [dataInicio, setDataInicio] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [dataFim, setDataFim] = useState(format(addDays(new Date(), 30), 'yyyy-MM-dd'));
-  const [intervaloMinutos, setIntervaloMinutos] = useState<1 | 5 | 10 | 15 | 20 | 30>(15);
   const [previewCount, setPreviewCount] = useState(0);
   const [showValidation, setShowValidation] = useState(false);
   
   const [schedules, setSchedules] = useState<DaySchedule[]>(
     DIAS_SEMANA.map(dia => ({
       dia_semana: dia.value,
-      manha: { ativo: false, hora_inicio: '08:00', hora_fim: '12:00' },
-      tarde: { ativo: false, hora_inicio: '13:00', hora_fim: '18:00' },
+      manha: { ativo: false, hora_inicio: '08:00', hora_fim: '12:00', intervalo_minutos: 15 },
+      tarde: { ativo: false, hora_inicio: '13:00', hora_fim: '18:00', intervalo_minutos: 15 },
     }))
   );
   
@@ -121,8 +120,8 @@ export function DoctorScheduleGenerator({
       case 'weekdays':
         newSchedules.forEach((sched, idx) => {
           if (idx >= 1 && idx <= 5) {
-            sched.manha = { ativo: true, hora_inicio: '08:00', hora_fim: '12:00' };
-            sched.tarde = { ativo: true, hora_inicio: '13:00', hora_fim: '18:00' };
+            sched.manha = { ativo: true, hora_inicio: '08:00', hora_fim: '12:00', intervalo_minutos: sched.manha.intervalo_minutos };
+            sched.tarde = { ativo: true, hora_inicio: '13:00', hora_fim: '18:00', intervalo_minutos: sched.tarde.intervalo_minutos };
           } else {
             sched.manha.ativo = false;
             sched.tarde.ativo = false;
@@ -131,14 +130,14 @@ export function DoctorScheduleGenerator({
         break;
       case 'allMornings':
         newSchedules.forEach(sched => {
-          sched.manha = { ativo: true, hora_inicio: '08:00', hora_fim: '12:00' };
+          sched.manha = { ativo: true, hora_inicio: '08:00', hora_fim: '12:00', intervalo_minutos: sched.manha.intervalo_minutos };
           sched.tarde.ativo = false;
         });
         break;
       case 'allAfternoons':
         newSchedules.forEach(sched => {
           sched.manha.ativo = false;
-          sched.tarde = { ativo: true, hora_inicio: '13:00', hora_fim: '18:00' };
+          sched.tarde = { ativo: true, hora_inicio: '13:00', hora_fim: '18:00', intervalo_minutos: sched.tarde.intervalo_minutos };
         });
         break;
     }
@@ -168,7 +167,7 @@ export function DoctorScheduleGenerator({
           const timeSlots = generateTimeSlots(
             schedule[p].hora_inicio,
             schedule[p].hora_fim,
-            intervaloMinutos
+            schedule[p].intervalo_minutos
           );
           totalSlots += timeSlots.length;
         }
@@ -176,7 +175,7 @@ export function DoctorScheduleGenerator({
     });
     
     return totalSlots;
-  }, [selectedDoctor, dataInicio, dataFim, intervaloMinutos, schedules]);
+  }, [selectedDoctor, dataInicio, dataFim, schedules]);
 
   // Preview reativo - recalcula com debounce quando estado muda
 
@@ -238,7 +237,7 @@ export function DoctorScheduleGenerator({
       setPreviewCount(count);
     }, 500);
     return () => clearTimeout(timeoutId);
-  }, [selectedDoctor, dataInicio, dataFim, intervaloMinutos, schedules, calculatePreview]);
+  }, [selectedDoctor, dataInicio, dataFim, schedules, calculatePreview]);
   
   useEffect(() => {
     if (open && activeTab === 'gerenciar' && selectedDoctor) {
@@ -425,7 +424,7 @@ export function DoctorScheduleGenerator({
               periodo,
               hora_inicio: sched[periodo].hora_inicio,
               hora_fim: sched[periodo].hora_fim,
-              intervalo_minutos: intervaloMinutos,
+              intervalo_minutos: sched[periodo].intervalo_minutos,
               ativo: true
             }]
           : []
@@ -555,28 +554,8 @@ export function DoctorScheduleGenerator({
                   )}
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Intervalo entre horários</Label>
-                  <Select 
-                    value={String(intervaloMinutos)} 
-                    onValueChange={(v) => setIntervaloMinutos(Number(v) as 1 | 5 | 10 | 15 | 20 | 30)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1">1 minuto (máxima flexibilidade)</SelectItem>
-                      <SelectItem value="5">5 minutos</SelectItem>
-                      <SelectItem value="10">10 minutos</SelectItem>
-                      <SelectItem value="15">15 minutos</SelectItem>
-                      <SelectItem value="20">20 minutos</SelectItem>
-                      <SelectItem value="30">30 minutos</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    💡 Intervalos menores geram mais horários disponíveis
-                  </p>
-                </div>
+                <div />
+
 
                 <div className="space-y-2">
                   <Label>Data Início *</Label>
@@ -673,10 +652,10 @@ export function DoctorScheduleGenerator({
                             }
                             className="data-[state=checked]:bg-primary"
                           />
-                          <div className="flex items-center gap-1.5 flex-1">
+                      <div className="flex items-center gap-1.5 flex-1">
                             <Input 
                               type="time" 
-                              className="h-9 text-xs font-mono"
+                              className="h-9 text-xs font-mono w-[90px]"
                               value={sched.manha.hora_inicio}
                               disabled={!sched.manha.ativo}
                               onChange={(e) => updateSchedule(idx, 'manha', 'hora_inicio', e.target.value)}
@@ -684,11 +663,29 @@ export function DoctorScheduleGenerator({
                             <span className="text-xs text-muted-foreground">até</span>
                             <Input 
                               type="time" 
-                              className="h-9 text-xs font-mono"
+                              className="h-9 text-xs font-mono w-[90px]"
                               value={sched.manha.hora_fim}
                               disabled={!sched.manha.ativo}
                               onChange={(e) => updateSchedule(idx, 'manha', 'hora_fim', e.target.value)}
                             />
+                            {sched.manha.ativo && (
+                              <Select
+                                value={String(sched.manha.intervalo_minutos)}
+                                onValueChange={(v) => updateSchedule(idx, 'manha', 'intervalo_minutos', Number(v))}
+                              >
+                                <SelectTrigger className="h-9 w-[80px] text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="1">1 min</SelectItem>
+                                  <SelectItem value="5">5 min</SelectItem>
+                                  <SelectItem value="10">10 min</SelectItem>
+                                  <SelectItem value="15">15 min</SelectItem>
+                                  <SelectItem value="20">20 min</SelectItem>
+                                  <SelectItem value="30">30 min</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            )}
                           </div>
                         </div>
                       
@@ -704,7 +701,7 @@ export function DoctorScheduleGenerator({
                           <div className="flex items-center gap-1.5 flex-1">
                             <Input 
                               type="time" 
-                              className="h-9 text-xs font-mono"
+                              className="h-9 text-xs font-mono w-[90px]"
                               value={sched.tarde.hora_inicio}
                               disabled={!sched.tarde.ativo}
                               onChange={(e) => updateSchedule(idx, 'tarde', 'hora_inicio', e.target.value)}
@@ -712,11 +709,29 @@ export function DoctorScheduleGenerator({
                             <span className="text-xs text-muted-foreground">até</span>
                             <Input 
                               type="time" 
-                              className="h-9 text-xs font-mono"
+                              className="h-9 text-xs font-mono w-[90px]"
                               value={sched.tarde.hora_fim}
                               disabled={!sched.tarde.ativo}
                               onChange={(e) => updateSchedule(idx, 'tarde', 'hora_fim', e.target.value)}
                             />
+                            {sched.tarde.ativo && (
+                              <Select
+                                value={String(sched.tarde.intervalo_minutos)}
+                                onValueChange={(v) => updateSchedule(idx, 'tarde', 'intervalo_minutos', Number(v))}
+                              >
+                                <SelectTrigger className="h-9 w-[80px] text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="1">1 min</SelectItem>
+                                  <SelectItem value="5">5 min</SelectItem>
+                                  <SelectItem value="10">10 min</SelectItem>
+                                  <SelectItem value="15">15 min</SelectItem>
+                                  <SelectItem value="20">20 min</SelectItem>
+                                  <SelectItem value="30">30 min</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -738,7 +753,7 @@ export function DoctorScheduleGenerator({
                       
                       <div className="text-sm space-y-1">
                         <p><strong>Período:</strong> {format(toZonedTime(parseISO(dataInicio + 'T12:00:00'), BRAZIL_TIMEZONE), 'dd/MM/yyyy')} até {format(toZonedTime(parseISO(dataFim + 'T12:00:00'), BRAZIL_TIMEZONE), 'dd/MM/yyyy')}</p>
-                        <p><strong>Intervalo:</strong> {intervaloMinutos} minutos</p>
+                        <p><strong>Intervalo:</strong> por período (individual)</p>
                         <p><strong>Dias configurados:</strong></p>
                         <ul className="ml-4 list-disc">
                           {getActiveDaysSummary.map((day, idx) => (
