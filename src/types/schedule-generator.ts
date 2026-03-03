@@ -33,16 +33,15 @@ export interface GenerationResult {
   errors?: string[];
 }
 
+export interface PeriodSchedule {
+  ativo: boolean;
+  hora_inicio: string;
+  hora_fim: string;
+  intervalo_minutos: 1 | 5 | 10 | 15 | 20 | 30;
+}
+
 export interface DaySchedule {
   dia_semana: number;
-  manha: {
-    ativo: boolean;
-    hora_inicio: string;
-    hora_fim: string;
-  };
-  tarde: {
-    ativo: boolean;
-    hora_inicio: string;
-    hora_fim: string;
-  };
+  manha: PeriodSchedule;
+  tarde: PeriodSchedule;
 }
