@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Clock, User, Calendar, Phone, AlertCircle, CheckCircle, X, Search, RefreshCw } from 'lucide-react';
+import { Clock, User, Calendar, Phone, AlertCircle, CheckCircle, X, Search, RefreshCw, AlertTriangle } from 'lucide-react';
 import { FilaEsperaWithRelations, FilaStatus } from '@/types/fila-espera';
+import { supabase } from '@/integrations/supabase/client';
 
 interface FilaEsperaListProps {
   filaEspera: FilaEsperaWithRelations[];
@@ -33,6 +34,23 @@ export function FilaEsperaList({
   const [filtroMedico, setFiltroMedico] = useState<string>('todos');
   const [busca, setBusca] = useState('');
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [notificadosExpirados, setNotificadosExpirados] = useState(0);
+
+  // Contar notificados com prazo expirado
+  useEffect(() => {
+    const checkExpired = async () => {
+      const { count } = await supabase
+        .from('fila_notificacoes')
+        .select('*', { count: 'exact', head: true })
+        .in('status_envio', ['pendente', 'enviado', 'pending_n8n'])
+        .lt('tempo_limite', new Date().toISOString())
+        .eq('resposta_paciente', 'sem_resposta');
+      setNotificadosExpirados(count || 0);
+    };
+    checkExpired();
+    const interval = setInterval(checkExpired, 30000);
+    return () => clearInterval(interval);
+  }, [filaEspera]);
 
   // Carregar dados automaticamente quando o componente monta
   useEffect(() => {
@@ -126,6 +144,12 @@ export function FilaEsperaList({
               <div>
                 <p className="text-2xl font-bold">{status.notificado}</p>
                 <p className="text-sm text-muted-foreground">Notificados</p>
+                {notificadosExpirados > 0 && (
+                  <Badge variant="destructive" className="mt-1 text-xs flex items-center gap-1 w-fit">
+                    <AlertTriangle className="h-3 w-3" />
+                    {notificadosExpirados} expirado{notificadosExpirados > 1 ? 's' : ''}
+                  </Badge>
+                )}
               </div>
             </div>
           </CardContent>
