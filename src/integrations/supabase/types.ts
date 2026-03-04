@@ -2532,6 +2532,7 @@ export type Database = {
         Args: { p_aprovador_user_id: string; p_user_id: string }
         Returns: Json
       }
+      reset_fila_notificados_expirados: { Args: never; Returns: Json }
       search_doctor_by_name_llm: {
         Args: { p_cliente_id: string; p_nome_busca: string }
         Returns: Json
