@@ -1843,6 +1843,62 @@ serve(async (req) => {
   }
 })
 
+// ============= FUZZY MATCHING DE NOMES DE MÉDICOS =============
+const STOPWORDS_MEDICO = new Set(['dr', 'dra', 'de', 'da', 'do', 'dos', 'das', 'e', 'o', 'a']);
+
+function normalizarTexto(texto: string): string {
+  return texto.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[.,\-']/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extrairPalavrasSignificativas(textoNormalizado: string): string[] {
+  return textoNormalizado.split(' ').filter(p => p.length > 1 && !STOPWORDS_MEDICO.has(p));
+}
+
+function fuzzyMatchMedicos<T extends { nome: string }>(nomeInput: string, medicos: T[]): T[] {
+  const inputNorm = normalizarTexto(nomeInput);
+  
+  // 1) Match exato por includes (lógica original)
+  const exatos = medicos.filter(m => {
+    const n = normalizarTexto(m.nome);
+    return n.includes(inputNorm) || inputNorm.includes(n);
+  });
+  if (exatos.length > 0) return exatos;
+
+  // 2) Fuzzy: score por palavras significativas em comum
+  const palavrasInput = extrairPalavrasSignificativas(inputNorm);
+  if (palavrasInput.length === 0) return [];
+
+  const scored = medicos.map(m => {
+    const palavrasMedico = extrairPalavrasSignificativas(normalizarTexto(m.nome));
+    if (palavrasMedico.length === 0) return { medico: m, score: 0 };
+
+    // Contar palavras do input que aparecem (parcial) em alguma palavra do médico e vice-versa
+    let matchCount = 0;
+    for (const pi of palavrasInput) {
+      for (const pm of palavrasMedico) {
+        if (pi.includes(pm) || pm.includes(pi)) { matchCount++; break; }
+      }
+    }
+    const score = matchCount / Math.min(palavrasInput.length, palavrasMedico.length);
+    return { medico: m, score };
+  });
+
+  const threshold = 0.5;
+  const matches = scored
+    .filter(s => s.score >= threshold)
+    .sort((a, b) => b.score - a.score)
+    .map(s => s.medico);
+
+  if (matches.length > 0) {
+    console.log(`🔍 Fuzzy match: "${nomeInput}" → "${matches[0].nome}" (${scored.find(s => s.medico === matches[0])?.score.toFixed(2)})`);
+  }
+  return matches;
+}
+
 
 /**
  * Formata convênio para o padrão do banco de dados (MAIÚSCULO)
@@ -2028,27 +2084,9 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
       console.log(`📋 Total de médicos ativos encontrados: ${todosMedicos.length}`);
       console.log(`📋 Médicos disponíveis: ${todosMedicos.map(m => m.nome).join(', ')}`);
       
-      // Normalizar nome para busca (remover acentos, pontuação, espaços extras)
-      const normalizarNomeMedico = (texto: string): string => 
-        texto.toLowerCase()
-          .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-          .replace(/[.,\-']/g, '')
-          .replace(/\s+/g, ' ')
-          .trim();
-      
-      const nomeNormalizado = normalizarNomeMedico(medico_nome);
-      console.log(`🔍 Nome normalizado para busca: "${nomeNormalizado}"`);
-      
-      // Matching inteligente - buscar médico que contém o nome normalizado
-      const medicosEncontrados = todosMedicos.filter(m => {
-        const nomeCompletoNormalizado = normalizarNomeMedico(m.nome);
-        const match = nomeCompletoNormalizado.includes(nomeNormalizado) || 
-                     nomeNormalizado.includes(nomeCompletoNormalizado);
-        if (match) {
-          console.log(`✅ Match encontrado: "${m.nome}" ↔ "${medico_nome}"`);
-        }
-        return match;
-      });
+      // Matching inteligente com fuzzy fallback
+      console.log(`🔍 Buscando médico: "${medico_nome}"`);
+      const medicosEncontrados = fuzzyMatchMedicos(medico_nome, todosMedicos);
       
       if (medicosEncontrados.length === 0) {
         console.log(`❌ Nenhum médico encontrado para: "${medico_nome}"`);
@@ -5113,22 +5151,9 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         });
       }
       
-      // Função auxiliar: normalizar texto para comparação (sem pontuação, tudo minúsculo)
-      const normalizar = (texto: string) => 
-        texto.toLowerCase()
-          .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remove acentos
-          .replace(/[.,\-']/g, '') // Remove pontuação
-          .replace(/\s+/g, ' ') // Normaliza espaços
-          .trim();
-      
-      const nomeNormalizado = normalizar(medico_nome);
-      console.log(`🔍 Nome normalizado para busca: "${nomeNormalizado}"`);
-      
-      // Procurar médico que contenha o nome buscado
-      const medicosEncontrados = todosMedicos.filter(m => {
-        const nomeCompletoNormalizado = normalizar(m.nome);
-        return nomeCompletoNormalizado.includes(nomeNormalizado);
-      });
+      // Matching inteligente com fuzzy fallback
+      console.log(`🔍 Buscando médico: "${medico_nome}"`);
+      const medicosEncontrados = fuzzyMatchMedicos(medico_nome, todosMedicos);
       
       if (medicosEncontrados.length === 0) {
         console.error(`❌ Nenhum médico encontrado para: "${medico_nome}"`);
