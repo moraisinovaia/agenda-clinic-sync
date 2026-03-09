@@ -5151,22 +5151,9 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         });
       }
       
-      // Função auxiliar: normalizar texto para comparação (sem pontuação, tudo minúsculo)
-      const normalizar = (texto: string) => 
-        texto.toLowerCase()
-          .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remove acentos
-          .replace(/[.,\-']/g, '') // Remove pontuação
-          .replace(/\s+/g, ' ') // Normaliza espaços
-          .trim();
-      
-      const nomeNormalizado = normalizar(medico_nome);
-      console.log(`🔍 Nome normalizado para busca: "${nomeNormalizado}"`);
-      
-      // Procurar médico que contenha o nome buscado
-      const medicosEncontrados = todosMedicos.filter(m => {
-        const nomeCompletoNormalizado = normalizar(m.nome);
-        return nomeCompletoNormalizado.includes(nomeNormalizado);
-      });
+      // Matching inteligente com fuzzy fallback
+      console.log(`🔍 Buscando médico: "${medico_nome}"`);
+      const medicosEncontrados = fuzzyMatchMedicos(medico_nome, todosMedicos);
       
       if (medicosEncontrados.length === 0) {
         console.error(`❌ Nenhum médico encontrado para: "${medico_nome}"`);
