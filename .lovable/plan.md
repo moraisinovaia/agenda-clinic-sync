@@ -1,34 +1,48 @@
 
-Verifiquei no banco e você está certo: **existem pacientes na fila para o Dr. Marcelo**.  
-O ponto é que **nenhum está no status elegível para o trigger de cancelamento**.
 
-Diagnóstico objetivo (com evidência):
-1) Para o médico `Dr. Marcelo D'Carli` (`1e110923-50df-46ff-a57a-29d88e372900`), a fila está assim:
-   - `aguardando`: **0**
-   - `notificado`: **2**
-   - `agendado`: **1**
+## Problema
 
-2) A função `processar_fila_cancelamento()` só busca candidato com:
-   - `fe.status = 'aguardando'`
-   - mesmo `medico_id`, `atendimento_id`, `cliente_id`
-   - filtros de data (`data_preferida`, `data_limite`)
+O LLM (Gemini) envia o nome "Dr. Marcelo De Carli Cavalcanti" mas no banco está cadastrado como "Dr. Marcelo D'Carli". A normalização atual transforma:
 
-3) No seu cancelamento recente:
-   - agendamento `bdf630cc-2c90-4ad0-a332-61cc1964fefb`
-   - mudou de `agendado -> cancelado` às `03:20:04`
-   - **não gerou insert em `fila_notificacoes`** (logo não havia candidato `aguardando` que passasse no filtro)
+- **Banco**: `"dr marcelo dcarli"` (o apóstrofo é removido, juntando "D" e "Carli")
+- **LLM**: `"dr marcelo de carli cavalcanti"`
 
-4) O fluxo técnico está funcionando:
-   - cancelamento anterior `ec000eef-796b-4c14-8bb4-2c78f145e49a` às `03:12:26`
-   - gerou `fila_notificacoes` `04b1f7a4-afec-4a93-8c1b-bc7cb12ea4c9` **no mesmo timestamp**
-   - isso prova que trigger + função de webhook estão ativos
+Nenhum contém o outro → `MEDICO_NAO_ENCONTRADO`.
 
-Plano de correção (para evitar esse “bloqueio” com pacientes presos em `notificado`):
-1. Ajustar a lógica da cascata para reaproveitar candidatos `notificado` com prazo expirado (ou resetar para `aguardando`) antes de procurar novo candidato.
-2. Garantir job/rotina de timeout que move `notificado` sem resposta para próximo estado e libera próxima tentativa automaticamente.
-3. Adicionar observabilidade no painel (badge “notificado expirado” + contador) para facilitar operação.
-4. Teste E2E após ajuste:
-   - cenário com 2+ pacientes
-   - cancelar 1 vaga
-   - validar criação em `fila_notificacoes` e disparo webhook
-   - validar avanço para próximo candidato quando expirar/não responder.
+## Solução
+
+Adicionar **matching por palavras-chave** como fallback nos dois locais de busca de médico (linhas ~2043 e ~5128). Quando o match simples (`includes`) falha, usar um score baseado em palavras em comum:
+
+1. Extrair palavras significativas (ignorando "dr", "dra", "de", "da", "do", "dos")
+2. Contar quantas palavras do nome buscado aparecem no nome do médico (e vice-versa)
+3. Se ≥50% das palavras significativas fazem match, considerar como encontrado
+4. Ordenar por score e pegar o melhor match
+
+Isso resolve variações como:
+- "Marcelo De Carli Cavalcanti" → match com "Marcelo D'Carli" (palavras "marcelo" e "carli" em comum)
+- "Adriana Sena" → match com "Adriana Carla de Sena"
+
+## Alterações
+
+**Arquivo**: `supabase/functions/llm-agent-api/index.ts`
+
+Criar uma função utilitária `fuzzyMatchMedico` e usá-la nos dois locais de busca:
+
+- **Linha ~2043** (handler de schedule/availability por nome)
+- **Linha ~5128** (handler de availability principal)
+
+A função:
+```text
+function fuzzyMatchMedico(nomeInput, listaMedicos):
+  1. Tentar match exato normalizado (já existente)
+  2. Se falhar, extrair palavras significativas
+  3. Calcular score de overlap para cada médico
+  4. Retornar médicos com score ≥ 0.5, ordenados por score desc
+```
+
+Stopwords a ignorar: `["dr", "dra", "de", "da", "do", "dos", "das", "e"]`
+
+## Deploy
+
+Após editar, deploy via `supabase--deploy_edge_functions` e testar com o mesmo payload que falhou.
+
