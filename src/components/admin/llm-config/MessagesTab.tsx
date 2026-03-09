@@ -33,6 +33,17 @@ const TIPOS_MENSAGEM = [
   { value: 'hora_marcada', label: 'Hora Marcada' },
   { value: 'encaixe', label: 'Encaixe / Urgência' },
   { value: 'servico_nao_agendavel', label: 'Serviço Não Agendável Online' },
+  { value: 'parecer_cardiologico', label: 'Parecer Cardiológico' },
+  { value: 'mapa_vs_mrpa', label: 'MAPA vs MRPA' },
+  { value: 'indicacoes_exames', label: 'Indicações de Exames' },
+  { value: 'urgencia', label: 'Urgência' },
+  { value: 'receita_handoff', label: 'Receita (Handoff)' },
+  { value: 'nota_fiscal_pix', label: 'Nota Fiscal / PIX' },
+  { value: 'plano_hgu', label: 'Plano HGU' },
+  { value: 'valores_consulta', label: 'Valores Consulta' },
+  { value: 'valores_ecg', label: 'Valores ECG' },
+  { value: 'confirmacao_3dias', label: 'Confirmação 3 Dias' },
+  { value: 'criancas_atendimento', label: 'Crianças - Atendimento' },
 ];
 
 export function MessagesTab({ mensagens, medicos, saving, onSave, onDelete }: MessagesTabProps) {
