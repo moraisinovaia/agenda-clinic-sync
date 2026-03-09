@@ -5670,16 +5670,16 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         console.log(`📊 Após ampliação: ${proximasDatas.length} datas encontradas`);
       }
       
-      // 🚫 SE AINDA NÃO ENCONTROU NADA após 45 dias, retornar erro claro
+      // 🚫 SE AINDA NÃO ENCONTROU NADA, retornar erro claro
       if (proximasDatas.length === 0) {
         const mensagemSemVagas = 
-          `😔 Não encontrei vagas disponíveis para ${medico.nome} nos próximos 45 dias.\n\n` +
+          `😔 Não encontrei vagas disponíveis para ${medico.nome} nos próximos ${quantidade_dias} dias.\n\n` +
           `📞 Por favor, ligue para ${getClinicPhone(config)} para:\n` +
           `• Entrar na fila de espera\n` +
           `• Verificar outras opções\n` +
           `• Consultar disponibilidade futura`;
         
-        console.log('❌ Nenhuma data disponível mesmo após buscar 45 dias');
+        console.log(`❌ Nenhuma data disponível mesmo após buscar ${quantidade_dias} dias`);
         
         return successResponse({
           message: mensagemSemVagas,
