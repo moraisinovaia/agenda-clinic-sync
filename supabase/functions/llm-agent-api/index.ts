@@ -2084,27 +2084,9 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
       console.log(`📋 Total de médicos ativos encontrados: ${todosMedicos.length}`);
       console.log(`📋 Médicos disponíveis: ${todosMedicos.map(m => m.nome).join(', ')}`);
       
-      // Normalizar nome para busca (remover acentos, pontuação, espaços extras)
-      const normalizarNomeMedico = (texto: string): string => 
-        texto.toLowerCase()
-          .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-          .replace(/[.,\-']/g, '')
-          .replace(/\s+/g, ' ')
-          .trim();
-      
-      const nomeNormalizado = normalizarNomeMedico(medico_nome);
-      console.log(`🔍 Nome normalizado para busca: "${nomeNormalizado}"`);
-      
-      // Matching inteligente - buscar médico que contém o nome normalizado
-      const medicosEncontrados = todosMedicos.filter(m => {
-        const nomeCompletoNormalizado = normalizarNomeMedico(m.nome);
-        const match = nomeCompletoNormalizado.includes(nomeNormalizado) || 
-                     nomeNormalizado.includes(nomeCompletoNormalizado);
-        if (match) {
-          console.log(`✅ Match encontrado: "${m.nome}" ↔ "${medico_nome}"`);
-        }
-        return match;
-      });
+      // Matching inteligente com fuzzy fallback
+      console.log(`🔍 Buscando médico: "${medico_nome}"`);
+      const medicosEncontrados = fuzzyMatchMedicos(medico_nome, todosMedicos);
       
       if (medicosEncontrados.length === 0) {
         console.log(`❌ Nenhum médico encontrado para: "${medico_nome}"`);
