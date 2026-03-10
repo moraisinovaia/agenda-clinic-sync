@@ -1,54 +1,34 @@
 
+Verifiquei no banco e você está certo: **existem pacientes na fila para o Dr. Marcelo**.  
+O ponto é que **nenhum está no status elegível para o trigger de cancelamento**.
 
-## Diagnóstico: Confirmação de Agendamento Lenta
+Diagnóstico objetivo (com evidência):
+1) Para o médico `Dr. Marcelo D'Carli` (`1e110923-50df-46ff-a57a-29d88e372900`), a fila está assim:
+   - `aguardando`: **0**
+   - `notificado`: **2**
+   - `agendado`: **1**
 
-### Problema Identificado
+2) A função `processar_fila_cancelamento()` só busca candidato com:
+   - `fe.status = 'aguardando'`
+   - mesmo `medico_id`, `atendimento_id`, `cliente_id`
+   - filtros de data (`data_preferida`, `data_limite`)
 
-O fluxo de confirmação em `useAppointmentsList.ts` (linhas 828-958) executa **4 chamadas sequenciais ao banco** antes de mostrar resultado:
+3) No seu cancelamento recente:
+   - agendamento `bdf630cc-2c90-4ad0-a332-61cc1964fefb`
+   - mudou de `agendado -> cancelado` às `03:20:04`
+   - **não gerou insert em `fila_notificacoes`** (logo não havia candidato `aguardando` que passasse no filtro)
 
-```text
-1. getUserProfile() → RPC get_current_user_profile     (~200-500ms)
-2. SELECT status check → query agendamentos             (~200-500ms)
-3. retryOperation(confirmar_agendamento) → RPC           (~200-500ms)
-4. refetch() → query completa de todos agendamentos      (~500-2000ms)
-─────────────────────────────────────────────────────────
-Total estimado: 1.1s - 3.5s (sem retries)
-```
+4) O fluxo técnico está funcionando:
+   - cancelamento anterior `ec000eef-796b-4c14-8bb4-2c78f145e49a` às `03:12:26`
+   - gerou `fila_notificacoes` `04b1f7a4-afec-4a93-8c1b-bc7cb12ea4c9` **no mesmo timestamp**
+   - isso prova que trigger + função de webhook estão ativos
 
-Agravantes:
-- **retryOperation com 5 tentativas** e backoff exponencial (1s, 2s, 4s, 8s, 16s) -- se houver qualquer falha, pode levar 31 segundos
-- **Verificação de status redundante**: a query SELECT antes do RPC é desnecessária -- a função SQL `confirmar_agendamento` já valida o status internamente
-- **refetch() bloqueante**: após o update otimista (que já mostra o resultado na UI), ainda espera um refetch completo antes de liberar `isOperatingRef`
-- **withTimeout de 15s + 20s**: timeouts muito generosos que mascaram lentidão
-
-### Plano de Correção
-
-**Arquivo**: `src/hooks/useAppointmentsList.ts`
-
-**1. Aplicar update otimista ANTES da chamada RPC (feedback instantâneo)**
-- Mover `updateLocalAppointment()` para antes da chamada `confirmar_agendamento`
-- O usuário vê "confirmado" imediatamente na UI
-
-**2. Remover a query de verificação de status redundante (economiza ~300ms)**
-- Eliminar o bloco SELECT + validação de status (linhas 843-877)
-- A função SQL já retorna erro se o status não permitir confirmação
-
-**3. Reduzir retries de 5 para 2 e timeouts**
-- `retryOperation` de 5 para 2 tentativas
-- `withTimeout` de 20s para 10s
-
-**4. Tornar refetch não-bloqueante**
-- Após sucesso, fazer `refetch()` em background sem `await`
-- Liberar `isOperatingRef` imediatamente após o RPC retornar
-
-**5. Aplicar mesmas otimizações em `unconfirmAppointment`, `cancelAppointment` e `deleteAppointment`**
-- Mesma estrutura: otimista primeiro, sem pre-check, refetch em background
-
-### Resultado Esperado
-
-```text
-ANTES:  getUserProfile → SELECT status → RPC → refetch (1.1-3.5s)
-DEPOIS: otimista (instantâneo) → getUserProfile(cache) → RPC → refetch(background)
-         UI feedback: <50ms | operação total: 200-500ms
-```
-
+Plano de correção (para evitar esse “bloqueio” com pacientes presos em `notificado`):
+1. Ajustar a lógica da cascata para reaproveitar candidatos `notificado` com prazo expirado (ou resetar para `aguardando`) antes de procurar novo candidato.
+2. Garantir job/rotina de timeout que move `notificado` sem resposta para próximo estado e libera próxima tentativa automaticamente.
+3. Adicionar observabilidade no painel (badge “notificado expirado” + contador) para facilitar operação.
+4. Teste E2E após ajuste:
+   - cenário com 2+ pacientes
+   - cancelar 1 vaga
+   - validar criação em `fila_notificacoes` e disparo webhook
+   - validar avanço para próximo candidato quando expirar/não responder.
