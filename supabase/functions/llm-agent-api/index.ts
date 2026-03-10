@@ -2405,18 +2405,16 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
                           }
                           
                           
-                          // ✅ Buscar agendamentos do período específico (incluindo recentes)
-                          const cincMinutosAtras = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-                          let queryFuturos = supabase
-                            .from('agendamentos')
-                            .select('id, atendimento_id, hora_agendamento, created_at')
-                            .eq('medico_id', medico.id)
-                            .eq('data_agendamento', dataFuturaStr)
-                            .eq('cliente_id', clienteId)
-                            .is('excluido_em', null)
-                            .is('cancelado_em', null)
-                            .in('status', ['agendado', 'confirmado'])
-                            .gte('created_at', cincMinutosAtras); // Incluir agendamentos criados nos últimos 5min
+                           // ✅ Buscar TODOS os agendamentos ativos do período (sem filtro de created_at)
+                           let queryFuturos = supabase
+                             .from('agendamentos')
+                             .select('id, atendimento_id, hora_agendamento, created_at')
+                             .eq('medico_id', medico.id)
+                             .eq('data_agendamento', dataFuturaStr)
+                             .eq('cliente_id', clienteId)
+                             .is('excluido_em', null)
+                             .is('cancelado_em', null)
+                             .in('status', ['agendado', 'confirmado']);
                           
                           // 🆕 Filtrar por horário do período de CONTAGEM
                           if (inicioContagem && fimContagem) {
