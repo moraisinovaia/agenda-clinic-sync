@@ -1,34 +1,40 @@
 
-Verifiquei no banco e você está certo: **existem pacientes na fila para o Dr. Marcelo**.  
-O ponto é que **nenhum está no status elegível para o trigger de cancelamento**.
 
-Diagnóstico objetivo (com evidência):
-1) Para o médico `Dr. Marcelo D'Carli` (`1e110923-50df-46ff-a57a-29d88e372900`), a fila está assim:
-   - `aguardando`: **0**
-   - `notificado`: **2**
-   - `agendado`: **1**
+## Bug Encontrado: Limite de Agendamentos NÃO É Respeitado
 
-2) A função `processar_fila_cancelamento()` só busca candidato com:
-   - `fe.status = 'aguardando'`
-   - mesmo `medico_id`, `atendimento_id`, `cliente_id`
-   - filtros de data (`data_preferida`, `data_limite`)
+### Problema
 
-3) No seu cancelamento recente:
-   - agendamento `bdf630cc-2c90-4ad0-a332-61cc1964fefb`
-   - mudou de `agendado -> cancelado` às `03:20:04`
-   - **não gerou insert em `fila_notificacoes`** (logo não havia candidato `aguardando` que passasse no filtro)
+Na validação de limite de vagas (linha 2371 e 2421 do `llm-agent-api/index.ts`), a query que conta agendamentos existentes tem um filtro **incorreto**:
 
-4) O fluxo técnico está funcionando:
-   - cancelamento anterior `ec000eef-796b-4c14-8bb4-2c78f145e49a` às `03:12:26`
-   - gerou `fila_notificacoes` `04b1f7a4-afec-4a93-8c1b-bc7cb12ea4c9` **no mesmo timestamp**
-   - isso prova que trigger + função de webhook estão ativos
+```sql
+.gte('created_at', cincMinutosAtras)
+```
 
-Plano de correção (para evitar esse “bloqueio” com pacientes presos em `notificado`):
-1. Ajustar a lógica da cascata para reaproveitar candidatos `notificado` com prazo expirado (ou resetar para `aguardando`) antes de procurar novo candidato.
-2. Garantir job/rotina de timeout que move `notificado` sem resposta para próximo estado e libera próxima tentativa automaticamente.
-3. Adicionar observabilidade no painel (badge “notificado expirado” + contador) para facilitar operação.
-4. Teste E2E após ajuste:
-   - cenário com 2+ pacientes
-   - cancelar 1 vaga
-   - validar criação em `fila_notificacoes` e disparo webhook
-   - validar avanço para próximo candidato quando expirar/não responder.
+Isso filtra para contar **apenas agendamentos criados nos últimos 5 minutos**, ignorando todos os outros. No caso da data 2026-03-17, existem **19 agendamentos** (limite é 15), mas a API reportou "✅ Vagas disponíveis: 15" porque nenhum deles foi criado nos últimos 5 minutos.
+
+### Evidência
+
+- Data 2026-03-17: 19 consultas ativas para Dr. Marcelo (18 manhã + 1 às 08:00 recém-criada)
+- Limite configurado: 15 por período
+- Log da API: `✅ Vagas disponíveis: 15` — contou 0 ocupados porque o filtro `created_at >= 5min atrás` excluiu os 18 agendamentos antigos
+
+### Correção
+
+Remover o filtro `.gte('created_at', cincMinutosAtras)` em **3 locais** do `handleSchedule`:
+
+1. **Linha ~2361-2371**: Query de validação de limite antes de criar
+2. **Linha ~2411-2421**: Query de busca de datas alternativas (dentro do loop de 60 dias)
+3. Verificar se há mais ocorrências do mesmo padrão
+
+O filtro `excluido_em IS NULL`, `cancelado_em IS NULL` e `status IN ('agendado','confirmado')` já são suficientes para excluir agendamentos cancelados/excluídos. O `created_at` nunca deveria ter sido incluído.
+
+### Impacto
+
+- **Crítico**: Qualquer data com agendamentos criados há mais de 5 minutos será tratada como "vazia", permitindo overbooking ilimitado
+- A correção não tem efeitos colaterais negativos — apenas remove um filtro que nunca deveria existir
+
+### Implementação
+
+1. Editar `supabase/functions/llm-agent-api/index.ts` — remover as 3+ linhas com `.gte('created_at', cincMinutosAtras)` nas queries de contagem de limite
+2. Redeploy da edge function
+
