@@ -808,42 +808,13 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     try {
       const profile = await getUserProfile();
       
-      console.log('🔍 [CONFIRM] Verificando status no banco...');
-      const { data: currentAppointment, error: fetchError } = await withTimeout(
-        (async () => {
-          return await supabase
-            .from('agendamentos')
-            .select('status, pacientes(nome_completo)')
-            .eq('id', appointmentId)
-            .is('excluido_em', null)
-            .single();
-        })(),
-        15000 // Aumentado de 8000 para 15000ms
-      );
-      
-      if (fetchError) {
-        throw new Error('Agendamento não encontrado');
-      }
-      
-      if (currentAppointment.status === 'confirmado') {
-        toast({
-          title: 'Já confirmado',
-          description: 'Este agendamento já está confirmado.',
-          variant: 'default',
-        });
-        await refetch();
-        return;
-      }
-      
-      if (currentAppointment.status !== 'agendado' && currentAppointment.status !== 'cancelado_bloqueio') {
-        toast({
-          title: 'Ação não permitida',
-          description: `Agendamentos com status "${currentAppointment.status}" não podem ser confirmados.`,
-          variant: 'destructive',
-        });
-        await refetch();
-        return;
-      }
+      // ⚡ OTIMIZAÇÃO: Update otimista ANTES do RPC (feedback instantâneo)
+      updateLocalAppointment(appointmentId, { 
+        status: 'confirmado',
+        confirmado_em: new Date().toISOString(),
+        confirmado_por: profile.nome,
+        confirmado_por_user_id: profile.user_id
+      });
       
       console.log('🔄 [CONFIRM] Executando RPC...');
       const response = await retryOperation(async () => {
@@ -855,9 +826,9 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
               p_confirmado_por_user_id: profile.user_id
             });
           })(),
-          20000 // Aumentado de 10000 para 20000ms
+          10000
         );
-      }, 5); // Aumentado de 3 para 5 tentativas
+      }, 2);
 
       if (response.error) {
         throw response.error;
@@ -873,30 +844,21 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         throw new Error(resultAny?.error || resultAny?.message || 'Falha ao confirmar');
       }
       
-      updateLocalAppointment(appointmentId, { 
-        status: 'confirmado',
-        confirmado_em: new Date().toISOString(),
-        confirmado_por: profile.nome,
-        confirmado_por_user_id: profile.user_id
-      });
-      
       toast({ 
         title: 'Confirmado com sucesso', 
         description: 'O agendamento foi confirmado' 
       });
       
-      // Refetch imediato após confirmar
-      console.log('🔄 [CONFIRM] Executando refetch imediato...');
+      // ⚡ Refetch em background (não-bloqueante)
       invalidateCache();
-      await refetch();
+      refetch().catch(() => {});
       
     } catch (error) {
-      console.error('❌ [CONFIRM] Erro detalhado:', {
-        message: error instanceof Error ? error.message : 'Erro desconhecido',
-        stack: error instanceof Error ? error.stack : undefined,
-        appointmentId,
-        timestamp: new Date().toISOString()
-      });
+      console.error('❌ [CONFIRM] Erro:', error);
+      
+      // Rollback otimista em caso de erro
+      invalidateCache();
+      refetch().catch(() => {});
       
       const errorMsg = error instanceof Error ? error.message : 'Erro desconhecido';
       let userMessage = 'Tente novamente';
@@ -918,8 +880,6 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         description: userMessage,
         variant: 'destructive',
       });
-      
-      await refetch();
       
     } finally {
       isOperatingRef.current = false;
