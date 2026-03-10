@@ -988,6 +988,9 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     try {
       const profile = await getUserProfile();
       
+      // ⚡ OTIMIZAÇÃO: Update otimista ANTES do RPC
+      setAppointments(prev => prev.filter(apt => apt.id !== appointmentId));
+      
       console.log('🔄 [DELETE] Executando RPC...');
       const response = await retryOperation(async () => {
         return await withTimeout(
@@ -1000,7 +1003,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           })(),
           10000
         );
-      });
+      }, 2);
 
       if (response.error) {
         throw response.error;
@@ -1016,25 +1019,21 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         throw new Error(resultAny?.error || resultAny?.message || 'Falha ao excluir');
       }
       
-      setAppointments(prev => prev.filter(apt => apt.id !== appointmentId));
-      
       toast({ 
         title: 'Excluído com sucesso', 
         description: 'O agendamento foi excluído' 
       });
       
-      setTimeout(() => {
-        if (!isOperatingRef.current) {
-          console.log('🔄 [BACKGROUND-DELETE] Executando refetch de validação...');
-          invalidateCache();
-          refetch();
-        } else {
-          console.warn('⚠️ [BACKGROUND-DELETE] Refetch cancelado - operação em andamento');
-        }
-      }, 2000);
+      // ⚡ Refetch em background (não-bloqueante)
+      invalidateCache();
+      refetch().catch(() => {});
       
     } catch (error) {
       console.error('❌ [DELETE] Erro:', error);
+      
+      // Rollback otimista em caso de erro
+      invalidateCache();
+      refetch().catch(() => {});
       
       const errorMsg = error instanceof Error ? error.message : 'Erro desconhecido';
       let userMessage = 'Não foi possível excluir';
@@ -1050,8 +1049,6 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         description: userMessage,
         variant: 'destructive',
       });
-      
-      await refetch();
       
     } finally {
       isOperatingRef.current = false;
