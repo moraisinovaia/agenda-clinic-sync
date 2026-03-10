@@ -901,49 +901,13 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     try {
       const profile = await getUserProfile();
       
-      console.log('🔍 [UNCONFIRM] Verificando status no banco...');
-      const { data: currentAppointment, error: fetchError } = await withTimeout(
-        (async () => {
-          return await supabase
-            .from('agendamentos')
-            .select('status, pacientes(nome_completo)')
-            .eq('id', appointmentId)
-            .is('excluido_em', null)
-            .single();
-        })(),
-        8000
-      );
-      
-      if (fetchError) {
-        throw new Error('Agendamento não encontrado');
-      }
-      
-      if (currentAppointment.status === 'agendado') {
-        toast({
-          title: 'Sem confirmação',
-          description: 'Este agendamento já está sem confirmação.',
-          variant: 'default',
-        });
-        await refetch();
-        return;
-      }
-      
-      if (currentAppointment.status !== 'confirmado') {
-        let userMessage = '';
-        if (currentAppointment.status === 'cancelado') {
-          userMessage = 'Agendamentos cancelados não podem ser desconfirmados.';
-        } else {
-          userMessage = `Agendamentos com status "${currentAppointment.status}" não podem ser desconfirmados.`;
-        }
-        
-        toast({
-          title: 'Ação não permitida',
-          description: userMessage,
-          variant: 'destructive',
-        });
-        await refetch();
-        return;
-      }
+      // ⚡ OTIMIZAÇÃO: Update otimista ANTES do RPC
+      updateLocalAppointment(appointmentId, { 
+        status: 'agendado',
+        confirmado_em: null,
+        confirmado_por: null,
+        confirmado_por_user_id: null
+      });
       
       console.log('🔄 [UNCONFIRM] Executando RPC...');
       const response = await retryOperation(async () => {
@@ -957,7 +921,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
           })(),
           10000
         );
-      });
+      }, 2);
 
       if (response.error) {
         throw response.error;
@@ -973,30 +937,21 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         throw new Error(resultAny?.error || resultAny?.message || 'Falha ao desconfirmar');
       }
       
-      updateLocalAppointment(appointmentId, { 
-        status: 'agendado',
-        confirmado_em: null,
-        confirmado_por: null,
-        confirmado_por_user_id: null
-      });
-      
       toast({ 
         title: 'Confirmação removida', 
         description: 'A confirmação do agendamento foi removida' 
       });
       
-      setTimeout(() => {
-        if (!isOperatingRef.current) {
-          console.log('🔄 [BACKGROUND-UNCONFIRM] Executando refetch de validação...');
-          invalidateCache();
-          refetch();
-        } else {
-          console.warn('⚠️ [BACKGROUND-UNCONFIRM] Refetch cancelado - operação em andamento');
-        }
-      }, 2000);
+      // ⚡ Refetch em background (não-bloqueante)
+      invalidateCache();
+      refetch().catch(() => {});
       
     } catch (error) {
       console.error('❌ [UNCONFIRM] Erro:', error);
+      
+      // Rollback otimista em caso de erro
+      invalidateCache();
+      refetch().catch(() => {});
       
       const errorMsg = error instanceof Error ? error.message : 'Erro desconhecido';
       let userMessage = 'Tente novamente';
@@ -1012,8 +967,6 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
         description: userMessage,
         variant: 'destructive',
       });
-      
-      await refetch();
       
     } finally {
       isOperatingRef.current = false;
