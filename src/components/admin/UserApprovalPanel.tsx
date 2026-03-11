@@ -351,7 +351,13 @@ export function UserApprovalPanel() {
         }
       });
 
-      if (error) throw error;
+      // Edge Function errors: try to extract structured error from response
+      if (error) {
+        // supabase.functions.invoke wraps non-2xx as FunctionsHttpError
+        const errorBody = (error as any)?.context?.body || data;
+        const message = errorBody?.error || error.message || 'Erro ao excluir usuário';
+        throw new Error(message);
+      }
 
       if (!data?.success) {
         throw new Error(data?.error || 'Erro ao excluir usuário');
