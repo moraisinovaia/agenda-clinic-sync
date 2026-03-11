@@ -1,34 +1,51 @@
 
-Verifiquei no banco e você está certo: **existem pacientes na fila para o Dr. Marcelo**.  
-O ponto é que **nenhum está no status elegível para o trigger de cancelamento**.
+Objetivo: isolar por que a exclusão continua falhando após a correção anterior e definir uma solução definitiva (nível produção).
 
-Diagnóstico objetivo (com evidência):
-1) Para o médico `Dr. Marcelo D'Carli` (`1e110923-50df-46ff-a57a-29d88e372900`), a fila está assim:
-   - `aguardando`: **0**
-   - `notificado`: **2**
-   - `agendado`: **1**
+Diagnóstico confirmado
+- O erro atual NÃO é mais `user_roles_created_by_fkey` (esse já está corrigido com `ON DELETE SET NULL`).
+- O bloqueio atual é: `profiles_aprovado_por_fkey`.
+- Evidência dos logs de Auth:
+  - `ERROR: update or delete on table "profiles" violates foreign key constraint "profiles_aprovado_por_fkey" on table "profiles" (SQLSTATE 23503)`
+- Evidência de banco:
+  - Constraint atual: `FOREIGN KEY (aprovado_por) REFERENCES profiles(id)` (sem `ON DELETE`).
+  - Usuário alvo (`42eb274a-...`, profile `892445da-...`) é referenciado em `profiles.aprovado_por` por 4 registros.
+- Conclusão: ao deletar `auth.users`, o cascade remove `profiles.user_id`, mas a auto-FK de `profiles.aprovado_por` bloqueia a exclusão do profile aprovador.
 
-2) A função `processar_fila_cancelamento()` só busca candidato com:
-   - `fe.status = 'aguardando'`
-   - mesmo `medico_id`, `atendimento_id`, `cliente_id`
-   - filtros de data (`data_preferida`, `data_limite`)
+Do I know what the issue is?
+- Sim. A causa raiz é relacional (FK sem política de deleção) e está reproduzida em logs + constraints atuais.
 
-3) No seu cancelamento recente:
-   - agendamento `bdf630cc-2c90-4ad0-a332-61cc1964fefb`
-   - mudou de `agendado -> cancelado` às `03:20:04`
-   - **não gerou insert em `fila_notificacoes`** (logo não havia candidato `aguardando` que passasse no filtro)
+Plano de correção definitiva e profissional
 
-4) O fluxo técnico está funcionando:
-   - cancelamento anterior `ec000eef-796b-4c14-8bb4-2c78f145e49a` às `03:12:26`
-   - gerou `fila_notificacoes` `04b1f7a4-afec-4a93-8c1b-bc7cb12ea4c9` **no mesmo timestamp**
-   - isso prova que trigger + função de webhook estão ativos
+1) Corrigir FK principal que está bloqueando agora (obrigatório)
+- Criar migration para recriar `profiles_aprovado_por_fkey` com `ON DELETE SET NULL`.
+- SQL:
+  - `ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_aprovado_por_fkey;`
+  - `ALTER TABLE public.profiles ADD CONSTRAINT profiles_aprovado_por_fkey FOREIGN KEY (aprovado_por) REFERENCES public.profiles(id) ON DELETE SET NULL;`
 
-Plano de correção (para evitar esse “bloqueio” com pacientes presos em `notificado`):
-1. Ajustar a lógica da cascata para reaproveitar candidatos `notificado` com prazo expirado (ou resetar para `aguardando`) antes de procurar novo candidato.
-2. Garantir job/rotina de timeout que move `notificado` sem resposta para próximo estado e libera próxima tentativa automaticamente.
-3. Adicionar observabilidade no painel (badge “notificado expirado” + contador) para facilitar operação.
-4. Teste E2E após ajuste:
-   - cenário com 2+ pacientes
-   - cancelar 1 vaga
-   - validar criação em `fila_notificacoes` e disparo webhook
-   - validar avanço para próximo candidato quando expirar/não responder.
+2) Hardening preventivo para não “quebrar no próximo usuário”
+- Ajustar também FK `audit_logs_user_id_fkey` para `ON DELETE SET NULL` (hoje está sem ação; usuários com histórico podem falhar no futuro).
+- SQL:
+  - `ALTER TABLE public.audit_logs DROP CONSTRAINT IF EXISTS audit_logs_user_id_fkey;`
+  - `ALTER TABLE public.audit_logs ADD CONSTRAINT audit_logs_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE SET NULL;`
+
+3) Melhorar retorno de erro da exclusão (profissional/operacional)
+- No `user-management`:
+  - padronizar resposta estruturada sem stack completa para o cliente;
+  - incluir `error_code` e mensagem amigável de integridade referencial;
+  - manter log técnico completo apenas no Edge log.
+- No frontend (`UserApprovalPanel`):
+  - ler payload da Function quando vier non-2xx e exibir mensagem real, não só “Edge Function returned non-2xx”.
+
+4) Validação pós-correção (aceite)
+- Verificar constraints no banco (`pg_constraint`) com `ON DELETE SET NULL` nas duas FKs.
+- Repetir exclusão do usuário que falhou.
+- Testar exclusão de um usuário com histórico de `audit_logs` para garantir que não há novo bloqueio.
+- Confirmar integridade:
+  - `profiles.aprovado_por` dos aprovados vira `NULL`;
+  - demais dados permanecem consistentes;
+  - sem erro 500 no endpoint `/admin/users/:id`.
+
+Detalhes técnicos (resumo)
+- O problema é de modelagem de FK, não de RLS nem de permissão.
+- A escolha correta aqui é `SET NULL` (preserva histórico e evita perda de registros dependentes).
+- A abordagem em banco elimina a classe de erro de forma permanente, sem depender de “workaround” no código.
