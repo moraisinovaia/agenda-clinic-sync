@@ -279,11 +279,24 @@ serve(async (req) => {
   } catch (error: any) {
     console.error('[ERROR] Exception in user-management:', error);
     console.error('[ERROR] Error stack:', error.stack);
+    
+    // Detect FK constraint violations and return user-friendly message
+    const errorMsg = error.message || '';
+    let userMessage = 'Erro interno ao processar requisição';
+    let errorCode = 'INTERNAL_ERROR';
+    
+    if (errorMsg.includes('foreign key constraint') || errorMsg.includes('violates foreign key')) {
+      const constraintMatch = errorMsg.match(/"([^"]+)"/);
+      const constraintName = constraintMatch ? constraintMatch[1] : 'desconhecida';
+      userMessage = `Não foi possível excluir: o usuário possui referências em outros registros (constraint: ${constraintName}). Contate o administrador do sistema.`;
+      errorCode = 'FK_CONSTRAINT_VIOLATION';
+    }
+    
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error.message || 'Erro interno ao processar requisição',
-        stack: error.stack
+        error: userMessage,
+        error_code: errorCode
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
