@@ -239,9 +239,15 @@ export default function Auth() {
       
       if (error) {
         // Se houve erro no cadastro
-        const errorMessage = error.message.includes('already registered')
-          ? 'Este email já está cadastrado'
-          : 'Erro ao criar conta. Tente novamente.';
+        let errorMessage = 'Erro ao criar conta. Tente novamente.';
+        
+        if (error.message.includes('already registered')) {
+          errorMessage = 'Este email já está cadastrado';
+        } else if (error.message.includes('weak') || error.message.includes('easy to guess') || error.message.includes('leaked')) {
+          errorMessage = 'Senha muito fraca ou já exposta em vazamentos de dados. Use uma senha mais forte com letras maiúsculas, minúsculas, números e caracteres especiais (mínimo 8 caracteres).';
+        } else if (error.message.includes('password')) {
+          errorMessage = 'Senha inválida. Use pelo menos 8 caracteres com letras e números.';
+        }
         
         setError(errorMessage);
         // Não exibir toast aqui pois o useAuth já exibe
