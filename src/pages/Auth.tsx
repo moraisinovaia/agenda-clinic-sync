@@ -309,21 +309,19 @@ export default function Auth() {
     
     let email = loginData.emailOrUsername;
     
-    // Se não contém @, buscar email pelo username
+    // Se não contém @, buscar email pelo username via RPC (bypassa RLS)
     if (!loginData.emailOrUsername.includes('@')) {
       try {
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('email')
-          .eq('username', loginData.emailOrUsername)
-          .maybeSingle();
+        const { data: emailResult, error: rpcError } = await supabase
+          .rpc('get_email_by_username', { p_username: loginData.emailOrUsername.trim() });
           
-        if (profileError || !profile) {
-          setError('Nome de usuário não encontrado');
+        if (rpcError || !emailResult) {
+          console.warn('🔐 Forgot password: username não encontrado via RPC:', rpcError);
+          setError('Nome de usuário não encontrado. Tente usar seu email diretamente.');
           return;
         }
         
-        email = profile.email;
+        email = emailResult;
       } catch (error) {
         setError('Erro ao buscar email. Tente usar seu email diretamente.');
         return;
