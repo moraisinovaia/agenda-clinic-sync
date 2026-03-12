@@ -169,7 +169,10 @@ export type Database = {
           observacoes: string | null
           restricoes: string | null
           tipo: string
+          valor_monocular: number | null
+          valor_monocular_avista: number | null
           valor_particular: number | null
+          valor_particular_avista: number | null
         }
         Insert: {
           ativo?: boolean | null
@@ -187,7 +190,10 @@ export type Database = {
           observacoes?: string | null
           restricoes?: string | null
           tipo: string
+          valor_monocular?: number | null
+          valor_monocular_avista?: number | null
           valor_particular?: number | null
+          valor_particular_avista?: number | null
         }
         Update: {
           ativo?: boolean | null
@@ -205,7 +211,10 @@ export type Database = {
           observacoes?: string | null
           restricoes?: string | null
           tipo?: string
+          valor_monocular?: number | null
+          valor_monocular_avista?: number | null
           valor_particular?: number | null
+          valor_particular_avista?: number | null
         }
         Relationships: [
           {
