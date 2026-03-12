@@ -247,24 +247,20 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const signUp = async (password: string, nome: string, username: string, email: string, clienteId?: string) => {
     try {
-      // Verificar se o username já existe
+      // Verificar se o username já existe via RPC (funciona para anon)
       try {
-        const { data: existingProfile } = await supabase
-          .from('profiles')
-          .select('username')
-          .eq('username', username)
-          .maybeSingle();
+        const { data: isAvailable, error: checkError } = await supabase
+          .rpc('check_username_available', { p_username: username });
           
-        if (existingProfile) {
+        if (!checkError && isAvailable === false) {
           toast({
             title: 'Erro no cadastro',
-            description: 'Este nome de usuário já está em uso',
+            description: 'Este nome de usuário já está em uso. Escolha outro.',
             variant: 'destructive',
           });
           return { error: new Error('Este nome de usuário já está em uso') };
         }
       } catch (usernameCheckError) {
-        // Se falhar na verificação de username, continuar com cadastro
         console.warn('Erro ao verificar username, continuando:', usernameCheckError);
       }
 
