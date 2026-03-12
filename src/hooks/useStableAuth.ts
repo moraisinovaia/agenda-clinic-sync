@@ -68,13 +68,14 @@ export const useStableAuth = () => {
         if (error) {
           console.error('❌ useStableAuth: Erro na RPC get_user_auth_data:', error);
           // Fallback para método antigo
-          const [adminResult, clinicAdminResult, clinicIdResult] = await Promise.all([
+          const [adminResult, superAdminResult, clinicAdminResult, clinicIdResult] = await Promise.all([
             (supabase.rpc as any)('has_role', { _user_id: user.id, _role: 'admin' }),
+            (supabase.rpc as any)('is_super_admin'),
             (supabase.rpc as any)('is_clinic_admin', { _user_id: user.id }),
             (supabase.rpc as any)('get_clinic_admin_cliente_id', { _user_id: user.id })
           ]);
           
-          const isApprovedAdmin = adminResult.data === true && profile?.status === 'aprovado';
+          const isApprovedAdmin = (adminResult.data === true || superAdminResult.data === true) && profile?.status === 'aprovado';
           const isApprovedClinicAdmin = clinicAdminResult.data === true && profile?.status === 'aprovado';
           
           setIsAdmin(isApprovedAdmin);
