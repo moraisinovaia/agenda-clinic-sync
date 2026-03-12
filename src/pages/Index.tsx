@@ -628,7 +628,7 @@ const Index = () => {
             {/* Admin view - gerenciamento de usuários, médicos, serviços */}
             {(isAdmin || isClinicAdmin) ? (
               <Tabs defaultValue="usuarios" className="w-full">
-                <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-8' : 'grid-cols-6'} max-w-6xl mb-6`}>
+                <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-9' : 'grid-cols-6'} max-w-6xl mb-6`}>
                   {isAdmin && <TabsTrigger value="dashboard">Dashboard</TabsTrigger>}
                   <TabsTrigger value="usuarios">Usuários</TabsTrigger>
                   {isAdmin && <TabsTrigger value="clinicas">Clínicas</TabsTrigger>}
@@ -637,6 +637,7 @@ const Index = () => {
                   <TabsTrigger value="preparos">Preparos</TabsTrigger>
                   <TabsTrigger value="horarios">Horários</TabsTrigger>
                   <TabsTrigger value="llm-config">LLM API</TabsTrigger>
+                  {isAdmin && <TabsTrigger value="planos">Planos</TabsTrigger>}
                 </TabsList>
                 {isAdmin && (
                   <TabsContent value="dashboard">
