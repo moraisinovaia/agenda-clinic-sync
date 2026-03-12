@@ -146,11 +146,16 @@ export default function Auth() {
       const { error } = await signIn(loginData.emailOrUsername, loginData.password);
       
       if (error) {
-        console.error('🔐 Page: Erro no login retornado:', error.message);
-        // Se houve erro no login
-        const errorMessage = error.message === 'Invalid credentials' 
-          ? 'Email/usuário ou senha incorretos'
-          : 'Erro ao fazer login. Tente novamente.';
+        console.error('🔐 Page: Erro no login retornado:', JSON.stringify(error));
+        // Mensagem específica para credenciais inválidas com CTA de recuperação
+        let errorMessage: string;
+        if (error.message?.includes('Invalid login credentials') || error.message === 'Invalid credentials' || error.message?.includes('incorretos')) {
+          errorMessage = 'Email/usuário ou senha incorretos. Se esqueceu a senha, use "Esqueci minha senha" abaixo.';
+        } else if (error.message?.includes('não encontrado')) {
+          errorMessage = error.message;
+        } else {
+          errorMessage = error.message || 'Erro ao fazer login. Tente novamente.';
+        }
         
         setError(errorMessage);
         // Limpar credenciais salvas se login falhar
