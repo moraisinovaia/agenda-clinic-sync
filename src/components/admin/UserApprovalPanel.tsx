@@ -447,6 +447,35 @@ export function UserApprovalPanel() {
     }
   };
 
+  const handleSendPasswordReset = async (userEmail: string, userName: string) => {
+    try {
+      console.log('🔑 Enviando redefinição de senha para:', userEmail);
+      
+      const { data, error } = await supabase.functions.invoke('user-management', {
+        body: {
+          action: 'send_password_reset',
+          user_email: userEmail,
+          admin_id: profile?.user_id
+        }
+      });
+
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Falha ao enviar');
+
+      toast({
+        title: 'Email enviado!',
+        description: `Link de redefinição de senha enviado para ${userName} (${userEmail})`,
+      });
+    } catch (error: any) {
+      console.error('❌ Erro ao enviar reset:', error);
+      toast({
+        title: 'Erro',
+        description: error.message || 'Erro ao enviar email de redefinição',
+        variant: 'destructive',
+      });
+    }
+  };
+
   // Se não é admin ou admin da clínica aprovado, não mostrar nada
   if (!isAdmin && !isClinicAdmin) {
     return null;
