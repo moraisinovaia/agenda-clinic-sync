@@ -64,12 +64,12 @@ export default function Auth() {
           console.log('🏥 Auth: Domínio genérico, mostrando todas as clínicas');
         }
         
-        const { data, error } = await supabase.rpc('get_clinicas_para_signup', {
+        const { data, error } = await supabase.rpc('get_clinicas_para_signup' as any, {
           p_parceiro: parceiro
-        });
+        } as any);
         if (!error && data) {
-          setClinicas(data);
-          console.log(`🏥 Auth: ${data.length} clínicas carregadas`);
+          setClinicas(data as any);
+          console.log(`🏥 Auth: ${(data as any[]).length} clínicas carregadas`);
         }
       } catch (err) {
         console.warn('Erro ao buscar clínicas para signup:', err);
