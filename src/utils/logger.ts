@@ -1,3 +1,5 @@
+import { supabase } from '@/integrations/supabase/client';
+
 interface LogEntry {
   timestamp: string;
   level: 'info' | 'warn' | 'error' | 'debug';
@@ -6,11 +8,14 @@ interface LogEntry {
   context?: string;
   userId?: string;
   sessionId?: string;
+  clienteId?: string;
 }
 
 class Logger {
   private isDevelopment = import.meta.env.DEV;
   private sessionId = crypto.randomUUID();
+  private clienteIdCache: { value: string | null; timestamp: number } | null = null;
+  private CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
   private formatLog(entry: LogEntry): string {
     const { timestamp, level, message, context, userId } = entry;
@@ -21,27 +26,34 @@ class Logger {
     return `${prefix}${contextStr}${userStr} ${message}`;
   }
 
-  private createLogEntry(
-    level: LogEntry['level'],
-    message: string,
-    data?: any,
-    context?: string
-  ): LogEntry {
-    return {
-      timestamp: new Date().toISOString(),
-      level,
-      message,
-      data,
-      context,
-      sessionId: this.sessionId,
-      userId: this.getCurrentUserId()
-    };
+  private async getClienteId(): Promise<string | null> {
+    const now = Date.now();
+    if (this.clienteIdCache && (now - this.clienteIdCache.timestamp) < this.CACHE_TTL) {
+      return this.clienteIdCache.value;
+    }
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.id) return null;
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('cliente_id')
+        .eq('user_id', user.id)
+        .single();
+
+      const clienteId = profile?.cliente_id || null;
+      this.clienteIdCache = { value: clienteId, timestamp: now };
+      return clienteId;
+    } catch {
+      return null;
+    }
   }
 
   private getCurrentUserId(): string | undefined {
-    // Tentar obter ID do usuário do contexto de autenticação
     try {
-      const userString = localStorage.getItem('sb-qxlvzbvzajibdtlzngdy-auth-token');
+      const storageKey = `sb-${import.meta.env.VITE_SUPABASE_PROJECT_ID || 'qxlvzbvzajibdtlzngdy'}-auth-token`;
+      const userString = localStorage.getItem(storageKey);
       if (userString) {
         const userData = JSON.parse(userString);
         return userData?.user?.id;
@@ -52,14 +64,42 @@ class Logger {
     return undefined;
   }
 
+  private async createLogEntry(
+    level: LogEntry['level'],
+    message: string,
+    data?: any,
+    context?: string
+  ): Promise<LogEntry> {
+    const clienteId = await this.getClienteId();
+    return {
+      timestamp: new Date().toISOString(),
+      level,
+      message,
+      data,
+      context,
+      sessionId: this.sessionId,
+      userId: this.getCurrentUserId(),
+      clienteId: clienteId || undefined,
+    };
+  }
+
   private async sendToSupabase(entry: LogEntry) {
     if (!this.isDevelopment) {
       try {
-        // Em produção, enviar para edge function de logging
-        await fetch('/api/logs', {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+
+        const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID || 'qxlvzbvzajibdtlzngdy';
+        const url = `https://${projectId}.supabase.co/functions/v1/system-logs`;
+
+        await fetch(url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(entry)
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '',
+          },
+          body: JSON.stringify(entry),
         });
       } catch (error) {
         console.warn('Falha ao enviar log para Supabase:', error);
@@ -68,23 +108,37 @@ class Logger {
   }
 
   info(message: string, data?: any, context?: string) {
-    const entry = this.createLogEntry('info', message, data, context);
-    
     if (this.isDevelopment) {
-      console.info(this.formatLog(entry), data || '');
+      const syncEntry = {
+        timestamp: new Date().toISOString(),
+        level: 'info' as const,
+        message,
+        data,
+        context,
+        sessionId: this.sessionId,
+        userId: this.getCurrentUserId(),
+      };
+      console.info(this.formatLog(syncEntry), data || '');
     }
-    
-    this.sendToSupabase(entry);
+
+    this.createLogEntry('info', message, data, context).then(entry => this.sendToSupabase(entry));
   }
 
   warn(message: string, data?: any, context?: string) {
-    const entry = this.createLogEntry('warn', message, data, context);
-    
     if (this.isDevelopment) {
-      console.warn(this.formatLog(entry), data || '');
+      const syncEntry = {
+        timestamp: new Date().toISOString(),
+        level: 'warn' as const,
+        message,
+        data,
+        context,
+        sessionId: this.sessionId,
+        userId: this.getCurrentUserId(),
+      };
+      console.warn(this.formatLog(syncEntry), data || '');
     }
-    
-    this.sendToSupabase(entry);
+
+    this.createLogEntry('warn', message, data, context).then(entry => this.sendToSupabase(entry));
   }
 
   error(message: string, error?: Error | any, context?: string) {
@@ -93,20 +147,35 @@ class Logger {
       message: error.message,
       stack: error.stack
     } : error;
-    
-    const entry = this.createLogEntry('error', message, errorData, context);
-    
+
     if (this.isDevelopment) {
-      console.error(this.formatLog(entry), errorData || '');
+      const syncEntry = {
+        timestamp: new Date().toISOString(),
+        level: 'error' as const,
+        message,
+        data: errorData,
+        context,
+        sessionId: this.sessionId,
+        userId: this.getCurrentUserId(),
+      };
+      console.error(this.formatLog(syncEntry), errorData || '');
     }
-    
-    this.sendToSupabase(entry);
+
+    this.createLogEntry('error', message, errorData, context).then(entry => this.sendToSupabase(entry));
   }
 
   debug(message: string, data?: any, context?: string) {
     if (this.isDevelopment) {
-      const entry = this.createLogEntry('debug', message, data, context);
-      console.debug(this.formatLog(entry), data || '');
+      const syncEntry = {
+        timestamp: new Date().toISOString(),
+        level: 'debug' as const,
+        message,
+        data,
+        context,
+        sessionId: this.sessionId,
+        userId: this.getCurrentUserId(),
+      };
+      console.debug(this.formatLog(syncEntry), data || '');
     }
   }
 

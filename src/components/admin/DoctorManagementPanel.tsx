@@ -256,6 +256,18 @@ export const DoctorManagementPanel: React.FC = () => {
   const createMutation = useMutation({
     mutationFn: async (data: MedicoFormData) => {
       if (!effectiveClinicId) throw new Error('Clínica não selecionada');
+
+      // Verificar limite de médicos do tenant
+      const { checkLimit } = await import('@/hooks/useTenantLimits').then(m => ({ checkLimit: null }));
+      // Use inline check instead of hook (we're inside mutationFn)
+      const { data: limitResult } = await supabase.rpc('check_tenant_limit', { p_tipo: 'medicos' } as any);
+      if (limitResult && typeof limitResult === 'object' && 'allowed' in (limitResult as any)) {
+        const lr = limitResult as any;
+        if (!lr.allowed) {
+          throw new Error(lr.message || `Limite de médicos atingido (${lr.current}/${lr.max})`);
+        }
+      }
+      
       
       // Criar médico usando a RPC existente
       const { data: result, error } = await supabase.rpc('criar_medico', {

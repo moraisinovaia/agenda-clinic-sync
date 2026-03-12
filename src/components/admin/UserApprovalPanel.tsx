@@ -248,6 +248,21 @@ export function UserApprovalPanel() {
     setProcessingUser(userId);
     
     try {
+      // Verificar limite de usuários do tenant
+      const { data: limitResult } = await supabase.rpc('check_tenant_limit', { p_tipo: 'usuarios' } as any);
+      if (limitResult && typeof limitResult === 'object' && 'allowed' in (limitResult as any)) {
+        const lr = limitResult as any;
+        if (!lr.allowed) {
+          toast({
+            title: 'Limite atingido',
+            description: lr.message || `Limite de usuários atingido (${lr.current}/${lr.max})`,
+            variant: 'destructive',
+          });
+          setProcessingUser(null);
+          return;
+        }
+      }
+
       // @ts-ignore - p_role foi adicionado na migração mas types ainda não foram atualizados
       const { data, error } = await supabase.rpc('aprovar_usuario', {
         p_user_id: userId,
