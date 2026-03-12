@@ -1192,6 +1192,7 @@ export type Database = {
       notification_logs: {
         Row: {
           agendamento_id: string
+          cliente_id: string | null
           created_at: string | null
           error_message: string | null
           id: string
@@ -1204,6 +1205,7 @@ export type Database = {
         }
         Insert: {
           agendamento_id: string
+          cliente_id?: string | null
           created_at?: string | null
           error_message?: string | null
           id?: string
@@ -1216,6 +1218,7 @@ export type Database = {
         }
         Update: {
           agendamento_id?: string
+          cliente_id?: string | null
           created_at?: string | null
           error_message?: string | null
           id?: string
@@ -1226,7 +1229,15 @@ export type Database = {
           status?: string | null
           type?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "notification_logs_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pacientes: {
         Row: {
@@ -1304,6 +1315,68 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      planos_assinatura: {
+        Row: {
+          cliente_id: string
+          created_at: string | null
+          data_fim: string | null
+          data_inicio: string
+          dia_vencimento: number | null
+          id: string
+          max_agendamentos_mes: number
+          max_medicos: number
+          max_pacientes: number
+          max_usuarios: number
+          plano: string
+          status: string
+          trial_ate: string | null
+          updated_at: string | null
+          valor_mensal: number | null
+        }
+        Insert: {
+          cliente_id: string
+          created_at?: string | null
+          data_fim?: string | null
+          data_inicio?: string
+          dia_vencimento?: number | null
+          id?: string
+          max_agendamentos_mes?: number
+          max_medicos?: number
+          max_pacientes?: number
+          max_usuarios?: number
+          plano?: string
+          status?: string
+          trial_ate?: string | null
+          updated_at?: string | null
+          valor_mensal?: number | null
+        }
+        Update: {
+          cliente_id?: string
+          created_at?: string | null
+          data_fim?: string | null
+          data_inicio?: string
+          dia_vencimento?: number | null
+          id?: string
+          max_agendamentos_mes?: number
+          max_medicos?: number
+          max_pacientes?: number
+          max_usuarios?: number
+          plano?: string
+          status?: string
+          trial_ate?: string | null
+          updated_at?: string | null
+          valor_mensal?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planos_assinatura_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: true
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       preparos: {
         Row: {
@@ -1524,6 +1597,7 @@ export type Database = {
       }
       system_logs: {
         Row: {
+          cliente_id: string | null
           context: string | null
           created_at: string | null
           data: Json | null
@@ -1535,6 +1609,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          cliente_id?: string | null
           context?: string | null
           created_at?: string | null
           data?: Json | null
@@ -1546,6 +1621,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          cliente_id?: string | null
           context?: string | null
           created_at?: string | null
           data?: Json | null
@@ -1556,11 +1632,20 @@ export type Database = {
           timestamp?: string
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "system_logs_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       system_settings: {
         Row: {
           category: string | null
+          cliente_id: string | null
           created_at: string | null
           description: string | null
           editable: boolean | null
@@ -1572,6 +1657,7 @@ export type Database = {
         }
         Insert: {
           category?: string | null
+          cliente_id?: string | null
           created_at?: string | null
           description?: string | null
           editable?: boolean | null
@@ -1583,6 +1669,7 @@ export type Database = {
         }
         Update: {
           category?: string | null
+          cliente_id?: string | null
           created_at?: string | null
           description?: string | null
           editable?: boolean | null
@@ -1592,10 +1679,19 @@ export type Database = {
           updated_at?: string | null
           value?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "system_settings_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
+          cliente_id: string | null
           created_at: string | null
           created_by: string | null
           id: string
@@ -1603,6 +1699,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          cliente_id?: string | null
           created_at?: string | null
           created_by?: string | null
           id?: string
@@ -1610,13 +1707,22 @@ export type Database = {
           user_id: string
         }
         Update: {
+          cliente_id?: string | null
           created_at?: string | null
           created_by?: string | null
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -1765,6 +1871,7 @@ export type Database = {
             Returns: Json
           }
       check_security_health: { Args: never; Returns: Json }
+      check_tenant_limit: { Args: { limit_type: string }; Returns: boolean }
       classify_period: { Args: { hora_inicio: string }; Returns: string }
       cleanup_expired_backups: { Args: never; Returns: undefined }
       cleanup_expired_horarios_vazios: { Args: never; Returns: undefined }
@@ -2466,7 +2573,9 @@ export type Database = {
         Args: { check_user_id: string }
         Returns: boolean
       }
-      is_clinic_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_clinic_admin:
+        | { Args: never; Returns: boolean }
+        | { Args: { _user_id: string }; Returns: boolean }
       is_current_user_admin: { Args: never; Returns: boolean }
       is_super_admin: { Args: never; Returns: boolean }
       listar_agendamentos_medico_dia: {
@@ -2616,7 +2725,12 @@ export type Database = {
       verify_admin_access: { Args: { p_profile_id: string }; Returns: Json }
     }
     Enums: {
-      app_role: "admin" | "recepcionista" | "medico" | "admin_clinica"
+      app_role:
+        | "admin"
+        | "recepcionista"
+        | "medico"
+        | "admin_clinica"
+        | "super_admin"
     }
     CompositeTypes: {
       http_header: {
@@ -2760,7 +2874,13 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "recepcionista", "medico", "admin_clinica"],
+      app_role: [
+        "admin",
+        "recepcionista",
+        "medico",
+        "admin_clinica",
+        "super_admin",
+      ],
     },
   },
 } as const
