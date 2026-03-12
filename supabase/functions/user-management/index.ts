@@ -9,7 +9,7 @@ const corsHeaders = {
 };
 
 interface UserManagementRequest {
-  action: 'confirm_email' | 'delete_user' | 'check_email_status' | 'batch_check_emails';
+  action: 'confirm_email' | 'delete_user' | 'check_email_status' | 'batch_check_emails' | 'send_password_reset';
   user_email?: string;
   user_id?: string;
   user_ids?: string[];
