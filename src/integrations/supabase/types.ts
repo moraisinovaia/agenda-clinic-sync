@@ -1729,15 +1729,25 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      aprovar_usuario: {
-        Args: {
-          p_aprovador_user_id: string
-          p_cliente_id?: string
-          p_role?: string
-          p_user_id: string
-        }
-        Returns: Json
-      }
+      aprovar_usuario:
+        | {
+            Args: {
+              p_aprovador_user_id: string
+              p_cliente_id?: string
+              p_role?: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_aprovador_user_id: string
+              p_cliente_id?: string
+              p_role?: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
       atualizar_cliente: {
         Args: {
           p_admin_user_id?: string
@@ -1793,7 +1803,7 @@ export type Database = {
       }
       atualizar_role_usuario: {
         Args: {
-          p_action?: string
+          p_action: string
           p_admin_user_id: string
           p_new_role: string
           p_target_user_id: string
