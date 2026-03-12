@@ -90,9 +90,13 @@ export default function Auth() {
   }, [rememberMe, savedUsername]);
 
   // Check for password recovery session FIRST (before any redirect logic)
+  // Also check window.location.hash for Supabase recovery links (e.g., #access_token=...&type=recovery)
+  const hashParams = new URLSearchParams(window.location.hash.replace('#', ''));
   const hasRecoveryParams = searchParams.get('type') === 'recovery' || 
     searchParams.get('access_token') || 
-    searchParams.get('refresh_token');
+    searchParams.get('refresh_token') ||
+    hashParams.get('type') === 'recovery' ||
+    hashParams.get('access_token');
 
   useEffect(() => {
     const checkPasswordRecovery = async () => {
@@ -142,11 +146,16 @@ export default function Auth() {
       const { error } = await signIn(loginData.emailOrUsername, loginData.password);
       
       if (error) {
-        console.error('🔐 Page: Erro no login retornado:', error.message);
-        // Se houve erro no login
-        const errorMessage = error.message === 'Invalid credentials' 
-          ? 'Email/usuário ou senha incorretos'
-          : 'Erro ao fazer login. Tente novamente.';
+        console.error('🔐 Page: Erro no login retornado:', JSON.stringify(error));
+        // Mensagem específica para credenciais inválidas com CTA de recuperação
+        let errorMessage: string;
+        if (error.message?.includes('Invalid login credentials') || error.message === 'Invalid credentials' || error.message?.includes('incorretos')) {
+          errorMessage = 'Email/usuário ou senha incorretos. Se esqueceu a senha, use "Esqueci minha senha" abaixo.';
+        } else if (error.message?.includes('não encontrado')) {
+          errorMessage = error.message;
+        } else {
+          errorMessage = error.message || 'Erro ao fazer login. Tente novamente.';
+        }
         
         setError(errorMessage);
         // Limpar credenciais salvas se login falhar
@@ -300,21 +309,19 @@ export default function Auth() {
     
     let email = loginData.emailOrUsername;
     
-    // Se não contém @, buscar email pelo username
+    // Se não contém @, buscar email pelo username via RPC (bypassa RLS)
     if (!loginData.emailOrUsername.includes('@')) {
       try {
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('email')
-          .eq('username', loginData.emailOrUsername)
-          .maybeSingle();
+        const { data: emailResult, error: rpcError } = await supabase
+          .rpc('get_email_by_username', { p_username: loginData.emailOrUsername.trim() });
           
-        if (profileError || !profile) {
-          setError('Nome de usuário não encontrado');
+        if (rpcError || !emailResult) {
+          console.warn('🔐 Forgot password: username não encontrado via RPC:', rpcError);
+          setError('Nome de usuário não encontrado. Tente usar seu email diretamente.');
           return;
         }
         
-        email = profile.email;
+        email = emailResult;
       } catch (error) {
         setError('Erro ao buscar email. Tente usar seu email diretamente.');
         return;

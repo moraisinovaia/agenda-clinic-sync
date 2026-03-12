@@ -9,7 +9,7 @@ const corsHeaders = {
 };
 
 interface UserManagementRequest {
-  action: 'confirm_email' | 'delete_user' | 'check_email_status' | 'batch_check_emails';
+  action: 'confirm_email' | 'delete_user' | 'check_email_status' | 'batch_check_emails' | 'send_password_reset';
   user_email?: string;
   user_id?: string;
   user_ids?: string[];
@@ -264,6 +264,48 @@ serve(async (req) => {
         console.log('[DEBUG] Email statuses checked for', Object.keys(emailStatuses).length, 'profiles');
 
         result = { success: true, email_statuses: emailStatuses };
+        break;
+      }
+
+      case 'send_password_reset': {
+        if (!user_email) {
+          throw new Error('user_email é obrigatório para send_password_reset');
+        }
+
+        console.log('[DEBUG] Sending password reset for:', user_email);
+
+        // Use Supabase Admin API to generate a password reset link
+        const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+          type: 'recovery',
+          email: user_email,
+        });
+
+        if (linkError) {
+          console.error('[ERROR] Failed to generate reset link:', linkError);
+          throw linkError;
+        }
+
+        // The generated link contains the token - we need to send it via Supabase's built-in email
+        // Using resetPasswordForEmail which sends the email automatically
+        const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(user_email, {
+          redirectTo: `${supabaseUrl.replace('.supabase.co', '.supabase.co')}/auth/v1/verify?redirect_to=${encodeURIComponent(Deno.env.get('SITE_URL') || 'https://agenda-clinic-sync.lovable.app')}/auth`
+        });
+
+        if (resetError) {
+          console.error('[ERROR] Failed to send reset email:', resetError);
+          throw resetError;
+        }
+
+        // Log
+        await supabaseAdmin.from('system_logs').insert({
+          timestamp: new Date().toISOString(),
+          level: 'info',
+          message: `[ADMIN] Reset de senha enviado para ${user_email}`,
+          context: 'PASSWORD_RESET',
+          data: { user_email, admin_id, sent_at: new Date().toISOString() }
+        });
+
+        result = { success: true, message: 'Email de redefinição enviado com sucesso' };
         break;
       }
 

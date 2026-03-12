@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Check, X, Users, Clock, CheckCircle, Trash2, Building2, Mail } from 'lucide-react';
+import { Loader2, Check, X, Users, Clock, CheckCircle, Trash2, Building2, Mail, KeyRound } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useStableAuth } from '@/hooks/useStableAuth';
@@ -447,6 +447,35 @@ export function UserApprovalPanel() {
     }
   };
 
+  const handleSendPasswordReset = async (userEmail: string, userName: string) => {
+    try {
+      console.log('🔑 Enviando redefinição de senha para:', userEmail);
+      
+      const { data, error } = await supabase.functions.invoke('user-management', {
+        body: {
+          action: 'send_password_reset',
+          user_email: userEmail,
+          admin_id: profile?.user_id
+        }
+      });
+
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Falha ao enviar');
+
+      toast({
+        title: 'Email enviado!',
+        description: `Link de redefinição de senha enviado para ${userName} (${userEmail})`,
+      });
+    } catch (error: any) {
+      console.error('❌ Erro ao enviar reset:', error);
+      toast({
+        title: 'Erro',
+        description: error.message || 'Erro ao enviar email de redefinição',
+        variant: 'destructive',
+      });
+    }
+  };
+
   // Se não é admin ou admin da clínica aprovado, não mostrar nada
   if (!isAdmin && !isClinicAdmin) {
     return null;
@@ -691,17 +720,29 @@ export function UserApprovalPanel() {
                         })}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => openDeleteModal(user)}
-                          disabled={processingUser === user.id || user.id === profile?.id}
-                          className="text-red-600 border-red-200 hover:bg-red-50 disabled:opacity-50"
-                          title={user.id === profile?.id ? 'Não é possível excluir seu próprio usuário' : 'Excluir usuário'}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          Excluir
-                        </Button>
+                        <div className="flex gap-2 justify-end">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleSendPasswordReset(user.email, user.nome)}
+                            disabled={processingUser === user.id}
+                            title="Enviar email de redefinição de senha"
+                          >
+                            <KeyRound className="h-4 w-4" />
+                            Reset Senha
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openDeleteModal(user)}
+                            disabled={processingUser === user.id || user.id === profile?.id}
+                            className="text-red-600 border-red-200 hover:bg-red-50 disabled:opacity-50"
+                            title={user.id === profile?.id ? 'Não é possível excluir seu próprio usuário' : 'Excluir usuário'}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Excluir
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
