@@ -50,13 +50,26 @@ export default function Auth() {
   // Lista de clínicas para o signup
   const [clinicas, setClinicas] = useState<{id: string, nome: string}[]>([]);
   
-  // Buscar clínicas ativas para o formulário de cadastro
+  // Buscar clínicas ativas filtradas por parceiro do domínio
   useEffect(() => {
     const fetchClinicas = async () => {
       try {
-        const { data, error } = await supabase.rpc('get_clinicas_para_signup');
+        let parceiro: string | null = null;
+        
+        // Em domínios específicos de parceiro, filtrar clínicas
+        if (!isGenericDomain()) {
+          parceiro = await detectPartnerByHostname();
+          console.log(`🏥 Auth: Filtrando clínicas para parceiro="${parceiro}"`);
+        } else {
+          console.log('🏥 Auth: Domínio genérico, mostrando todas as clínicas');
+        }
+        
+        const { data, error } = await supabase.rpc('get_clinicas_para_signup', {
+          p_parceiro: parceiro
+        });
         if (!error && data) {
           setClinicas(data);
+          console.log(`🏥 Auth: ${data.length} clínicas carregadas`);
         }
       } catch (err) {
         console.warn('Erro ao buscar clínicas para signup:', err);
