@@ -307,7 +307,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         console.error('Erro no cadastro:', error);
         let errorMessage = 'Erro ao criar conta';
         
-        if (error.message?.includes('email_address_invalid')) {
+        if (error.message?.includes('Database error saving new user') || error.message?.includes('unique_violation')) {
+          errorMessage = 'Nome de usuário já está em uso. Escolha outro nome de usuário.';
+        } else if (error.message?.includes('email_address_invalid')) {
           errorMessage = 'Erro interno de validação. Tente novamente ou contate o administrador.';
         } else if (error.message?.includes('User already registered')) {
           errorMessage = 'Este usuário já está cadastrado. Você pode fazer login.';
