@@ -90,9 +90,13 @@ export default function Auth() {
   }, [rememberMe, savedUsername]);
 
   // Check for password recovery session FIRST (before any redirect logic)
+  // Also check window.location.hash for Supabase recovery links (e.g., #access_token=...&type=recovery)
+  const hashParams = new URLSearchParams(window.location.hash.replace('#', ''));
   const hasRecoveryParams = searchParams.get('type') === 'recovery' || 
     searchParams.get('access_token') || 
-    searchParams.get('refresh_token');
+    searchParams.get('refresh_token') ||
+    hashParams.get('type') === 'recovery' ||
+    hashParams.get('access_token');
 
   useEffect(() => {
     const checkPasswordRecovery = async () => {
