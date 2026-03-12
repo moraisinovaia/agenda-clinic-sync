@@ -824,7 +824,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
               p_agendamento_id: appointmentId,
               p_confirmado_por: profile.nome,
               p_confirmado_por_user_id: profile.user_id
-            });
+            } as any);
           })(),
           10000
         );
