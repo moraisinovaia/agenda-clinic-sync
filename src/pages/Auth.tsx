@@ -50,13 +50,26 @@ export default function Auth() {
   // Lista de clínicas para o signup
   const [clinicas, setClinicas] = useState<{id: string, nome: string}[]>([]);
   
-  // Buscar clínicas ativas para o formulário de cadastro
+  // Buscar clínicas ativas filtradas por parceiro do domínio
   useEffect(() => {
     const fetchClinicas = async () => {
       try {
-        const { data, error } = await supabase.rpc('get_clinicas_para_signup');
+        let parceiro: string | null = null;
+        
+        // Em domínios específicos de parceiro, filtrar clínicas
+        if (!isGenericDomain()) {
+          parceiro = await detectPartnerByHostname();
+          console.log(`🏥 Auth: Filtrando clínicas para parceiro="${parceiro}"`);
+        } else {
+          console.log('🏥 Auth: Domínio genérico, mostrando todas as clínicas');
+        }
+        
+        const { data, error } = await supabase.rpc('get_clinicas_para_signup' as any, {
+          p_parceiro: parceiro
+        } as any);
         if (!error && data) {
-          setClinicas(data);
+          setClinicas(data as any);
+          console.log(`🏥 Auth: ${(data as any[]).length} clínicas carregadas`);
         }
       } catch (err) {
         console.warn('Erro ao buscar clínicas para signup:', err);
@@ -238,17 +251,24 @@ export default function Auth() {
       const { error } = await signUp(signupData.password, nome, username, email, signupData.clienteId || undefined);
       
       if (error) {
-        // Se houve erro no cadastro
-        let errorMessage = 'Erro ao criar conta. Tente novamente.';
+        // Se houve erro no cadastro - mostrar mensagem específica
+        let errorMessage = error.message || 'Erro ao criar conta. Tente novamente.';
         
-        if (error.message.includes('already registered')) {
-          errorMessage = 'Este email já está cadastrado';
-        } else if (error.message.includes('weak') || error.message.includes('easy to guess') || error.message.includes('leaked')) {
+        if (error.message.includes('already registered') || error.message.includes('User already registered')) {
+          errorMessage = 'Este email já está cadastrado. Faça login ou use outro email.';
+        } else if (error.message.includes('weak') || error.message.includes('easy to guess') || error.message.includes('leaked') || error.message.includes('compromised') || error.message.includes('HIBP')) {
           errorMessage = 'Senha muito fraca ou já exposta em vazamentos de dados. Use uma senha mais forte com letras maiúsculas, minúsculas, números e caracteres especiais (mínimo 8 caracteres).';
-        } else if (error.message.includes('password')) {
+        } else if (error.message.includes('password') || error.message.includes('Password')) {
           errorMessage = 'Senha inválida. Use pelo menos 8 caracteres com letras e números.';
+        } else if (error.message.includes('username') || error.message.includes('já está em uso') || error.message.includes('unique_violation')) {
+          errorMessage = 'Nome de usuário já está em uso. Escolha outro nome de usuário.';
+        } else if (error.message.includes('Database error saving new user')) {
+          errorMessage = 'Erro ao criar conta. Possível conflito de nome de usuário ou senha rejeitada. Tente outro username e uma senha mais forte.';
+        } else if (error.message.includes('email')) {
+          errorMessage = 'Problema com o email informado. Verifique e tente novamente.';
         }
         
+        console.error('🔐 Signup error details:', error.message);
         setError(errorMessage);
         // Não exibir toast aqui pois o useAuth já exibe
       } else {

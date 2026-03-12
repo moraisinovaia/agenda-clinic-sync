@@ -2239,7 +2239,7 @@ export type Database = {
         }[]
       }
       get_clinicas_para_signup: {
-        Args: never
+        Args: { p_parceiro?: string }
         Returns: {
           id: string
           nome: string
