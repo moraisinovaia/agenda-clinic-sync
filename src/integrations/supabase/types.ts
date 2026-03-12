@@ -1850,7 +1850,7 @@ export type Database = {
         Returns: Json
       }
       check_security_health: { Args: never; Returns: Json }
-      check_tenant_limit: { Args: { limit_type: string }; Returns: boolean }
+      check_tenant_limit: { Args: { p_tipo: string }; Returns: Json }
       classify_period: { Args: { hora_inicio: string }; Returns: string }
       cleanup_expired_backups: { Args: never; Returns: undefined }
       cleanup_expired_horarios_vazios: { Args: never; Returns: undefined }
