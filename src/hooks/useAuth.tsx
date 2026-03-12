@@ -247,24 +247,20 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const signUp = async (password: string, nome: string, username: string, email: string, clienteId?: string) => {
     try {
-      // Verificar se o username já existe
+      // Verificar se o username já existe via RPC (funciona para anon)
       try {
-        const { data: existingProfile } = await supabase
-          .from('profiles')
-          .select('username')
-          .eq('username', username)
-          .maybeSingle();
+        const { data: isAvailable, error: checkError } = await supabase
+          .rpc('check_username_available', { p_username: username });
           
-        if (existingProfile) {
+        if (!checkError && isAvailable === false) {
           toast({
             title: 'Erro no cadastro',
-            description: 'Este nome de usuário já está em uso',
+            description: 'Este nome de usuário já está em uso. Escolha outro.',
             variant: 'destructive',
           });
           return { error: new Error('Este nome de usuário já está em uso') };
         }
       } catch (usernameCheckError) {
-        // Se falhar na verificação de username, continuar com cadastro
         console.warn('Erro ao verificar username, continuando:', usernameCheckError);
       }
 
@@ -311,7 +307,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         console.error('Erro no cadastro:', error);
         let errorMessage = 'Erro ao criar conta';
         
-        if (error.message?.includes('email_address_invalid')) {
+        if (error.message?.includes('Database error saving new user') || error.message?.includes('unique_violation')) {
+          errorMessage = 'Nome de usuário já está em uso. Escolha outro nome de usuário.';
+        } else if (error.message?.includes('email_address_invalid')) {
           errorMessage = 'Erro interno de validação. Tente novamente ou contate o administrador.';
         } else if (error.message?.includes('User already registered')) {
           errorMessage = 'Este usuário já está cadastrado. Você pode fazer login.';
