@@ -29,6 +29,7 @@ import DoctorScheduleConfigPanel from '@/components/admin/DoctorScheduleConfigPa
 import { MultiClinicDashboard } from '@/components/admin/MultiClinicDashboard';
 import { LLMConfigPanel } from '@/components/admin/LLMConfigPanel';
 import { PreparosManagementPanel } from '@/components/admin/PreparosManagementPanel';
+import { SubscriptionPlansPanel } from '@/components/admin/SubscriptionPlansPanel';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   LazyDashboard, 
