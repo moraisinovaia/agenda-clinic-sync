@@ -210,7 +210,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       });
 
       if (error) {
-        console.error('🔐 Auth: Erro no login:', error.message);
+        console.error('🔐 Auth: Erro no login:', error.message, 'Status:', (error as any).status);
+        console.error('🔐 Auth: Erro completo:', JSON.stringify(error));
         let errorMessage = 'Erro ao fazer login';
         if (error.message.includes('Invalid login credentials')) {
           errorMessage = 'Email/usuário ou senha incorretos';
