@@ -109,6 +109,20 @@ export function FilaEsperaForm({
     }
 
     try {
+      // Verificar limite de pacientes do tenant
+      const { data: limitResult } = await supabase.rpc('check_tenant_limit', { p_tipo: 'pacientes' } as any);
+      if (limitResult && typeof limitResult === 'object' && 'allowed' in (limitResult as any)) {
+        const lr = limitResult as any;
+        if (!lr.allowed) {
+          toast({
+            title: 'Limite atingido',
+            description: lr.message || `Limite de pacientes atingido (${lr.current}/${lr.max})`,
+            variant: 'destructive',
+          });
+          return;
+        }
+      }
+
       const { data, error } = await supabase
         .from('pacientes')
         .insert({

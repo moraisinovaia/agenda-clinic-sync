@@ -667,6 +667,11 @@ const Index = () => {
                 <TabsContent value="llm-config">
                   <LLMConfigPanel />
                 </TabsContent>
+                {isAdmin && (
+                  <TabsContent value="planos">
+                    <SubscriptionPlansPanel />
+                  </TabsContent>
+                )}
               </Tabs>
             ) : (
               // Receptionist view - dashboard completo
