@@ -917,7 +917,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
               p_agendamento_id: appointmentId,
               p_desconfirmado_por: profile.nome,
               p_desconfirmado_por_user_id: profile.user_id
-            });
+            } as any);
           })(),
           10000
         );
