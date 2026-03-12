@@ -720,17 +720,29 @@ export function UserApprovalPanel() {
                         })}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => openDeleteModal(user)}
-                          disabled={processingUser === user.id || user.id === profile?.id}
-                          className="text-red-600 border-red-200 hover:bg-red-50 disabled:opacity-50"
-                          title={user.id === profile?.id ? 'Não é possível excluir seu próprio usuário' : 'Excluir usuário'}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          Excluir
-                        </Button>
+                        <div className="flex gap-2 justify-end">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleSendPasswordReset(user.email, user.nome)}
+                            disabled={processingUser === user.id}
+                            title="Enviar email de redefinição de senha"
+                          >
+                            <KeyRound className="h-4 w-4" />
+                            Reset Senha
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openDeleteModal(user)}
+                            disabled={processingUser === user.id || user.id === profile?.id}
+                            className="text-red-600 border-red-200 hover:bg-red-50 disabled:opacity-50"
+                            title={user.id === profile?.id ? 'Não é possível excluir seu próprio usuário' : 'Excluir usuário'}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Excluir
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
