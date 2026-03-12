@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
 interface LogEntry {
@@ -14,10 +14,10 @@ interface LogEntry {
   context?: string;
   userId?: string;
   sessionId?: string;
+  clienteId?: string;
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -54,7 +54,6 @@ serve(async (req) => {
     if (req.method === 'POST') {
       const logEntry: LogEntry = await req.json()
 
-      // Validar entrada de log
       if (!logEntry.timestamp || !logEntry.level || !logEntry.message) {
         return new Response(
           JSON.stringify({ error: 'Invalid log entry format' }),
@@ -65,7 +64,6 @@ serve(async (req) => {
         )
       }
 
-      // Inserir log na tabela system_logs
       const { error } = await supabase
         .from('system_logs')
         .insert([{
@@ -76,6 +74,7 @@ serve(async (req) => {
           context: logEntry.context || null,
           user_id: logEntry.userId || null,
           session_id: logEntry.sessionId || null,
+          cliente_id: logEntry.clienteId || null,
           created_at: new Date().toISOString()
         }])
 
