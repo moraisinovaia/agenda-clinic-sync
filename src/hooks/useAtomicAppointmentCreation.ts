@@ -182,6 +182,15 @@ export function useAtomicAppointmentCreation() {
         }
       }
 
+      // Verificar limite de pacientes do tenant
+      const { data: pacienteLimitResult } = await supabase.rpc('check_tenant_limit', { p_tipo: 'pacientes' } as any);
+      if (pacienteLimitResult && typeof pacienteLimitResult === 'object' && 'allowed' in (pacienteLimitResult as any)) {
+        const lr = pacienteLimitResult as any;
+        if (!lr.allowed) {
+          throw new Error(lr.message || `Limite de pacientes atingido (${lr.current}/${lr.max})`);
+        }
+      }
+
       // Chamar função SQL atômica COM LOCKS (uma única tentativa)
       const { data, error } = await supabase.rpc('criar_agendamento_atomico', {
         p_nome_completo: formData.nomeCompleto,
