@@ -1854,10 +1854,19 @@ export type Database = {
       }
       bytea_to_text: { Args: { data: string }; Returns: string }
       can_access_patient_data: { Args: never; Returns: boolean }
-      cancelar_agendamento_soft: {
-        Args: { p_agendamento_id: string; p_motivo?: string }
-        Returns: Json
-      }
+      cancelar_agendamento_soft:
+        | {
+            Args: {
+              p_agendamento_id: string
+              p_cancelado_por?: string
+              p_cancelado_por_user_id?: string
+            }
+            Returns: undefined
+          }
+        | {
+            Args: { p_agendamento_id: string; p_motivo?: string }
+            Returns: Json
+          }
       check_security_health: { Args: never; Returns: Json }
       check_tenant_limit: { Args: { p_tipo: string }; Returns: Json }
       check_username_available: {
@@ -1871,10 +1880,16 @@ export type Database = {
       cleanup_old_backups_auto: { Args: never; Returns: undefined }
       cleanup_old_logs: { Args: never; Returns: undefined }
       cleanup_old_security_logs: { Args: never; Returns: undefined }
-      confirmar_agendamento: {
-        Args: { p_agendamento_id: string }
-        Returns: Json
-      }
+      confirmar_agendamento:
+        | { Args: { p_agendamento_id: string }; Returns: Json }
+        | {
+            Args: {
+              p_agendamento_id: string
+              p_confirmado_por?: string
+              p_confirmado_por_user_id?: string
+            }
+            Returns: undefined
+          }
       confirmar_email_usuario_aprovado: {
         Args: { p_admin_id: string; p_user_email: string }
         Returns: Json
@@ -2010,10 +2025,16 @@ export type Database = {
       criar_usuario_teste_ipado: { Args: never; Returns: Json }
       day_name_to_number: { Args: { day_name: string }; Returns: number }
       debug_user_access: { Args: never; Returns: Json }
-      desconfirmar_agendamento: {
-        Args: { p_agendamento_id: string }
-        Returns: Json
-      }
+      desconfirmar_agendamento:
+        | { Args: { p_agendamento_id: string }; Returns: Json }
+        | {
+            Args: {
+              p_agendamento_id: string
+              p_desconfirmado_por?: string
+              p_desconfirmado_por_user_id?: string
+            }
+            Returns: undefined
+          }
       diagnosticar_whatsapp_sistema: { Args: never; Returns: Json }
       ensure_user_cliente_id: { Args: never; Returns: undefined }
       enviar_whatsapp_fallback:
@@ -2023,10 +2044,16 @@ export type Database = {
         Args: { p_agendamento_id: string }
         Returns: Json
       }
-      excluir_agendamento_soft: {
-        Args: { p_agendamento_id: string }
-        Returns: Json
-      }
+      excluir_agendamento_soft:
+        | { Args: { p_agendamento_id: string }; Returns: Json }
+        | {
+            Args: {
+              p_agendamento_id: string
+              p_excluido_por?: string
+              p_excluido_por_user_id?: string
+            }
+            Returns: undefined
+          }
       excluir_usuario: {
         Args: { p_admin_id: string; p_user_id: string }
         Returns: Json
