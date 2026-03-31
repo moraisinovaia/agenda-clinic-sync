@@ -35,6 +35,7 @@ export type Database = {
           excluido_por_user_id: string | null
           hora_agendamento: string
           id: string
+          idempotency_key: string | null
           medico_id: string
           observacoes: string | null
           paciente_id: string
@@ -61,6 +62,7 @@ export type Database = {
           excluido_por_user_id?: string | null
           hora_agendamento: string
           id?: string
+          idempotency_key?: string | null
           medico_id: string
           observacoes?: string | null
           paciente_id: string
@@ -87,6 +89,7 @@ export type Database = {
           excluido_por_user_id?: string | null
           hora_agendamento?: string
           id?: string
+          idempotency_key?: string | null
           medico_id?: string
           observacoes?: string | null
           paciente_id?: string
@@ -288,6 +291,191 @@ export type Database = {
             columns: ["cliente_id"]
             isOneToOne: false
             referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      auth_group: {
+        Row: {
+          id: number
+          name: string
+        }
+        Insert: {
+          id?: number
+          name: string
+        }
+        Update: {
+          id?: number
+          name?: string
+        }
+        Relationships: []
+      }
+      auth_group_permissions: {
+        Row: {
+          group_id: number
+          id: number
+          permission_id: number
+        }
+        Insert: {
+          group_id: number
+          id?: number
+          permission_id: number
+        }
+        Update: {
+          group_id?: number
+          id?: number
+          permission_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "auth_group_permissio_permission_id_84c5c92e_fk_auth_perm"
+            columns: ["permission_id"]
+            isOneToOne: false
+            referencedRelation: "auth_permission"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auth_group_permissions_group_id_b120cbf9_fk_auth_group_id"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "auth_group"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      auth_permission: {
+        Row: {
+          codename: string
+          content_type_id: number
+          id: number
+          name: string
+        }
+        Insert: {
+          codename: string
+          content_type_id: number
+          id?: number
+          name: string
+        }
+        Update: {
+          codename?: string
+          content_type_id?: number
+          id?: number
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "auth_permission_content_type_id_2f476e4b_fk_django_co"
+            columns: ["content_type_id"]
+            isOneToOne: false
+            referencedRelation: "django_content_type"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      auth_user: {
+        Row: {
+          date_joined: string
+          email: string
+          first_name: string
+          id: number
+          is_active: boolean
+          is_staff: boolean
+          is_superuser: boolean
+          last_login: string | null
+          last_name: string
+          password: string
+          username: string
+        }
+        Insert: {
+          date_joined: string
+          email: string
+          first_name: string
+          id?: number
+          is_active: boolean
+          is_staff: boolean
+          is_superuser: boolean
+          last_login?: string | null
+          last_name: string
+          password: string
+          username: string
+        }
+        Update: {
+          date_joined?: string
+          email?: string
+          first_name?: string
+          id?: number
+          is_active?: boolean
+          is_staff?: boolean
+          is_superuser?: boolean
+          last_login?: string | null
+          last_name?: string
+          password?: string
+          username?: string
+        }
+        Relationships: []
+      }
+      auth_user_groups: {
+        Row: {
+          group_id: number
+          id: number
+          user_id: number
+        }
+        Insert: {
+          group_id: number
+          id?: number
+          user_id: number
+        }
+        Update: {
+          group_id?: number
+          id?: number
+          user_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "auth_user_groups_group_id_97559544_fk_auth_group_id"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "auth_group"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auth_user_groups_user_id_6a12ed8b_fk_auth_user_id"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "auth_user"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      auth_user_user_permissions: {
+        Row: {
+          id: number
+          permission_id: number
+          user_id: number
+        }
+        Insert: {
+          id?: number
+          permission_id: number
+          user_id: number
+        }
+        Update: {
+          id?: number
+          permission_id?: number
+          user_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "auth_user_user_permi_permission_id_1fbb5f2c_fk_auth_perm"
+            columns: ["permission_id"]
+            isOneToOne: false
+            referencedRelation: "auth_permission"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auth_user_user_permissions_user_id_a95ead1b_fk_auth_user_id"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "auth_user"
             referencedColumns: ["id"]
           },
         ]
@@ -690,6 +878,111 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      django_admin_log: {
+        Row: {
+          action_flag: number
+          action_time: string
+          change_message: string
+          content_type_id: number | null
+          id: number
+          object_id: string | null
+          object_repr: string
+          user_id: number
+        }
+        Insert: {
+          action_flag: number
+          action_time: string
+          change_message: string
+          content_type_id?: number | null
+          id?: number
+          object_id?: string | null
+          object_repr: string
+          user_id: number
+        }
+        Update: {
+          action_flag?: number
+          action_time?: string
+          change_message?: string
+          content_type_id?: number | null
+          id?: number
+          object_id?: string | null
+          object_repr?: string
+          user_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "django_admin_log_content_type_id_c4bce8eb_fk_django_co"
+            columns: ["content_type_id"]
+            isOneToOne: false
+            referencedRelation: "django_content_type"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "django_admin_log_user_id_c564eba6_fk_auth_user_id"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "auth_user"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      django_content_type: {
+        Row: {
+          app_label: string
+          id: number
+          model: string
+        }
+        Insert: {
+          app_label: string
+          id?: number
+          model: string
+        }
+        Update: {
+          app_label?: string
+          id?: number
+          model?: string
+        }
+        Relationships: []
+      }
+      django_migrations: {
+        Row: {
+          app: string
+          applied: string
+          id: number
+          name: string
+        }
+        Insert: {
+          app: string
+          applied: string
+          id?: number
+          name: string
+        }
+        Update: {
+          app?: string
+          applied?: string
+          id?: number
+          name?: string
+        }
+        Relationships: []
+      }
+      django_session: {
+        Row: {
+          expire_date: string
+          session_data: string
+          session_key: string
+        }
+        Insert: {
+          expire_date: string
+          session_data: string
+          session_key: string
+        }
+        Update: {
+          expire_date?: string
+          session_data?: string
+          session_key?: string
+        }
+        Relationships: []
       }
       fila_espera: {
         Row: {
@@ -1832,6 +2125,14 @@ export type Database = {
           updated_at: string
         }[]
       }
+      buscar_atendimentos_pool: {
+        Args: {
+          p_cliente_id: string
+          p_medico_id: string
+          p_servico_nomes: string[]
+        }
+        Returns: string[]
+      }
       buscar_historico_endogastro: {
         Args: {
           p_data_fim?: string
@@ -1893,6 +2194,27 @@ export type Database = {
       confirmar_email_usuario_aprovado: {
         Args: { p_admin_id: string; p_user_email: string }
         Returns: Json
+      }
+      contar_agendamentos_periodo: {
+        Args: {
+          p_cliente_id: string
+          p_data: string
+          p_hora_fim: string
+          p_hora_inicio: string
+          p_medico_id: string
+        }
+        Returns: number
+      }
+      contar_agendamentos_pool: {
+        Args: {
+          p_atendimento_ids: string[]
+          p_cliente_id: string
+          p_data: string
+          p_hora_fim: string
+          p_hora_inicio: string
+          p_medico_id: string
+        }
+        Returns: number
       }
       create_test_user_profile: {
         Args: {
@@ -2057,6 +2379,17 @@ export type Database = {
       excluir_usuario: {
         Args: { p_admin_id: string; p_user_id: string }
         Returns: Json
+      }
+      gerar_idempotency_key: {
+        Args: {
+          p_atendimento_id: string
+          p_cliente_id: string
+          p_data_agendamento: string
+          p_hora_agendamento: string
+          p_medico_id: string
+          p_paciente_id: string
+        }
+        Returns: string
       }
       get_agendamento_audit_history: {
         Args: { p_agendamento_id: string }
@@ -2288,6 +2621,16 @@ export type Database = {
         }[]
       }
       get_email_by_username: { Args: { p_username: string }; Returns: string }
+      get_filtered_context: {
+        Args: {
+          p_cliente_id: string
+          p_convenio?: string
+          p_especialidade?: string
+          p_medico_nome?: string
+          p_servico?: string
+        }
+        Returns: Json
+      }
       get_llm_business_rules: {
         Args: { p_cliente_id: string }
         Returns: {
@@ -2398,6 +2741,10 @@ export type Database = {
           created_at: string
           role: Database["public"]["Enums"]["app_role"]
         }[]
+      }
+      get_webhook_url: {
+        Args: { p_chave?: string; p_cliente_id: string }
+        Returns: string
       }
       has_clinic_admin_access: {
         Args: { _cliente_id: string; _user_id: string }
@@ -2628,6 +2975,56 @@ export type Database = {
         Returns: Json
       }
       reset_fila_notificados_expirados: { Args: never; Returns: Json }
+      resolver_tenant: {
+        Args: { p_cliente_id?: string; p_config_id?: string }
+        Returns: Json
+      }
+      rpc_cancelar_agendamento: {
+        Args: {
+          p_actor?: string
+          p_agendamento_id: string
+          p_cliente_id: string
+          p_motivo?: string
+          p_origem?: string
+        }
+        Returns: Json
+      }
+      rpc_confirmar_agendamento: {
+        Args: {
+          p_actor?: string
+          p_agendamento_id: string
+          p_cliente_id: string
+          p_observacoes?: string
+          p_origem?: string
+        }
+        Returns: Json
+      }
+      rpc_get_disponibilidade: {
+        Args: {
+          p_atendimento_id?: string
+          p_cliente_id: string
+          p_data_fim?: string
+          p_data_inicio?: string
+          p_dia_semana_preferido?: number
+          p_max_resultados?: number
+          p_medico_id: string
+          p_periodo_preferido?: string
+        }
+        Returns: Json
+      }
+      rpc_health_check: { Args: never; Returns: Json }
+      rpc_remarcar_agendamento: {
+        Args: {
+          p_actor?: string
+          p_agendamento_id: string
+          p_cliente_id: string
+          p_nova_data: string
+          p_nova_hora: string
+          p_observacoes?: string
+          p_origem?: string
+        }
+        Returns: Json
+      }
       search_doctor_by_name_llm: {
         Args: { p_cliente_id: string; p_nome_busca: string }
         Returns: Json
