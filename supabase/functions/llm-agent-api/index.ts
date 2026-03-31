@@ -1774,7 +1774,36 @@ serve(async (req) => {
       // 🆕 CARREGAR CONFIGURAÇÃO DINÂMICA DO BANCO
       // Se config_id foi fornecido, carrega config específica (ex: Orion)
       // Senão, busca primeira config ativa do cliente_id
-      const dynamicConfig = await loadDynamicConfig(supabase, CLIENTE_ID, CONFIG_ID);
+      const dynamicConfig = await loadDynamicConfig(supabase, CLIENTE_ID || '', CONFIG_ID);
+      
+      // Se veio apenas config_id sem cliente_id, resolver cliente_id da config
+      let resolvedClienteId = CLIENTE_ID;
+      if (!resolvedClienteId && CONFIG_ID && dynamicConfig?.clinic_info) {
+        // Buscar cliente_id da llm_clinic_config pelo config_id
+        const { data: configRow } = await supabase
+          .from('llm_clinic_config')
+          .select('cliente_id')
+          .eq('id', CONFIG_ID)
+          .single();
+        if (configRow?.cliente_id) {
+          resolvedClienteId = configRow.cliente_id;
+          console.log(`🔧 cliente_id resolvido via config_id: ${resolvedClienteId}`);
+        } else {
+          return new Response(JSON.stringify({
+            success: false,
+            error: 'CONFIG_NOT_FOUND',
+            message: 'config_id fornecido não corresponde a nenhuma configuração válida',
+            api_version: API_VERSION,
+            timestamp: new Date().toISOString()
+          }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+      }
+      
+      // A partir daqui, CLIENTE_ID_RESOLVED é garantido
+      const CLIENTE_ID_FINAL = resolvedClienteId!;
       
       // Nome do cliente vem do banco (sem hardcodes)
       const clienteNome = dynamicConfig?.clinic_info?.nome_clinica || 'Cliente';
@@ -1782,7 +1811,7 @@ serve(async (req) => {
       if (dynamicConfig?.clinic_info) {
         console.log(`✅ Config carregada: ${clienteNome}`);
       } else {
-        console.log(`⚠️ Sem configuração no banco para cliente ${CLIENTE_ID}`);
+        console.log(`⚠️ Sem configuração no banco para cliente ${CLIENTE_ID_FINAL}`);
       }
 
       switch (action) {
