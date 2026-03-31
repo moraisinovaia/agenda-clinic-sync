@@ -3548,6 +3548,7 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string, c
     const { data: ultimosAgendamentos } = await supabase
       .from('agendamentos')
       .select('paciente_id, convenio, data_agendamento, hora_agendamento')
+      .eq('cliente_id', clienteId)
       .in('paciente_id', pacienteIds)
       .order('data_agendamento', { ascending: false })
       .order('hora_agendamento', { ascending: false });
