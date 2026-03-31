@@ -1694,21 +1694,30 @@ serve(async (req) => {
     if (method === 'POST') {
       let body = await req.json();
       
-      // 🔍 DEBUG: Mostrar exatamente o que foi recebido
-      console.log('📥 [DEBUG] Body recebido (raw):', JSON.stringify(body));
-      console.log('📥 [DEBUG] Tipo do body:', typeof body);
-      console.log('📥 [DEBUG] É array?:', Array.isArray(body));
-      if (body) {
-        console.log('📥 [DEBUG] Keys do body:', Object.keys(body));
-      }
-      
       // ✅ Normalizar body se for array (n8n às vezes envia [{...}] ao invés de {...})
       if (Array.isArray(body) && body.length > 0) {
-        console.log('⚠️ Body recebido como array, extraindo primeiro elemento');
+        console.log(`⚠️ [${requestId}] Body recebido como array, extraindo primeiro elemento`);
         body = body[0];
       }
       
-      console.log('📤 [DEBUG] Body após normalização:', JSON.stringify(body));
+      // Log sanitizado: apenas chaves e presença de campos, sem PII
+      structuredLog({
+        timestamp: new Date().toISOString(),
+        request_id: requestId,
+        cliente_id: body.cliente_id || body.config_id || 'pending',
+        action: 'body_received',
+        level: 'info',
+        phase: 'request',
+        metadata: {
+          keys: Object.keys(body || {}),
+          has_paciente_nome: !!body.paciente_nome,
+          has_celular: !!body.celular,
+          has_data_nascimento: !!body.data_nascimento,
+          has_medico: !!(body.medico || body.medico_nome),
+          has_cliente_id: !!body.cliente_id,
+          has_config_id: !!body.config_id
+        }
+      });
       
       const rawAction = pathParts[1]; // /llm-agent-api/{action}
       
@@ -1731,25 +1740,70 @@ serve(async (req) => {
         console.log(`🔄 [I18N] Action mapeada: ${rawAction} → ${action}`);
       }
 
-      // 🔑 MULTI-CLIENTE: Aceita config_id e cliente_id do body
+      // 🔑 MULTI-CLIENTE: Exige cliente_id ou config_id no body
       // config_id: Identifica configuração específica (usado por filiais como Orion)
-      // cliente_id: Fallback para compatibilidade (busca primeira config ativa)
-      const IPADO_CLIENT_ID = '2bfb98b5-ae41-4f96-8ba7-acc797c22054';
-      const CLIENTE_ID = body.cliente_id || IPADO_CLIENT_ID;
-      const CONFIG_ID = body.config_id; // Se fornecido, usa config específica
+      // cliente_id: Identifica o tenant diretamente
+      const CLIENTE_ID = body.cliente_id;
+      const CONFIG_ID = body.config_id;
       
-      // Identificar origem da requisição
-      const isProxy = !!body.cliente_id || !!body.config_id;
-      
-      console.log(`🏥 Cliente ID: ${CLIENTE_ID}${isProxy ? ' [via proxy]' : ''}`);
-      if (CONFIG_ID) {
-        console.log(`🔧 Config ID: ${CONFIG_ID} (filial específica)`);
+      // 🛡️ P0: Não permitir requisições sem identificação de tenant
+      if (!CLIENTE_ID && !CONFIG_ID) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'MISSING_TENANT',
+          message: 'cliente_id ou config_id é obrigatório',
+          codigo_erro: 'TENANT_REQUIRED',
+          api_version: API_VERSION,
+          timestamp: new Date().toISOString()
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
       }
+      
+      structuredLog({
+        timestamp: new Date().toISOString(),
+        request_id: requestId,
+        cliente_id: CLIENTE_ID || 'via_config',
+        action: 'tenant_identified',
+        level: 'info',
+        phase: 'request',
+        metadata: { cliente_id: CLIENTE_ID || null, config_id: CONFIG_ID || null }
+      });
 
       // 🆕 CARREGAR CONFIGURAÇÃO DINÂMICA DO BANCO
       // Se config_id foi fornecido, carrega config específica (ex: Orion)
       // Senão, busca primeira config ativa do cliente_id
-      const dynamicConfig = await loadDynamicConfig(supabase, CLIENTE_ID, CONFIG_ID);
+      const dynamicConfig = await loadDynamicConfig(supabase, CLIENTE_ID || '', CONFIG_ID);
+      
+      // Se veio apenas config_id sem cliente_id, resolver cliente_id da config
+      let resolvedClienteId = CLIENTE_ID;
+      if (!resolvedClienteId && CONFIG_ID && dynamicConfig?.clinic_info) {
+        // Buscar cliente_id da llm_clinic_config pelo config_id
+        const { data: configRow } = await supabase
+          .from('llm_clinic_config')
+          .select('cliente_id')
+          .eq('id', CONFIG_ID)
+          .single();
+        if (configRow?.cliente_id) {
+          resolvedClienteId = configRow.cliente_id;
+          console.log(`🔧 cliente_id resolvido via config_id: ${resolvedClienteId}`);
+        } else {
+          return new Response(JSON.stringify({
+            success: false,
+            error: 'CONFIG_NOT_FOUND',
+            message: 'config_id fornecido não corresponde a nenhuma configuração válida',
+            api_version: API_VERSION,
+            timestamp: new Date().toISOString()
+          }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+      }
+      
+      // A partir daqui, CLIENTE_ID_RESOLVED é garantido
+      const CLIENTE_ID_FINAL = resolvedClienteId!;
       
       // Nome do cliente vem do banco (sem hardcodes)
       const clienteNome = dynamicConfig?.clinic_info?.nome_clinica || 'Cliente';
@@ -1757,58 +1811,58 @@ serve(async (req) => {
       if (dynamicConfig?.clinic_info) {
         console.log(`✅ Config carregada: ${clienteNome}`);
       } else {
-        console.log(`⚠️ Sem configuração no banco para cliente ${CLIENTE_ID}`);
+        console.log(`⚠️ Sem configuração no banco para cliente ${CLIENTE_ID_FINAL}`);
       }
 
       switch (action) {
         case 'schedule':
-          return await withLogging('schedule', CLIENTE_ID, requestId, body,
-            () => handleSchedule(supabase, body, CLIENTE_ID, dynamicConfig));
+          return await withLogging('schedule', CLIENTE_ID_FINAL, requestId, body,
+            () => handleSchedule(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
         case 'check-patient':
-          return await withLogging('check-patient', CLIENTE_ID, requestId, body,
-            () => handleCheckPatient(supabase, body, CLIENTE_ID, dynamicConfig));
+          return await withLogging('check-patient', CLIENTE_ID_FINAL, requestId, body,
+            () => handleCheckPatient(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
         case 'reschedule':
-          return await withLogging('reschedule', CLIENTE_ID, requestId, body,
-            () => handleReschedule(supabase, body, CLIENTE_ID, dynamicConfig));
+          return await withLogging('reschedule', CLIENTE_ID_FINAL, requestId, body,
+            () => handleReschedule(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
         case 'cancel':
-          return await withLogging('cancel', CLIENTE_ID, requestId, body,
-            () => handleCancel(supabase, body, CLIENTE_ID, dynamicConfig));
+          return await withLogging('cancel', CLIENTE_ID_FINAL, requestId, body,
+            () => handleCancel(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
         case 'confirm':
-          return await withLogging('confirm', CLIENTE_ID, requestId, body,
-            () => handleConfirm(supabase, body, CLIENTE_ID, dynamicConfig));
+          return await withLogging('confirm', CLIENTE_ID_FINAL, requestId, body,
+            () => handleConfirm(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
         case 'availability':
-          return await withLogging('availability', CLIENTE_ID, requestId, body,
-            () => handleAvailability(supabase, body, CLIENTE_ID, dynamicConfig));
+          return await withLogging('availability', CLIENTE_ID_FINAL, requestId, body,
+            () => handleAvailability(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
         case 'patient-search':
-          return await withLogging('patient-search', CLIENTE_ID, requestId, body,
-            () => handlePatientSearch(supabase, body, CLIENTE_ID, dynamicConfig));
+          return await withLogging('patient-search', CLIENTE_ID_FINAL, requestId, body,
+            () => handlePatientSearch(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
         case 'list-appointments':
-          return await withLogging('list-appointments', CLIENTE_ID, requestId, body,
-            () => handleListAppointments(supabase, body, CLIENTE_ID, dynamicConfig));
+          return await withLogging('list-appointments', CLIENTE_ID_FINAL, requestId, body,
+            () => handleListAppointments(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
         case 'list-doctors':
-          return await withLogging('list-doctors', CLIENTE_ID, requestId, body,
-            () => handleListDoctors(supabase, body, CLIENTE_ID, dynamicConfig));
+          return await withLogging('list-doctors', CLIENTE_ID_FINAL, requestId, body,
+            () => handleListDoctors(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
         case 'clinic-info':
-          return await withLogging('clinic-info', CLIENTE_ID, requestId, body,
-            () => handleClinicInfo(supabase, body, CLIENTE_ID, dynamicConfig));
+          return await withLogging('clinic-info', CLIENTE_ID_FINAL, requestId, body,
+            () => handleClinicInfo(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
         case 'doctor-schedules':
         case 'horarios-medicos':
-          return await withLogging('doctor-schedules', CLIENTE_ID, requestId, body,
-            () => handleDoctorSchedules(supabase, body, CLIENTE_ID, dynamicConfig));
+          return await withLogging('doctor-schedules', CLIENTE_ID_FINAL, requestId, body,
+            () => handleDoctorSchedules(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
         case 'consultar-fila':
-          return await withLogging('consultar-fila', CLIENTE_ID, requestId, body,
-            () => handleConsultarFila(supabase, body, CLIENTE_ID, dynamicConfig));
+          return await withLogging('consultar-fila', CLIENTE_ID_FINAL, requestId, body,
+            () => handleConsultarFila(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
         case 'adicionar-fila':
-          return await withLogging('adicionar-fila', CLIENTE_ID, requestId, body,
-            () => handleAdicionarFila(supabase, body, CLIENTE_ID, dynamicConfig));
+          return await withLogging('adicionar-fila', CLIENTE_ID_FINAL, requestId, body,
+            () => handleAdicionarFila(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
         case 'responder-fila':
-          return await withLogging('responder-fila', CLIENTE_ID, requestId, body,
-            () => handleResponderFila(supabase, body, CLIENTE_ID, dynamicConfig));
+          return await withLogging('responder-fila', CLIENTE_ID_FINAL, requestId, body,
+            () => handleResponderFila(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
         default:
           structuredLog({
             timestamp: new Date().toISOString(),
             request_id: requestId,
-            cliente_id: CLIENTE_ID,
+            cliente_id: CLIENTE_ID_FINAL,
             action: action || 'unknown',
             level: 'warn',
             phase: 'response',
@@ -1926,7 +1980,7 @@ function formatarConvenioParaBanco(convenio: string): string {
 // Agendar consulta
 async function handleSchedule(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
-    console.log('📥 Dados recebidos na API:', JSON.stringify(body, null, 2));
+    console.log(`📥 [schedule] Keys recebidas: ${Object.keys(body).join(', ')}`);
     
     // 🛡️ SANITIZAÇÃO AUTOMÁTICA: Remover "=" do início dos valores (problema comum do N8N)
     const sanitizeValue = (value: any): any => {
@@ -3523,6 +3577,7 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string, c
     const { data: ultimosAgendamentos } = await supabase
       .from('agendamentos')
       .select('paciente_id, convenio, data_agendamento, hora_agendamento')
+      .eq('cliente_id', clienteId)
       .in('paciente_id', pacienteIds)
       .order('data_agendamento', { ascending: false })
       .order('hora_agendamento', { ascending: false });
@@ -3645,7 +3700,7 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string, c
 async function handleReschedule(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
     console.log('🔄 Iniciando remarcação de consulta');
-    console.log('📥 Dados recebidos:', JSON.stringify(body, null, 2));
+    console.log(`📥 [reschedule] Keys recebidas: ${Object.keys(body).join(', ')}, agendamento_id: ${body.agendamento_id || 'N/A'}`);
     console.log('🏥 Cliente ID:', clienteId);
     
     // 🆕 Sanitizar campos opcionais antes de processar
@@ -4033,7 +4088,7 @@ async function dispararWebhookFilaEspera(
       evolution_instance_name
     };
 
-    console.log(`📤 [WEBHOOK-FILA] Payload:`, JSON.stringify(payload));
+    console.log(`📤 [WEBHOOK-FILA] Enviando notificação para paciente_id: ${notifData.paciente_id}, medico: ${notifData.medico_nome}`);
 
     const webhookResponse = await fetch(
       'https://n8n-medical.inovaia-automacao.com.br/webhook/fila-espera-notificar',
@@ -4930,7 +4985,7 @@ async function handleConfirm(supabase: any, body: any, clienteId: string, config
 // Verificar disponibilidade de horários
 async function handleAvailability(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
-    console.log('📅 [RAW] Dados recebidos do N8N:', JSON.stringify(body, null, 2));
+    console.log(`📅 [availability] Keys recebidas: ${Object.keys(body).join(', ')}, medico: ${body.medico_nome || body.medico_id || 'N/A'}`);
     
     // 🛡️ SANITIZAÇÃO AUTOMÁTICA: Remover "=" do início dos valores (problema comum do N8N)
     const sanitizeValue = (value: any): any => {

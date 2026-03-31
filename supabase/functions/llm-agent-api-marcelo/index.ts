@@ -117,9 +117,7 @@ serve(async (req) => {
       }
     }
 
-    console.log(`🔄 [MARCELO PROXY v1.1.0] Redirecionando: ${req.method} /${action || '(root)'}`);
-    console.log(`📍 [MARCELO PROXY] Config ID: ${CONFIG_ID_MARCELO}`);
-    console.log(`🏥 [MARCELO PROXY] Cliente ID (IPADO): ${CLIENTE_ID_IPADO}`);
+    console.log(`🔄 [MARCELO PROXY v1.2.0] Redirecionando: ${req.method} /${action || '(root)'}`);
     
     // Parse body se POST
     let body: any = {};
@@ -143,18 +141,18 @@ serve(async (req) => {
       cliente_id: CLIENTE_ID_IPADO
     };
 
-    console.log(`📦 [MARCELO PROXY] Body enriquecido com config_id e cliente_id`);
-    console.log(`📝 [MARCELO PROXY] Ação: ${action || 'root'}, Medico solicitado: ${body.medico || body.medico_nome || 'não especificado'}`);
+    console.log(`📦 [MARCELO PROXY] Body enriquecido, action: ${action || 'root'}`);
 
     // Construir URL de destino
     const targetUrl = action ? `${MAIN_API_URL}/${action}` : MAIN_API_URL;
 
-    console.log(`🎯 [MARCELO PROXY] Chamando: ${targetUrl}`);
-
-    // Fazer requisição para API principal
+    // Fazer requisição para API principal repassando x-api-key
     const response = await fetch(targetUrl, {
       method: req.method,
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey!
+      },
       body: req.method === 'POST' ? JSON.stringify(enrichedBody) : undefined
     });
 
