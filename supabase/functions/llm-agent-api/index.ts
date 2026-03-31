@@ -1816,53 +1816,53 @@ serve(async (req) => {
 
       switch (action) {
         case 'schedule':
-          return await withLogging('schedule', CLIENTE_ID, requestId, body,
-            () => handleSchedule(supabase, body, CLIENTE_ID, dynamicConfig));
+          return await withLogging('schedule', CLIENTE_ID_FINAL, requestId, body,
+            () => handleSchedule(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
         case 'check-patient':
-          return await withLogging('check-patient', CLIENTE_ID, requestId, body,
-            () => handleCheckPatient(supabase, body, CLIENTE_ID, dynamicConfig));
+          return await withLogging('check-patient', CLIENTE_ID_FINAL, requestId, body,
+            () => handleCheckPatient(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
         case 'reschedule':
-          return await withLogging('reschedule', CLIENTE_ID, requestId, body,
-            () => handleReschedule(supabase, body, CLIENTE_ID, dynamicConfig));
+          return await withLogging('reschedule', CLIENTE_ID_FINAL, requestId, body,
+            () => handleReschedule(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
         case 'cancel':
-          return await withLogging('cancel', CLIENTE_ID, requestId, body,
-            () => handleCancel(supabase, body, CLIENTE_ID, dynamicConfig));
+          return await withLogging('cancel', CLIENTE_ID_FINAL, requestId, body,
+            () => handleCancel(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
         case 'confirm':
-          return await withLogging('confirm', CLIENTE_ID, requestId, body,
-            () => handleConfirm(supabase, body, CLIENTE_ID, dynamicConfig));
+          return await withLogging('confirm', CLIENTE_ID_FINAL, requestId, body,
+            () => handleConfirm(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
         case 'availability':
-          return await withLogging('availability', CLIENTE_ID, requestId, body,
-            () => handleAvailability(supabase, body, CLIENTE_ID, dynamicConfig));
+          return await withLogging('availability', CLIENTE_ID_FINAL, requestId, body,
+            () => handleAvailability(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
         case 'patient-search':
-          return await withLogging('patient-search', CLIENTE_ID, requestId, body,
-            () => handlePatientSearch(supabase, body, CLIENTE_ID, dynamicConfig));
+          return await withLogging('patient-search', CLIENTE_ID_FINAL, requestId, body,
+            () => handlePatientSearch(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
         case 'list-appointments':
-          return await withLogging('list-appointments', CLIENTE_ID, requestId, body,
-            () => handleListAppointments(supabase, body, CLIENTE_ID, dynamicConfig));
+          return await withLogging('list-appointments', CLIENTE_ID_FINAL, requestId, body,
+            () => handleListAppointments(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
         case 'list-doctors':
-          return await withLogging('list-doctors', CLIENTE_ID, requestId, body,
-            () => handleListDoctors(supabase, body, CLIENTE_ID, dynamicConfig));
+          return await withLogging('list-doctors', CLIENTE_ID_FINAL, requestId, body,
+            () => handleListDoctors(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
         case 'clinic-info':
-          return await withLogging('clinic-info', CLIENTE_ID, requestId, body,
-            () => handleClinicInfo(supabase, body, CLIENTE_ID, dynamicConfig));
+          return await withLogging('clinic-info', CLIENTE_ID_FINAL, requestId, body,
+            () => handleClinicInfo(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
         case 'doctor-schedules':
         case 'horarios-medicos':
-          return await withLogging('doctor-schedules', CLIENTE_ID, requestId, body,
-            () => handleDoctorSchedules(supabase, body, CLIENTE_ID, dynamicConfig));
+          return await withLogging('doctor-schedules', CLIENTE_ID_FINAL, requestId, body,
+            () => handleDoctorSchedules(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
         case 'consultar-fila':
-          return await withLogging('consultar-fila', CLIENTE_ID, requestId, body,
-            () => handleConsultarFila(supabase, body, CLIENTE_ID, dynamicConfig));
+          return await withLogging('consultar-fila', CLIENTE_ID_FINAL, requestId, body,
+            () => handleConsultarFila(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
         case 'adicionar-fila':
-          return await withLogging('adicionar-fila', CLIENTE_ID, requestId, body,
-            () => handleAdicionarFila(supabase, body, CLIENTE_ID, dynamicConfig));
+          return await withLogging('adicionar-fila', CLIENTE_ID_FINAL, requestId, body,
+            () => handleAdicionarFila(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
         case 'responder-fila':
-          return await withLogging('responder-fila', CLIENTE_ID, requestId, body,
-            () => handleResponderFila(supabase, body, CLIENTE_ID, dynamicConfig));
+          return await withLogging('responder-fila', CLIENTE_ID_FINAL, requestId, body,
+            () => handleResponderFila(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
         default:
           structuredLog({
             timestamp: new Date().toISOString(),
             request_id: requestId,
-            cliente_id: CLIENTE_ID,
+            cliente_id: CLIENTE_ID_FINAL,
             action: action || 'unknown',
             level: 'warn',
             phase: 'response',
