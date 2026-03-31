@@ -4088,7 +4088,7 @@ async function dispararWebhookFilaEspera(
       evolution_instance_name
     };
 
-    console.log(`📤 [WEBHOOK-FILA] Payload:`, JSON.stringify(payload));
+    console.log(`📤 [WEBHOOK-FILA] Enviando notificação para paciente_id: ${notifData.paciente_id}, medico: ${notifData.medico_nome}`);
 
     const webhookResponse = await fetch(
       'https://n8n-medical.inovaia-automacao.com.br/webhook/fila-espera-notificar',

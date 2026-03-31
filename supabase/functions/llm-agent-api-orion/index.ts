@@ -57,22 +57,20 @@ serve(async (req) => {
       }
     }
 
-    console.log(`🔄 [ORION PROXY v1.0.0] Redirecionando: ${req.method} /${action || '(root)'}`);
+    console.log(`🔄 [ORION PROXY v1.1.0] Redirecionando: ${req.method} /${action || '(root)'}`);
     
     // Obter o body da requisição original
     let body: any = {};
     if (req.method === 'POST') {
       try {
         body = await req.json();
-        console.log(`📥 [ORION PROXY] Body ORIGINAL:`, JSON.stringify(body));
-        
-        // Normalizar body se for array (n8n às vezes envia [{...}] ao invés de {...})
+        // Normalizar body se for array
         if (Array.isArray(body) && body.length > 0) {
           console.log('⚠️ [ORION PROXY] Body recebido como array, extraindo primeiro elemento');
           body = body[0];
         }
       } catch (e) {
-        console.log(`⚠️ [ORION PROXY] Body vazio ou inválido:`, e.message);
+        console.log(`⚠️ [ORION PROXY] Body vazio ou inválido`);
         body = {};
       }
     }
@@ -84,18 +82,17 @@ serve(async (req) => {
       cliente_id: CLIENTE_ID_ORION
     };
 
-    console.log(`📦 [ORION PROXY] Body enriquecido com config_id: ${CLINICA_ORION_CONFIG_ID}`);
-    console.log(`📤 [ORION PROXY] Body completo:`, JSON.stringify(enrichedBody));
+    console.log(`📦 [ORION PROXY] Body enriquecido, action: ${action || 'root'}`);
 
     // Construir URL da API principal
     const targetUrl = action ? `${MAIN_API_URL}/${action}` : MAIN_API_URL;
-    console.log(`📡 [ORION PROXY] Chamando: ${targetUrl}`);
 
-    // Fazer a chamada para a API principal
+    // Fazer a chamada para a API principal repassando x-api-key
     const response = await fetch(targetUrl, {
       method: req.method,
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey!
       },
       body: req.method === 'POST' ? JSON.stringify(enrichedBody) : undefined
     });
