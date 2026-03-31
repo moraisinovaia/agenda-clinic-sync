@@ -4955,7 +4955,7 @@ async function handleConfirm(supabase: any, body: any, clienteId: string, config
 // Verificar disponibilidade de horários
 async function handleAvailability(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
-    console.log('📅 [RAW] Dados recebidos do N8N:', JSON.stringify(body, null, 2));
+    console.log(`📅 [availability] Keys recebidas: ${Object.keys(body).join(', ')}, medico: ${body.medico_nome || body.medico_id || 'N/A'}`);
     
     // 🛡️ SANITIZAÇÃO AUTOMÁTICA: Remover "=" do início dos valores (problema comum do N8N)
     const sanitizeValue = (value: any): any => {
