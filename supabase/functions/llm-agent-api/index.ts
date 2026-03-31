@@ -1951,7 +1951,7 @@ function formatarConvenioParaBanco(convenio: string): string {
 // Agendar consulta
 async function handleSchedule(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
-    console.log('📥 Dados recebidos na API:', JSON.stringify(body, null, 2));
+    console.log(`📥 [schedule] Keys recebidas: ${Object.keys(body).join(', ')}`);
     
     // 🛡️ SANITIZAÇÃO AUTOMÁTICA: Remover "=" do início dos valores (problema comum do N8N)
     const sanitizeValue = (value: any): any => {
