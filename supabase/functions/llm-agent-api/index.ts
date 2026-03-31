@@ -3670,7 +3670,7 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string, c
 async function handleReschedule(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
     console.log('🔄 Iniciando remarcação de consulta');
-    console.log('📥 Dados recebidos:', JSON.stringify(body, null, 2));
+    console.log(`📥 [reschedule] Keys recebidas: ${Object.keys(body).join(', ')}, agendamento_id: ${body.agendamento_id || 'N/A'}`);
     console.log('🏥 Cliente ID:', clienteId);
     
     // 🆕 Sanitizar campos opcionais antes de processar
