@@ -1731,20 +1731,36 @@ serve(async (req) => {
         console.log(`🔄 [I18N] Action mapeada: ${rawAction} → ${action}`);
       }
 
-      // 🔑 MULTI-CLIENTE: Aceita config_id e cliente_id do body
+      // 🔑 MULTI-CLIENTE: Exige cliente_id ou config_id no body
       // config_id: Identifica configuração específica (usado por filiais como Orion)
-      // cliente_id: Fallback para compatibilidade (busca primeira config ativa)
-      const IPADO_CLIENT_ID = '2bfb98b5-ae41-4f96-8ba7-acc797c22054';
-      const CLIENTE_ID = body.cliente_id || IPADO_CLIENT_ID;
-      const CONFIG_ID = body.config_id; // Se fornecido, usa config específica
+      // cliente_id: Identifica o tenant diretamente
+      const CLIENTE_ID = body.cliente_id;
+      const CONFIG_ID = body.config_id;
       
-      // Identificar origem da requisição
-      const isProxy = !!body.cliente_id || !!body.config_id;
-      
-      console.log(`🏥 Cliente ID: ${CLIENTE_ID}${isProxy ? ' [via proxy]' : ''}`);
-      if (CONFIG_ID) {
-        console.log(`🔧 Config ID: ${CONFIG_ID} (filial específica)`);
+      // 🛡️ P0: Não permitir requisições sem identificação de tenant
+      if (!CLIENTE_ID && !CONFIG_ID) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'MISSING_TENANT',
+          message: 'cliente_id ou config_id é obrigatório',
+          codigo_erro: 'TENANT_REQUIRED',
+          api_version: API_VERSION,
+          timestamp: new Date().toISOString()
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
       }
+      
+      structuredLog({
+        timestamp: new Date().toISOString(),
+        request_id: requestId,
+        cliente_id: CLIENTE_ID || 'via_config',
+        action: 'tenant_identified',
+        level: 'info',
+        phase: 'request',
+        metadata: { cliente_id: CLIENTE_ID || null, config_id: CONFIG_ID || null }
+      });
 
       // 🆕 CARREGAR CONFIGURAÇÃO DINÂMICA DO BANCO
       // Se config_id foi fornecido, carrega config específica (ex: Orion)
