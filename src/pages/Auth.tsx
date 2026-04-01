@@ -253,7 +253,8 @@ export default function Auth() {
       // Aplicar trim() nos campos de texto para remover espaços extras
       const nome = signupData.nome.trim();
       const username = signupData.username.trim();
-      const email = signupData.email.trim().toLowerCase();
+      // Gerar email automático baseado no username
+      const email = `${username.toLowerCase().replace(/[^a-z0-9]/g, '')}@gtinova.sys`;
       
       const { error } = await signUp(signupData.password, nome, username, email, signupData.clienteId || undefined);
       
