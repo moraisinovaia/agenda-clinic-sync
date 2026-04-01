@@ -776,9 +776,10 @@ export default function Auth() {
                         </div>
                       </SelectTrigger>
                       <SelectContent>
-                        {clinicas.map((clinica) => (
+                         {clinicas.map((clinica) => (
                           <SelectItem key={clinica.id} value={clinica.id}>
-                            {clinica.nome}
+                            {CLINIC_SHORT_NAMES[clinica.nome] || clinica.nome}
+                          </SelectItem>
                           </SelectItem>
                         ))}
                       </SelectContent>
