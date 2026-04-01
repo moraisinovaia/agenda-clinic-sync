@@ -561,7 +561,7 @@ export default function Auth() {
             </div>
             <div>
               <CardTitle className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">
-                {subtitle}
+                {partnerName}
               </CardTitle>
               <p className="text-muted-foreground text-sm mt-1">Acesso para Recepcionistas</p>
             </div>
