@@ -1,0 +1,1 @@
+UPDATE clientes SET nome = 'HOSPITAL DE OLHOS PETROLINA', updated_at = now() WHERE id = 'd7d7b7cf-4ec0-437b-8377-d7555fc5ee6a';
