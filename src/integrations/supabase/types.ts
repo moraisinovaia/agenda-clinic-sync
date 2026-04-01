@@ -3025,10 +3025,19 @@ export type Database = {
         }
         Returns: Json
       }
-      search_doctor_by_name_llm: {
-        Args: { p_cliente_id: string; p_nome_busca: string }
-        Returns: Json
-      }
+      search_doctor_by_name_llm:
+        | {
+            Args: { p_cliente_id: string; p_nome_busca: string }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_cliente_id: string
+              p_config_id?: string
+              p_nome_busca: string
+            }
+            Returns: Json
+          }
       sincronizar_cliente_llm: {
         Args: {
           p_cliente_id: string
