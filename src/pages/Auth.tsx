@@ -722,22 +722,6 @@ export default function Auth() {
                  </div>
                  
                  <div className="space-y-2">
-                   <Label htmlFor="signup-email" className="text-sm font-medium">Email</Label>
-                   <div className="relative group">
-                     <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
-                     <Input
-                       id="signup-email"
-                       type="email"
-                       placeholder="seu@email.com"
-                       className="pl-10 auth-input"
-                       value={signupData.email}
-                       onChange={(e) => setSignupData(prev => ({ ...prev, email: e.target.value }))}
-                       required
-                     />
-                   </div>
-                 </div>
-                 
-                 <div className="space-y-2">
                    <Label htmlFor="signup-username" className="text-sm font-medium">Nome de Usuário</Label>
                    <div className="relative group">
                      <AtSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
