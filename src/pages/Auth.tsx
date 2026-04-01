@@ -49,6 +49,11 @@ export default function Auth() {
   
   // Lista de clínicas para o signup
   const [clinicas, setClinicas] = useState<{id: string, nome: string}[]>([]);
+
+  // Siglas para exibição no cadastro
+  const CLINIC_SHORT_NAMES: Record<string, string> = {
+    'HOSPITAL DE OLHOS PETROLINA': 'HOP',
+  };
   
   // Buscar clínicas ativas filtradas por parceiro do domínio
   useEffect(() => {
@@ -561,7 +566,7 @@ export default function Auth() {
             </div>
             <div>
               <CardTitle className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">
-                {subtitle}
+                {partnerName}
               </CardTitle>
               <p className="text-muted-foreground text-sm mt-1">Acesso para Recepcionistas</p>
             </div>
@@ -773,7 +778,7 @@ export default function Auth() {
                       <SelectContent>
                         {clinicas.map((clinica) => (
                           <SelectItem key={clinica.id} value={clinica.id}>
-                            {clinica.nome}
+                            {CLINIC_SHORT_NAMES[clinica.nome] || clinica.nome}
                           </SelectItem>
                         ))}
                       </SelectContent>
