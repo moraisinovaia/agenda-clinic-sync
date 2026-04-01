@@ -49,6 +49,11 @@ export default function Auth() {
   
   // Lista de clínicas para o signup
   const [clinicas, setClinicas] = useState<{id: string, nome: string}[]>([]);
+
+  // Siglas para exibição no cadastro
+  const CLINIC_SHORT_NAMES: Record<string, string> = {
+    'HOSPITAL DE OLHOS PETROLINA': 'HOP',
+  };
   
   // Buscar clínicas ativas filtradas por parceiro do domínio
   useEffect(() => {
