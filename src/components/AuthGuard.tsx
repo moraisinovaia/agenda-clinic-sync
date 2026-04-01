@@ -171,15 +171,3 @@ function DomainGuard({ clienteId, children }: { clienteId: string | null | undef
 
   return <>{children}</>;
 }
-```
-
-A única alteração foi trocar:
-```
-onClick={() => window.location.href = '/auth'}
-```
-por:
-```
-onClick={async () => {
-  await supabase.auth.signOut();
-  window.location.href = '/auth';
-}}
