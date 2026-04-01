@@ -53,9 +53,6 @@ export const DashboardHeader = ({
                   <h1 className="text-3xl font-bold text-foreground">
                     {clinicName}
                   </h1>
-                  <p className="text-muted-foreground mt-1">
-                    {clinicSubtitle}
-                  </p>
               {profileName && (
                 <p className="text-sm text-primary font-medium">
                   {profileRole === 'admin' ? 'Administrador Global' : profileRole === 'admin_clinica' ? 'Admin da Clínica' : 'Recepcionista'}: {profileName}
