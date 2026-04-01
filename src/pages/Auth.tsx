@@ -231,15 +231,8 @@ export default function Auth() {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!signupData.nome || !signupData.email || !signupData.username || !signupData.password) {
+    if (!signupData.nome || !signupData.username || !signupData.password) {
       setError('Por favor, preencha todos os campos obrigatórios');
-      return;
-    }
-
-    // Validar formato de email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(signupData.email)) {
-      setError('Por favor, insira um email válido');
       return;
     }
     
@@ -260,7 +253,8 @@ export default function Auth() {
       // Aplicar trim() nos campos de texto para remover espaços extras
       const nome = signupData.nome.trim();
       const username = signupData.username.trim();
-      const email = signupData.email.trim().toLowerCase();
+      // Gerar email automático baseado no username
+      const email = `${username.toLowerCase().replace(/[^a-z0-9]/g, '')}@gtinova.sys`;
       
       const { error } = await signUp(signupData.password, nome, username, email, signupData.clienteId || undefined);
       
@@ -722,22 +716,6 @@ export default function Auth() {
                        className="pl-10 auth-input"
                        value={signupData.nome}
                        onChange={(e) => setSignupData(prev => ({ ...prev, nome: e.target.value }))}
-                       required
-                     />
-                   </div>
-                 </div>
-                 
-                 <div className="space-y-2">
-                   <Label htmlFor="signup-email" className="text-sm font-medium">Email</Label>
-                   <div className="relative group">
-                     <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
-                     <Input
-                       id="signup-email"
-                       type="email"
-                       placeholder="seu@email.com"
-                       className="pl-10 auth-input"
-                       value={signupData.email}
-                       onChange={(e) => setSignupData(prev => ({ ...prev, email: e.target.value }))}
                        required
                      />
                    </div>
