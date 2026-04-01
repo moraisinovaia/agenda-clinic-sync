@@ -254,7 +254,9 @@ export default function Auth() {
       const nome = signupData.nome.trim();
       const username = signupData.username.trim();
       // Gerar email automático baseado no username
-      const email = `${username.toLowerCase().replace(/[^a-z0-9]/g, '')}@gmail.com`;
+      const sanitizedUsername = username.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const uniqueSuffix = Date.now().toString(36);
+      const email = `${sanitizedUsername}.${uniqueSuffix}@gmail.com`;
       
       const { error } = await signUp(signupData.password, nome, username, email, signupData.clienteId || undefined);
       
