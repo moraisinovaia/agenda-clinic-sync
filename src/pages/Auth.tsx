@@ -231,15 +231,8 @@ export default function Auth() {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!signupData.nome || !signupData.email || !signupData.username || !signupData.password) {
+    if (!signupData.nome || !signupData.username || !signupData.password) {
       setError('Por favor, preencha todos os campos obrigatórios');
-      return;
-    }
-
-    // Validar formato de email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(signupData.email)) {
-      setError('Por favor, insira um email válido');
       return;
     }
     
