@@ -253,10 +253,15 @@ export default function Auth() {
       // Aplicar trim() nos campos de texto para remover espaços extras
       const nome = signupData.nome.trim();
       const username = signupData.username.trim();
-      // Gerar email automático baseado no username
-      const sanitizedUsername = username.toLowerCase().replace(/[^a-z0-9]/g, '');
-      const uniqueSuffix = Date.now().toString(36);
-      const email = `${sanitizedUsername}.${uniqueSuffix}@gmail.com`;
+      // Gerar email interno com formato sempre válido para o Supabase Auth
+      const sanitizedUsername = username
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '')
+        .slice(0, 32);
+      const emailAlias = sanitizedUsername || `usuario${Date.now().toString(36)}`;
+      const email = `moraisinovaiacloud+${emailAlias}@gmail.com`;
       
       const { error } = await signUp(signupData.password, nome, username, email, signupData.clienteId || undefined);
       
@@ -274,8 +279,10 @@ export default function Auth() {
           errorMessage = 'Nome de usuário já está em uso. Escolha outro nome de usuário.';
         } else if (error.message.includes('Database error saving new user')) {
           errorMessage = 'Erro ao criar conta. Possível conflito de nome de usuário ou senha rejeitada. Tente outro username e uma senha mais forte.';
+        } else if (error.message.includes('email_address_invalid') || error.message.toLowerCase().includes('invalid email')) {
+          errorMessage = 'Erro interno ao gerar o email do cadastro. Tente novamente.';
         } else if (error.message.includes('email')) {
-          errorMessage = 'Problema com o email informado. Verifique e tente novamente.';
+          errorMessage = error.message;
         }
         
         console.error('🔐 Signup error details:', error.message);
