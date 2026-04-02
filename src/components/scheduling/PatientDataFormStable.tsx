@@ -1,12 +1,15 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Check, ChevronsUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DateOfBirthInput } from '@/components/ui/date-of-birth-input';
 import { User, Search, UserCheck, AlertCircle, CheckCircle } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { SchedulingFormData } from '@/types/scheduling';
 import { useUnifiedPatientSearch } from '@/hooks/useUnifiedPatientSearch';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -249,22 +252,42 @@ export const PatientDataFormStable = React.memo(({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <Label htmlFor="convenio">Convênio *</Label>
-          <Select 
-            value={formData.convenio} 
-            onValueChange={(value) => handleInputChange('convenio', value)}
-            disabled={!medicoSelected}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder={medicoSelected ? "Selecione o convênio" : "Primeiro selecione um médico"} />
-            </SelectTrigger>
-            <SelectContent>
-              {availableConvenios.map((convenio) => (
-                <SelectItem key={convenio} value={convenio}>
-                  {convenio}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                disabled={!medicoSelected}
+                className={cn(
+                  "w-full justify-between font-normal",
+                  !formData.convenio && "text-muted-foreground"
+                )}
+              >
+                {formData.convenio || (medicoSelected ? "Pesquisar convênio..." : "Primeiro selecione um médico")}
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+              <Command>
+                <CommandInput placeholder="Pesquisar convênio..." />
+                <CommandList>
+                  <CommandEmpty>Nenhum convênio encontrado.</CommandEmpty>
+                  <CommandGroup>
+                    {availableConvenios.map((convenio) => (
+                      <CommandItem
+                        key={convenio}
+                        value={convenio}
+                        onSelect={() => handleInputChange('convenio', convenio)}
+                      >
+                        <Check className={cn("mr-2 h-4 w-4", formData.convenio === convenio ? "opacity-100" : "opacity-0")} />
+                        {convenio}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
         </div>
         
         <div>
