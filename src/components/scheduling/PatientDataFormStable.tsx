@@ -111,11 +111,11 @@ export const PatientDataFormStable = React.memo(({
   const selectPatient = useCallback((patient: any) => {
     setFormData(prev => ({
       ...prev,
-      nomeCompleto: patient.nome_completo,
+      nomeCompleto: patient.nome_completo || prev.nomeCompleto,
       dataNascimento: patient.data_nascimento || prev.dataNascimento,
-      telefone: patient.telefone || '',
-      celular: patient.celular,
-      convenio: patient.ultimo_convenio || '',
+      telefone: patient.telefone || prev.telefone || '',
+      celular: patient.celular || prev.celular || '',
+      convenio: patient.ultimo_convenio || prev.convenio || '',
     }));
     selectPatientFromSearch(patient);
   }, [setFormData, selectPatientFromSearch]);
