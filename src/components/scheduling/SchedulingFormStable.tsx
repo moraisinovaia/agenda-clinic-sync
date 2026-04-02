@@ -77,6 +77,20 @@ export function SchedulingFormStable({
     }
   }, [error]);
 
+  // Normalizar array de convênios - separar itens com vírgula em itens individuais
+  const normalizeConvenios = (convenios: string[]): string[] => {
+    const normalized: string[] = [];
+    for (const item of convenios) {
+      if (item.includes(',')) {
+        const parts = item.split(',').map(s => s.trim()).filter(Boolean);
+        normalized.push(...parts);
+      } else {
+        normalized.push(item.trim());
+      }
+    }
+    return [...new Set(normalized)].filter(Boolean);
+  };
+
   // Calcular convênios disponíveis baseado no médico selecionado
   const getAvailableConvenios = () => {
     if (!formData.medicoId) return [];
@@ -86,7 +100,7 @@ export function SchedulingFormStable({
     
     // Se o médico tem lista de convênios aceitos, usar essa lista
     if (selectedDoctor.convenios_aceitos && selectedDoctor.convenios_aceitos.length > 0) {
-      return selectedDoctor.convenios_aceitos;
+      return normalizeConvenios(selectedDoctor.convenios_aceitos);
     }
     
     // Se não tem restrição, retornar lista padrão de convênios
