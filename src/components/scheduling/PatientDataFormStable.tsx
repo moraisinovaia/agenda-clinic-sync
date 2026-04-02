@@ -112,6 +112,7 @@ export const PatientDataFormStable = React.memo(({
     setFormData(prev => ({
       ...prev,
       nomeCompleto: patient.nome_completo,
+      dataNascimento: patient.data_nascimento || prev.dataNascimento,
       telefone: patient.telefone || '',
       celular: patient.celular,
       convenio: patient.ultimo_convenio || '',

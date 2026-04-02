@@ -196,7 +196,11 @@ export function SimpleSchedulingForm({
   }, [preSelectedTime, editingAppointment]);
 
   const selectedDoctor = doctors.find(doctor => doctor.id === formData.medicoId);
-  const availableConvenios = selectedDoctor?.convenios_aceitos || [];
+  // Normalizar convênios - separar itens com vírgula em itens individuais
+  const rawConvenios = selectedDoctor?.convenios_aceitos || [];
+  const availableConvenios = rawConvenios.flatMap(item => 
+    item.includes(',') ? item.split(',').map(s => s.trim()).filter(Boolean) : [item.trim()]
+  ).filter((v, i, a) => v && a.indexOf(v) === i);
   const medicoSelected = !!formData.medicoId;
 
   // Função para obter agendamentos de um médico específico em uma data
