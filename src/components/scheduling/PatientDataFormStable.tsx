@@ -9,6 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DateOfBirthInput } from '@/components/ui/date-of-birth-input';
 import { User, Search, UserCheck, AlertCircle, CheckCircle } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { SchedulingFormData } from '@/types/scheduling';
 import { useUnifiedPatientSearch } from '@/hooks/useUnifiedPatientSearch';
 import { useDebounce } from '@/hooks/useDebounce';
