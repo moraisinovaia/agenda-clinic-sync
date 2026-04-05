@@ -50,6 +50,10 @@ enable_confirmations = false
 enabled = true
 ip_version = "ipv4"
 
+# =========================
+# FUNCTIONS (LIMPO E PADRÃO)
+# =========================
+
 [functions.scheduling-api]
 verify_jwt = false
 
@@ -77,13 +81,8 @@ verify_jwt = false
 [functions.fix-approved-users-emails]
 verify_jwt = false
 
+#  API PRINCIPAL (CANÔNICA)
 [functions.llm-agent-api]
-verify_jwt = false
-
-[functions.llm-agent-api-venus]
-verify_jwt = false
-
-[functions.llm-agent-api-orion]
 verify_jwt = false
 
 [functions.user-management]
@@ -96,12 +95,6 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.create-test-user]
-verify_jwt = false
-
-[functions.llm-agent-api-marcelo]
-verify_jwt = false
-
-[functions.llm-agent-api-olhos]
 verify_jwt = false
 
 [functions.og-metadata]
