@@ -1,11 +1,11 @@
 -- =========================================================
--- PARTNER BRANDING - MIGRACAO SEGURA DO MODELO EXISTENTE
+-- PARTNER BRANDING - MIGRACAO SEGURA E IDEMPOTENTE
 -- =========================================================
 
--- 1) Garantir que a tabela exista no formato atual/minimo
+-- 1) Garantir estrutura mínima da tabela (legado compatível)
 CREATE TABLE IF NOT EXISTS public.partner_branding (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  partner_name TEXT,
+  partner_name TEXT UNIQUE,
   domain_pattern TEXT,
   logo_url TEXT,
   subtitle TEXT,
@@ -14,18 +14,18 @@ CREATE TABLE IF NOT EXISTS public.partner_branding (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- 2) Adicionar parceiro_id sem mexer nas colunas legadas
+-- 2) Adicionar parceiro_id (nova arquitetura)
 ALTER TABLE public.partner_branding
 ADD COLUMN IF NOT EXISTS parceiro_id UUID REFERENCES public.parceiros(id) ON DELETE CASCADE;
 
--- 3) Popular parceiro_id com base no nome legado
+-- 3) Preencher parceiro_id a partir do nome legado
 UPDATE public.partner_branding pb
 SET parceiro_id = p.id
 FROM public.parceiros p
-WHERE pb.parceiro_id IS NULL
-  AND pb.partner_name = p.nome;
+WHERE pb.partner_name = p.nome
+  AND pb.parceiro_id IS NULL;
 
--- 4) Garantir índice
+-- 4) Garantir índices
 CREATE INDEX IF NOT EXISTS idx_partner_branding_parceiro_id
   ON public.partner_branding(parceiro_id);
 
@@ -39,7 +39,11 @@ BEFORE UPDATE ON public.partner_branding
 FOR EACH ROW
 EXECUTE FUNCTION public.update_updated_at_column();
 
--- 6) Seed inicial, sem depender de colunas novas
+-- =========================================================
+-- 6) UPSERT LÓGICO (IDEMPOTENTE)
+-- =========================================================
+
+-- INOVAIA
 INSERT INTO public.partner_branding (
   partner_name,
   parceiro_id,
@@ -60,9 +64,23 @@ WHERE p.nome = 'INOVAIA'
   AND NOT EXISTS (
     SELECT 1
     FROM public.partner_branding pb
-    WHERE pb.domain_pattern = 'agenda-clinic-sync.lovable.app'
+    WHERE pb.partner_name = 'INOVAIA'
   );
 
+-- Atualizar caso já exista (garante consistência)
+UPDATE public.partner_branding pb
+SET
+  parceiro_id = p.id,
+  domain_pattern = 'inovaiaagendamentos.inovaia.online',
+  subtitle = 'Sistema de Agendamentos Médicos',
+  primary_color = '#0ea5e9',
+  updated_at = now()
+FROM public.parceiros p
+WHERE p.nome = 'INOVAIA'
+  AND pb.partner_name = 'INOVAIA';
+
+
+-- GT INOVA
 INSERT INTO public.partner_branding (
   partner_name,
   parceiro_id,
@@ -83,5 +101,17 @@ WHERE p.nome = 'GT INOVA'
   AND NOT EXISTS (
     SELECT 1
     FROM public.partner_branding pb
-    WHERE pb.domain_pattern = 'gt.inovaia-automacao.com.br'
+    WHERE pb.partner_name = 'GT INOVA'
   );
+
+-- Atualizar caso já exista
+UPDATE public.partner_branding pb
+SET
+  parceiro_id = p.id,
+  domain_pattern = 'gt.inovaia-automacao.com.br',
+  subtitle = 'Soluções em Tecnologia',
+  primary_color = '#16a34a',
+  updated_at = now()
+FROM public.parceiros p
+WHERE p.nome = 'GT INOVA'
+  AND pb.partner_name = 'GT INOVA';
