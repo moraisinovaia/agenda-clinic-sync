@@ -2,9 +2,25 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 // v3.2.0 - Sistema Dinâmico com Logging Estruturado
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-api-key',
+const ALLOWED_ORIGINS = [
+  "https://gt.inovaia-automacao.com.br",
+  "https://inovaiaagendamentos.inovaia.online",
+  "http://localhost:8080",
+  "http://localhost:3000",
+];
+
+function getCorsHeaders(origin: string | null) {
+  const allowedOrigin =
+    origin && ALLOWED_ORIGINS.includes(origin)
+      ? origin
+      : ALLOWED_ORIGINS[0];
+
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-api-key',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Vary': 'Origin',
+  };
 }
 
 const API_VERSION = '3.2.0';
@@ -1645,7 +1661,10 @@ function mapSchedulingData(body: any) {
 serve(async (req) => {
   const requestId = generateRequestId();
   const apiStartTime = performance.now();
-  
+
+  const origin = req.headers.get('origin');
+  const corsHeaders = getCorsHeaders(origin);
+
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
