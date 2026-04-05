@@ -64,3 +64,40 @@ A lógica real está concentrada na `llm-agent-api`.
 2. mapear onde cada proxy é chamada (docs, n8n, integrações externas)
 3. criar plano de migração para chamada direta à `llm-agent-api`
 4. descontinuar proxies gradualmente
+
+---
+
+## Primeira candidata para migração
+
+### llm-agent-api-venus
+Motivo:
+- é a proxy mais simples
+- injeta apenas `cliente_id`
+- não depende de `config_id`
+
+### Chamada atual
+- endpoint proxy: `llm-agent-api-venus`
+- body enriquecido:
+  - `cliente_id: 20747f3c-8fa1-4f7e-8817-a55a8a6c8e0a`
+
+### Chamada desejada
+Cliente/integrador deve chamar diretamente:
+
+- endpoint: `llm-agent-api`
+- mantendo `x-api-key`
+- enviando no body:
+  - `cliente_id: 20747f3c-8fa1-4f7e-8817-a55a8a6c8e0a`
+
+### Exemplo de direção de migração
+Antes:
+- `POST /functions/v1/llm-agent-api-venus/availability`
+
+Depois:
+- `POST /functions/v1/llm-agent-api/availability`
+- body inclui `cliente_id`
+
+### Estratégia
+1. atualizar documentação/integrador da Vênus
+2. validar chamadas diretas para `llm-agent-api`
+3. manter proxy antiga temporariamente
+4. descontinuar proxy após estabilidade
