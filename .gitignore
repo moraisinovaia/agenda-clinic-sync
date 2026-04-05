@@ -26,3 +26,4 @@ dist-ssr
 # Environment variables (SENSITIVE)
 .env
 .env.*
+!.env.example
