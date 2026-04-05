@@ -1,0 +1,17 @@
+-- 🔥 ADICIONAR CLIENTE_ID NAS TABELAS CORE
+
+-- PACIENTES
+ALTER TABLE public.pacientes
+ADD COLUMN IF NOT EXISTS cliente_id UUID REFERENCES clientes(id);
+
+-- AGENDAMENTOS
+ALTER TABLE public.agendamentos
+ADD COLUMN IF NOT EXISTS cliente_id UUID REFERENCES clientes(id);
+
+-- FILA ESPERA
+ALTER TABLE public.fila_espera
+ADD COLUMN IF NOT EXISTS cliente_id UUID REFERENCES clientes(id);
+
+-- FILA NOTIFICACOES
+ALTER TABLE public.fila_notificacoes
+ADD COLUMN IF NOT EXISTS cliente_id UUID REFERENCES clientes(id);
