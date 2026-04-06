@@ -40,7 +40,7 @@ API para integração com chatbot WhatsApp da Clínica Vênus via N8N.
 ## Base URL
 
 ```
-https://qxlvzbvzajibdtlzngdy.supabase.co/functions/v1/llm-agent-api-venus
+https://qxlvzbvzajibdtlzngdy.supabase.co/functions/v1/llm-agent-api
 ```
 
 ## Headers
