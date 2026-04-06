@@ -676,6 +676,7 @@ export type Database = {
           logo_url: string | null
           nome: string
           parceiro: string | null
+          parceiro_id: string
           telefone: string | null
           updated_at: string | null
           whatsapp: string | null
@@ -689,6 +690,7 @@ export type Database = {
           logo_url?: string | null
           nome: string
           parceiro?: string | null
+          parceiro_id: string
           telefone?: string | null
           updated_at?: string | null
           whatsapp?: string | null
@@ -702,11 +704,20 @@ export type Database = {
           logo_url?: string | null
           nome?: string
           parceiro?: string | null
+          parceiro_id?: string
           telefone?: string | null
           updated_at?: string | null
           whatsapp?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "clientes_parceiro_id_fkey"
+            columns: ["parceiro_id"]
+            isOneToOne: false
+            referencedRelation: "parceiros"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       configuracoes_clinica: {
         Row: {
@@ -1585,12 +1596,40 @@ export type Database = {
           },
         ]
       }
+      parceiros: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          nome: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome?: string
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       partner_branding: {
         Row: {
           created_at: string | null
           domain_pattern: string
           id: string
           logo_url: string | null
+          parceiro_id: string | null
           partner_name: string
           primary_color: string | null
           subtitle: string | null
@@ -1601,6 +1640,7 @@ export type Database = {
           domain_pattern: string
           id?: string
           logo_url?: string | null
+          parceiro_id?: string | null
           partner_name: string
           primary_color?: string | null
           subtitle?: string | null
@@ -1611,12 +1651,21 @@ export type Database = {
           domain_pattern?: string
           id?: string
           logo_url?: string | null
+          parceiro_id?: string | null
           partner_name?: string
           primary_color?: string | null
           subtitle?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "partner_branding_parceiro_id_fkey"
+            columns: ["parceiro_id"]
+            isOneToOne: false
+            referencedRelation: "parceiros"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       planos_assinatura: {
         Row: {
@@ -1756,6 +1805,7 @@ export type Database = {
           email: string
           id: string
           nome: string
+          parceiro_id: string
           status: string
           updated_at: string | null
           user_id: string
@@ -1771,6 +1821,7 @@ export type Database = {
           email: string
           id?: string
           nome: string
+          parceiro_id: string
           status?: string
           updated_at?: string | null
           user_id: string
@@ -1786,6 +1837,7 @@ export type Database = {
           email?: string
           id?: string
           nome?: string
+          parceiro_id?: string
           status?: string
           updated_at?: string | null
           user_id?: string
@@ -1804,6 +1856,13 @@ export type Database = {
             columns: ["aprovado_por"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_parceiro_id_fkey"
+            columns: ["parceiro_id"]
+            isOneToOne: false
+            referencedRelation: "parceiros"
             referencedColumns: ["id"]
           },
         ]
