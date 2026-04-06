@@ -14,7 +14,6 @@ interface UserManagementRequest {
     | 'delete_user'
     | 'check_email_status'
     | 'batch_check_emails'
-    | 'send_password_reset'
     | 'admin_reset_password';
   user_email?: string;
   user_id?: string;
@@ -28,28 +27,7 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // --- JWT Validation ---
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return new Response(
-      JSON.stringify({ success: false, error: 'Não autorizado' }),
-      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  }
-  const jwtClient = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_ANON_KEY')!,
-    { global: { headers: { Authorization: authHeader } } }
-  );
-  const token = authHeader.replace('Bearer ', '');
-  const { data: claimsData, error: claimsError } = await jwtClient.auth.getClaims(token);
-  if (claimsError || !claimsData?.claims) {
-    return new Response(
-      JSON.stringify({ success: false, error: 'Token inválido' }),
-      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  }
-  // --- End JWT Validation ---
+  // JWT validation delegada ao gateway via verify_jwt = true no config.toml
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -59,6 +37,21 @@ serve(async (req) => {
   const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     const { action, user_email, user_id, user_ids, new_password, admin_id }: UserManagementRequest = await req.json();
+
+    // Garantir que quem chama é quem declara ser no body
+    let callerUserId: string | null = null;
+    try {
+      const token = req.headers.get('Authorization')!.replace('Bearer ', '');
+      callerUserId = JSON.parse(atob(token.split('.')[1])).sub ?? null;
+    } catch {
+      // token malformado — gateway já validou assinatura, protegemos o parse
+    }
+    if (!callerUserId || callerUserId !== admin_id) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'admin_id não corresponde ao token autenticado' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
+      );
+    }
 
     console.log('[DEBUG] Admin verification starting', { admin_id, action });
 
@@ -275,65 +268,63 @@ serve(async (req) => {
       }
 
       case 'admin_reset_password': {
-  if (!user_id || !new_password || !admin_id) {
-    throw new Error('user_id, new_password e admin_id são obrigatórios');
-  }
+        if (!user_id || !new_password || !admin_id) {
+          throw new Error('user_id, new_password e admin_id são obrigatórios');
+        }
 
-  console.log('[DEBUG] Admin reset password:', user_id);
+        // 🔐 Verificar permissões
+        const { data: isSuperAdmin } = await supabaseAdmin
+          .rpc('has_role', { _user_id: admin_id, _role: 'super_admin' });
 
-  // 🔐 Verificar permissões
-  const { data: isSuperAdmin } = await supabaseAdmin
-    .rpc('has_role', { _user_id: admin_id, _role: 'super_admin' });
+        const { data: isClinicAdmin } = await supabaseAdmin
+          .rpc('has_role', { _user_id: admin_id, _role: 'admin_clinica' });
 
-  const { data: isClinicAdmin } = await supabaseAdmin
-    .rpc('has_role', { _user_id: admin_id, _role: 'admin_clinica' });
+        if (!isSuperAdmin && !isClinicAdmin) {
+          throw new Error('Sem permissão para resetar senha');
+        }
 
-  if (!isSuperAdmin && !isClinicAdmin) {
-    throw new Error('Sem permissão para resetar senha');
-  }
+        // 🔒 Se for admin_clinica, validar mesma clínica
+        if (!isSuperAdmin && isClinicAdmin) {
+          const { data: adminProfile } = await supabaseAdmin
+            .from('profiles')
+            .select('cliente_id')
+            .eq('user_id', admin_id)
+            .single();
 
-  // 🔒 Se for admin_clinica, validar mesma clínica
-  if (!isSuperAdmin && isClinicAdmin) {
-    const { data: adminProfile } = await supabaseAdmin
-      .from('profiles')
-      .select('cliente_id')
-      .eq('user_id', admin_id)
-      .single();
+          const { data: targetProfile } = await supabaseAdmin
+            .from('profiles')
+            .select('cliente_id')
+            .eq('user_id', user_id)
+            .single();
 
-    const { data: targetProfile } = await supabaseAdmin
-      .from('profiles')
-      .select('cliente_id')
-      .eq('user_id', user_id)
-      .single();
+          if (!adminProfile || !targetProfile || adminProfile.cliente_id !== targetProfile.cliente_id) {
+            throw new Error('Admin da clínica só pode alterar senha da própria clínica');
+          }
+        }
 
-    if (!adminProfile || !targetProfile || adminProfile.cliente_id !== targetProfile.cliente_id) {
-      throw new Error('Admin da clínica só pode alterar senha da própria clínica');
-    }
-  }
+        // 🔑 Atualizar senha direto no Auth
+        const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+          user_id,
+          { password: new_password }
+        );
 
-  // 🔑 Atualizar senha direto no Auth
-  const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
-    user_id,
-    { password: new_password }
-  );
+        if (updateError) {
+          console.error('[ERROR] Failed to update password:', updateError);
+          throw updateError;
+        }
 
-  if (updateError) {
-    console.error('[ERROR] Failed to update password:', updateError);
-    throw updateError;
-  }
+        // 📝 Log
+        await supabaseAdmin.from('system_logs').insert({
+          timestamp: new Date().toISOString(),
+          level: 'info',
+          message: `[ADMIN] Senha redefinida para usuário ${user_id}`,
+          context: 'PASSWORD_RESET',
+          data: { user_id, admin_id }
+        });
 
-  // 📝 Log
-  await supabaseAdmin.from('system_logs').insert({
-    timestamp: new Date().toISOString(),
-    level: 'info',
-    message: `[ADMIN] Senha redefinida para usuário ${user_id}`,
-    context: 'PASSWORD_RESET',
-    data: { user_id, admin_id }
-  });
-
-  result = { success: true, message: 'Senha redefinida com sucesso' };
-  break;
-}
+        result = { success: true, message: 'Senha redefinida com sucesso' };
+        break;
+      }
 
       default:
         throw new Error(`Ação não reconhecida: ${action}`);
