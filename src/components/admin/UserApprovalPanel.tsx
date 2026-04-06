@@ -35,13 +35,13 @@ interface ApprovedUser {
   role?: string;
 }
 
-type AppRole = 'recepcionista' | 'admin_clinica' | 'medico' | 'admin';
+type AppRole = 'recepcionista' | 'admin_clinica' | 'medico' | 'super_admin';
 
 const ROLE_LABELS: Record<AppRole, string> = {
   recepcionista: 'Recepcionista',
   admin_clinica: 'Admin da Clínica',
   medico: 'Médico',
-  admin: 'Administrador Global'
+  super_admin: 'Administrador Global'
 };
 
 interface Cliente {
@@ -447,34 +447,36 @@ export function UserApprovalPanel() {
     }
   };
 
-  const handleSendPasswordReset = async (userEmail: string, userName: string) => {
-    try {
-      console.log('🔑 Enviando redefinição de senha para:', userEmail);
-      
-      const { data, error } = await supabase.functions.invoke('user-management', {
-        body: {
-          action: 'send_password_reset',
-          user_email: userEmail,
-          admin_id: profile?.user_id
-        }
-      });
+  const handleResetPassword = async (userId: string, userName: string) => {
+  const novaSenha = prompt(`Digite a nova senha para ${userName}:`);
+  if (!novaSenha) return;
 
-      if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || 'Falha ao enviar');
+  try {
+    const { data, error } = await supabase.functions.invoke('user-management', {
+      body: {
+        action: 'admin_reset_password',
+        user_id: userId,
+        new_password: novaSenha,
+        admin_id: profile?.user_id
+      }
+    });
 
-      toast({
-        title: 'Email enviado!',
-        description: `Link de redefinição de senha enviado para ${userName} (${userEmail})`,
-      });
-    } catch (error: any) {
-      console.error('❌ Erro ao enviar reset:', error);
-      toast({
-        title: 'Erro',
-        description: error.message || 'Erro ao enviar email de redefinição',
-        variant: 'destructive',
-      });
-    }
-  };
+    if (error) throw error;
+    if (!data?.success) throw new Error(data?.error || 'Falha ao redefinir senha');
+
+    toast({
+      title: 'Sucesso!',
+      description: `Senha redefinida para ${userName}`,
+    });
+  } catch (error: any) {
+    console.error('❌ Erro ao resetar senha:', error);
+    toast({
+      title: 'Erro',
+      description: error.message || 'Erro ao redefinir senha',
+      variant: 'destructive',
+    });
+  }
+};
 
   // Se não é admin ou admin da clínica aprovado, não mostrar nada
   if (!isAdmin && !isClinicAdmin) {
@@ -622,7 +624,7 @@ export function UserApprovalPanel() {
                             <SelectItem value="admin_clinica">Admin da Clínica</SelectItem>
                             <SelectItem value="medico">Médico</SelectItem>
                             {/* Só admin global pode criar outros admins globais */}
-                            {isAdmin && !isClinicAdmin && <SelectItem value="admin">Admin Global</SelectItem>}
+                            {isAdmin && !isClinicAdmin && <SelectItem value="super_admin">Admin Global</SelectItem>}
                           </SelectContent>
                         </Select>
                       </TableCell>
@@ -706,7 +708,7 @@ export function UserApprovalPanel() {
                         <Badge variant="outline">{user.cliente_nome || 'IPADO'}</Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={user.role === 'admin' ? 'destructive' : user.role === 'admin_clinica' ? 'default' : 'secondary'}>
+                        <Badge variant={user.role === 'super_admin' ? 'destructive' : user.role === 'admin_clinica' ? 'default' : 'secondary'}>
                           {ROLE_LABELS[(user.role as AppRole) || 'recepcionista']}
                         </Badge>
                       </TableCell>
@@ -724,9 +726,9 @@ export function UserApprovalPanel() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => handleSendPasswordReset(user.email, user.nome)}
+                            onClick={() => handleResetPassword(user.user_id, user.nome)}
                             disabled={processingUser === user.id}
-                            title="Enviar email de redefinição de senha"
+                            title="Redefinir senha do usuário"
                           >
                             <KeyRound className="h-4 w-4" />
                             Reset Senha
