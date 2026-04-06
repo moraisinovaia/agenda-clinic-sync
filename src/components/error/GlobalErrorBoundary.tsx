@@ -2,8 +2,15 @@ import React, { Component, ReactNode } from 'react';
 import { AlertCircle, RefreshCw, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { usePartnerBranding } from '@/hooks/usePartnerBranding';
 
 interface Props {
+  children: ReactNode;
+  fallback?: ReactNode;
+  partnerName: string;
+}
+
+interface WrapperProps {
   children: ReactNode;
   fallback?: ReactNode;
 }
@@ -14,13 +21,13 @@ interface State {
   errorInfo: React.ErrorInfo | null;
 }
 
-export class GlobalErrorBoundary extends Component<Props, State> {
+class GlobalErrorBoundaryInner extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
     this.state = {
       hasError: false,
       error: null,
-      errorInfo: null
+      errorInfo: null,
     };
   }
 
@@ -28,37 +35,36 @@ export class GlobalErrorBoundary extends Component<Props, State> {
     return {
       hasError: true,
       error,
-      errorInfo: null
+      errorInfo: null,
     };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('🚨 Error caught by ErrorBoundary:', error);
     console.error('Error Info:', errorInfo);
-    
-    // Log to external service if needed
+
     this.logErrorToService(error, errorInfo);
-    
+
     this.setState({
       error,
-      errorInfo
+      errorInfo,
     });
   }
 
   logErrorToService = (error: Error, errorInfo: React.ErrorInfo) => {
-    // Here you could send to your logging service
     const errorData = {
       message: error.message,
       stack: error.stack,
       componentStack: errorInfo.componentStack,
       timestamp: new Date().toISOString(),
       userAgent: navigator.userAgent,
-      url: window.location.href
+      url: window.location.href,
+      partnerName: this.props.partnerName,
     };
-    
+
     console.error('Error Data for Logging:', errorData);
-    
-    // TODO: Send to external logging service
+
+    // TODO: Enviar para serviço externo de logs
     // logService.error(errorData);
   };
 
@@ -70,7 +76,7 @@ export class GlobalErrorBoundary extends Component<Props, State> {
     this.setState({
       hasError: false,
       error: null,
-      errorInfo: null
+      errorInfo: null,
     });
     window.location.href = '/';
   };
@@ -90,9 +96,10 @@ export class GlobalErrorBoundary extends Component<Props, State> {
               </div>
               <CardTitle className="text-xl">Ops! Algo deu errado</CardTitle>
               <CardDescription>
-                Encontramos um erro inesperado no sistema {window.location.hostname.toLowerCase().includes('gt.inovaia') ? 'GT INOVA' : 'INOVAIA'}. Nossa equipe foi notificada automaticamente.
+                Encontramos um erro inesperado no sistema {this.props.partnerName}. Nossa equipe foi notificada automaticamente.
               </CardDescription>
             </CardHeader>
+
             <CardContent className="space-y-4">
               <div className="bg-muted p-3 rounded-md">
                 <p className="text-sm font-medium mb-1">Detalhes do erro:</p>
@@ -100,9 +107,9 @@ export class GlobalErrorBoundary extends Component<Props, State> {
                   {this.state.error?.message || 'Erro desconhecido'}
                 </p>
               </div>
-              
+
               <div className="flex gap-2">
-                <Button 
+                <Button
                   onClick={this.handleRefresh}
                   className="flex-1"
                   variant="default"
@@ -110,7 +117,8 @@ export class GlobalErrorBoundary extends Component<Props, State> {
                   <RefreshCw className="h-4 w-4 mr-2" />
                   Tentar Novamente
                 </Button>
-                <Button 
+
+                <Button
                   onClick={this.handleGoHome}
                   variant="outline"
                   className="flex-1"
@@ -119,7 +127,7 @@ export class GlobalErrorBoundary extends Component<Props, State> {
                   Ir para Início
                 </Button>
               </div>
-              
+
               <div className="text-center">
                 <p className="text-xs text-muted-foreground">
                   Se o problema persistir, entre em contato com o suporte.
@@ -133,4 +141,14 @@ export class GlobalErrorBoundary extends Component<Props, State> {
 
     return this.props.children;
   }
+}
+
+export function GlobalErrorBoundary({ children, fallback }: WrapperProps) {
+  const { partnerName } = usePartnerBranding();
+
+  return (
+    <GlobalErrorBoundaryInner partnerName={partnerName} fallback={fallback}>
+      {children}
+    </GlobalErrorBoundaryInner>
+  );
 }

@@ -1,3 +1,4 @@
+import { usePartnerBranding } from '@/hooks/usePartnerBranding';
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -22,6 +23,7 @@ interface AlertData {
 }
 
 export const useAlertSystem = () => {
+  const { partnerName } = usePartnerBranding();
   const [alertConfigs, setAlertConfigs] = useState<AlertConfig[]>([]);
   const [lastSystemCheck, setLastSystemCheck] = useState<Date>(new Date());
 
@@ -125,7 +127,7 @@ export const useAlertSystem = () => {
     return await sendAlert({
       to: config.email,
       subject: '🚨 Sistema Fora do Ar',
-      message: `O sistema ${window.location.hostname.toLowerCase().includes('gt.inovaia') ? 'GT INOVA' : 'INOVAIA'} está apresentando problemas de conectividade ou está fora do ar.`,
+      message: `O sistema ${'partnerName'} está apresentando problemas de conectividade ou está fora do ar.`,
       alertType: 'system',
       data: {
         timestamp: new Date().toISOString(),

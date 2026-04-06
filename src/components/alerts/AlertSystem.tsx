@@ -1,3 +1,4 @@
+import { usePartnerBranding } from '@/hooks/usePartnerBranding';
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,6 +29,7 @@ export const AlertSystem = () => {
   const [isTesting, setIsTesting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const { partnerName } = usePartnerBranding();
 
   useEffect(() => {
     loadAlertConfigs();
@@ -154,7 +156,7 @@ export const AlertSystem = () => {
     try {
       setIsTesting(true);
 
-      const systemName = window.location.hostname.toLowerCase().includes('gt.inovaia') ? 'GT INOVA' : 'INOVAIA';
+      const systemName = partnerName;
       const response = await supabase.functions.invoke('gmail-alerts', {
         body: {
           to: testEmail,
