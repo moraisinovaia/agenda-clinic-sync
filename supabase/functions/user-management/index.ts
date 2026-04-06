@@ -9,10 +9,17 @@ const corsHeaders = {
 };
 
 interface UserManagementRequest {
-  action: 'confirm_email' | 'delete_user' | 'check_email_status' | 'batch_check_emails' | 'send_password_reset';
+  action:
+    | 'confirm_email'
+    | 'delete_user'
+    | 'check_email_status'
+    | 'batch_check_emails'
+    | 'send_password_reset'
+    | 'admin_reset_password';
   user_email?: string;
   user_id?: string;
   user_ids?: string[];
+  new_password?: string;
   admin_id: string;
 }
 
@@ -51,7 +58,7 @@ serve(async (req) => {
   // Cliente admin com service role key - bypassa RLS automaticamente
   const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { action, user_email, user_id, user_ids, admin_id }: UserManagementRequest = await req.json();
+    const { action, user_email, user_id, user_ids, new_password, admin_id }: UserManagementRequest = await req.json();
 
     console.log('[DEBUG] Admin verification starting', { admin_id, action });
 
@@ -267,47 +274,66 @@ serve(async (req) => {
         break;
       }
 
-      case 'send_password_reset': {
-        if (!user_email) {
-          throw new Error('user_email é obrigatório para send_password_reset');
-        }
+      case 'admin_reset_password': {
+  if (!user_id || !new_password || !admin_id) {
+    throw new Error('user_id, new_password e admin_id são obrigatórios');
+  }
 
-        console.log('[DEBUG] Sending password reset for:', user_email);
+  console.log('[DEBUG] Admin reset password:', user_id);
 
-        // Use Supabase Admin API to generate a password reset link
-        const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-          type: 'recovery',
-          email: user_email,
-        });
+  // 🔐 Verificar permissões
+  const { data: isSuperAdmin } = await supabaseAdmin
+    .rpc('has_role', { _user_id: admin_id, _role: 'super_admin' });
 
-        if (linkError) {
-          console.error('[ERROR] Failed to generate reset link:', linkError);
-          throw linkError;
-        }
+  const { data: isClinicAdmin } = await supabaseAdmin
+    .rpc('has_role', { _user_id: admin_id, _role: 'admin_clinica' });
 
-        // The generated link contains the token - we need to send it via Supabase's built-in email
-        // Using resetPasswordForEmail which sends the email automatically
-        const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(user_email, {
-          redirectTo: `${supabaseUrl.replace('.supabase.co', '.supabase.co')}/auth/v1/verify?redirect_to=${encodeURIComponent(Deno.env.get('SITE_URL') || 'https://agenda-clinic-sync.lovable.app')}/auth`
-        });
+  if (!isSuperAdmin && !isClinicAdmin) {
+    throw new Error('Sem permissão para resetar senha');
+  }
 
-        if (resetError) {
-          console.error('[ERROR] Failed to send reset email:', resetError);
-          throw resetError;
-        }
+  // 🔒 Se for admin_clinica, validar mesma clínica
+  if (!isSuperAdmin && isClinicAdmin) {
+    const { data: adminProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('cliente_id')
+      .eq('user_id', admin_id)
+      .single();
 
-        // Log
-        await supabaseAdmin.from('system_logs').insert({
-          timestamp: new Date().toISOString(),
-          level: 'info',
-          message: `[ADMIN] Reset de senha enviado para ${user_email}`,
-          context: 'PASSWORD_RESET',
-          data: { user_email, admin_id, sent_at: new Date().toISOString() }
-        });
+    const { data: targetProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('cliente_id')
+      .eq('user_id', user_id)
+      .single();
 
-        result = { success: true, message: 'Email de redefinição enviado com sucesso' };
-        break;
-      }
+    if (!adminProfile || !targetProfile || adminProfile.cliente_id !== targetProfile.cliente_id) {
+      throw new Error('Admin da clínica só pode alterar senha da própria clínica');
+    }
+  }
+
+  // 🔑 Atualizar senha direto no Auth
+  const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+    user_id,
+    { password: new_password }
+  );
+
+  if (updateError) {
+    console.error('[ERROR] Failed to update password:', updateError);
+    throw updateError;
+  }
+
+  // 📝 Log
+  await supabaseAdmin.from('system_logs').insert({
+    timestamp: new Date().toISOString(),
+    level: 'info',
+    message: `[ADMIN] Senha redefinida para usuário ${user_id}`,
+    context: 'PASSWORD_RESET',
+    data: { user_id, admin_id }
+  });
+
+  result = { success: true, message: 'Senha redefinida com sucesso' };
+  break;
+}
 
       default:
         throw new Error(`Ação não reconhecida: ${action}`);
