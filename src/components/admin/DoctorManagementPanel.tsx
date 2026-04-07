@@ -359,8 +359,41 @@ export const DoctorManagementPanel: React.FC = () => {
         throw new Error(resultObj.error || 'Erro ao atualizar médico');
       }
       
-      // Salvar horários de atendimento
+      // Salvar horários de atendimento e sincronizar business_rules
       await saveHorariosConfig(medicoId);
+      
+      // Sincronizar convênios e restrições de idade com business_rules
+      if (effectiveClinicId) {
+        try {
+          const { data: existingRule } = await supabase
+            .from('business_rules')
+            .select('id, config')
+            .eq('medico_id', medicoId)
+            .eq('cliente_id', effectiveClinicId)
+            .eq('ativo', true)
+            .maybeSingle();
+
+          if (existingRule?.config) {
+            const config = existingRule.config as Record<string, any>;
+            const updatedConfig = {
+              ...config,
+              convenios: data.convenios_aceitos,
+              idade_minima: data.idade_minima,
+              idade_maxima: data.idade_maxima,
+              tipo_agendamento: data.tipo_agendamento,
+              permite_agendamento_online: data.permite_agendamento_online,
+            };
+            
+            await supabase
+              .from('business_rules')
+              .update({ config: updatedConfig, updated_at: new Date().toISOString() })
+              .eq('id', existingRule.id);
+            console.log('✅ Business rules sincronizadas com convênios e configurações do médico');
+          }
+        } catch (err) {
+          console.warn('⚠️ Erro ao sincronizar business_rules:', err);
+        }
+      }
       
       return resultObj;
     },
