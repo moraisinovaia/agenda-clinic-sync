@@ -555,6 +555,51 @@ export const DoctorManagementPanel: React.FC = () => {
         }
       }
     }
+
+    // Sincronizar limites de pacientes com business_rules
+    try {
+      const { data: existingRule } = await supabase
+        .from('business_rules')
+        .select('id, config')
+        .eq('medico_id', medicoId)
+        .eq('cliente_id', effectiveClinicId)
+        .eq('ativo', true)
+        .maybeSingle();
+
+      if (existingRule?.config) {
+        const config = existingRule.config as Record<string, any>;
+        const servicos = config.servicos as Record<string, any> | undefined;
+        
+        if (servicos) {
+          let changed = false;
+          // Atualizar limite em cada serviço/período
+          for (const servicoKey of Object.keys(servicos)) {
+            const servico = servicos[servicoKey];
+            if (servico?.periodos) {
+              for (const periodo of periodos) {
+                const formPeriodo = formData.horarios_periodos[periodo];
+                if (formPeriodo.ativo && servico.periodos[periodo]) {
+                  if (servico.periodos[periodo].limite !== formPeriodo.limite_pacientes) {
+                    servico.periodos[periodo].limite = formPeriodo.limite_pacientes;
+                    changed = true;
+                  }
+                }
+              }
+            }
+          }
+          
+          if (changed) {
+            await supabase
+              .from('business_rules')
+              .update({ config: { ...config, servicos }, updated_at: new Date().toISOString() })
+              .eq('id', existingRule.id);
+            console.log('✅ Business rules sincronizadas com novos limites de pacientes');
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('⚠️ Erro ao sincronizar business_rules com limites:', err);
+    }
   };
 
   const handleDiaSemanaToggle = (periodo: keyof HorariosPeriodos, dia: number) => {
