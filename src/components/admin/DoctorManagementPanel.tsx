@@ -359,8 +359,41 @@ export const DoctorManagementPanel: React.FC = () => {
         throw new Error(resultObj.error || 'Erro ao atualizar médico');
       }
       
-      // Salvar horários de atendimento
+      // Salvar horários de atendimento e sincronizar business_rules
       await saveHorariosConfig(medicoId);
+      
+      // Sincronizar convênios e restrições de idade com business_rules
+      if (effectiveClinicId) {
+        try {
+          const { data: existingRule } = await supabase
+            .from('business_rules')
+            .select('id, config')
+            .eq('medico_id', medicoId)
+            .eq('cliente_id', effectiveClinicId)
+            .eq('ativo', true)
+            .maybeSingle();
+
+          if (existingRule?.config) {
+            const config = existingRule.config as Record<string, any>;
+            const updatedConfig = {
+              ...config,
+              convenios: data.convenios_aceitos,
+              idade_minima: data.idade_minima,
+              idade_maxima: data.idade_maxima,
+              tipo_agendamento: data.tipo_agendamento,
+              permite_agendamento_online: data.permite_agendamento_online,
+            };
+            
+            await supabase
+              .from('business_rules')
+              .update({ config: updatedConfig, updated_at: new Date().toISOString() })
+              .eq('id', existingRule.id);
+            console.log('✅ Business rules sincronizadas com convênios e configurações do médico');
+          }
+        } catch (err) {
+          console.warn('⚠️ Erro ao sincronizar business_rules:', err);
+        }
+      }
       
       return resultObj;
     },
@@ -555,6 +588,51 @@ export const DoctorManagementPanel: React.FC = () => {
         }
       }
     }
+
+    // Sincronizar limites de pacientes com business_rules
+    try {
+      const { data: existingRule } = await supabase
+        .from('business_rules')
+        .select('id, config')
+        .eq('medico_id', medicoId)
+        .eq('cliente_id', effectiveClinicId)
+        .eq('ativo', true)
+        .maybeSingle();
+
+      if (existingRule?.config) {
+        const config = existingRule.config as Record<string, any>;
+        const servicos = config.servicos as Record<string, any> | undefined;
+        
+        if (servicos) {
+          let changed = false;
+          // Atualizar limite em cada serviço/período
+          for (const servicoKey of Object.keys(servicos)) {
+            const servico = servicos[servicoKey];
+            if (servico?.periodos) {
+              for (const periodo of periodos) {
+                const formPeriodo = formData.horarios_periodos[periodo];
+                if (formPeriodo.ativo && servico.periodos[periodo]) {
+                  if (servico.periodos[periodo].limite !== formPeriodo.limite_pacientes) {
+                    servico.periodos[periodo].limite = formPeriodo.limite_pacientes;
+                    changed = true;
+                  }
+                }
+              }
+            }
+          }
+          
+          if (changed) {
+            await supabase
+              .from('business_rules')
+              .update({ config: { ...config, servicos }, updated_at: new Date().toISOString() })
+              .eq('id', existingRule.id);
+            console.log('✅ Business rules sincronizadas com novos limites de pacientes');
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('⚠️ Erro ao sincronizar business_rules com limites:', err);
+    }
   };
 
   const handleDiaSemanaToggle = (periodo: keyof HorariosPeriodos, dia: number) => {
@@ -585,11 +663,20 @@ export const DoctorManagementPanel: React.FC = () => {
       return;
     }
 
-    // Processar convênios: remover "OUTRO" e adicionar o convênio personalizado
+    // Processar convênios: remover "OUTRO" e separar convênios personalizados por vírgula
+    const conveniosPersonalizados = formData.outroConvenio.trim()
+      ? formData.outroConvenio.split(',').map(c => c.trim().toUpperCase()).filter(c => c.length > 0)
+      : [];
     const conveniosFinal = [
       ...formData.convenios_aceitos.filter(c => c !== 'OUTRO'),
-      ...(formData.outroConvenio.trim() ? [formData.outroConvenio.trim().toUpperCase()] : [])
+      ...conveniosPersonalizados
     ];
+    // Normalizar: expandir qualquer item que contenha vírgulas internas (dados legados)
+    const conveniosNormalizados = conveniosFinal.flatMap(c => 
+      c.includes(',') ? c.split(',').map(s => s.trim().toUpperCase()).filter(s => s.length > 0) : [c]
+    );
+    // Remover duplicatas
+    const conveniosUnicos = [...new Set(conveniosNormalizados)];
 
     let atendimentosIdsFinal = [...formData.atendimentos_ids];
 
@@ -624,7 +711,7 @@ export const DoctorManagementPanel: React.FC = () => {
 
     const dataToSubmit = {
       ...formData,
-      convenios_aceitos: conveniosFinal,
+      convenios_aceitos: conveniosUnicos,
       atendimentos_ids: atendimentosIdsFinal
     };
 
