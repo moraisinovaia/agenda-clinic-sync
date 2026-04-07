@@ -1,0 +1,1874 @@
+{
+  "name": "MLTC_WF__MotorAtendimentoIA_v3.0",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "upsert",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "n8n_status_atendimento",
+          "mode": "list",
+          "cachedResultName": "n8n_status_atendimento"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "lock_conversa": true,
+            "aguardando_followup": false,
+            "numero_followup": 0,
+            "cliente_id": "={{ $json.clinica_id }}",
+            "session_id": "={{ $json.numero }}",
+            "updated_at": "={{ $now }}"
+          },
+          "matchingColumns": [
+            "session_id",
+            "cliente_id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "session_id",
+              "displayName": "session_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "cliente_id",
+              "displayName": "cliente_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "lock_conversa",
+              "displayName": "lock_conversa",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "aguardando_followup",
+              "displayName": "aguardando_followup",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "numero_followup",
+              "displayName": "numero_followup",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "modo_atendimento",
+              "displayName": "modo_atendimento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "chatwoot_conversation_id",
+              "displayName": "chatwoot_conversation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "transbordo_iniciado_em",
+              "displayName": "transbordo_iniciado_em",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        6432,
+        3024
+      ],
+      "id": "eae9897b-7f66-4dc8-8376-255ec4466e5c",
+      "name": "ativarLockConversa",
+      "credentials": {
+        "postgres": {
+          "id": "CQz4auLNBpiEofO7",
+          "name": "supabase-gerais"
+        }
+      },
+      "notes": "Upsert em n8n_status_atendimento: lock_conversa=true.\nImpede que nova mensagem entre enquanto esta está sendo processada.\nOutput: lock ativo para session_id + cliente_id"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  cc.nome_clinica,\n  cc.prompt_sistema,\n  cc.prompt_agendamentos,\n  cc.modelo_ia,\n  cc.api_cliente_id,\n  cc.telefone_publico,\n  cc.transbordo_humano_ativo,\n  cc.mensagem_transbordo,\n  cc.chatwoot_url,\n  cc.chatwoot_account_id,\n  cis.chatwoot_api_token AS chatwoot_api_token,\n  get_clinic_runtime_context(cc.id) AS contexto_runtime\nFROM public.configuracoes_clinica cc\nLEFT JOIN public.clinica_integracoes_secretas cis\n  ON cis.cliente_id = cc.id\nWHERE cc.id = '{{ $('receberDadosWorkflowPai').item.json.clinica_id }}';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        6640,
+        3024
+      ],
+      "id": "59bd18b8-aa21-484d-87c6-8c9da5c578a8",
+      "name": "buscarConfigClinica",
+      "credentials": {
+        "postgres": {
+          "id": "CQz4auLNBpiEofO7",
+          "name": "supabase-gerais"
+        }
+      },
+      "notes": "Busca configurações da clínica no PostgreSQL usando o schema atual.\nCampos públicos vêm de configuracoes_clinica e segredos de clinica_integracoes_secretas.\nOutput: {nome_clinica, prompt_sistema, prompt_agendamentos, modelo_ia, chatwoot_url, chatwoot_api_token, transbordo_humano_ativo, ...}"
+    },
+    {
+      "parameters": {
+        "model": "google/gemini-2.5-flash",
+        "options": {
+          "temperature": 0.5
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        7040,
+        3216
+      ],
+      "id": "3327c92f-fe39-404e-8988-72779b344a0d",
+      "name": "modeloOpenRouterGemini",
+      "credentials": {
+        "openRouterApi": {
+          "id": "7LCgK5D4P221SXKA",
+          "name": "Recepção"
+        }
+      },
+      "notes": "Modelo LLM: google/gemini-2.5-flash via OpenRouter.\nConectado ao nodo LLM Extrator como sub-nodo."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT resumo_contexto, metadata, nome_paciente_detectado, estado_atual, dados_faltantes\nFROM ia_contexto_sessao\nWHERE session_id = '{{ $('receberDadosWorkflowPai').item.json.telefone }}'\n  AND cliente_id = '{{ $('receberDadosWorkflowPai').item.json.clinica_id }}'\nORDER BY ultima_interacao DESC\nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        6848,
+        3024
+      ],
+      "id": "56e351cb-f2ab-4840-a590-f235eaeb3a91",
+      "name": "buscarContextoSessao",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "CQz4auLNBpiEofO7",
+          "name": "supabase-gerais"
+        }
+      },
+      "notes": "Busca contexto/memória da sessão do paciente em ia_contexto_sessao.\nOutput: {resumo_contexto, metadata, nome_paciente_detectado}"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('receberDadosWorkflowPai').item.json.mensagem_final }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "==={{ $('buscarConfigClinica').first().json.prompt_sistema }}\n\n=== DADOS DO SISTEMA (VERDADE ABSOLUTA) ===\nData/Hora Atual: {{ $now.setZone('America/Sao_Paulo').toFormat('dd/MM/yyyy HH:mm - cccc') }}\nNome do paciente: {{ $('receberDadosWorkflowPai').first().json.nome }}\nID da Clínica: {{ $('receberDadosWorkflowPai').first().json.clinica_id }}\n\n== CONTEXTO DA CONVERSA ==\n{% if $json.resumo_contexto %}\nHistórico: {{ $('buscarContextoSessao').first().json.resumo_contexto }}\nDados coletados: {{ JSON.stringify($('buscarContextoSessao').first().json.metadata || {}) }}\n{% else %}\nPrimeira mensagem do paciente. Sem histórico.\n{% endif %}\n\n== CONTEXTO RUNTIME DA CLÍNICA (DADOS REAIS DO SISTEMA) ==\n{{ JSON.stringify($('buscarConfigClinica').first().json.contexto_runtime || {}) }}\n\n== ESTADO ATUAL DA CONVERSA ==\nEstado: {{ $('buscarContextoSessao').first().json.estado_atual || 'novo' }}\nDados faltantes: {{ JSON.stringify($('buscarContextoSessao').first().json.dados_faltantes || []) }}\n\n== SUA FUNÇÃO ==\nVocê é o motor de extração do chatbot desta clínica. Duas tarefas:\n1. Classificar a intenção e extrair dados para o JSON de saída.\n2. Gerar uma resposta_social seguindo o tom do prompt_sistema acima.\n\n== REGRAS DE EXECUÇÃO ==\n- QUERY REWRITING: Se o paciente for vago (\"quero\", \"pode?\", \"quais?\"), reescreva a necessidade como pergunta completa no campo busca_conhecimento.\n- TOM: Siga rigorosamente o tom definido no prompt_sistema. Emoticons com moderação. No máximo 1-2 informações por mensagem.\n- NOME: Use {{ $('receberDadosWorkflowPai').first().json.nome }} no máximo 1 vez por resposta. Ignore nomes divergentes no histórico.\n- SEM MARKDOWN: Proibido asteriscos, negritos, bullets com hífen. Use MAIÚSCULAS para ênfase.\n- NUNCA comece com \"Entendi\", \"Certo\", \"Compreendi\" ou \"Perfeito\".\n- PROIBIDO ENROLAR: NUNCA diga \"vou verificar\", \"deixa eu checar\", \"só um momento\" ou \"vou olhar\". Se a informação está no prompt_sistema ou no contexto, responda DIRETO. Se não está, preencha busca_conhecimento e dê a melhor resposta possível na resposta_social. NUNCA avise o paciente que vai procurar.\n- CONVÊNIOS, VALORES E PROCEDIMENTOS: Se o paciente mencionar convênio, plano de saúde, valor, preço ou forma de pagamento, SEMPRE classifique como \"duvida\" e preencha busca_conhecimento. NÃO tente responder sobre convênios, valores ou disponibilidade na resposta_social — essas informações serão consultadas na base de conhecimento da clínica.\n- NUNCA oriente o paciente a ligar ou telefonar para a própria clínica.\n\n== CLASSIFICAÇÃO DE INTENÇÃO (REGRA DE OURO) ==\n\nANTES DE CLASSIFICAR, aplique este teste obrigatório:\n→ A mensagem contém QUALQUER verbo de ação (marcar, agendar, cancelar, remarcar, saber, consultar, fazer, pedir, precisar, querer) OU substantivo de serviço (consulta, exame, teste, mapa, receita, retorno, encaixe)?\n→ Se SIM: NÃO é saudação. Classifique pela intenção real, mesmo que a mensagem comece com \"oi\", \"bom dia\", \"olá\" ou qualquer cumprimento.\n→ Se NÃO: pode ser saudação (se for cumprimento puro) ou mensagem vazia.\n\nNA DÚVIDA entre \"saudacao\" e qualquer outra intenção → NUNCA classifique como \"saudacao\". Prefira \"duvida\".\n\n\"saudacao\": APENAS cumprimentos puros SEM qualquer pedido, intenção ou pergunta.\n→ Exemplos de saudação: \"oi\", \"bom dia\", \"olá\", \"boa tarde\", \"e aí\"\n→ Exemplos que NÃO são saudação (mesmo começando com cumprimento):\n  - \"oi quero marcar uma consulta\" → agendar\n  - \"bom dia, quanto custa o teste?\" → duvida\n  - \"olá, aceita unimed?\" → duvida\n  - \"oi preciso de um encaixe\" → encaixe\n  - \"boa tarde, quero cancelar\" → cancelar\n→ Mensagens sem conteúdo (., kkk, emoji isolado, áudio sem texto) = saudação.\n→ busca_conhecimento: NULL\n→ resposta_social: Resposta acolhedora + pergunta sobre o que precisa.\n\n\"duvida\": Classifique como \"duvida\" quando:\n  - Paciente pergunta sobre horários, valores, convênios, orientações, procedimentos.\n  - Paciente menciona convênio ou plano de saúde (atendido ou não) → busca_conhecimento: \"convênio [nome] atendido aceito regras\"\n  - Paciente pede informação sobre médico que NÃO é da clínica → busca_conhecimento: \"indicação encaminhamento [nome do médico]\"\n  - Paciente menciona exame/procedimento e você não tem certeza se a clínica realiza → busca_conhecimento: \"a clínica realiza [exame]?\"\n  - Paciente pergunta sobre exame/procedimento que NÃO realizamos → busca_conhecimento: \"indicação [exame] onde fazer encaminhar\" (OBRIGATÓRIO, mesmo que o prompt_sistema já diga que não fazemos — a base tem as indicações de onde fazer)\n  - Paciente pede desconto → busca_conhecimento: \"política de desconto valores [procedimento]\"\n  - Paciente diz que \"pagou menos da última vez\" → busca_conhecimento: \"valores atuais [procedimento]\"\n  - Paciente inicia um FLUXO DE COLETA (ver regra abaixo) e ainda faltam dados.\n→ busca_conhecimento: OBRIGATÓRIO quando precisa consultar base. NULL quando está apenas coletando dados do paciente.\n→ REGRA IMPORTANTE: Se a informação JÁ ESTÁ no prompt_sistema, responda DIRETO sem busca_conhecimento. EXCEÇÕES QUE SEMPRE PRECISAM DE busca_conhecimento (mesmo que pareça estar no prompt_sistema): convênios e planos de saúde, valores e preços, exames não realizados, política de desconto, procedimentos específicos.\n\n\"agendar\": Paciente quer marcar/agendar consulta ou exame.\n→ REGRA DE MÉDICO ÚNICO: Se o prompt_sistema indicar que a clínica possui apenas 1 médico (frases como \"único médico\", \"consultório do Dr. X\" sem mencionar outros médicos, ou declaração explícita de médico único), preencha medico_nome automaticamente com o nome do médico encontrado no prompt_sistema. NUNCA pergunte qual médico nesse caso.\n→ Se a clínica tem múltiplos médicos e o paciente não especificou, classifique como \"duvida\" e pergunte qual médico na resposta_social. NÃO classifique como \"saudacao\".\n→ busca_conhecimento: NULL (a rota transacional cuida).\n→ resposta_social: Quando já souber o que o paciente quer agendar, prossiga direto com a coleta de dados necessários (convênio, data, etc). NÃO faça saudação.\n\n\"encaixe\": Classifique como \"encaixe\" quando:\n  - Paciente diz que JÁ FOI à emergência/hospital e agora quer marcar consulta.\n  - Paciente pede encaixe explicitamente (\"quero um encaixe\", \"tem como encaixar\").\n  - Paciente relata urgência pós-atendimento hospitalar (\"tive alta\", \"me mandaram procurar cardiologista\").\n→ Preencha medico_nome automaticamente se a clínica tem apenas 1 médico (mesma regra acima).\n→ Preencha atendimento_nome = \"Consulta\" (encaixe é sempre consulta).\n→ busca_conhecimento: NULL\n→ resposta_social: Informe que será incluído na lista de espera para encaixe e colete os dados necessários.\n\n\"cancelar\": Paciente quer cancelar agendamento existente.\n\"remarcar\": Paciente quer remarcar/alterar data de agendamento.\n\n\"emergencia\": Paciente relata sintomas agudos ATIVOS (dor no peito AGORA, falta de ar, mal-estar súbito, desmaio).\nATENÇÃO CRÍTICA (LINHA DO TEMPO): Se o paciente relatar que o sintoma ocorreu no PASSADO (\"fui ontem à emergência\", \"de madrugada\", \"tive alta\", \"já fui atendido\"), isso NÃO É EMERGÊNCIA. Classifique como \"encaixe\".\n→ busca_conhecimento: NULL\n→ resposta_social: NÃO gere resposta — o fluxo tem mensagem própria de emergência.\n\n{{ $('buscarConfigClinica').first().json.transbordo_humano_ativo ? `\n== REGRA DE TRANSFERÊNCIA PARA ATENDENTE HUMANO ==\n\nTRANSFERIR IMEDIATAMENTE (classifique como \"transferir_humano\"):\n- Paciente pede EXPLICITAMENTE para falar com humano/atendente/pessoa.\n- Dúvida não resolvida após 2 tentativas de busca.\n- Reclamação grave ou insatisfação persistente.\n- Fora do escopo (parcerias, currículos, administrativo).\n\nFLUXOS DE COLETA ANTES DE TRANSFERIR (REGRA CRÍTICA):\nAlguns fluxos definidos no prompt_sistema exigem coleta de dados ANTES de transferir (ex: renovação de receita, nota fiscal, ou qualquer outro que o prompt_sistema defina).\n\nA lógica é OBRIGATORIAMENTE esta:\n1. Enquanto FALTAM dados obrigatórios para o fluxo:\n   → intencao = \"duvida\" (NUNCA \"transferir_humano\")\n   → busca_conhecimento = NULL\n   → resposta_social = solicite o PRÓXIMO dado faltante (1 por vez)\n   → campos_faltando = liste os dados que ainda faltam\n\n2. SOMENTE quando TODOS os dados exigidos estiverem preenchidos:\n   → intencao = \"transferir_humano\"\n   → campos_faltando = [] (vazio)\n\nREGRA ABSOLUTA: Se campos_faltando NÃO está vazio para um fluxo de coleta, a intenção DEVE ser \"duvida\". Classificar como \"transferir_humano\" com dados faltando é um ERRO GRAVE.\n\nNÃO TRANSFERIR (resolva você mesmo):\n- Desconto ou negociação de valor → \"duvida\" com busca_conhecimento.\n- \"Da última vez pagou menos\" → \"duvida\".\n- Dúvidas sobre preço, horário, convênio → \"duvida\".\n- Remarcar ou cancelar → \"remarcar\" ou \"cancelar\".\n\nAo classificar como \"transferir_humano\":\n- Use EXATAMENTE este texto na resposta_social: ${$('buscarConfigClinica').first().json.mensagem_transbordo}\n- busca_conhecimento = NULL.\n` : '' }}\n\n== NORMALIZAÇÃO DE atendimento_nome (CRÍTICO) ==\nO campo atendimento_nome DEVE conter EXATAMENTE um dos nomes de serviço listados no prompt_sistema acima. NUNCA copie o texto literal do paciente.\n\nProcesso:\n1. Identifique qual serviço do prompt_sistema o paciente está pedindo (mesmo com palavras diferentes ou nomes populares).\n2. Preencha atendimento_nome com o NOME EXATO conforme aparece no prompt_sistema.\n3. Se não conseguir identificar, classifique como \"duvida\" com busca_conhecimento preenchida.\n\nNUNCA envie atendimento_nome com texto livre ou nomes que não existam no prompt_sistema.\n\n== PRESERVAÇÃO DE DADOS (MÁXIMA PRIORIDADE) ==\nOs dados abaixo vêm PRÉ-PREENCHIDOS de turnos anteriores. São VERDADE ABSOLUTA.\n- NUNCA apague um campo que já tem valor (exceto se paciente pedir correção explícita).\n- Apenas ADICIONE dados novos nos campos ainda null.\n- Se medico_nome e atendimento_nome já estão preenchidos e paciente confirma, mantenha tudo.\n\n== VALIDAÇÃO FINAL ANTES DE RETORNAR ==\nAntes de gerar a saída, verifique:\n1. Se intencao = \"transferir_humano\" E campos_faltando tem itens → ERRO. Corrija para intencao = \"duvida\" e peça o próximo dado.\n2. Se intencao = \"saudacao\" E a mensagem contém verbo de ação ou substantivo de serviço → ERRO. Reclassifique como \"agendar\", \"duvida\", \"cancelar\", \"remarcar\" ou \"encaixe\" conforme o conteúdo.\n3. Se intencao = \"duvida\" e a resposta pode ser dada com informações do prompt_sistema → responda direto e coloque busca_conhecimento = NULL. EXCEÇÕES: convênios, valores, exames não realizados, política de desconto → SEMPRE busca_conhecimento.\n4. Se intencao = \"emergencia\" → confirme que é sintoma ATIVO, não evento passado. Se passado → \"encaixe\".\n5. Se intencao = \"agendar\" e medico_nome está null → verifique se o prompt_sistema indica médico único. Se sim, preencha. Se não, reclassifique como \"duvida\" e pergunte qual médico. NUNCA classifique como \"saudacao\".\n\n== SAÍDA (JSON VÁLIDO — NADA MAIS) ==\nResponda APENAS o JSON puro. Sem introduções, sem explicações, sem markdown, sem backticks, sem texto antes ou depois.\n{\n  \"intencao\": \"saudacao | duvida | agendar | encaixe | cancelar | remarcar | emergencia{{ $('buscarConfigClinica').first().json.transbordo_humano_ativo ? ' | transferir_humano' : '' }}\",\n  \"pronto_para_acao\": false,\n  \"dados\": {{ JSON.stringify(Object.assign({\"paciente_nome\": $('receberDadosWorkflowPai').first().json.nome, \"data_nascimento\": null, \"celular\": null, \"convenio\": null, \"medico_nome\": null, \"atendimento_nome\": null, \"data_consulta\": null, \"periodo_preferido\": null}, $('buscarContextoSessao').first().json.metadata || {})) }},\n  \"campos_faltando\": [],\n  \"confirmacao_paciente\": false,\n  \"busca_conhecimento\": \"Pergunta reescrita para o banco de dados, ou NULL se não precisa.\",\n  \"resposta_social\": \"Resposta seguindo o tom do prompt_sistema.\",\n\"estado_proximo\": \"coletando_dados\",\n\"dados_faltantes\": [\"convenio\", \"data_consulta\"]\n}"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        7104,
+        3024
+      ],
+      "id": "d292c8db-b681-4aab-9011-75a71db1ac8e",
+      "name": "extrairIntencaoLLM",
+      "notes": "Chain LLM que extrai intenção, dados estruturados e resposta a partir da mensagem do paciente.\nInput: mensagem_final + contexto da sessão + prompt do sistema\nOutput: JSON com intenção, dados, resposta, busca_conhecimento"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst raw = item.text || item.output || '';\n\n// Remove cercas ```json ... ```\nlet cleaned = String(raw).trim()\n  .replace(/^```json\\s*/i, '')\n  .replace(/^```\\s*/i, '')\n  .replace(/\\s*```$/i, '')\n  .trim();\n\n// Tenta isolar o JSON\nconst match = cleaned.match(/\\{[\\s\\S]*\\}/);\nlet jsonStr = match ? match[0] : cleaned;\n\n// Sanitiza nulls textuais\njsonStr = jsonStr.replace(/\"(null|undefined|nulo|nenhum)\"/gi, 'null');\n\ntry {\n  const parsed = JSON.parse(jsonStr);\n\n  const sanitize = (val) => {\n    if (val === null || val === undefined) return null;\n    const s = String(val).trim().toLowerCase();\n    return (s === '' || s === 'null' || s === 'undefined' || s === 'nulo' || s === 'nenhum')\n      ? null\n      : String(val).trim();\n  };\n\n  const dados = parsed.dados || {};\n  const dadosLimpos = {\n    paciente_nome: sanitize(dados.paciente_nome),\n    data_nascimento: sanitize(dados.data_nascimento),\n    celular: sanitize(dados.celular),\n    convenio: sanitize(dados.convenio),\n    medico_nome: sanitize(dados.medico_nome),\n    atendimento_nome: sanitize(dados.atendimento_nome),\n    data_consulta: sanitize(dados.data_consulta),\n    periodo_preferido: sanitize(dados.periodo_preferido)\n  };\n\n  if (dadosLimpos.convenio) {\n    let c = dadosLimpos.convenio.toUpperCase().trim();\n\n    if (c.includes('HGU')) {\n      c = 'HGU';\n    } else if (c.includes('UNIMED')) {\n      if (c.includes('REGIONAL')) c = 'UNIMED REGIONAL';\n      else if (c.includes('NACIONAL')) c = 'UNIMED NACIONAL';\n      else if (c.includes('INTERCAMBIO') || c.includes('INTERCÂMBIO')) c = 'UNIMED INTERCAMBIO';\n      else if (c.includes('40')) c = 'UNIMED 40%';\n      else if (c.includes('20')) c = 'UNIMED 20%';\n      else if (c.includes('VSF') || c.includes('VALE DO SÃO') || c.includes('VALE DO SAO')) c = 'UNIMED VSF';\n      else c = 'UNIMED';\n    }\n\n    dadosLimpos.convenio = c;\n  }\n\n  const obrigatorios = [\n    'paciente_nome',\n    'data_nascimento',\n    'celular',\n    'convenio',\n    'medico_nome',\n    'atendimento_nome',\n    'data_consulta'\n  ];\n\n  const camposFaltando = obrigatorios.filter((c) => !dadosLimpos[c]);\n\n  let intencao = sanitize(parsed.intencao) || 'duvida';\n  const confirmacao = parsed.confirmacao_paciente === true;\n\n  let prontoParaAcao = parsed.pronto_para_acao === true;\n\n  if (intencao === 'agendar' && (camposFaltando.length > 0 || !confirmacao)) {\n    prontoParaAcao = false;\n  }\n\n  let buscaConhecimento = sanitize(parsed.busca_conhecimento);\n  const respostaSocial = parsed.resposta_social || '';\n\n  // ═══════════════════════════════════════════════════════════════\n  // REDE DE SEGURANÇA — Reclassificação de intenção quando a LLM\n  // classificou incorretamente. Regras genéricas (multi-tenant safe).\n  // ═══════════════════════════════════════════════════════════════\n\n  // --- NOVA REGRA: Anti-saudação falsa ---\n  if (intencao === 'saudacao') {\n    const mensagemOriginal = (\n      item.mensagem_teste ||\n      item.pergunta ||\n      item.mensagem_final ||\n      ''\n    ).toLowerCase().trim();\n\n    const verbosAcao = /\\b(marcar|agendar|cancelar|remarcar|saber|consultar|fazer|pedir|precisar|querer|quero|preciso|gostaria|desejo|necessito|perguntar|verificar|confirmar|reagendar)\\b/i;\n    const substantivosServico = /\\b(consulta|exame|teste|mapa|mrpa|ecg|eletro|ergom[eé]tric|receita|retorno|encaixe|agendamento|cancelamento|remarca[çc][aã]o|parecer|checkup|check-up|peri[oó]dico|cateteri|cirurgia|marcapasso)\\b/i;\n    const mencaoConvenio = /\\b(conv[eê]nio|plano|unimed|hgu|bradesco|sulam[eé]rica|cassi|medclin|medprev|sedilab|particular)\\b/i;\n    const mencaoValor = /\\b(valor|pre[çc]o|quanto|custa|cobr|desconto|pagamento|pix|cart[aã]o)\\b/i;\n\n    if (mensagemOriginal && (\n      verbosAcao.test(mensagemOriginal) ||\n      substantivosServico.test(mensagemOriginal) ||\n      mencaoConvenio.test(mensagemOriginal) ||\n      mencaoValor.test(mensagemOriginal)\n    )) {\n      const querAgendar = /\\b(marcar|agendar|quero|preciso|gostaria|desejo)\\b/i.test(mensagemOriginal) &&\n                          /\\b(consulta|exame|teste|mapa|mrpa|ecg|retorno|peri[oó]dico)\\b/i.test(mensagemOriginal);\n\n      const querCancelar = /\\b(cancelar|cancelamento|desmarcar)\\b/i.test(mensagemOriginal);\n      const querRemarcar = /\\b(remarcar|reagendar|mudar|alterar)\\b/i.test(mensagemOriginal) &&\n                           /\\b(data|hor[aá]rio|dia|consulta|exame)\\b/i.test(mensagemOriginal);\n      const querEncaixe = /\\b(encaixe|encaixar|emerg[eê]ncia.*passou|alta.*hospital|j[aá].*fui.*emerg)\\b/i.test(mensagemOriginal);\n\n      if (querCancelar) {\n        intencao = 'cancelar';\n      } else if (querRemarcar) {\n        intencao = 'remarcar';\n      } else if (querEncaixe) {\n        intencao = 'encaixe';\n      } else if (querAgendar && dadosLimpos.medico_nome) {\n        intencao = 'agendar';\n      } else {\n        intencao = 'duvida';\n        if (!buscaConhecimento) {\n          buscaConhecimento = mensagemOriginal;\n        }\n      }\n    }\n  }\n\n  // --- NOVA REGRA: Agendar sem médico → duvida ---\n  if (intencao === 'agendar' && !dadosLimpos.medico_nome) {\n    intencao = 'duvida';\n    if (!buscaConhecimento) {\n      buscaConhecimento = null;\n    }\n  }\n\n  // ═══════════════════════════════════════════════════════════════\n  // REDE DE SEGURANÇA — Força busca_conhecimento quando a LLM\n  // não preencheu mas o contexto exige consulta à RAG.\n  // ═══════════════════════════════════════════════════════════════\n\n  if (!buscaConhecimento && respostaSocial) {\n    const padraoNegacao = /não\\s+(realizamos|fazemos|faz|realiza|atendemos|oferecemos|temos)/i;\n\n    if (padraoNegacao.test(respostaSocial)) {\n      const mensagem =\n        item.mensagem_teste ||\n        item.pergunta ||\n        item.mensagem_final ||\n        '';\n\n      buscaConhecimento = mensagem\n        ? 'indicação ' + mensagem + ' onde fazer encaminhar'\n        : null;\n    }\n  }\n\n  if (!buscaConhecimento && dadosLimpos.convenio) {\n    buscaConhecimento = 'convênio ' + dadosLimpos.convenio + ' atendido aceito regras';\n  }\n\n  if (!buscaConhecimento && /R\\$\\s?\\d/.test(respostaSocial)) {\n    const mensagem =\n      item.mensagem_teste ||\n      item.pergunta ||\n      item.mensagem_final ||\n      '';\n\n    buscaConhecimento = mensagem || 'valores preços consulta exame';\n  }\n\n  // ═══════════════════════════════════════════════════════════════\n  // ALTERAÇÃO 4: Extrair estado da conversa e dados_faltantes\n  // ═══════════════════════════════════════════════════════════════\n  // Validação: só aceita estados permitidos pela constraint do banco\n  const ESTADOS_VALIDOS = [\n    'novo', 'triagem', 'coletando_dados',\n    'aguardando_escolha_medico', 'aguardando_escolha_servico',\n    'aguardando_confirmacao', 'aguardando_humano',\n    'agendado', 'cancelado', 'encerrado',\n    'cancelando_consulta', 'remarcando_consulta',\n    'verificando_disponibilidade', 'aguardando_dados_paciente',\n    'aguardando_convênio', 'duvida', 'social'\n  ];\n  const estadoRaw = sanitize(parsed.estado_proximo) || 'triagem';\n  const estadoProximo = ESTADOS_VALIDOS.includes(estadoRaw) ? estadoRaw : 'triagem';\n  const dadosFaltantes = parsed.dados_faltantes || camposFaltando;\n\n  return [{\n    json: {\n      intencao,\n      pronto_para_acao: prontoParaAcao,\n      dados: dadosLimpos,\n      campos_faltando: camposFaltando,\n      confirmacao_paciente: confirmacao,\n      busca_conhecimento: buscaConhecimento,\n      resposta_social: respostaSocial || 'Desculpe, pode repetir?',\n      parse_ok: true,\n      // Alteração 4: novos campos de estado\n      estado_proximo: estadoProximo,\n      dados_faltantes: dadosFaltantes,\n      estado_anterior: $('buscarContextoSessao').first().json.estado_atual || 'novo'\n    }\n  }];\n\n} catch (e) {\n  return [{\n    json: {\n      intencao: 'duvida',\n      pronto_para_acao: false,\n      dados: {},\n      campos_faltando: [],\n      confirmacao_paciente: false,\n      busca_conhecimento: null,\n      resposta_social: 'Desculpe, pode repetir?',\n      parse_ok: false,\n      parse_error: String(e.message || e)\n    }\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7456,
+        3024
+      ],
+      "id": "5086de89-6721-4cd0-81a3-d8fe12d07f1e",
+      "name": "parsearRespostaLLM",
+      "notes": "Parseia o JSON retornado pelo LLM.\nExtrai campos: intencao, dados, resposta_social, busca_conhecimento, resumo_atualizado, nome_paciente.\nTrata erros de parsing com fallback."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO ia_contexto_sessao (\n    id, session_id, cliente_id, whatsapp_number,\n    resumo_contexto, nome_paciente_detectado, metadata,\n    estado_atual, dados_faltantes, ultima_interacao\n) VALUES (\n    gen_random_uuid(),\n    '{{ $('receberDadosWorkflowPai').item.json.telefone }}',\n    '{{ $('receberDadosWorkflowPai').item.json.clinica_id }}',\n    '{{ $('receberDadosWorkflowPai').item.json.telefone }}',\n    CONCAT('Paciente: ', '{{ $('receberDadosWorkflowPai').item.json.mensagem_final.replace(/'/g, \"''\") }}', E'\\n', 'Assistente: ', '{{ $('parsearRespostaLLM').item.json.resposta_social.replace(/'/g, \"''\") }}'),\n    {{ $('parsearRespostaLLM').item.json.dados.paciente_nome ? \"'\" + $('parsearRespostaLLM').item.json.dados.paciente_nome.replace(/'/g, \"''\") + \"'\" : 'NULL' }},\n    '{{ JSON.stringify($('parsearRespostaLLM').item.json.dados).replace(/'/g, \"''\") }}'::jsonb,\n    '{{ $('parsearRespostaLLM').item.json.estado_proximo || 'triagem' }}',\n    ARRAY[{{ ($('parsearRespostaLLM').item.json.dados_faltantes || []).length > 0 ? ($('parsearRespostaLLM').item.json.dados_faltantes).map(d => \"'\" + d + \"'\").join(',') : '' }}]::text[],\n    NOW()\n)\nON CONFLICT (session_id, cliente_id)\nDO UPDATE SET\n    resumo_contexto = RIGHT(CONCAT(ia_contexto_sessao.resumo_contexto, E'\\n', EXCLUDED.resumo_contexto), 3000),\n    nome_paciente_detectado = EXCLUDED.nome_paciente_detectado,\n    metadata = EXCLUDED.metadata,\n    estado_atual = EXCLUDED.estado_atual,\n    dados_faltantes = EXCLUDED.dados_faltantes,\n    ultima_interacao = EXCLUDED.ultima_interacao;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        7664,
+        3024
+      ],
+      "id": "97b23da6-8304-42e6-beda-19eb6ee29f42",
+      "name": "salvarContextoSessao",
+      "credentials": {
+        "postgres": {
+          "id": "CQz4auLNBpiEofO7",
+          "name": "supabase-gerais"
+        }
+      },
+      "notes": "Upsert em ia_contexto_sessao com o contexto atualizado da conversa.\nSalva resumo, nome do paciente e metadata para próximas interações."
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "7daec5a1-1041-4626-927a-2735a3da7cd2",
+                    "leftValue": "={{ $('parsearRespostaLLM').item.json.intencao }}",
+                    "rightValue": "transferir_humano",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "handoff"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "4edb1787-a69b-4ed9-a31c-9759cea5c610",
+                    "leftValue": "={{ $('parsearRespostaLLM').item.json.intencao }}",
+                    "rightValue": "agendar|cancelar|remarcar|verificar_agendamento|confirmar_agendamento|encaixe",
+                    "operator": {
+                      "type": "string",
+                      "operation": "regex"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "transacional"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "03361991-7ab3-413f-aaaf-1057b3287ef8",
+                    "leftValue": "={{ $('parsearRespostaLLM').item.json.intencao }}",
+                    "rightValue": "duvida",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "duvida"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "648dcef7-6bed-4756-bbc7-d17349b6a4c0",
+                    "leftValue": "={{ $('parsearRespostaLLM').item.json.intencao }}",
+                    "rightValue": "emergencia",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "emergencia"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "resposta_direta"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        8080,
+        3024
+      ],
+      "id": "c0e8b28e-071a-4d6f-ad85-7814d91f7726",
+      "name": "rotearIntencao",
+      "notes": "Switch que roteia com base na intenção extraída pelo LLM.\nRoutas: transbordo → handoff humano | agendamento → validação convênio | duvida → RAG | emergencia → resposta fixa | social → resposta social"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "let busca = $('parsearRespostaLLM').first().json.busca_conhecimento\n  || $('receberDadosWorkflowPai').first().json.mensagem_final\n  || '';\n\n// Remove emojis e limita tamanho para evitar problemas na API\nbusca = busca.replace(/[\\u{1F600}-\\u{1F9FF}\\u{2600}-\\u{27BF}\\u{1F300}-\\u{1F5FF}\\u{1F680}-\\u{1F6FF}]/gu, '').trim();\nbusca = busca.substring(0, 500);\n\nconst clinicaId = $('receberDadosWorkflowPai').first().json.clinica_id;\nreturn { json: { busca, clinicaId } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        8592,
+        2992
+      ],
+      "id": "32a8876a-7dce-48dd-abe0-49420570e45c",
+      "name": "prepararBuscaRAG",
+      "notes": "Extrai busca_conhecimento do JSON parseado e clinica_id para montar a query de RAG.\nOutput: {busca, clinicaId}"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/embeddings",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"text-embedding-3-large\",\n  \"input\": {{ JSON.stringify($json.busca) }},\n  \"dimensions\": 2000\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        8848,
+        2992
+      ],
+      "id": "cf9ef13a-e1e7-4af1-accd-355e4a12ddc3",
+      "name": "gerarEmbeddingPergunta",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "sIUOlbIgyEdyt5xo",
+          "name": "OpenAI Direta"
+        }
+      },
+      "notes": "Chama OpenAI Embeddings API para vetorizar a pergunta do paciente.\nURL: api.openai.com/v1/embeddings\nOutput: vetor de embedding"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.query }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        9440,
+        2992
+      ],
+      "id": "30529eb5-a634-49a3-b930-3ebb7a2aa2ba",
+      "name": "executarBuscaHibridaRAG",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "CQz4auLNBpiEofO7",
+          "name": "supabase-gerais"
+        }
+      },
+      "notes": "Executa busca híbrida no PostgreSQL com pgvector.\nRetorna chunks de conhecimento relevantes para a pergunta."
+    },
+    {
+      "parameters": {
+        "jsCode": "const resultados = $('executarBuscaHibridaRAG').all();\nconst mensagem = $('receberDadosWorkflowPai').first().json.mensagem_final;\n\n// 1. Memória de Sessão via SQL (Buscar Contexto)\nconst dadosSessao = $('buscarContextoSessao').first().json;\nconst resumoSessao = dadosSessao.resumo_contexto || \"\";\nconst nomePaciente = dadosSessao.nome_paciente_detectado || \"\";\n\n// 2. Configurações dinâmicas da clínica (multi-tenant)\nconst config = $('buscarConfigClinica').first().json;\nconst nomeClinica = config.nome_clinica || \"nossa clínica\";\nconst modeloIA = config.modelo_ia || \"google/gemini-2.5-flash\";\nconst promptSistema = config.prompt_sistema || \"\";\n\n// 3. Monta o bloco de contexto RAG\nlet contexto = \"\";\nfor (const item of resultados) {\n  if (item.json.conteudo) {\n    contexto += `[${item.json.categoria}] ${item.json.conteudo}\\n\\n`;\n  }\n}\n\n// 4. Fallback se o RAG não trouxer nada\nif (!contexto.trim()) {\n  const respostaSocial = $('parsearRespostaLLM').first().json.resposta_social || \"Como posso te ajudar?\";\n  return { json: { resposta_final: respostaSocial, usou_rag: false } };\n}\n\n// 5. Bloco de memória\nconst blocoMemoria = resumoSessao\n  ? `RESUMO DA CONVERSA ATÉ AGORA (use para resolver pronomes como \"ele\", \"esse médico\", \"esse plano\"):\n${nomePaciente ? `Paciente: ${nomePaciente}\\n` : \"\"}${resumoSessao}\\n\\n`\n  : \"\";\n\n// 6. Percepção temporal\nconst timezone = config.timezone || 'America/Sao_Paulo';\nconst dataHora = new Date().toLocaleString('pt-BR', { timeZone: timezone, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });\n\n// 7. Monta o payload para o OpenRouter\nconst payload = {\n  model: modeloIA,\n  messages: [\n    {\n      role: \"system\",\n      content: `${promptSistema}\n\nREGRA ZERO — PROIBIDO ENROLAR (PRIORIDADE MÁXIMA):\n- O contexto abaixo JÁ CONTÉM todas as informações necessárias para responder. USE-AS DIRETAMENTE.\n- PROIBIDO dizer \"preciso consultar\", \"vou verificar\", \"preciso checar\", \"deixa eu olhar\", \"vou consultar nossa base\" ou qualquer variação. Essas frases são ERRO GRAVE.\n- Se a informação está no contexto, RESPONDA DIRETAMENTE. Não peça permissão ao paciente para consultar.\n- Se a informação NÃO está no contexto, diga com naturalidade que não tem essa informação e ofereça alternativa.\n\nREGRAS DE OURO DE FORMATAÇÃO (ESTRITAMENTE PROIBIDO VIOLAR):\n1. PROIBIDO o uso de asteriscos (*), negritos (**) ou qualquer símbolo Markdown.\n2. NUNCA use hifens (-) para listas. Use apenas números (1. , 2. ) ou parágrafos simples.\n3. RESPONDA APENAS COM TEXTO PURO.\n4. Use apenas UMA quebra de linha (\\\\n) para separar informações do mesmo assunto. Use DUAS (\\\\n\\\\n) apenas quando mudar totalmente de tema. Isso evita excesso de balões no WhatsApp.\n\nREGRAS DE AGENDAMENTO (MUITO IMPORTANTE):\n- Você PODE e DEVE oferecer agendamento diretamente pelo chat para qualquer serviço que conste no contexto abaixo.\n- NUNCA direcione o paciente para ligar quando o serviço está disponível no banco. Diga que pode agendar por aqui mesmo.\n- Se o paciente perguntar sobre um serviço ou procedimento e ele ESTIVER no contexto, confirme que realizamos e ofereça o agendamento pelo chat.\n- Se o paciente perguntar sobre algo que NÃO consta no contexto, informe com gentileza que esse serviço não é realizado e, se possível, sugira uma alternativa que esteja disponível.\n- NUNCA oriente o paciente a ligar para a clínica como solução padrão. O atendimento acontece aqui, pelo chat.\n\nREGRAS DE FIDELIDADE AO CONTEXTO DA CLÍNICA (CRÍTICO):\n- O contexto abaixo é a ÚNICA fonte de verdade sobre esta unidade. Não invente, não suponha, não complete com conhecimento geral.\n- Se o contexto disser que NÃO atende SUS, diga isso com clareza e sem rodeios: \"Esta unidade NÃO atende pelo SUS.\"\n- Se o contexto mencionar exigências de preparo (ex: dilatação de pupila, jejum, acompanhante), informe o paciente ANTES de confirmar o agendamento.\n- Se o contexto contiver uma restrição (ex: não aceita determinado plano, não realiza certo procedimento), trate isso como regra absoluta. NUNCA sugira que \"talvez seja possível\" ou que o paciente ligue para confirmar.\n- Cada clínica tem suas próprias regras. O que vale é SOMENTE o que está no contexto desta conversa.\n\nREGRAS DE VALORES E DADOS EXATOS (CRÍTICO):\n- Quando o contexto contiver um VALOR EXATO de coparticipação (ex: \"PAGA EXATAMENTE R$ 52,00\"), INFORME esse valor diretamente ao paciente.\n- NUNCA diga \"depende do plano\", \"varia conforme o contrato\" ou \"consulte seu convênio\" quando o valor já está explícito no contexto.\n- Se o paciente perguntar \"quanto pago pela UNIMED 40%?\" e o contexto diz \"R$ 52,00\", responda: \"Pela UNIMED 40%, o valor é R$ 52,00.\"\n- Se o contexto contiver um HORÁRIO EXATO (ex: \"Segunda-feira: 08:00\"), INFORME esse horário. Não diga \"preciso verificar\".\n- Se o contexto disser \"NÃO tem consulta na quarta de manhã\", responda DIRETAMENTE: \"Na quarta-feira só temos consulta à TARDE.\"\n- Valores, horários e regras que estão no contexto são DADOS CONFIRMADOS. Use-os com confiança.\n\nREGRAS DE INDICAÇÕES EXTERNAS (IMPORTANTE):\n- Quando informar que NÃO realizamos um exame ou procedimento, SEMPRE indique onde o paciente pode fazer.\n- Quando informar que NÃO realizamos um exame ou procedimento, SEMPRE verifique no contexto se há indicação de onde o paciente pode fazer. Se houver, informe o local e o profissional indicado. NUNCA diga apenas \"não fazemos\" sem oferecer alternativa quando ela existir no contexto.\n- NUNCA diga apenas \"não fazemos\" sem oferecer alternativa quando ela está disponível no contexto.\n\nREGRAS DE CONTEÚDO E COMPORTAMENTO:\n- NÃO repita saudações (Olá, Bom dia), pois o sistema já iniciou a conversa. Comece confirmando a dúvida ou respondendo a pergunta de forma gentil.\n- Se o paciente perguntar \"Só atendem [PLANO]?\", responda primeiro a dúvida antes de listar os dados técnicos.\n- Se a resposta envolver valores, use sempre o formato R$.\n- DIFERENCIAL: Use LETRAS MAIÚSCULAS para dar ênfase em pontos importantes, mantendo a naturalidade.\n- NUNCA comece com \"Entendi\", \"Certo\", \"Compreendi\" ou \"Perfeito\".\n\nTRAVA DE CONVERSÃO — REGRA ABSOLUTA DE ENCERRAMENTO:\n- TODA resposta DEVE terminar com UMA pergunta curta e direta que mantenha a conversa viva. Isso é OBRIGATÓRIO, sem exceção.\n- Se o assunto permite agendamento: \"Posso verificar um horário para você?\" ou \"Quer que eu já separe uma data?\"\n- Se o paciente recebeu uma informação negativa (serviço não disponível, plano não aceito): ofereça uma alternativa real do contexto e pergunte se quer seguir por esse caminho.\n- Se a dúvida foi totalmente resolvida e não há abertura óbvia: use uma pergunta ampla como \"Posso te ajudar com mais alguma coisa?\"\n- PROIBIDO encerrar com frases como \"Qualquer dúvida estou aqui.\", \"Fico à disposição.\" ou similares — essas frases matam a conversa.\n- A pergunta final deve ter NO MÁXIMO uma linha. Sem introdução, sem explicação. Só a pergunta.\n- Se a resposta NÃO terminar com \"?\", ela está INCORRETA. Revise antes de enviar.\n\nDATA E HORA ATUAL: ${dataHora}. Use para validar pedidos de agendamento contra regras de horário do contexto.\n\n${blocoMemoria}CONTEXTO TÉCNICO PARA CONSULTA (regras e informações exclusivas desta unidade):\n${contexto}`\n    },\n    {\n      role: \"user\",\n      content: mensagem\n    }\n  ]\n};\n\nreturn { json: { api_body: payload, usou_rag: true } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        9648,
+        3072
+      ],
+      "id": "4403854f-f2f1-42e0-96f5-1f2dcef06f8c",
+      "name": "montarPromptRAG",
+      "notes": "Monta prompt final com contexto RAG + memória de sessão + mensagem original.\nDefine flag usou_rag para decidir se precisa chamar Gemini."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a290c6db-619f-4f7c-be8f-b695dc0e1d0a",
+              "leftValue": "={{ $json.usou_rag }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        9840,
+        3104
+      ],
+      "id": "a0a8d9c1-ed35-4a25-a431-07bb814c6e76",
+      "name": "checarNecessidadeRAG",
+      "notes": "Se usou_rag=true → chama Gemini para gerar resposta com contexto RAG.\nSe usou_rag=false → monta resposta direto sem RAG adicional."
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputItems = $input.all();\nconst triggerItems = $('receberDadosWorkflowPai').all();\nconst results = [];\n\nconst perguntasFallback = [\n  \"\\n\\nPosso te ajudar com mais alguma informação?\",\n  \"\\n\\nPosso te ajudar com mais alguma coisa?\",\n  \"\\n\\nTem mais alguma dúvida?\"\n];\n\ninputItems.forEach((item, index) => {\n    const triggerData = triggerItems[index] ? triggerItems[index].json : triggerItems[0].json;\n    const telefone = triggerData.telefone;\n    const clinicaId = triggerData.clinica_id;\n    \n    const data = item.json;\n    let resposta = \"\";\n\n    if (data.choices && data.choices.length > 0 && data.choices[0].message) {\n      resposta = data.choices[0].message.content;\n    } else if (data.resposta_final) {\n      resposta = data.resposta_final;\n    } else {\n      resposta = \"Desculpe, estou com uma pequena instabilidade. Poderia repetir sua pergunta?\";\n    }\n\n    // Garante pergunta final se não terminar com \"?\"\n    const respostaTrimmed = resposta.trim();\n    const semEmoji = respostaTrimmed\n      .replace(/[\\u{1F300}-\\u{1FAFF}\\u{2600}-\\u{27BF}\\u{FE00}-\\u{FE0F}\\u{1F900}-\\u{1F9FF}\\u{200D}\\s]+$/u, '')\n      .trim();\n    \n    if (!semEmoji.endsWith('?')) {\n      const idx = Math.floor(Math.random() * perguntasFallback.length);\n      resposta = respostaTrimmed + perguntasFallback[idx];\n    }\n\n    const partes = resposta.split(\"\\n\\n\").filter(p => p.trim() !== \"\");\n    partes.forEach(parte => {\n        results.push({\n            json: {\n                texto: parte,\n                telefone: telefone,\n                clinica_id: clinicaId\n            }\n        });\n    });\n});\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        10304,
+        3104
+      ],
+      "id": "b5d6e3a9-c681-494b-90fa-38088384298b",
+      "name": "prepararRespostaDuvida",
+      "notes": "Formata a resposta de dúvida para envio, adicionando perguntas de follow-up aleatórias.\nOutput: {texto_final, telefone, clinicaId, ...}"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('receberDadosWorkflowPai').first().json.server_url }}/message/sendText/{{ $('receberDadosWorkflowPai').first().json.instance }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('receberDadosWorkflowPai').first().json.apikey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $json.telefone }}\",\n  \"text\": {{ JSON.stringify($json.texto_fatiado) }},\n  \"delay\": 3000,\n  \"presence\": \"composing\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        11584,
+        3120
+      ],
+      "id": "c7326742-67b3-4a4c-98f6-5c9aa3b740db",
+      "name": "enviarRespostaWhatsapp",
+      "notes": "Envia mensagem de resposta ao paciente via Evolution API.\nURL: server_url/message/sendText/instance"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE n8n_status_atendimento \nSET lock_conversa = false, updated_at = NOW() \nWHERE session_id = '{{ $('receberDadosWorkflowPai').first().json.telefone }}' \n  AND cliente_id = '{{ $('receberDadosWorkflowPai').first().json.clinica_id }}';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        11424,
+        2928
+      ],
+      "id": "802d30fb-b83b-411c-996f-c125698debf7",
+      "name": "desativarLockConversaRAG",
+      "credentials": {
+        "postgres": {
+          "id": "CQz4auLNBpiEofO7",
+          "name": "supabase-gerais"
+        }
+      },
+      "notes": "Remove lock_conversa após envio da resposta de dúvida.\nLibera o fluxo para processar novas mensagens."
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "telefone"
+            },
+            {
+              "name": "mensagem_final"
+            },
+            {
+              "name": "clinica_id"
+            },
+            {
+              "name": "numero"
+            },
+            {
+              "name": "nome"
+            },
+            {
+              "name": "server_url"
+            },
+            {
+              "name": "instance"
+            },
+            {
+              "name": "apikey"
+            },
+            {
+              "name": "transbordo_humano_ativo"
+            },
+            {
+              "name": "mensagem_transbordo"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        6192,
+        3024
+      ],
+      "id": "da2285da-ff60-4bb4-9628-6b17f92a2cff",
+      "name": "receberDadosWorkflowPai",
+      "notes": "Execute Workflow Trigger — recebe dados do workflow de recepção.\nInput: {telefone, clinica_id, mensagem_final, server_url, instance, apikey}"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Extraímos os nós FORA do laço de repetição. \n// É ISSO que impede o n8n de entrar em loop infinito e travar.\nconst prepItems = $('prepararBuscaRAG').all();\nconst inputItems = $input.all();\n\n// 2. Usamos .map() para processar múltiplos pacientes simultâneos caso cheguem em lote\nreturn inputItems.map((item, index) => {\n  \n  // Pareamento seguro: garante que a busca da Clínica A não vá para a Clínica B\n  const prepData = prepItems[index] ? prepItems[index].json : prepItems[0].json;\n  \n  const busca = prepData.busca;\n  const clinicaId = prepData.clinicaId;\n  \n  // Pega o embedding do item exato que está sendo processado nesta iteração\n  const embedding = item.json.data[0].embedding;\n  const embeddingStr = '[' + embedding.join(',') + ']';\n\n  // 3. Dollar-Quoting ($q$ ... $q$) blindando o input do WhatsApp para o Postgres\n  const query = `\n    SELECT conteudo, categoria, metadata, rrf_score \n    FROM hybrid_search_clinica(\n      $q$${busca}$q$,\n      '${embeddingStr}'::vector,\n      '${clinicaId}',\n      6\n    );\n  `;\n\n  return {\n    json: { \n      query: query.trim(), \n      busca: busca \n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        9136,
+        3008
+      ],
+      "id": "783436ac-d758-4b5f-b1c8-bd9a9c4cb86f",
+      "name": "montarQueryBuscaHibrida",
+      "notes": "Monta a query SQL para busca híbrida (semântica + textual) no PostgreSQL.\nCombina embedding com busca full-text para melhor recall."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c141e9eb-2cf2-459f-86e3-661cacd78cc9",
+              "name": "texto_final",
+              "value": "⚠️ EMERGÊNCIA MÉDICA\\n\\nBusque atendimento URGENTE:\\n- UPA/Pronto Socorro mais próximo\\n- SAMU: 192\\n\\nNÃO ESPERE! Caso deseje falar com um atendente humano basta entrar em contato por ligação normal.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        9488,
+        3344
+      ],
+      "id": "1d1fde07-6965-4bb3-8c38-eb73ce686a4d",
+      "name": "formatarRespostaEmergencia",
+      "notes": "Set fixo com mensagem de emergência médica.\nOutput: texto orientando buscar atendimento urgente (UPA/SAMU)."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "bc9b558f-03ba-4045-99e5-e479eb2f309a",
+              "name": "texto_final",
+              "value": "={{ $('parsearRespostaLLM').first().json.resposta_social }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        8864,
+        3408
+      ],
+      "id": "e9d982bd-ea7e-4842-8e6e-52b6c7bea26c",
+      "name": "formatarRespostaSocial",
+      "notes": "Passa a resposta_social do LLM direto como texto_final.\nPara conversas informais/saudações."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "4946971c-ae0b-4ca3-a21a-3975ffff8e0a",
+              "name": "texto_final",
+              "value": "={{ $json.texto_final }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        10064,
+        2720
+      ],
+      "id": "6ccb2ea6-d188-4e13-956f-cbbf6aaf8611",
+      "name": "formatarRespostaAgendamento",
+      "notes": "Passa texto_final retornado pelo sub-workflow de agendamento."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Puxa os dados universais do Trigger\nconst triggerData = $('receberDadosWorkflowPai').first().json;\nconst telefone = triggerData.telefone;\nconst clinicaId = triggerData.clinica_id;\nconst results = [];\n\n$input.all().forEach(item => {\n    const textoRaw = item.json.texto || item.json.texto_final || item.json.resposta || item.json.output || \"Desculpe, ocorreu um erro.\";\n    \n    // CORREÇÃO: Converte \\n literais (string) em quebras de linha reais\n    let texto = textoRaw.replace(/\\\\n/g, '\\n');\n    \n    // ═══════════════════════════════════════════════════════════════\n    // LIMPEZA DE MARKDOWN (a LLM insiste em usar mesmo proibido)\n    // ═══════════════════════════════════════════════════════════════\n    texto = texto.replace(/\\*\\*\\*(.*?)\\*\\*\\*/g, '$1');  // ***negrito itálico***\n    texto = texto.replace(/\\*\\*(.*?)\\*\\*/g, '$1');       // **negrito**\n    texto = texto.replace(/\\*(.*?)\\*/g, '$1');            // *itálico*\n    texto = texto.replace(/^[\\s]*[-•]\\s+/gm, '• ');      // Padroniza bullets\n    texto = texto.replace(/^[\\s]*\\*\\s+/gm, '• ');        // * usado como bullet\n    texto = texto.replace(/#{1,6}\\s+/g, '');              // ### headers\n    texto = texto.replace(/`{1,3}(.*?)`{1,3}/g, '$1');   // `código`\n    texto = texto.replace(/\\[([^\\]]+)\\]\\([^)]+\\)/g, '$1'); // [link](url) → link\n    \n    // FILTRO DE SEGURANÇA (CRÍTICO): Fatia em parágrafos e DESCARTA qualquer parte que comece com JSON '{'\n    const partes = texto.split(\"\\n\\n\").filter(p => p.trim() !== \"\" && !p.trim().startsWith('{'));\n\n    // Prepara cada fatia purificada para o disparo individual no WhatsApp\n    partes.forEach(parte => {\n        results.push({\n            json: {\n                texto_fatiado: parte.trim(),\n                telefone: telefone,\n                clinica_id: clinicaId\n            }\n        });\n    });\n});\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        10960,
+        3040
+      ],
+      "id": "55adad67-92fc-4d11-a9e3-f3e9dd9f5410",
+      "name": "centralizarRespostas",
+      "notes": "Code node que centraliza todas as respostas (dúvida, emergência, social, agendamento, bloqueio convênio).\nFormata array de mensagens para envio sequencial via loop."
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        11216,
+        3040
+      ],
+      "id": "069ee86e-9321-49d7-abb3-d66d5c8df0c0",
+      "name": "iterarRespostas",
+      "notes": "Loop que itera sobre as respostas formatadas, enviando uma por vez.\nSplit in Batches para controle de fluxo."
+    },
+    {
+      "parameters": {
+        "amount": 2
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        11808,
+        3216
+      ],
+      "id": "45e8e95b-5237-48f6-943c-6e1e65222b5d",
+      "name": "aguardarEntreEnvios",
+      "webhookId": "cd16279a-1842-41e0-9a08-221d7d09971f",
+      "notes": "Wait de 2s entre envios de mensagem.\nEvita rate limit da Evolution API e melhora UX do paciente."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.api_body) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        10048,
+        3008
+      ],
+      "id": "660d036a-9ff6-4e98-8680-0c4ece02f1cc",
+      "name": "gerarRespostaGeminiRAG",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "YhaAQztRlv81ItT8",
+          "name": "Fluxo_Recepção"
+        }
+      },
+      "notes": "Chama Gemini via OpenRouter para gerar resposta final usando contexto RAG.\nURL: openrouter.ai/api/v1/chat/completions"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM validar_convenio_medico(\n  '{{ $('receberDadosWorkflowPai').first().json.clinica_id }}'::uuid,\n  '{{ $('parsearRespostaLLM').first().json.dados.medico_nome }}',\n  '{{ $('parsearRespostaLLM').first().json.dados.convenio }}',\n  '{{ $('parsearRespostaLLM').first().json.dados.atendimento_nome }}'\n);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        9312,
+        2528
+      ],
+      "id": "5b61bb53-5cc1-4b53-b6ea-f929ee0474e1",
+      "name": "validarConvenioMedico",
+      "credentials": {
+        "postgres": {
+          "id": "CQz4auLNBpiEofO7",
+          "name": "supabase-gerais"
+        }
+      },
+      "notes": "Chama função PostgreSQL validar_convenio_medico().\nVerifica se o convênio é aceito pelo médico na clínica."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "42f3dec9-e3ff-409b-8648-b9be94d720df",
+              "leftValue": "={{ $('validarConvenioMedico').first().json.validar_convenio_medico.permitido }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        9488,
+        2576
+      ],
+      "id": "b43a8a9f-464d-4920-a6d8-28e2e71e4f76",
+      "name": "checarConvenioValido",
+      "notes": "Se convênio válido → segue para agendamento.\nSe inválido → formata mensagem de bloqueio."
+    },
+    {
+      "parameters": {
+        "jsCode": "const validacao = $('validarConvenioMedico').first().json.validar_convenio_medico;\nconst parsedData = $('parsearRespostaLLM').first().json;\nconst trigger = $('receberDadosWorkflowPai').first().json;\n\nif (validacao.permitido) {\n  return [{ json: { ...parsedData, validacao_ok: true } }];\n}\n\n// --- PROTEÇÃO CONTRA DADOS INCOMPLETOS ---\n// Se o banco deu erro, mas o paciente ainda não informou o dado correspondente,\n// ignoramos o erro e usamos a resposta natural da IA (acolhimento).\nconst medicoVazio = !parsedData.dados.medico_nome || String(parsedData.dados.medico_nome).trim().toLowerCase() === 'null';\nconst convenioVazio = !parsedData.dados.convenio || String(parsedData.dados.convenio).trim().toLowerCase() === 'null';\n\nif (\n  (validacao.codigo === 'CONVENIO_NAO_ACEITO' && convenioVazio) ||\n  (validacao.codigo === 'MEDICO_NAO_ENCONTRADO' && medicoVazio) ||\n  (validacao.codigo === 'PROCEDIMENTO_NAO_ENCONTRADO' && !parsedData.dados.atendimento_nome)\n) {\n  return [{\n    json: {\n      texto_final: parsedData.resposta_social,\n      clinica_id: trigger.clinica_id,\n      telefone: trigger.telefone,\n      nome: trigger.nome,\n      instancia: trigger.instancia\n    }\n  }];\n}\n\n// Fallbacks para mensagens reais de erro (dados preenchidos mas inválidos)\nconst medicoNome = parsedData.dados.medico_nome || \"o médico informado\";\nconst convenioNome = parsedData.dados.convenio || \"o convênio mencionado\";\nconst conveniosLista = validacao.convenios_aceitos ? validacao.convenios_aceitos.join(', ') : 'nossos convênios parceiros';\n\nlet resposta = '';\n\nswitch (validacao.codigo) {\n  case 'MEDICO_NAO_ENCONTRADO':\n    resposta = `O médico ${medicoNome} não atende na nossa clínica. Gostaria de saber quais médicos atendem por aqui?`;\n    break;\n  case 'CONVENIO_NAO_ACEITO':\n    resposta = `${validacao.medico_encontrado} não atende ${convenioNome}.\\n\\nConvênios aceitos: ${conveniosLista}.\\n\\nDeseja agendar como PARTICULAR ou verificar outro médico?`;\n    break;\n  case 'PROCEDIMENTO_NAO_ENCONTRADO':\n    resposta = `A clínica não realiza o procedimento \"${parsedData.dados.atendimento_nome || 'solicitado'}\". Posso ajudar com outro serviço?`;\n    break;\n  default:\n    resposta = parsedData.resposta_social;\n}\n\nreturn [{\n  json: {\n    texto_final: resposta,\n    clinica_id: trigger.clinica_id,\n    telefone: trigger.telefone,\n    nome: trigger.nome,\n    instancia: trigger.instancia\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        9888,
+        2960
+      ],
+      "id": "42698ef9-1756-4f83-bf4e-4d264f719341",
+      "name": "formatarBloqueioConvenio",
+      "notes": "Monta mensagem informando que o convênio não é aceito pelo médico.\nOutput: texto_final com orientação ao paciente."
+    },
+    {
+      "parameters": {
+        "jsCode": "const dados = $('parsearRespostaLLM').first().json;\nconst trigger = $('receberDadosWorkflowPai').first().json;\nconst intencao = (dados.intencao || '').trim().toLowerCase();\nconst limpar = (val) => {\n  if (val === null || val === undefined) return '';\n  const s = String(val).trim().toLowerCase();\n  return (s === '' || s === 'null' || s === 'undefined') ? '' : s;\n};\nconst medico = limpar(dados.dados?.medico_nome);\nconst convenio = limpar(dados.dados?.convenio);\nconst procedimento = limpar(dados.dados?.atendimento_nome);\n\n// SÓ VALIDAMOS SE:\n// Tivermos Médico E Convênio (para checar o par)\n// Procedimento sozinho sem médico+convênio não tem o que validar\nconst temParParaValidar = (medico !== '' && convenio !== '');\n\nconst precisaValidar = intencao === 'agendar' && temParParaValidar;\n\nreturn [{\n  json: {\n    precisaValidar,\n    intencao,\n    dados: dados.dados,\n    resposta_social: dados.resposta_social,\n    pronto_para_acao: dados.pronto_para_acao,\n    clinica_id: trigger.clinica_id,\n    telefone: trigger.telefone,\n    nome: trigger.nome\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        8640,
+        2768
+      ],
+      "id": "6faf6ff9-ed99-40f5-b7d3-dba00b2b26fb",
+      "name": "checarNecessidadeValidacao",
+      "notes": "Verifica se o agendamento precisa validar convênio.\nCheca se médico e convênio estão preenchidos nos dados extraídos."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "bacd9e7c-eb84-472f-b85f-c78245dfd979",
+              "leftValue": "={{ $json.precisaValidar }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        8960,
+        2688
+      ],
+      "id": "6b63c53e-0358-49dd-b618-e0803d3c880f",
+      "name": "rotearValidacaoConvenio",
+      "notes": "Se precisaValidar=true → valida convênio no PostgreSQL.\nSe não → chama sub-workflow de agendamento direto."
+    },
+    {
+      "parameters": {
+        "url": "={{ $('buscarConfigClinica').first().json.chatwoot_url }}/api/v1/accounts/{{ $('buscarConfigClinica').first().json.chatwoot_account_id }}/search?q={{ $('receberDadosWorkflowPai').first().json.telefone }}&page=1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $('buscarConfigClinica').first().json.chatwoot_api_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        8816,
+        2448
+      ],
+      "id": "127fe9b2-d551-4f31-8d10-a164fb0e7180",
+      "name": "buscarConversaChatwoot",
+      "notes": "Busca conversa existente do paciente no Chatwoot.\nUsado para reabrir e adicionar contexto ao handoff."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE n8n_status_atendimento \nSET lock_conversa = false \nWHERE session_id = '{{ $('receberDadosWorkflowPai').first().json.telefone }}' \n  AND cliente_id = '{{ $('receberDadosWorkflowPai').first().json.clinica_id }}'\n  AND modo_atendimento = 'humano';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        9856,
+        2160
+      ],
+      "id": "bbf1a3cb-1337-42cb-a220-266f5ac34fa3",
+      "name": "desativarLockConversaHandoff",
+      "credentials": {
+        "postgres": {
+          "id": "CQz4auLNBpiEofO7",
+          "name": "supabase-gerais"
+        }
+      },
+      "notes": "Remove lock_conversa após handoff completo para humano.\nFluxo de handoff finalizado."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('buscarConfigClinica').first().json.chatwoot_url }}/api/v1/accounts/{{ $('buscarConfigClinica').first().json.chatwoot_account_id }}/conversations/{{ $('buscarConversaChatwoot').first().json.payload.conversations[0].id }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $('buscarConfigClinica').first().json.chatwoot_api_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\nJSON.stringify({\n  \"content\": `TRANSBORDO AUTOMATICO - Paciente: ${$('receberDadosWorkflowPai').first().json.nome} | Telefone: ${$('receberDadosWorkflowPai').first().json.telefone} | Intencao: ${$('parsearRespostaLLM').first().json.intencao} | Ultima mensagem: ${$('receberDadosWorkflowPai').first().json.mensagem_final} | Contexto: ${$('buscarContextoSessao').first().json.resumo_contexto || 'Primeira interacao'}`,\n  \"message_type\": \"outgoing\",\n  \"private\": true\n})\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        9360,
+        2304
+      ],
+      "id": "6525ac50-7584-465e-b410-b6dcec669ef6",
+      "name": "criarNotaPrivadaChatwoot",
+      "notes": "Cria nota privada na conversa do Chatwoot com resumo do contexto IA.\nAjuda o atendente humano a entender o histórico."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE n8n_status_atendimento \nSET modo_atendimento = 'humano',\n    transbordo_iniciado_em = NOW()\nWHERE session_id = '{{ $('receberDadosWorkflowPai').first().json.telefone }}' \n  AND cliente_id = '{{ $('receberDadosWorkflowPai').first().json.clinica_id }}';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        8544,
+        2560
+      ],
+      "id": "01dd3e29-1483-4198-acfa-eee047bb2825",
+      "name": "setarModoHumano",
+      "credentials": {
+        "postgres": {
+          "id": "CQz4auLNBpiEofO7",
+          "name": "supabase-gerais"
+        }
+      },
+      "notes": "UPDATE modo_atendimento='humano' em n8n_status_atendimento.\nA partir daqui, o workflow de recepção não processará mais mensagens deste paciente."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('receberDadosWorkflowPai').first().json.server_url }}/message/sendText/{{ $('receberDadosWorkflowPai').first().json.instance }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('receberDadosWorkflowPai').first().json.apikey }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('receberDadosWorkflowPai').first().json.telefone }}\",\n  \"text\": {{ JSON.stringify($('parsearRespostaLLM').first().json.resposta_social) }},\n  \"delay\": 3000,\n  \"presence\": \"composing\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        8304,
+        2688
+      ],
+      "id": "3c8e2921-d320-4de8-b7c1-846d0775ae11",
+      "name": "enviarMensagemTransbordo",
+      "notes": "Envia mensagem ao paciente informando que será transferido para atendente humano.\nUsa mensagem_transbordo configurada pela clínica."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('buscarConfigClinica').first().json.chatwoot_url }}/api/v1/accounts/{{ $('buscarConfigClinica').first().json.chatwoot_account_id }}/conversations/{{ $('buscarConversaChatwoot').first().json.payload.conversations[0].id }}/labels",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $('buscarConfigClinica').first().json.chatwoot_api_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"labels\":[\"atendimento_humano\"]}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        9568,
+        2304
+      ],
+      "id": "a2c4969e-e3fe-4510-b835-1a1127ec20b7",
+      "name": "adicionarLabelChatwoot",
+      "notes": "Adiciona labels à conversa no Chatwoot.\nFacilita triagem e organização do atendimento humano."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('buscarConfigClinica').first().json.chatwoot_url }}/api/v1/accounts/{{ $('buscarConfigClinica').first().json.chatwoot_account_id }}/conversations/{{ $('buscarConversaChatwoot').first().json.payload.conversations[0].id }}/toggle_status",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $('buscarConfigClinica').first().json.chatwoot_api_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"status\":\"open\"}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        9024,
+        2448
+      ],
+      "id": "538e0ebb-4e06-4ace-ad1b-1ea78df44a45",
+      "name": "reabrirConversaChatwoot",
+      "notes": "Toggle status da conversa no Chatwoot para reabrir.\nGarante que o atendente veja a conversa ativa."
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        10064,
+        2160
+      ],
+      "id": "99f9fa3c-050c-46f4-b8ca-82760cad1db7",
+      "name": "pararFluxoHandoffFinalizado",
+      "notes": "NoOp — fim do fluxo de handoff humano."
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "KCcKFDapJjHD7idfGafMa",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/KCcKFDapJjHD7idfGafMa",
+          "cachedResultName": "MLTC_WF__AgendamentoConsultaIA_v3.0"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "dados_coletados": "={{ $('parsearRespostaLLM').first().json.dados }}",
+            "telefone": "={{ $('receberDadosWorkflowPai').first().json.telefone }}",
+            "clinica_id": "={{ $('receberDadosWorkflowPai').first().json.clinica_id }}",
+            "mensagem_final": "={{ $('receberDadosWorkflowPai').first().json.mensagem_final }}",
+            "resumo_contexto": "={{ $('buscarContextoSessao').first().json.resumo_contexto || 'Primeira conversa. Sem histórico.' }}",
+            "intencao": "={{ $('parsearRespostaLLM').first().json.intencao }}",
+            "prompt_agendamentos": "={{ $('buscarConfigClinica').first().json.prompt_agendamentos }}",
+            "agendamento_api_base_url": "={{ $('receberDadosWorkflowPai').first().json.agendamento_api_base_url || 'https://qxlvzbvzajibdtlzngdy.supabase.co/functions/v1/llm-agent-api' }}",
+            "api_cliente_id": "={{ $('buscarConfigClinica').first().json.api_cliente_id || $('receberDadosWorkflowPai').first().json.clinica_id }}",
+            "allowed_services_json": "={{ (() => {\n  const parentValue = $('receberDadosWorkflowPai').first().json.allowed_services_json;\n  if (typeof parentValue === 'string' && parentValue.trim()) return parentValue;\n  const contextoRuntime = $('buscarConfigClinica').first().json.contexto_runtime || {};\n  const agendamentoContext = contextoRuntime.agendamento || {};\n  const candidates = [\n    contextoRuntime.allowed_services,\n    contextoRuntime.servicos_permitidos,\n    agendamentoContext.allowed_services,\n    agendamentoContext.servicos_permitidos\n  ];\n  const resolved = candidates.find((value) => value !== undefined && value !== null && value !== '');\n  if (Array.isArray(resolved)) return JSON.stringify(resolved);\n  if (typeof resolved === 'string') return resolved.trim() || '[]';\n  return '[]';\n})() }}",
+            "nome": "={{ $('receberDadosWorkflowPai').first().json.nome }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "telefone",
+              "displayName": "telefone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "clinica_id",
+              "displayName": "clinica_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "mensagem_final",
+              "displayName": "mensagem_final",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "resumo_contexto",
+              "displayName": "resumo_contexto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "intencao",
+              "displayName": "intencao",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "prompt_agendamentos",
+              "displayName": "prompt_agendamentos",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "agendamento_api_base_url",
+              "displayName": "agendamento_api_base_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "api_cliente_id",
+              "displayName": "api_cliente_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "allowed_services_json",
+              "displayName": "allowed_services_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "nome",
+              "displayName": "nome",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "dados_coletados",
+              "displayName": "dados_coletados",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "object"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        9712,
+        2416
+      ],
+      "id": "5c41ff07-78ad-4b44-95c9-7a73670fb513",
+      "name": "chamarSubAgendamento",
+      "notes": "Chama sub-workflow v3_agendamento.\nPassa dados do paciente, médico, convênio e configurações da clínica."
+    },
+    {
+      "parameters": {
+        "content": "## MLTC — Motor de Atendimento IA\n\n**Owner:** @gabi\n**Trigger:** Execute Workflow (sub-workflow)\n**Security:** Chamado internamente pelo workflow de Recepção\n**Criticality:** P1 — Importante\n**Version:** v3.0\n**Docs:** —\n\n---\n\n### Fluxo Geral\n1. Recebe dados → Tranca lock → Busca config clínica\n2. Busca contexto sessão → LLM extrai intenção\n3. Roteia por intenção:\n   - **Dúvida** → RAG + Gemini → Resposta\n   - **Agendamento** → Valida convênio → Sub-workflow\n   - **Transbordo** → Handoff Chatwoot\n   - **Emergência** → Resposta fixa\n   - **Social** → Resposta LLM\n4. Centraliza respostas → Loop envio → Destrava lock",
+        "height": 680,
+        "width": 440,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4896,
+        1872
+      ],
+      "id": "8a5199cb-c96e-4052-8f97-19b49dd1980f",
+      "name": "stickyNotePadrao"
+    },
+    {
+      "parameters": {
+        "content": "## 1️⃣ Entrada + Extração de Intenção\n\nRecebe dados do workflow de recepção → ativa lock → busca config da clínica e contexto da sessão → LLM (Gemini via OpenRouter) extrai intenção, dados estruturados e resposta → parseia JSON → salva contexto atualizado → roteia por intenção.\n\n⚡ O lock impede que outra mensagem do mesmo paciente entre em paralelo enquanto esta é processada.",
+        "height": 260,
+        "width": 764,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        5520,
+        1904
+      ],
+      "id": "5ee41146-e895-4817-8ae0-35a2bca7ae64",
+      "name": "stickyNota01EntradaExtracao"
+    },
+    {
+      "parameters": {
+        "content": "## 2️⃣ Fluxo RAG (Dúvidas)\n\nPrepara busca → gera embedding da pergunta (OpenAI) → busca híbrida no PostgreSQL (pgvector + full-text) → monta prompt com contexto RAG + memória → se precisou de RAG, chama Gemini para resposta final → formata resposta com pergunta de follow-up → centraliza para envio.\n\n💡 Busca híbrida combina semântica (vetor) + textual (tsvector) para melhor recall.",
+        "height": 464,
+        "width": 558,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        6464,
+        1776
+      ],
+      "id": "297ab7b9-47fc-4178-9668-fa97a49782e2",
+      "name": "stickyNota02RAG"
+    },
+    {
+      "parameters": {
+        "content": "## 3️⃣ Fluxo Agendamento\n\nVerifica se precisa validar convênio (médico + convênio preenchidos) → se sim, chama função PostgreSQL `validar_convenio_medico()` → convênio válido: chama sub-workflow `v3_agendamento` → convênio inválido: monta mensagem de bloqueio.\nSe não precisa validar: vai direto para o sub-workflow de agendamento.",
+        "height": 256,
+        "width": 608,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        6016,
+        2416
+      ],
+      "id": "9718fe0c-a32b-4d05-900a-dba99abf04b7",
+      "name": "stickyNota03Agendamento"
+    },
+    {
+      "parameters": {
+        "content": "## 4️⃣ Fluxo Transbordo Humano (Handoff)\n\nEnvia mensagem de transbordo ao paciente → seta modo_atendimento='humano' no PostgreSQL → busca conversa no Chatwoot → reabre conversa → cria nota privada com contexto IA → adiciona labels → remove lock.\n\n⚠️ Após setar modo humano, o workflow de recepção para de processar mensagens deste paciente (lock no fluxo pai).",
+        "height": 304,
+        "width": 898
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        6672,
+        2688
+      ],
+      "id": "a585500a-737a-455f-9cfc-f7f51c0b2cd3",
+      "name": "stickyNota04Handoff"
+    },
+    {
+      "parameters": {
+        "content": "## 5️⃣ Centralização + Envio\n\nTodas as rotas (dúvida, emergência, social, agendamento, bloqueio convênio) convergem no Centralizador → Loop envia mensagens uma a uma via Evolution API → Wait 2s entre envios (rate limit + UX) → destrava lock_conversa após último envio.\n\n⚡ O Wait de 2s evita flood e dá tempo do paciente ler cada mensagem.",
+        "height": 240,
+        "width": 1158,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        7488,
+        1984
+      ],
+      "id": "23d23bdf-8961-42fa-a9e6-ce5e341c57a7",
+      "name": "stickyNota05Envio"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO historico_eventos (\n  cliente_id, session_id, paciente_telefone, paciente_nome,\n  tipo_evento, intencao, estado_antes, estado_depois,\n  dados_extraidos, resultado, modelo_ia\n) VALUES (\n  '{{ $('receberDadosWorkflowPai').item.json.clinica_id }}',\n  '{{ $('receberDadosWorkflowPai').item.json.telefone }}',\n  '{{ $('receberDadosWorkflowPai').item.json.telefone }}',\n  {{ $('parsearRespostaLLM').item.json.dados.paciente_nome ? \"'\" + $('parsearRespostaLLM').item.json.dados.paciente_nome.replace(/'/g, \"''\") + \"'\" : 'NULL' }},\n  'intencao_detectada',\n  '{{ $('parsearRespostaLLM').item.json.intencao }}',\n  '{{ $('parsearRespostaLLM').item.json.estado_anterior || 'novo' }}',\n  '{{ $('parsearRespostaLLM').item.json.estado_proximo || 'triagem' }}',\n  '{{ JSON.stringify($('parsearRespostaLLM').item.json.dados).replace(/'/g, \"''\") }}'::jsonb,\n  'sucesso',\n  'gemini-2.5-flash'\n);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        7872,
+        3024
+      ],
+      "id": "d7731f9c-a309-4894-a910-9250fe1f832c",
+      "name": "registrarEvento",
+      "credentials": {
+        "postgres": {
+          "id": "CQz4auLNBpiEofO7",
+          "name": "supabase-gerais"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "receberDadosWorkflowPai": [
+      {
+        "json": {
+          "telefone": "558788045656",
+          "mensagem_final": "Dra Marina Tozzi",
+          "clinica_id": "d7d7b7cf-4ec0-437b-8377-d7555fc5ee6a",
+          "numero": "558788045656",
+          "nome": "carlos alves",
+          "server_url": "http://evo-w0c0g0swcgk04cocgo4o0gww.148.230.74.128.sslip.io",
+          "instance": "INOVAIA",
+          "apikey": "969B0D2C5FC1-439C-B024-905D8CC93640",
+          "transbordo_humano_ativo": "false",
+          "mensagem_transbordo": "Vou transferir você para um de nossos atendentes. Em instantes alguém da equipe vai continuar seu atendimento 😊"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "ativarLockConversa": {
+      "main": [
+        [
+          {
+            "node": "buscarConfigClinica",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "buscarConfigClinica": {
+      "main": [
+        [
+          {
+            "node": "buscarContextoSessao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "modeloOpenRouterGemini": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "extrairIntencaoLLM",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "buscarContextoSessao": {
+      "main": [
+        [
+          {
+            "node": "extrairIntencaoLLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "extrairIntencaoLLM": {
+      "main": [
+        [
+          {
+            "node": "parsearRespostaLLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "parsearRespostaLLM": {
+      "main": [
+        [
+          {
+            "node": "salvarContextoSessao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "salvarContextoSessao": {
+      "main": [
+        [
+          {
+            "node": "registrarEvento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "rotearIntencao": {
+      "main": [
+        [
+          {
+            "node": "enviarMensagemTransbordo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "checarNecessidadeValidacao",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "prepararBuscaRAG",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "formatarRespostaEmergencia",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "formatarRespostaSocial",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "prepararBuscaRAG": {
+      "main": [
+        [
+          {
+            "node": "gerarEmbeddingPergunta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "gerarEmbeddingPergunta": {
+      "main": [
+        [
+          {
+            "node": "montarQueryBuscaHibrida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "executarBuscaHibridaRAG": {
+      "main": [
+        [
+          {
+            "node": "montarPromptRAG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "montarPromptRAG": {
+      "main": [
+        [
+          {
+            "node": "checarNecessidadeRAG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "checarNecessidadeRAG": {
+      "main": [
+        [
+          {
+            "node": "gerarRespostaGeminiRAG",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "prepararRespostaDuvida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "prepararRespostaDuvida": {
+      "main": [
+        [
+          {
+            "node": "centralizarRespostas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "enviarRespostaWhatsapp": {
+      "main": [
+        [
+          {
+            "node": "aguardarEntreEnvios",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "receberDadosWorkflowPai": {
+      "main": [
+        [
+          {
+            "node": "ativarLockConversa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "montarQueryBuscaHibrida": {
+      "main": [
+        [
+          {
+            "node": "executarBuscaHibridaRAG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "formatarRespostaEmergencia": {
+      "main": [
+        [
+          {
+            "node": "centralizarRespostas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "formatarRespostaSocial": {
+      "main": [
+        [
+          {
+            "node": "centralizarRespostas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "formatarRespostaAgendamento": {
+      "main": [
+        [
+          {
+            "node": "centralizarRespostas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "centralizarRespostas": {
+      "main": [
+        [
+          {
+            "node": "iterarRespostas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "iterarRespostas": {
+      "main": [
+        [
+          {
+            "node": "desativarLockConversaRAG",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "enviarRespostaWhatsapp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "aguardarEntreEnvios": {
+      "main": [
+        [
+          {
+            "node": "iterarRespostas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "gerarRespostaGeminiRAG": {
+      "main": [
+        [
+          {
+            "node": "prepararRespostaDuvida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "validarConvenioMedico": {
+      "main": [
+        [
+          {
+            "node": "checarConvenioValido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "checarConvenioValido": {
+      "main": [
+        [
+          {
+            "node": "chamarSubAgendamento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "formatarBloqueioConvenio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "formatarBloqueioConvenio": {
+      "main": [
+        [
+          {
+            "node": "centralizarRespostas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "checarNecessidadeValidacao": {
+      "main": [
+        [
+          {
+            "node": "rotearValidacaoConvenio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "rotearValidacaoConvenio": {
+      "main": [
+        [
+          {
+            "node": "validarConvenioMedico",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "chamarSubAgendamento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "buscarConversaChatwoot": {
+      "main": [
+        [
+          {
+            "node": "reabrirConversaChatwoot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "desativarLockConversaHandoff": {
+      "main": [
+        [
+          {
+            "node": "pararFluxoHandoffFinalizado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "criarNotaPrivadaChatwoot": {
+      "main": [
+        [
+          {
+            "node": "adicionarLabelChatwoot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "setarModoHumano": {
+      "main": [
+        [
+          {
+            "node": "buscarConversaChatwoot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "enviarMensagemTransbordo": {
+      "main": [
+        [
+          {
+            "node": "setarModoHumano",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "adicionarLabelChatwoot": {
+      "main": [
+        [
+          {
+            "node": "desativarLockConversaHandoff",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "reabrirConversaChatwoot": {
+      "main": [
+        [
+          {
+            "node": "criarNotaPrivadaChatwoot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "chamarSubAgendamento": {
+      "main": [
+        [
+          {
+            "node": "formatarRespostaAgendamento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "registrarEvento": {
+      "main": [
+        [
+          {
+            "node": "rotearIntencao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "5022938c-d3b9-459a-baf3-0fc9bb85a45a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "29904fb7452e8c571d1daed834613de10cd7bd3fb8c86085e9fca2451931424c"
+  },
+  "id": "ce15bLOd_CPUiF-eoWvEv",
+  "tags": []
+}

@@ -57,20 +57,25 @@ serve(async (req) => {
       }
     }
 
-    console.log(`🔄 [ORION PROXY v1.1.0] Redirecionando: ${req.method} /${action || '(root)'}`);
+    console.log(`🔄 [ORION PROXY v1.0.0] Redirecionando: ${req.method} /${action || '(root)'}`);
     
     // Obter o body da requisição original
     let body: any = {};
     if (req.method === 'POST') {
       try {
         body = await req.json();
-        // Normalizar body se for array
+        console.log(`📥 [ORION PROXY] Body recebido:`, {
+          is_array: Array.isArray(body),
+          keys: body && typeof body === 'object' ? Object.keys(body) : []
+        });
+        
+        // Normalizar body se for array (n8n às vezes envia [{...}] ao invés de {...})
         if (Array.isArray(body) && body.length > 0) {
           console.log('⚠️ [ORION PROXY] Body recebido como array, extraindo primeiro elemento');
           body = body[0];
         }
       } catch (e) {
-        console.log(`⚠️ [ORION PROXY] Body vazio ou inválido`);
+        console.log(`⚠️ [ORION PROXY] Body vazio ou inválido:`, e.message);
         body = {};
       }
     }
@@ -82,17 +87,23 @@ serve(async (req) => {
       cliente_id: CLIENTE_ID_ORION
     };
 
-    console.log(`📦 [ORION PROXY] Body enriquecido, action: ${action || 'root'}`);
+    console.log(`📦 [ORION PROXY] Body enriquecido com config_id: ${CLINICA_ORION_CONFIG_ID}`);
+    console.log(`📤 [ORION PROXY] Body enriquecido:`, {
+      keys: Object.keys(enrichedBody),
+      has_cliente_id: !!enrichedBody.cliente_id,
+      has_config_id: !!enrichedBody.config_id
+    });
 
     // Construir URL da API principal
     const targetUrl = action ? `${MAIN_API_URL}/${action}` : MAIN_API_URL;
+    console.log(`📡 [ORION PROXY] Chamando: ${targetUrl}`);
 
-    // Fazer a chamada para a API principal repassando x-api-key
+    // Fazer a chamada para a API principal
     const response = await fetch(targetUrl, {
       method: req.method,
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': apiKey!
+        'x-api-key': apiKey
       },
       body: req.method === 'POST' ? JSON.stringify(enrichedBody) : undefined
     });

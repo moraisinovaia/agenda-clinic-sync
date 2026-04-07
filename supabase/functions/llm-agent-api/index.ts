@@ -1,5 +1,16 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import {
+  CheckAvailabilityUseCase,
+  BookAppointmentUseCase,
+  CancelAppointmentUseCase,
+  SupabaseAppointmentRepository,
+  SupabaseScheduleRepository,
+  DynamicConfigBusinessRulesRepository,
+  SlotAlreadyTakenError,
+  AppointmentNotFoundError,
+  InvalidStatusTransitionError,
+} from '../_shared/scheduling-core/index.ts'
 
 // v3.2.0 - Sistema Dinâmico com Logging Estruturado
 const corsHeaders = {
@@ -15,6 +26,8 @@ interface StructuredLog {
   timestamp: string;
   request_id: string;
   cliente_id: string;
+  config_id?: string;
+  medico_id?: string;
   action: string;
   level: 'info' | 'warn' | 'error' | 'debug';
   phase: 'request' | 'processing' | 'response';
@@ -22,6 +35,19 @@ interface StructuredLog {
   success?: boolean;
   error_code?: string;
   metadata?: Record<string, any>;
+}
+
+/**
+ * Normaliza erros de domínio e infraestrutura em códigos estáveis para filtragem.
+ * Erros de domínio têm severidade menor que erros de infraestrutura.
+ */
+function normalizeErrorCode(error: any): { code: string; level: 'warn' | 'error' } {
+  const name = error?.name ?? '';
+  if (name === 'SlotAlreadyTakenError')         return { code: 'SLOT_TAKEN',                level: 'warn' };
+  if (name === 'DuplicateBookingError')          return { code: 'DUPLICATE_BOOKING',         level: 'warn' };
+  if (name === 'AppointmentNotFoundError')       return { code: 'APPOINTMENT_NOT_FOUND',     level: 'warn' };
+  if (name === 'InvalidStatusTransitionError')   return { code: 'INVALID_STATUS_TRANSITION', level: 'warn' };
+  return { code: error?.code || 'INTERNAL_ERROR', level: 'error' };
 }
 
 // Métricas agregadas em memória (reset a cada cold start)
@@ -66,12 +92,16 @@ async function withLogging<T>(
   handler: () => Promise<T>
 ): Promise<T> {
   const startTime = performance.now();
-  
+  const medicoId: string | undefined = body?.medico_id || undefined;
+  const configId: string | undefined = body?.config_id || undefined;
+
   // Log de entrada
   structuredLog({
     timestamp: new Date().toISOString(),
     request_id: requestId,
     cliente_id: clienteId,
+    config_id: configId,
+    medico_id: medicoId,
     action: handlerName,
     level: 'info',
     phase: 'request',
@@ -84,46 +114,48 @@ async function withLogging<T>(
   try {
     const result = await handler();
     const duration = Math.round(performance.now() - startTime);
-    
-    // Atualizar métricas
+
     updateMetrics(handlerName, duration, true);
-    
-    // Log de saída (sucesso)
+
     structuredLog({
       timestamp: new Date().toISOString(),
       request_id: requestId,
       cliente_id: clienteId,
+      config_id: configId,
+      medico_id: medicoId,
       action: handlerName,
       level: 'info',
       phase: 'response',
       duration_ms: duration,
-      success: true
+      success: true,
     });
-    
+
     return result;
   } catch (error: any) {
     const duration = Math.round(performance.now() - startTime);
-    
-    // Atualizar métricas
+    const { code, level } = normalizeErrorCode(error);
+
     updateMetrics(handlerName, duration, false);
-    
-    // Log de saída (erro)
+
     structuredLog({
       timestamp: new Date().toISOString(),
       request_id: requestId,
       cliente_id: clienteId,
+      config_id: configId,
+      medico_id: medicoId,
       action: handlerName,
-      level: 'error',
+      level,
       phase: 'response',
       duration_ms: duration,
       success: false,
-      error_code: error?.code || 'UNKNOWN_ERROR',
+      error_code: code,
       metadata: {
+        error_name: error?.name,
         error_message: error?.message,
-        error_stack: error?.stack?.substring(0, 500)
-      }
+        error_stack: level === 'error' ? error?.stack?.substring(0, 500) : undefined,
+      },
     });
-    
+
     throw error;
   }
 }
@@ -229,6 +261,147 @@ interface DynamicConfig {
 interface ConfigCache {
   data: DynamicConfig;
   clienteId: string;
+}
+
+interface RequestScope {
+  doctorIds: string[];
+  doctorNames: string[];
+  serviceNames: string[];
+}
+
+function normalizeScopeEntries(value: any): string[] {
+  if (!value) return [];
+
+  const rawValues = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split(',')
+      : [];
+
+  return Array.from(new Set(
+    rawValues
+      .map((entry: any) => typeof entry === 'string' ? entry.trim() : '')
+      .filter(Boolean)
+  ));
+}
+
+function normalizeScopeText(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/[_\s-]+/g, ' ')
+    .trim();
+}
+
+function getRequestScope(body: any): RequestScope {
+  return {
+    doctorIds: normalizeScopeEntries(
+      body?.allowed_doctor_ids ??
+      body?.doctor_scope_ids ??
+      body?.doctor_scope ??
+      body?.medico_ids_permitidos
+    ),
+    doctorNames: normalizeScopeEntries(
+      body?.allowed_doctor_names ??
+      body?.doctor_scope_names ??
+      body?.medico_nomes_permitidos
+    ),
+    serviceNames: normalizeScopeEntries(
+      body?.allowed_services ??
+      body?.service_scope ??
+      body?.servicos_permitidos
+    ),
+  };
+}
+
+function hasDoctorScope(scope: RequestScope): boolean {
+  return scope.doctorIds.length > 0 || scope.doctorNames.length > 0;
+}
+
+function hasServiceScope(scope: RequestScope): boolean {
+  return scope.serviceNames.length > 0;
+}
+
+function isDoctorAllowed(
+  medicoId: string | null | undefined,
+  medicoNome: string | null | undefined,
+  scope: RequestScope
+): boolean {
+  if (!hasDoctorScope(scope)) return true;
+
+  if (medicoId && scope.doctorIds.includes(medicoId)) {
+    return true;
+  }
+
+  if (medicoNome && scope.doctorNames.length > 0) {
+    const nomeNormalizado = normalizeScopeText(medicoNome);
+    return scope.doctorNames.some((allowedName) => {
+      const allowedNormalizado = normalizeScopeText(allowedName);
+      return (
+        nomeNormalizado === allowedNormalizado ||
+        nomeNormalizado.includes(allowedNormalizado) ||
+        allowedNormalizado.includes(nomeNormalizado)
+      );
+    });
+  }
+
+  return false;
+}
+
+function isServiceAllowed(servicoNome: string | null | undefined, scope: RequestScope): boolean {
+  if (!hasServiceScope(scope)) return true;
+  if (!servicoNome) return true;
+
+  const servicoNormalizado = normalizeScopeText(servicoNome);
+
+  return scope.serviceNames.some((allowedService) => {
+    const allowedNormalizado = normalizeScopeText(allowedService);
+    return (
+      servicoNormalizado === allowedNormalizado ||
+      servicoNormalizado.includes(allowedNormalizado) ||
+      allowedNormalizado.includes(servicoNormalizado)
+    );
+  });
+}
+
+function filterDoctorsByScope<T extends { id?: string | null; nome?: string | null }>(medicos: T[], scope: RequestScope): T[] {
+  if (!hasDoctorScope(scope)) return medicos;
+  return medicos.filter((medico) => isDoctorAllowed(medico.id, medico.nome, scope));
+}
+
+function isAppointmentAllowed(
+  medicoId: string | null | undefined,
+  medicoNome: string | null | undefined,
+  atendimentoNome: string | null | undefined,
+  scope: RequestScope
+): boolean {
+  return isDoctorAllowed(medicoId, medicoNome, scope) && isServiceAllowed(atendimentoNome, scope);
+}
+
+function getScopeSummary(scope: RequestScope): string {
+  const partes: string[] = [];
+
+  if (hasDoctorScope(scope)) {
+    partes.push(`médicos: ${getDoctorScopeSummary(scope)}`);
+  }
+
+  if (hasServiceScope(scope)) {
+    partes.push(`serviços: ${scope.serviceNames.join(', ')}`);
+  }
+
+  return partes.length > 0 ? partes.join(' | ') : 'canal atual';
+}
+
+function getDoctorScopeSummary(scope: RequestScope): string {
+  if (scope.doctorNames.length > 0) {
+    return scope.doctorNames.join(', ');
+  }
+  if (scope.doctorIds.length > 0) {
+    return `${scope.doctorIds.length} médico(s) autorizado(s)`;
+  }
+  return 'escopo atual';
 }
 
 const CONFIG_CACHE: Map<string, ConfigCache> = new Map();
@@ -1694,29 +1867,28 @@ serve(async (req) => {
     if (method === 'POST') {
       let body = await req.json();
       
+      // 🔍 DEBUG SANITIZADO: preservar observabilidade sem expor payload completo
+      console.log('📥 [DEBUG] Tipo do body:', typeof body);
+      console.log('📥 [DEBUG] É array?:', Array.isArray(body));
+      if (body) {
+        console.log('📥 [DEBUG] Keys do body:', Object.keys(body));
+      }
+      
       // ✅ Normalizar body se for array (n8n às vezes envia [{...}] ao invés de {...})
       if (Array.isArray(body) && body.length > 0) {
-        console.log(`⚠️ [${requestId}] Body recebido como array, extraindo primeiro elemento`);
+        console.log('⚠️ Body recebido como array, extraindo primeiro elemento');
         body = body[0];
       }
       
-      // Log sanitizado: apenas chaves e presença de campos, sem PII
-      structuredLog({
-        timestamp: new Date().toISOString(),
-        request_id: requestId,
-        cliente_id: body.cliente_id || body.config_id || 'pending',
-        action: 'body_received',
-        level: 'info',
-        phase: 'request',
-        metadata: {
-          keys: Object.keys(body || {}),
-          has_paciente_nome: !!body.paciente_nome,
-          has_celular: !!body.celular,
-          has_data_nascimento: !!body.data_nascimento,
-          has_medico: !!(body.medico || body.medico_nome),
-          has_cliente_id: !!body.cliente_id,
-          has_config_id: !!body.config_id
-        }
+      console.log('📤 [DEBUG] Body normalizado:', {
+        is_array: Array.isArray(body),
+        keys: body && typeof body === 'object' ? Object.keys(body) : [],
+        has_cliente_id: !!body?.cliente_id,
+        has_config_id: !!body?.config_id,
+        has_doctor_scope: !!(body?.allowed_doctor_ids || body?.doctor_scope || body?.medico_ids_permitidos),
+        has_medico_id: !!body?.medico_id,
+        has_medico_nome: !!body?.medico_nome,
+        has_paciente_nome: !!body?.paciente_nome,
       });
       
       const rawAction = pathParts[1]; // /llm-agent-api/{action}
@@ -1740,70 +1912,31 @@ serve(async (req) => {
         console.log(`🔄 [I18N] Action mapeada: ${rawAction} → ${action}`);
       }
 
-      // 🔑 MULTI-CLIENTE: Exige cliente_id ou config_id no body
-      // config_id: Identifica configuração específica (usado por filiais como Orion)
-      // cliente_id: Identifica o tenant diretamente
+      // 🔑 MULTI-CLIENTE: requer identificação explícita do tenant
+      // cliente_id: obrigatório para isolar todas as queries dos handlers
+      // config_id: opcional para apontar uma configuração específica (ex: filial)
       const CLIENTE_ID = body.cliente_id;
-      const CONFIG_ID = body.config_id;
-      
-      // 🛡️ P0: Não permitir requisições sem identificação de tenant
-      if (!CLIENTE_ID && !CONFIG_ID) {
-        return new Response(JSON.stringify({
-          success: false,
-          error: 'MISSING_TENANT',
-          message: 'cliente_id ou config_id é obrigatório',
-          codigo_erro: 'TENANT_REQUIRED',
-          api_version: API_VERSION,
-          timestamp: new Date().toISOString()
-        }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
+      const CONFIG_ID = body.config_id; // Se fornecido, usa config específica
+
+      if (!CLIENTE_ID) {
+        return new Response(
+          JSON.stringify({ error: 'cliente_id é obrigatório' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
       
-      structuredLog({
-        timestamp: new Date().toISOString(),
-        request_id: requestId,
-        cliente_id: CLIENTE_ID || 'via_config',
-        action: 'tenant_identified',
-        level: 'info',
-        phase: 'request',
-        metadata: { cliente_id: CLIENTE_ID || null, config_id: CONFIG_ID || null }
-      });
+      // Identificar origem da requisição
+      const isProxy = !!body.cliente_id || !!body.config_id;
+      
+      console.log(`🏥 Cliente ID: ${CLIENTE_ID}${isProxy ? ' [via proxy]' : ''}`);
+      if (CONFIG_ID) {
+        console.log(`🔧 Config ID: ${CONFIG_ID} (filial específica)`);
+      }
 
       // 🆕 CARREGAR CONFIGURAÇÃO DINÂMICA DO BANCO
       // Se config_id foi fornecido, carrega config específica (ex: Orion)
       // Senão, busca primeira config ativa do cliente_id
-      const dynamicConfig = await loadDynamicConfig(supabase, CLIENTE_ID || '', CONFIG_ID);
-      
-      // Se veio apenas config_id sem cliente_id, resolver cliente_id da config
-      let resolvedClienteId = CLIENTE_ID;
-      if (!resolvedClienteId && CONFIG_ID && dynamicConfig?.clinic_info) {
-        // Buscar cliente_id da llm_clinic_config pelo config_id
-        const { data: configRow } = await supabase
-          .from('llm_clinic_config')
-          .select('cliente_id')
-          .eq('id', CONFIG_ID)
-          .single();
-        if (configRow?.cliente_id) {
-          resolvedClienteId = configRow.cliente_id;
-          console.log(`🔧 cliente_id resolvido via config_id: ${resolvedClienteId}`);
-        } else {
-          return new Response(JSON.stringify({
-            success: false,
-            error: 'CONFIG_NOT_FOUND',
-            message: 'config_id fornecido não corresponde a nenhuma configuração válida',
-            api_version: API_VERSION,
-            timestamp: new Date().toISOString()
-          }), {
-            status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          });
-        }
-      }
-      
-      // A partir daqui, CLIENTE_ID_RESOLVED é garantido
-      const CLIENTE_ID_FINAL = resolvedClienteId!;
+      const dynamicConfig = await loadDynamicConfig(supabase, CLIENTE_ID, CONFIG_ID);
       
       // Nome do cliente vem do banco (sem hardcodes)
       const clienteNome = dynamicConfig?.clinic_info?.nome_clinica || 'Cliente';
@@ -1811,58 +1944,58 @@ serve(async (req) => {
       if (dynamicConfig?.clinic_info) {
         console.log(`✅ Config carregada: ${clienteNome}`);
       } else {
-        console.log(`⚠️ Sem configuração no banco para cliente ${CLIENTE_ID_FINAL}`);
+        console.log(`⚠️ Sem configuração no banco para cliente ${CLIENTE_ID}`);
       }
 
       switch (action) {
         case 'schedule':
-          return await withLogging('schedule', CLIENTE_ID_FINAL, requestId, body,
-            () => handleSchedule(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
+          return await withLogging('schedule', CLIENTE_ID, requestId, body,
+            () => handleSchedule(supabase, body, CLIENTE_ID, dynamicConfig));
         case 'check-patient':
-          return await withLogging('check-patient', CLIENTE_ID_FINAL, requestId, body,
-            () => handleCheckPatient(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
+          return await withLogging('check-patient', CLIENTE_ID, requestId, body,
+            () => handleCheckPatient(supabase, body, CLIENTE_ID, dynamicConfig));
         case 'reschedule':
-          return await withLogging('reschedule', CLIENTE_ID_FINAL, requestId, body,
-            () => handleReschedule(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
+          return await withLogging('reschedule', CLIENTE_ID, requestId, body,
+            () => handleReschedule(supabase, body, CLIENTE_ID, dynamicConfig));
         case 'cancel':
-          return await withLogging('cancel', CLIENTE_ID_FINAL, requestId, body,
-            () => handleCancel(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
+          return await withLogging('cancel', CLIENTE_ID, requestId, body,
+            () => handleCancel(supabase, body, CLIENTE_ID, dynamicConfig));
         case 'confirm':
-          return await withLogging('confirm', CLIENTE_ID_FINAL, requestId, body,
-            () => handleConfirm(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
+          return await withLogging('confirm', CLIENTE_ID, requestId, body,
+            () => handleConfirm(supabase, body, CLIENTE_ID, dynamicConfig));
         case 'availability':
-          return await withLogging('availability', CLIENTE_ID_FINAL, requestId, body,
-            () => handleAvailability(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
+          return await withLogging('availability', CLIENTE_ID, requestId, body,
+            () => handleAvailability(supabase, body, CLIENTE_ID, dynamicConfig));
         case 'patient-search':
-          return await withLogging('patient-search', CLIENTE_ID_FINAL, requestId, body,
-            () => handlePatientSearch(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
+          return await withLogging('patient-search', CLIENTE_ID, requestId, body,
+            () => handlePatientSearch(supabase, body, CLIENTE_ID, dynamicConfig));
         case 'list-appointments':
-          return await withLogging('list-appointments', CLIENTE_ID_FINAL, requestId, body,
-            () => handleListAppointments(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
+          return await withLogging('list-appointments', CLIENTE_ID, requestId, body,
+            () => handleListAppointments(supabase, body, CLIENTE_ID, dynamicConfig));
         case 'list-doctors':
-          return await withLogging('list-doctors', CLIENTE_ID_FINAL, requestId, body,
-            () => handleListDoctors(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
+          return await withLogging('list-doctors', CLIENTE_ID, requestId, body,
+            () => handleListDoctors(supabase, body, CLIENTE_ID, dynamicConfig));
         case 'clinic-info':
-          return await withLogging('clinic-info', CLIENTE_ID_FINAL, requestId, body,
-            () => handleClinicInfo(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
+          return await withLogging('clinic-info', CLIENTE_ID, requestId, body,
+            () => handleClinicInfo(supabase, body, CLIENTE_ID, dynamicConfig));
         case 'doctor-schedules':
         case 'horarios-medicos':
-          return await withLogging('doctor-schedules', CLIENTE_ID_FINAL, requestId, body,
-            () => handleDoctorSchedules(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
+          return await withLogging('doctor-schedules', CLIENTE_ID, requestId, body,
+            () => handleDoctorSchedules(supabase, body, CLIENTE_ID, dynamicConfig));
         case 'consultar-fila':
-          return await withLogging('consultar-fila', CLIENTE_ID_FINAL, requestId, body,
-            () => handleConsultarFila(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
+          return await withLogging('consultar-fila', CLIENTE_ID, requestId, body,
+            () => handleConsultarFila(supabase, body, CLIENTE_ID, dynamicConfig));
         case 'adicionar-fila':
-          return await withLogging('adicionar-fila', CLIENTE_ID_FINAL, requestId, body,
-            () => handleAdicionarFila(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
+          return await withLogging('adicionar-fila', CLIENTE_ID, requestId, body,
+            () => handleAdicionarFila(supabase, body, CLIENTE_ID, dynamicConfig));
         case 'responder-fila':
-          return await withLogging('responder-fila', CLIENTE_ID_FINAL, requestId, body,
-            () => handleResponderFila(supabase, body, CLIENTE_ID_FINAL, dynamicConfig));
+          return await withLogging('responder-fila', CLIENTE_ID, requestId, body,
+            () => handleResponderFila(supabase, body, CLIENTE_ID, dynamicConfig));
         default:
           structuredLog({
             timestamp: new Date().toISOString(),
             request_id: requestId,
-            cliente_id: CLIENTE_ID_FINAL,
+            cliente_id: CLIENTE_ID,
             action: action || 'unknown',
             level: 'warn',
             phase: 'response',
@@ -1980,7 +2113,19 @@ function formatarConvenioParaBanco(convenio: string): string {
 // Agendar consulta
 async function handleSchedule(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
-    console.log(`📥 [schedule] Keys recebidas: ${Object.keys(body).join(', ')}`);
+    const scope = getRequestScope(body);
+    console.log('📥 [SCHEDULE] Dados recebidos:', {
+      keys: Object.keys(body || {}),
+      doctor_scope_count: scope.doctorIds.length,
+      has_paciente_nome: !!(body?.paciente_nome || body?.nome_paciente || body?.nome_completo),
+      has_data_nascimento: !!(body?.data_nascimento || body?.paciente_nascimento || body?.birth_date || body?.nascimento),
+      has_celular: !!(body?.celular || body?.mobile || body?.whatsapp || body?.telefone_celular),
+      has_medico_id: !!body?.medico_id,
+      has_medico_nome: !!body?.medico_nome,
+      has_atendimento_nome: !!body?.atendimento_nome,
+      has_data_consulta: !!(body?.data_consulta || body?.data_agendamento || body?.appointment_date || body?.data),
+      has_hora_consulta: !!(body?.hora_consulta || body?.hora_agendamento || body?.appointment_time || body?.hora),
+    });
     
     // 🛡️ SANITIZAÇÃO AUTOMÁTICA: Remover "=" do início dos valores (problema comum do N8N)
     const sanitizeValue = (value: any): any => {
@@ -2007,7 +2152,16 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
     
     // Mapear dados flexivelmente (aceitar diferentes formatos)
     const mappedData = mapSchedulingData(robustSanitizedBody);
-    console.log('🔄 Dados mapeados:', JSON.stringify(mappedData, null, 2));
+    console.log('🔄 [SCHEDULE] Dados mapeados:', {
+      has_paciente_nome: !!mappedData.paciente_nome,
+      data_nascimento: mappedData.data_nascimento,
+      celular_masked: mappedData.celular ? `${mappedData.celular.substring(0, 4)}****` : null,
+      has_medico_nome: !!mappedData.medico_nome,
+      has_medico_id: !!mappedData.medico_id,
+      atendimento_nome: mappedData.atendimento_nome || null,
+      data_consulta: mappedData.data_consulta || null,
+      hora_consulta: mappedData.hora_consulta || null,
+    });
     
     const { 
       paciente_nome, 
@@ -2022,6 +2176,17 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
       hora_consulta, 
       observacoes 
     } = mappedData;
+
+    if (!isServiceAllowed(atendimento_nome, scope)) {
+      return businessErrorResponse({
+        codigo_erro: 'SERVICO_FORA_DO_ESCOPO',
+        mensagem_usuario: `❌ O serviço "${atendimento_nome}" não está disponível neste canal.\n\n✅ Serviços permitidos:\n${scope.serviceNames.map((service) => `   • ${service}`).join('\n')}`,
+        detalhes: {
+          servico_solicitado: atendimento_nome,
+          servicos_permitidos: scope.serviceNames
+        }
+      });
+    }
 
     // Validar campos obrigatórios
     if (!paciente_nome || !data_nascimento || !convenio || !celular || (!medico_nome && !medico_id) || !data_consulta || !hora_consulta) {
@@ -2089,13 +2254,18 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
     console.log('🔍 Iniciando busca de médico...');
     if (medico_id) {
       console.log(`🔍 Buscando médico por ID: ${medico_id}`);
-      const { data, error } = await supabase
+      let medicoQuery = supabase
         .from('medicos')
         .select('id, nome, ativo, crm, rqe')
         .eq('id', medico_id)
         .eq('cliente_id', clienteId)
-        .eq('ativo', true)
-        .single();
+        .eq('ativo', true);
+
+      if (scope.doctorIds.length > 0) {
+        medicoQuery = medicoQuery.in('id', scope.doctorIds);
+      }
+
+      const { data, error } = await medicoQuery.single();
       
       medico = data;
       if (error || !medico) {
@@ -2134,17 +2304,30 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
           detalhes: { erro: medicosError?.message }
         });
       }
+
+      const medicosDentroDoEscopo = filterDoctorsByScope(todosMedicos, scope);
+
+      if (hasDoctorScope(scope) && medicosDentroDoEscopo.length === 0) {
+        return businessErrorResponse({
+          codigo_erro: 'ESCOPO_SEM_MEDICOS',
+          mensagem_usuario: `❌ Este canal não possui médicos autorizados para agendamento.\n\nEscopo atual: ${getDoctorScopeSummary(scope)}.`,
+          detalhes: {
+            doctor_scope_ids: scope.doctorIds,
+            doctor_scope_names: scope.doctorNames
+          }
+        });
+      }
       
       console.log(`📋 Total de médicos ativos encontrados: ${todosMedicos.length}`);
-      console.log(`📋 Médicos disponíveis: ${todosMedicos.map(m => m.nome).join(', ')}`);
+      console.log(`📋 Médicos disponíveis no escopo: ${medicosDentroDoEscopo.map(m => m.nome).join(', ')}`);
       
       // Matching inteligente com fuzzy fallback
       console.log(`🔍 Buscando médico: "${medico_nome}"`);
-      const medicosEncontrados = fuzzyMatchMedicos(medico_nome, todosMedicos);
+      const medicosEncontrados = fuzzyMatchMedicos(medico_nome, medicosDentroDoEscopo);
       
       if (medicosEncontrados.length === 0) {
         console.log(`❌ Nenhum médico encontrado para: "${medico_nome}"`);
-        const sugestoes = todosMedicos.map(m => m.nome).slice(0, 10);
+        const sugestoes = medicosDentroDoEscopo.map(m => m.nome).slice(0, 10);
         return businessErrorResponse({
           codigo_erro: 'MEDICO_NAO_ENCONTRADO',
           mensagem_usuario: `❌ Médico "${medico_nome}" não encontrado.\n\n✅ Médicos disponíveis:\n${sugestoes.map(m => `   • ${m}`).join('\n')}`,
@@ -2164,6 +2347,19 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
           console.log(`✅ [SCHEDULE] Agendamento será criado na agenda: ${medico.nome}`);
         }
       }
+    }
+
+    if (!isDoctorAllowed(medico?.id, medico?.nome, scope)) {
+      return businessErrorResponse({
+        codigo_erro: 'MEDICO_FORA_DO_ESCOPO',
+        mensagem_usuario: `❌ ${medico?.nome || 'Este médico'} não está disponível neste canal.\n\nEscopo atual: ${getDoctorScopeSummary(scope)}.`,
+        detalhes: {
+          medico_id: medico?.id || null,
+          medico_nome: medico?.nome || null,
+          doctor_scope_ids: scope.doctorIds,
+          doctor_scope_names: scope.doctorNames
+        }
+      });
     }
 
     console.log('🔍 Buscando regras de negócio...');
@@ -2811,31 +3007,46 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
       console.log(`🎯 Horário final selecionado: ${horarioFinal} (convertido de "${hora_consulta}")`);
     }
 
-    // Criar agendamento usando a função atômica
+    // Criar agendamento via BookAppointmentUseCase
     console.log(`📅 Criando agendamento para ${paciente_nome} com médico ${medico.nome} às ${horarioFinal}`);
-    
-    const { data: result, error: agendamentoError } = await supabase
-      .rpc('criar_agendamento_atomico_externo', {
-        p_cliente_id: clienteId, // 🆕 Passar cliente_id explicitamente
-        p_nome_completo: paciente_nome.toUpperCase(),
-        p_data_nascimento: data_nascimento,
-        p_convenio: formatarConvenioParaBanco(convenio), // ✅ Formatar para padrão do banco
-        p_telefone: telefone || null,
-        p_celular: celular,
-        p_medico_id: medico.id,
-        p_atendimento_id: atendimento_id,
-        p_data_agendamento: data_consulta,
-        p_hora_agendamento: horarioFinal, // 🆕 Usar horário convertido
-        p_observacoes: (observacoes || 'Agendamento via LLM Agent WhatsApp').toUpperCase(),
-        p_criado_por: 'LLM Agent WhatsApp',
-        p_force_conflict: false
+
+    // Chave heurística de idempotência gerada pelo adapter
+    const idempotencyKey = `${clienteId}:${celular}:${medico.id}:${data_consulta}:${horarioFinal}`;
+    const bookRepo = new SupabaseAppointmentRepository(supabase);
+
+    // result mantém shape { success, agendamento_id, paciente_id } compatível com código legado abaixo
+    let result: any;
+    try {
+      const bookResult = await new BookAppointmentUseCase(bookRepo).execute({
+        patient: {
+          nomeCompleto: paciente_nome.toUpperCase(),
+          dataNascimento: data_nascimento,
+          convenio: formatarConvenioParaBanco(convenio),
+          celular,
+          telefone: telefone || null,
+        },
+        appointment: {
+          medicoId: medico.id,
+          clienteId,
+          atendimentoId: atendimento_id,
+          date: data_consulta,
+          time: horarioFinal,
+          observacoes: (observacoes || 'Agendamento via LLM Agent WhatsApp').toUpperCase(),
+        },
+        meta: {
+          criadoPor: 'LLM Agent WhatsApp',
+          idempotencyKey,
+        },
       });
-
-    console.log('📋 Resultado da função:', { result, agendamentoError });
-
-    if (agendamentoError) {
-      console.error('❌ Erro na função criar_agendamento_atomico_externo:', agendamentoError);
-      return errorResponse(`Erro ao agendar: ${agendamentoError.message}`);
+      result = { success: true, agendamento_id: bookResult.appointmentId, paciente_id: bookResult.patientId };
+      console.log('📋 Agendamento via use case:', { id: bookResult.appointmentId, created: bookResult.created });
+    } catch (err: any) {
+      if (err instanceof SlotAlreadyTakenError) {
+        result = { success: false, error: 'CONFLICT' };
+        console.log('🔄 SlotAlreadyTakenError: iniciando busca minuto a minuto...');
+      } else {
+        throw err;
+      }
     }
 
     if (!result?.success) {
@@ -2900,31 +3111,39 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
             
             console.log(`🔁 Tentativa ${tentativas}: Testando ${horarioTeste}...`);
             
-            // Tentar agendar neste minuto
-            const { data: tentativaResult, error: tentativaError } = await supabase
-              .rpc('criar_agendamento_atomico_externo', {
-                p_cliente_id: clienteId,
-                p_nome_completo: paciente_nome.toUpperCase(),
-                p_data_nascimento: data_nascimento,
-                p_convenio: formatarConvenioParaBanco(convenio), // ✅ Formatar para padrão do banco
-                p_telefone: telefone || null,
-                p_celular: celular,
-                p_medico_id: medico.id,
-                p_atendimento_id: atendimento_id,
-                p_data_agendamento: data_consulta,
-                p_hora_agendamento: horarioTeste,
-                p_observacoes: (observacoes || 'Agendamento via LLM Agent WhatsApp').toUpperCase(),
-                p_criado_por: 'LLM Agent WhatsApp',
-                p_force_conflict: false
+            // Tentar agendar neste minuto via repository (idempotencyKey do horário original)
+            let tentativaResult: any;
+            try {
+              const tentativa = await bookRepo.create({
+                clienteId,
+                nomeCompleto: paciente_nome.toUpperCase(),
+                dataNascimento: data_nascimento,
+                convenio: formatarConvenioParaBanco(convenio),
+                telefone: telefone || null,
+                celular,
+                medicoId: medico.id,
+                atendimentoId: atendimento_id,
+                date: data_consulta,
+                time: horarioTeste,
+                observacoes: (observacoes || 'Agendamento via LLM Agent WhatsApp').toUpperCase(),
+                criadoPor: 'LLM Agent WhatsApp',
+                idempotencyKey,
               });
-            
-            // Verificar resultado
-            if (tentativaError) {
-              console.error(`❌ Erro inesperado em ${horarioTeste}:`, tentativaError);
-              // Continuar tentando outros horários mesmo com erro
-              continue;
+              tentativaResult = { success: true, agendamento_id: tentativa.appointmentId, paciente_id: tentativa.patientId };
+            } catch (tentativaErr: any) {
+              if (tentativaErr instanceof SlotAlreadyTakenError) {
+                console.log(`⏭️  ${horarioTeste} ocupado, tentando próximo...`);
+                continue;
+              }
+              // Outro tipo de erro (convênio, regra de negócio, etc.) - parar o loop
+              console.error(`⚠️ Erro não-conflito em ${horarioTeste}:`, tentativaErr.message);
+              return businessErrorResponse({
+                codigo_erro: 'ERRO_AGENDAMENTO',
+                mensagem_usuario: tentativaErr.message || `Erro ao tentar agendar: ${tentativaErr.message}`,
+                detalhes: { horario: horarioTeste }
+              });
             }
-            
+
             if (tentativaResult?.success) {
               // ✅ SUCESSO! Encontramos um horário livre
               console.log(`✅ SUCESSO! Agendado em ${horarioTeste} após ${tentativas} tentativas`);
@@ -2932,20 +3151,6 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
               resultadoFinal = tentativaResult;
               break;
             }
-            
-            if (tentativaResult?.error === 'CONFLICT') {
-              // Horário ocupado, continuar para o próximo
-              console.log(`⏭️  ${horarioTeste} ocupado, tentando próximo...`);
-              continue;
-            }
-            
-            // Outro tipo de erro (idade, convênio, etc.) - parar o loop
-            console.error(`⚠️ Erro não-conflito em ${horarioTeste}:`, tentativaResult?.error);
-            return businessErrorResponse({
-              codigo_erro: tentativaResult?.error || 'ERRO_DESCONHECIDO',
-              mensagem_usuario: tentativaResult?.message || `Erro ao tentar agendar: ${tentativaResult?.error}`,
-              detalhes: { horario: horarioTeste }
-            });
           }
           
           // Verificar se conseguiu alocar
@@ -3358,6 +3563,7 @@ function consolidatePatients(patients: any[], lastConvenios: Record<string, stri
 // Listar agendamentos de um médico em uma data específica
 async function handleListAppointments(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
+    const scope = getRequestScope(body);
     const { medico_nome, data } = body;
 
     if (!medico_nome || !data) {
@@ -3381,6 +3587,7 @@ async function handleListAppointments(supabase: any, body: any, clienteId: strin
     // Chamar função do banco que retorna TODOS os médicos que correspondem à busca
     const { data: agendamentos, error } = await supabase
       .rpc('listar_agendamentos_medico_dia', {
+        p_cliente_id: clienteId,
         p_nome_medico: medico_nome,
         p_data: dataFormatada
       });
@@ -3390,7 +3597,16 @@ async function handleListAppointments(supabase: any, body: any, clienteId: strin
       return errorResponse(`Erro ao buscar agendamentos: ${error.message}`);
     }
 
-    if (!agendamentos || agendamentos.length === 0) {
+    const agendamentosFiltrados = (agendamentos || []).filter((agendamento: any) =>
+      isAppointmentAllowed(
+        agendamento.medico_id || agendamento.id_medico,
+        agendamento.medico_nome || agendamento.nome_medico || agendamento['Médico'],
+        agendamento.atendimento_nome || agendamento.tipo_atendimento || agendamento['Tipo de atendimento'],
+        scope
+      )
+    );
+
+    if (agendamentosFiltrados.length === 0) {
       const mensagem = `Não foi encontrado nenhum agendamento para o Dr. ${medico_nome} em ${dataFormatada}.`;
       return successResponse({
         encontrado: false,
@@ -3403,12 +3619,12 @@ async function handleListAppointments(supabase: any, body: any, clienteId: strin
     }
 
     // Agrupar por período e tipo de atendimento
-    const manha = agendamentos.filter((a: any) => a.periodo === 'manhã');
-    const tarde = agendamentos.filter((a: any) => a.periodo === 'tarde');
+    const manha = agendamentosFiltrados.filter((a: any) => a.periodo === 'manhã');
+    const tarde = agendamentosFiltrados.filter((a: any) => a.periodo === 'tarde');
     
     // Contar tipos
     const tiposCount: Record<string, number> = {};
-    agendamentos.forEach((a: any) => {
+    agendamentosFiltrados.forEach((a: any) => {
       tiposCount[a.tipo_atendimento] = (tiposCount[a.tipo_atendimento] || 0) + 1;
     });
 
@@ -3417,19 +3633,19 @@ async function handleListAppointments(supabase: any, body: any, clienteId: strin
       .map(([tipo, qtd]) => `${qtd} ${tipo}${qtd > 1 ? 's' : ''}`)
       .join(', ');
     
-    const mensagem = `Encontrei ${agendamentos.length} agendamento(s) para o Dr. ${medico_nome} em ${dataFormatada}:\n\n` +
+    const mensagem = `Encontrei ${agendamentosFiltrados.length} agendamento(s) para o Dr. ${medico_nome} em ${dataFormatada}:\n\n` +
       `📊 Resumo: ${tiposLista}\n\n` +
       (manha.length > 0 ? `☀️ Manhã: ${manha.length} agendamento(s)\n` : '') +
       (tarde.length > 0 ? `🌙 Tarde: ${tarde.length} agendamento(s)\n` : '');
 
-    console.log(`✅ Encontrados ${agendamentos.length} agendamentos (${manha.length} manhã, ${tarde.length} tarde)`);
+    console.log(`✅ Encontrados ${agendamentosFiltrados.length} agendamentos (${manha.length} manhã, ${tarde.length} tarde)`);
 
     return successResponse({
       encontrado: true,
-      agendamentos: agendamentos,
-      total: agendamentos.length,
+      agendamentos: agendamentosFiltrados,
+      total: agendamentosFiltrados.length,
       resumo: {
-        total: agendamentos.length,
+        total: agendamentosFiltrados.length,
         manha: manha.length,
         tarde: tarde.length,
         tipos: tiposCount
@@ -3448,6 +3664,7 @@ async function handleListAppointments(supabase: any, body: any, clienteId: strin
 // Verificar se paciente tem consultas agendadas
 async function handleCheckPatient(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
+    const scope = getRequestScope(body);
     // Sanitizar dados de busca
     const celularRaw = sanitizarCampoOpcional(body.celular);
     const dataNascimentoNormalizada = normalizarDataNascimento(
@@ -3620,7 +3837,7 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string, c
       nomes: pacientesConsolidados.map(p => p.nome_completo)
     });
 
-    const { data: agendamentos, error: agendamentoError } = await supabase
+    let agendamentosQuery = supabase
       .from('agendamentos')
       .select(`
         id,
@@ -3639,12 +3856,27 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string, c
       .gte('data_agendamento', new Date().toISOString().split('T')[0])
       .order('data_agendamento', { ascending: true });
 
+    if (scope.doctorIds.length > 0) {
+      agendamentosQuery = agendamentosQuery.in('medico_id', scope.doctorIds);
+    }
+
+    const { data: agendamentos, error: agendamentoError } = await agendamentosQuery;
+
+    const agendamentosFiltrados = (agendamentos || []).filter((agendamento: any) =>
+      isAppointmentAllowed(
+        agendamento.medico_id,
+        agendamento.medicos?.nome,
+        agendamento.atendimentos?.nome,
+        scope
+      )
+    );
+
     if (agendamentoError) {
       return errorResponse(`Erro ao buscar agendamentos: ${agendamentoError.message}`);
     }
 
     // Se não tem agendamentos FUTUROS, informar que existe mas sem consultas futuras
-    if (!agendamentos || agendamentos.length === 0) {
+    if (agendamentosFiltrados.length === 0) {
       console.log('ℹ️ Paciente existe mas não tem agendamentos futuros');
       return successResponse({
         encontrado: true,
@@ -3657,7 +3889,7 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string, c
     }
 
     // 📋 PASSO 3: Montar resposta com agendamentos futuros formatados contextualmente
-    const consultas = agendamentos.map((a: any) => {
+    const consultas = agendamentosFiltrados.map((a: any) => {
       const consultaBase = {
         id: a.id,
         paciente_nome: a.pacientes?.nome_completo,
@@ -3699,8 +3931,15 @@ async function handleCheckPatient(supabase: any, body: any, clienteId: string, c
 // Remarcar consulta
 async function handleReschedule(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
+    const scope = getRequestScope(body);
     console.log('🔄 Iniciando remarcação de consulta');
-    console.log(`📥 [reschedule] Keys recebidas: ${Object.keys(body).join(', ')}, agendamento_id: ${body.agendamento_id || 'N/A'}`);
+    console.log('📥 [RESCHEDULE] Dados recebidos:', {
+      keys: Object.keys(body || {}),
+      has_agendamento_id: !!body?.agendamento_id,
+      has_nova_data: !!body?.nova_data,
+      has_nova_hora: !!body?.nova_hora,
+      has_observacoes: !!body?.observacoes,
+    });
     console.log('🏥 Cliente ID:', clienteId);
     
     // 🆕 Sanitizar campos opcionais antes de processar
@@ -3723,7 +3962,12 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
     if (camposFaltando.length > 0) {
       const erro = `Campos obrigatórios faltando: ${camposFaltando.join(', ')}`;
       console.error('❌ Validação falhou:', erro);
-      console.error('📦 Body recebido:', body);
+      console.error('📦 [RESCHEDULE] Payload inválido:', {
+        keys: Object.keys(body || {}),
+        has_agendamento_id: !!body?.agendamento_id,
+        has_nova_data: !!body?.nova_data,
+        has_nova_hora: !!body?.nova_hora,
+      });
       return errorResponse(erro);
     }
     
@@ -3737,11 +3981,13 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
       .select(`
         id,
         medico_id,
+        atendimento_id,
         data_agendamento,
         hora_agendamento,
         status,
         pacientes(nome_completo),
-        medicos(nome)
+        medicos(nome),
+        atendimentos(nome)
       `)
       .eq('id', agendamento_id)
       .eq('cliente_id', clienteId)
@@ -3755,6 +4001,19 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
     if (!agendamento) {
       console.error('❌ Agendamento não encontrado');
       return errorResponse('Agendamento não encontrado');
+    }
+
+    if (!isAppointmentAllowed(agendamento.medico_id, agendamento.medicos?.nome, agendamento.atendimentos?.nome, scope)) {
+      return businessErrorResponse({
+        codigo_erro: 'AGENDAMENTO_FORA_DO_ESCOPO',
+        mensagem_usuario: `❌ Este agendamento não pertence ao escopo deste canal.\n\nEscopo atual: ${getScopeSummary(scope)}.`,
+        detalhes: {
+          agendamento_id,
+          medico_id: agendamento.medico_id,
+          medico_nome: agendamento.medicos?.nome || null,
+          atendimento_nome: agendamento.atendimentos?.nome || null
+        }
+      });
     }
 
     console.log('✅ Agendamento encontrado:', {
@@ -3828,7 +4087,8 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
     const { error: updateError } = await supabase
       .from('agendamentos')
       .update(updateData)
-      .eq('id', agendamento_id);
+      .eq('id', agendamento_id)
+      .eq('cliente_id', clienteId);
 
     if (updateError) {
       console.error('❌ Erro ao atualizar:', updateError);
@@ -3938,183 +4198,19 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
   }
 }
 
-// ============= WEBHOOK FILA DE ESPERA =============
-async function dispararWebhookFilaEspera(
-  supabase: any,
-  config: DynamicConfig | null,
-  clienteId: string,
-  medicoId: string,
-  atendimentoId: string,
-  notifData: {
-    notif_id: string;
-    fila_id: string;
-    paciente_nome: string;
-    paciente_celular: string;
-    medico_nome: string;
-    atendimento_nome: string;
-    data_agendamento: string;
-    hora_agendamento: string;
-    tempo_limite: string;
-  }
-): Promise<void> {
-  try {
-    console.log(`📤 [WEBHOOK-FILA] Disparando webhook para paciente: ${notifData.paciente_nome}`);
-
-    // 1. Determinar tipo de agenda
-    let regras = getMedicoRules(config, medicoId, BUSINESS_RULES.medicos[medicoId]);
-    
-    // Fallback: buscar direto do banco se não encontrou no cache
-    if (!regras) {
-      try {
-        console.log(`🔍 [WEBHOOK-FILA] Regras não encontradas no cache para médico ${medicoId}, buscando no banco...`);
-        const { data: brData } = await supabase
-          .from('business_rules')
-          .select('config')
-          .eq('medico_id', medicoId)
-          .eq('cliente_id', clienteId)
-          .eq('ativo', true)
-          .maybeSingle();
-        if (brData?.config) {
-          regras = brData.config;
-          console.log(`✅ [WEBHOOK-FILA] Regras encontradas no banco para médico ${medicoId}`);
-        }
-      } catch (e) {
-        console.warn('⚠️ [WEBHOOK-FILA] Erro ao buscar business_rules fallback:', e?.message);
-      }
-    }
-    
-    let tipo_agenda = 'hora_marcada';
-    let horario_inicio: string | null = null;
-    let horario_fim: string | null = null;
-
-    if (regras) {
-      // Determinar dia da semana (0=domingo, 6=sábado)
-      const dataObj = new Date(notifData.data_agendamento + 'T12:00:00');
-      const diaSemana = dataObj.getDay();
-      const diasNomes = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
-      const diaNome = diasNomes[diaSemana];
-
-      // Determinar período baseado na hora
-      const horaNum = parseInt(notifData.hora_agendamento.split(':')[0], 10);
-      const periodoNome = horaNum < 12 ? 'manha' : 'tarde';
-
-      // Buscar serviço e período correspondente
-      const servicos = regras.servicos || {};
-      let periodoConfig: any = null;
-      let servicoConfig: any = null;
-
-      // Tentar encontrar pelo atendimento_nome ou usar o primeiro serviço
-      for (const [_nomeServico, sConfig] of Object.entries(servicos) as any[]) {
-        if (sConfig?.periodos) {
-          for (const [pKey, pConfig] of Object.entries(sConfig.periodos) as any[]) {
-            const pKeyNorm = pKey.toLowerCase();
-            if (pKeyNorm.includes(diaNome) && pKeyNorm.includes(periodoNome)) {
-              periodoConfig = pConfig;
-              servicoConfig = sConfig;
-              break;
-            }
-          }
-          if (periodoConfig) break;
-
-          // Fallback: buscar pelo dia sem período específico
-          for (const [pKey, pConfig] of Object.entries(sConfig.periodos) as any[]) {
-            const pKeyNorm = pKey.toLowerCase();
-            if (pKeyNorm.includes(diaNome)) {
-              periodoConfig = pConfig;
-              servicoConfig = sConfig;
-              break;
-            }
-          }
-          if (periodoConfig) break;
-        }
-      }
-
-      // Fallback final: match apenas pelo período (chaves simples como "manha", "tarde")
-      if (!periodoConfig) {
-        for (const [_nomeServico, sConfig] of Object.entries(servicos) as any[]) {
-          if (sConfig?.periodos?.[periodoNome]) {
-            periodoConfig = sConfig.periodos[periodoNome];
-            servicoConfig = sConfig;
-            console.log(`🔍 [WEBHOOK-FILA] Fallback: match por período simples "${periodoNome}"`);
-            break;
-          }
-        }
-      }
-
-      // Determinar tipo efetivo
-      const tipoEfetivo = getTipoAgendamentoEfetivo(servicoConfig, regras);
-
-      if (tipoEfetivo === 'ordem_chegada') {
-        tipo_agenda = 'ordem_chegada';
-        if (periodoConfig) {
-          horario_inicio = periodoConfig.inicio || periodoConfig.horario_inicio || null;
-          horario_fim = periodoConfig.fim || periodoConfig.horario_fim || null;
-        }
-      } else {
-        tipo_agenda = 'hora_marcada';
-      }
-    }
-
-    // 2. Buscar evolution_instance_name
-    let evolution_instance_name: string | null = null;
-    try {
-      const { data: configRow } = await supabase
-        .from('configuracoes_clinica')
-        .select('valor')
-        .eq('cliente_id', clienteId)
-        .eq('chave', 'evolution_instance_name')
-        .eq('ativo', true)
-        .maybeSingle();
-      evolution_instance_name = configRow?.valor || null;
-    } catch (e) {
-      console.warn('⚠️ [WEBHOOK-FILA] Erro ao buscar evolution_instance_name (ignorado)');
-    }
-
-    // 3. Montar payload e disparar
-    const payload = {
-      notif_id: notifData.notif_id,
-      fila_id: notifData.fila_id,
-      cliente_id: clienteId,
-      paciente_nome: notifData.paciente_nome,
-      paciente_celular: notifData.paciente_celular,
-      medico_nome: notifData.medico_nome,
-      atendimento_nome: notifData.atendimento_nome,
-      data_agendamento: notifData.data_agendamento,
-      hora_agendamento: notifData.hora_agendamento,
-      tempo_limite: notifData.tempo_limite,
-      tipo_agenda,
-      horario_inicio,
-      horario_fim,
-      evolution_instance_name
-    };
-
-    console.log(`📤 [WEBHOOK-FILA] Enviando notificação para paciente_id: ${notifData.paciente_id}, medico: ${notifData.medico_nome}`);
-
-    const webhookResponse = await fetch(
-      'https://n8n-medical.inovaia-automacao.com.br/webhook/fila-espera-notificar',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      }
-    );
-
-    console.log(`📤 [WEBHOOK-FILA] Resposta: ${webhookResponse.status} ${webhookResponse.statusText}`);
-  } catch (err: any) {
-    console.error(`⚠️ [WEBHOOK-FILA] Erro ao disparar webhook (ignorado):`, err?.message);
-  }
-}
 
 // Cancelar consulta
 async function handleCancel(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
+    const scope = getRequestScope(body);
     const { agendamento_id, motivo } = body;
 
     if (!agendamento_id) {
       return errorResponse('Campo obrigatório: agendamento_id');
     }
 
-    // Verificar se agendamento existe COM filtro de cliente
+    // Buscar dados completos (joins) para escopo check e shape de resposta
+    // — separado do findById do use case que não carrega joins
     const { data: agendamento, error: checkError } = await supabase
       .from('agendamentos')
       .select(`
@@ -4122,7 +4218,6 @@ async function handleCancel(supabase: any, body: any, clienteId: string, config:
         status,
         data_agendamento,
         hora_agendamento,
-        observacoes,
         medico_id,
         atendimento_id,
         pacientes(nome_completo, celular),
@@ -4131,32 +4226,43 @@ async function handleCancel(supabase: any, body: any, clienteId: string, config:
       `)
       .eq('id', agendamento_id)
       .eq('cliente_id', clienteId)
+      .is('excluido_em', null)
       .single();
 
     if (checkError || !agendamento) {
       return errorResponse('Agendamento não encontrado');
     }
 
-    if (agendamento.status === 'cancelado') {
-      return errorResponse('Consulta já está cancelada');
+    if (!isAppointmentAllowed(agendamento.medico_id, agendamento.medicos?.nome, agendamento.atendimentos?.nome, scope)) {
+      return businessErrorResponse({
+        codigo_erro: 'AGENDAMENTO_FORA_DO_ESCOPO',
+        mensagem_usuario: `❌ Este agendamento não pertence ao escopo deste canal.\n\nEscopo atual: ${getScopeSummary(scope)}.`,
+        detalhes: {
+          agendamento_id,
+          medico_id: agendamento.medico_id,
+          medico_nome: agendamento.medicos?.nome || null,
+          atendimento_nome: agendamento.atendimentos?.nome || null
+        }
+      });
     }
 
-    // Cancelar agendamento
-    const observacoes_cancelamento = motivo 
-      ? `${agendamento.observacoes || ''}\nCancelado via LLM Agent: ${motivo}`.trim()
-      : `${agendamento.observacoes || ''}\nCancelado via LLM Agent`.trim();
-
-    const { error: updateError } = await supabase
-      .from('agendamentos')
-      .update({
-        status: 'cancelado',
-        observacoes: observacoes_cancelamento,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', agendamento_id);
-
-    if (updateError) {
-      return errorResponse(`Erro ao cancelar: ${updateError.message}`);
+    // Cancelar via use case — valida transição e persiste
+    const cancelRepo = new SupabaseAppointmentRepository(supabase);
+    try {
+      await new CancelAppointmentUseCase(cancelRepo).execute({
+        appointmentId: agendamento_id,
+        clienteId,
+        motivo,
+        canceladoPor: 'LLM Agent WhatsApp',
+      });
+    } catch (err: any) {
+      if (err instanceof AppointmentNotFoundError) {
+        return errorResponse('Agendamento não encontrado');
+      }
+      if (err instanceof InvalidStatusTransitionError) {
+        return errorResponse('Consulta já está cancelada');
+      }
+      throw err;
     }
 
     // ============= LER RESULTADO DO TRIGGER PG (FILA DE ESPERA) =============
@@ -4208,22 +4314,7 @@ async function handleCancel(supabase: any, body: any, clienteId: string, config:
           atendimento_id: fe.atendimento_id
         };
 
-        // Disparar webhook para n8n (WhatsApp) - nunca bloqueia
-        try {
-          await dispararWebhookFilaEspera(supabase, config, clienteId, agendamento.medico_id, fe.atendimento_id, {
-            notif_id: notifCriada.id,
-            fila_id: notifCriada.fila_id,
-            paciente_nome: fe.pacientes?.nome_completo,
-            paciente_celular: fe.pacientes?.celular,
-            medico_nome: agendamento.medicos?.nome,
-            atendimento_nome: (agendamento as any).atendimentos?.nome || '',
-            data_agendamento: notifCriada.data_agendamento,
-            hora_agendamento: notifCriada.hora_agendamento,
-            tempo_limite: notifCriada.tempo_limite
-          });
-        } catch (webhookErr: any) {
-          console.error('⚠️ [WEBHOOK-FILA] Erro ao disparar webhook (ignorado):', webhookErr?.message);
-        }
+        // Webhook disparado pelo trigger PG (trigger_notificar_fila_webhook) no INSERT acima
       } else {
         console.log('ℹ️ [FILA-ESPERA] Trigger PG não encontrou candidato na fila');
       }
@@ -4343,6 +4434,7 @@ async function handleConsultarFila(supabase: any, body: any, clienteId: string, 
 // Adicionar paciente à fila de espera
 async function handleAdicionarFila(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
+    const scope = getRequestScope(body);
     // Normalização: aceita snake_case (padrão) e camelCase (retrocompatibilidade)
     const nomeCompleto = body.nome_completo || body.nomeCompleto;
     const dataNascimento = body.data_nascimento || body.dataNascimento;
@@ -4360,6 +4452,17 @@ async function handleAdicionarFila(supabase: any, body: any, clienteId: string, 
     // Validações — aceita UUID ou nome para médico e atendimento
     if (!nomeCompleto || (!medicoId && !medicoNome) || (!atendimentoId && !atendimentoNome) || !dataPreferida) {
       return errorResponse('Campos obrigatórios: nome_completo, (medico_id ou medico_nome), (atendimento_id ou atendimento_nome), data_preferida');
+    }
+
+    if (!isServiceAllowed(atendimentoNome, scope)) {
+      return businessErrorResponse({
+        codigo_erro: 'SERVICO_FORA_DO_ESCOPO',
+        mensagem_usuario: `❌ O serviço "${atendimentoNome}" não está disponível neste canal.\n\n✅ Serviços permitidos:\n${scope.serviceNames.map((service) => `   • ${service}`).join('\n')}`,
+        detalhes: {
+          servico_solicitado: atendimentoNome,
+          servicos_permitidos: scope.serviceNames
+        }
+      });
     }
 
     // ============= RESOLVER MÉDICO POR NOME (se não veio UUID) =============
@@ -4384,7 +4487,7 @@ async function handleAdicionarFila(supabase: any, body: any, clienteId: string, 
           .trim();
 
       const nomeNorm = normalizarNomeFuzzy(medicoNome);
-      const medicosEncontrados = todosMedicos.filter((m: any) => {
+      const medicosEncontrados = filterDoctorsByScope(todosMedicos, scope).filter((m: any) => {
         const nomeComplNorm = normalizarNomeFuzzy(m.nome);
         return nomeComplNorm.includes(nomeNorm) || nomeNorm.includes(nomeComplNorm);
       });
@@ -4554,6 +4657,7 @@ async function handleResponderFila(supabase: any, body: any, clienteId: string, 
       .from('fila_notificacoes')
       .select('id, fila_id, tempo_limite, resposta_paciente, status_envio')
       .eq('id', notif_id)
+      .eq('cliente_id', clienteId)
       .single();
 
     if (notifErr || !notif) {
@@ -4578,7 +4682,7 @@ async function handleResponderFila(supabase: any, body: any, clienteId: string, 
     const { data: filaItem, error: filaError } = await supabase
       .from('fila_espera')
       .select(`
-        id, status, paciente_id, medico_id, atendimento_id,
+        id, status, paciente_id, medico_id, atendimento_id, tentativas_contato,
         pacientes(id, nome_completo, celular, data_nascimento, convenio),
         medicos(id, nome),
         atendimentos(id, nome)
@@ -4639,7 +4743,8 @@ async function handleResponderFila(supabase: any, body: any, clienteId: string, 
           agendamento_id: result.agendamento_id,
           updated_at: new Date().toISOString()
         })
-        .eq('id', fila_id);
+        .eq('id', fila_id)
+        .eq('cliente_id', clienteId);
 
       // Atualizar notificação
       await supabase
@@ -4649,6 +4754,7 @@ async function handleResponderFila(supabase: any, body: any, clienteId: string, 
           status_envio: 'respondido'
         })
         .eq('id', notif_id)
+        .eq('cliente_id', clienteId)
         .eq('resposta_paciente', 'sem_resposta');
 
       console.log(`✅ [RESPONDER-FILA] Agendamento criado: ${result.agendamento_id}`);
@@ -4677,7 +4783,8 @@ async function handleResponderFila(supabase: any, body: any, clienteId: string, 
           tentativas_contato: (filaItem.tentativas_contato || 0) + 1,
           updated_at: new Date().toISOString()
         })
-        .eq('id', fila_id);
+        .eq('id', fila_id)
+        .eq('cliente_id', clienteId);
 
       // Atualizar notificação
       const respostaNotif = respostaNormalizada === 'TIMEOUT' ? 'sem_resposta' : 'recusado';
@@ -4688,6 +4795,7 @@ async function handleResponderFila(supabase: any, body: any, clienteId: string, 
           status_envio: 'respondido'
         })
         .eq('id', notif_id)
+        .eq('cliente_id', clienteId)
         .eq('resposta_paciente', 'sem_resposta');
 
       // ============= BUSCAR PRÓXIMO CANDIDATO (CASCATA) =============
@@ -4723,7 +4831,8 @@ async function handleResponderFila(supabase: any, body: any, clienteId: string, 
               tentativas_contato: 1,
               updated_at: new Date().toISOString()
             })
-            .eq('id', proximoCandidato.id);
+            .eq('id', proximoCandidato.id)
+            .eq('cliente_id', clienteId);
 
           // Criar notificação para o próximo
           const tempoLimite = new Date();
@@ -4759,22 +4868,7 @@ async function handleResponderFila(supabase: any, body: any, clienteId: string, 
             tempo_limite: tempoLimite.toISOString()
           };
 
-          // Disparar webhook para n8n (WhatsApp) - nunca bloqueia
-          try {
-            await dispararWebhookFilaEspera(supabase, config, clienteId, filaItem.medico_id, filaItem.atendimento_id, {
-              notif_id: notifNova?.id || '',
-              fila_id: proximoCandidato.id,
-              paciente_nome: proximoCandidato.pacientes?.nome_completo,
-              paciente_celular: proximoCandidato.pacientes?.celular,
-              medico_nome: filaItem.medicos?.nome,
-              atendimento_nome: filaItem.atendimentos?.nome || '',
-              data_agendamento,
-              hora_agendamento,
-              tempo_limite: tempoLimite.toISOString()
-            });
-          } catch (webhookErr: any) {
-            console.error('⚠️ [WEBHOOK-FILA] Erro ao disparar webhook cascata (ignorado):', webhookErr?.message);
-          }
+          // Webhook disparado pelo trigger PG (trigger_notificar_fila_webhook) no INSERT acima
 
           console.log(`📱 [RESPONDER-FILA] Próximo notificado: ${proximoNotificado.paciente_nome}`);
         } else {
@@ -4811,6 +4905,7 @@ async function handleResponderFila(supabase: any, body: any, clienteId: string, 
 // Confirmar consulta
 async function handleConfirm(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
+    const scope = getRequestScope(body);
     const { agendamento_id, observacoes } = body;
 
     // Validação
@@ -4828,8 +4923,10 @@ async function handleConfirm(supabase: any, body: any, clienteId: string, config
         hora_agendamento,
         observacoes,
         medico_id,
+        atendimento_id,
         pacientes(nome_completo, celular),
-        medicos(nome)
+        medicos(nome),
+        atendimentos(nome)
       `)
       .eq('id', agendamento_id)
       .eq('cliente_id', clienteId)
@@ -4837,6 +4934,19 @@ async function handleConfirm(supabase: any, body: any, clienteId: string, config
 
     if (checkError || !agendamento) {
       return errorResponse('Agendamento não encontrado');
+    }
+
+    if (!isAppointmentAllowed(agendamento.medico_id, agendamento.medicos?.nome, agendamento.atendimentos?.nome, scope)) {
+      return businessErrorResponse({
+        codigo_erro: 'AGENDAMENTO_FORA_DO_ESCOPO',
+        mensagem_usuario: `❌ Este agendamento não pertence ao escopo deste canal.\n\nEscopo atual: ${getScopeSummary(scope)}.`,
+        detalhes: {
+          agendamento_id,
+          medico_id: agendamento.medico_id,
+          medico_nome: agendamento.medicos?.nome || null,
+          atendimento_nome: agendamento.atendimentos?.nome || null
+        }
+      });
     }
 
     // Validar status atual
@@ -4884,7 +4994,8 @@ async function handleConfirm(supabase: any, body: any, clienteId: string, config
         confirmado_por: 'whatsapp_automatico',
         updated_at: new Date().toISOString()
       })
-      .eq('id', agendamento_id);
+      .eq('id', agendamento_id)
+      .eq('cliente_id', clienteId);
 
     if (updateError) {
       return errorResponse(`Erro ao confirmar: ${updateError.message}`);
@@ -4985,7 +5096,18 @@ async function handleConfirm(supabase: any, body: any, clienteId: string, config
 // Verificar disponibilidade de horários
 async function handleAvailability(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
-    console.log(`📅 [availability] Keys recebidas: ${Object.keys(body).join(', ')}, medico: ${body.medico_nome || body.medico_id || 'N/A'}`);
+    const scope = getRequestScope(body);
+    console.log('📅 [AVAILABILITY] Dados recebidos:', {
+      keys: Object.keys(body || {}),
+      doctor_scope_count: scope.doctorIds.length,
+      has_medico_nome: !!body?.medico_nome,
+      has_medico_id: !!body?.medico_id,
+      has_data_consulta: !!body?.data_consulta,
+      has_atendimento_nome: !!body?.atendimento_nome,
+      has_mensagem_original: !!body?.mensagem_original,
+      dias_busca: body?.dias_busca ?? null,
+      quantidade_dias: body?.quantidade_dias ?? null,
+    });
     
     // 🛡️ SANITIZAÇÃO AUTOMÁTICA: Remover "=" do início dos valores (problema comum do N8N)
     const sanitizeValue = (value: any): any => {
@@ -5124,6 +5246,17 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       atendimento_nome, 
       dias_busca 
     });
+
+    if (!isServiceAllowed(atendimento_nome, scope)) {
+      return businessErrorResponse({
+        codigo_erro: 'SERVICO_FORA_DO_ESCOPO',
+        mensagem_usuario: `❌ O serviço "${atendimento_nome}" não está disponível neste canal.\n\n✅ Serviços permitidos:\n${scope.serviceNames.map((service) => `   • ${service}`).join('\n')}`,
+        detalhes: {
+          servico_solicitado: atendimento_nome,
+          servicos_permitidos: scope.serviceNames
+        }
+      });
+    }
     
     // 💬 LOGGING: Mensagem original do paciente (se fornecida)
     if (mensagem_original) {
@@ -5155,13 +5288,18 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
     let medico;
     if (medico_id) {
       // Busca por ID (exata)
-      const { data, error } = await supabase
+      let medicoQuery = supabase
         .from('medicos')
         .select('id, nome, ativo, crm, rqe')
         .eq('id', medico_id)
         .eq('cliente_id', clienteId)
-        .eq('ativo', true)
-        .single();
+        .eq('ativo', true);
+
+      if (scope.doctorIds.length > 0) {
+        medicoQuery = medicoQuery.in('id', scope.doctorIds);
+      }
+
+      const { data, error } = await medicoQuery.single();
       
       medico = data;
       if (error || !medico) {
@@ -5201,14 +5339,27 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           detalhes: {}
         });
       }
+
+      const medicosDentroDoEscopo = filterDoctorsByScope(todosMedicos, scope);
+
+      if (hasDoctorScope(scope) && medicosDentroDoEscopo.length === 0) {
+        return businessErrorResponse({
+          codigo_erro: 'ESCOPO_SEM_MEDICOS',
+          mensagem_usuario: `❌ Este canal não possui médicos autorizados para consulta de disponibilidade.\n\nEscopo atual: ${getDoctorScopeSummary(scope)}.`,
+          detalhes: {
+            doctor_scope_ids: scope.doctorIds,
+            doctor_scope_names: scope.doctorNames
+          }
+        });
+      }
       
       // Matching inteligente com fuzzy fallback
       console.log(`🔍 Buscando médico: "${medico_nome}"`);
-      const medicosEncontrados = fuzzyMatchMedicos(medico_nome, todosMedicos);
+      const medicosEncontrados = fuzzyMatchMedicos(medico_nome, medicosDentroDoEscopo);
       
       if (medicosEncontrados.length === 0) {
         console.error(`❌ Nenhum médico encontrado para: "${medico_nome}"`);
-        const sugestoes = todosMedicos.map(m => m.nome).slice(0, 10);
+        const sugestoes = medicosDentroDoEscopo.map(m => m.nome).slice(0, 10);
         return businessErrorResponse({
           codigo_erro: 'MEDICO_NAO_ENCONTRADO',
           mensagem_usuario: `❌ Médico "${medico_nome}" não encontrado.\n\n✅ Médicos disponíveis:\n${sugestoes.map(m => `   • ${m}`).join('\n')}\n\n💡 Escolha um dos médicos disponíveis acima.`,
@@ -5249,6 +5400,19 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
           ativo: true
         };
       }
+    }
+
+    if (!isDoctorAllowed(medico?.id, medico?.nome, scope)) {
+      return businessErrorResponse({
+        codigo_erro: 'MEDICO_FORA_DO_ESCOPO',
+        mensagem_usuario: `❌ ${medico?.nome || 'Este médico'} não está disponível neste canal.\n\nEscopo atual: ${getDoctorScopeSummary(scope)}.`,
+        detalhes: {
+          medico_id: medico?.id || null,
+          medico_nome: medico?.nome || null,
+          doctor_scope_ids: scope.doctorIds,
+          doctor_scope_names: scope.doctorNames
+        }
+      });
     }
     
     // 🔍 BUSCAR REGRAS DE NEGÓCIO E CONFIGURAÇÃO DO SERVIÇO (declarar uma única vez)
@@ -5479,28 +5643,27 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
       
       // 🎫 LÓGICA PARA ORDEM DE CHEGADA (todos os médicos)
       console.log('🎫 Buscando períodos disponíveis (ordem de chegada)...');
-      
-      for (let diasAdiantados = 0; diasAdiantados <= quantidade_dias; diasAdiantados++) {
-        const dataCheck = new Date(dataInicial + 'T00:00:00');
-        dataCheck.setDate(dataCheck.getDate() + diasAdiantados);
-        const dataCheckStr = dataCheck.toISOString().split('T')[0];
-        const diaSemanaNum = dataCheck.getDay();
-        
-        // Pular finais de semana
-        if (diaSemanaNum === 0 || diaSemanaNum === 6) continue;
-        
-        // 🗓️ Filtrar por dia da semana preferido
-        if (diaPreferido && diaSemanaNum !== diaPreferido) {
-          continue; // Pular dias que não correspondem ao preferido
-        }
-        
-        // Verificar se dia permitido pelo serviço
-        if (servico?.dias_semana && !servico.dias_semana.includes(diaSemanaNum)) {
-          continue;
-        }
-        
-        // 🆕 VERIFICAR LIMITES COMPARTILHADOS PARA SERVIÇOS ESPECIAIS
-        if (servicoKey && servico && (servico.compartilha_limite_com || servico.limite_proprio)) {
+
+      const hasSharedLimits = !!(servicoKey && servico && (servico.compartilha_limite_com || servico.limite_proprio));
+
+      if (hasSharedLimits) {
+        // 🔒 Rota especial: serviços com limites compartilhados/sublimites (bypass use case)
+        for (let diasAdiantados = 0; diasAdiantados <= quantidade_dias; diasAdiantados++) {
+          const dataCheck = new Date(dataInicial + 'T00:00:00');
+          dataCheck.setDate(dataCheck.getDate() + diasAdiantados);
+          const dataCheckStr = dataCheck.toISOString().split('T')[0];
+          const diaSemanaNum = dataCheck.getDay();
+
+          // Pular finais de semana
+          if (diaSemanaNum === 0 || diaSemanaNum === 6) continue;
+
+          // Filtrar por dia da semana preferido
+          if (diaPreferido && diaSemanaNum !== diaPreferido) continue;
+
+          // Verificar se dia permitido pelo serviço
+          if (servico?.dias_semana && !servico.dias_semana.includes(diaSemanaNum)) continue;
+
+          // Calcular vagas com limites compartilhados/sublimites
           const vagasComLimites = await calcularVagasDisponiveisComLimites(
             supabase,
             clienteId,
@@ -5510,126 +5673,75 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
             servico,
             regras
           );
-          
+
           if (vagasComLimites <= 0) {
             console.log(`⏭️ Pulando ${dataCheckStr} - limites compartilhados/sublimite atingidos`);
             continue;
           }
-          
-          // Se passou na verificação de limites, adicionar com as vagas calculadas
+
           const diasSemana = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
           proximasDatas.push({
             data: dataCheckStr,
             dia_semana: diasSemana[diaSemanaNum],
             periodos: [{
-              periodo: 'Manhã', // Ligadura é manhã
+              periodo: 'Manhã',
               horario_distribuicao: '07:00 às 12:00',
               vagas_disponiveis: vagasComLimites,
               limite_total: servico.limite_proprio || 1,
               tipo: servico.tipo_agendamento || 'hora_marcada'
             }]
           });
-          
+
           const datasNecessarias = periodoPreferido ? 5 : 3;
           if (proximasDatas.length >= datasNecessarias) break;
-          continue; // Pular lógica padrão de períodos
         }
-        
-        const periodosDisponiveis = [];
-        
-      // ☀️ VERIFICAR MANHÃ (pular se paciente quer apenas tarde)
-      if (servico?.periodos?.manha && periodoPreferido !== 'tarde') {
-          const manha = servico.periodos.manha;
-          const diaPermitido = !manha.dias_especificos || manha.dias_especificos.includes(diaSemanaNum);
-          
-          if (diaPermitido) {
-            const { data: agendados } = await supabase
-              .from('agendamentos')
-              .select('id')
-              .eq('medico_id', medico.id)
-              .eq('data_agendamento', dataCheckStr)
-              .eq('cliente_id', clienteId)
-              .gte('hora_agendamento', manha.inicio)
-              .lte('hora_agendamento', manha.fim)
-              .gte('data_agendamento', getMinimumBookingDate(config))
-              .is('excluido_em', null)
-              .in('status', ['agendado', 'confirmado']);
-            
-            const ocupadas = agendados?.length || 0;
-            const disponiveis = manha.limite - ocupadas;
-            
-            if (disponiveis > 0) {
-              // 🆕 USAR ordem_chegada_config se disponível
-              const horarioDistribuicao = ordemChegadaConfig 
-                ? `${ordemChegadaConfig.hora_chegada_inicio} às ${ordemChegadaConfig.hora_chegada_fim}` 
-                : (manha.distribuicao_fichas || `${manha.inicio} às ${manha.fim}`);
-              
-              periodosDisponiveis.push({
-                periodo: 'Manhã',
-                horario_distribuicao: horarioDistribuicao,
-                vagas_disponiveis: disponiveis,
-                limite_total: manha.limite,
-                tipo: regras?.tipo_agendamento || 'ordem_chegada',
-                mensagem_ordem_chegada: ordemChegadaConfig?.mensagem || null,
-                hora_atendimento_inicio: ordemChegadaConfig?.hora_atendimento_inicio || null
-              });
-            }
-          }
-        }
-        
-      // 🌙 VERIFICAR TARDE (pular se paciente quer apenas manhã)
-      if (servico?.periodos?.tarde && periodoPreferido !== 'manha') {
-          const tarde = servico.periodos.tarde;
-          const diaPermitido = !tarde.dias_especificos || tarde.dias_especificos.includes(diaSemanaNum);
-          
-          if (diaPermitido) {
-            const { data: agendados } = await supabase
-              .from('agendamentos')
-              .select('id')
-              .eq('medico_id', medico.id)
-              .eq('data_agendamento', dataCheckStr)
-              .eq('cliente_id', clienteId)
-              .gte('hora_agendamento', tarde.inicio)
-              .lte('hora_agendamento', tarde.fim)
-              .gte('data_agendamento', getMinimumBookingDate(config))
-              .is('excluido_em', null)
-              .in('status', ['agendado', 'confirmado']);
-            
-            const ocupadas = agendados?.length || 0;
-            const disponiveis = tarde.limite - ocupadas;
-            
-            if (disponiveis > 0) {
-              // 🆕 USAR ordem_chegada_config se disponível
-              const horarioDistribuicao = ordemChegadaConfig 
-                ? `${ordemChegadaConfig.hora_chegada_inicio} às ${ordemChegadaConfig.hora_chegada_fim}` 
-                : (tarde.distribuicao_fichas || `${tarde.inicio} às ${tarde.fim}`);
-              
-              periodosDisponiveis.push({
-                periodo: 'Tarde',
-                horario_distribuicao: horarioDistribuicao,
-                vagas_disponiveis: disponiveis,
-                limite_total: tarde.limite,
-                tipo: regras?.tipo_agendamento || 'ordem_chegada',
-                mensagem_ordem_chegada: ordemChegadaConfig?.mensagem || null,
-                hora_atendimento_inicio: ordemChegadaConfig?.hora_atendimento_inicio || null
-              });
-            }
-          }
-        }
-        
-        // Adicionar data se tiver períodos disponíveis
-        if (periodosDisponiveis.length > 0) {
-          const diasSemana = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+      } else {
+        // 🆕 Rota normal: usar CheckAvailabilityUseCase via ScheduleRepository
+        const { diasDisponiveis } = await new CheckAvailabilityUseCase(
+          new SupabaseAppointmentRepository(supabase),
+          new SupabaseScheduleRepository(
+            new DynamicConfigBusinessRulesRepository(config)
+          ),
+        ).execute({
+          medicoId: medico.id,
+          clienteId,
+          dataInicio: dataInicial,
+          quantidadeDias: quantidade_dias,
+          periodoPreferido,
+          diaPreferido,
+          servicoKey: servicoKey ?? undefined,
+          minimumDate: getMinimumBookingDate(config),
+          datasNecessarias: periodoPreferido ? 5 : 3,
+        });
+
+        // Adapter mapeia domínio → formato de apresentação do canal
+        const DIA_SEMANA_PT = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+        const PERIODO_LABEL: Record<string, string> = { manha: 'Manhã', tarde: 'Tarde' };
+        const BOOKING_MODE_LEGADO: Record<string, string> = { capacity_window: 'ordem_chegada', time_slot: 'hora_marcada' };
+
+        for (const day of diasDisponiveis) {
           proximasDatas.push({
-            data: dataCheckStr,
-            dia_semana: diasSemana[diaSemanaNum],
-            periodos: periodosDisponiveis
+            data: day.date,
+            dia_semana: DIA_SEMANA_PT[day.weekday],
+            periodos: day.windows.map(w => {
+              const horarioDistribuicao = ordemChegadaConfig
+                ? `${ordemChegadaConfig.hora_chegada_inicio} às ${ordemChegadaConfig.hora_chegada_fim}`
+                : (servico?.periodos?.[w.periodKey]?.distribuicao_fichas ?? `${w.start} às ${w.end}`);
+
+              return {
+                periodo: PERIODO_LABEL[w.periodKey] ?? w.periodKey,
+                horario_distribuicao: horarioDistribuicao,
+                vagas_disponiveis: w.available,
+                limite_total: w.capacity,
+                tipo: BOOKING_MODE_LEGADO[w.bookingMode] ?? w.bookingMode,
+                mensagem_ordem_chegada: ordemChegadaConfig?.mensagem ?? null,
+                hora_atendimento_inicio: ordemChegadaConfig?.hora_atendimento_inicio ?? null,
+              };
+            }),
           });
         }
-        
-        // Encontrar datas suficientes (mais quando há período específico)
-        const datasNecessarias = periodoPreferido ? 5 : 3;
-        if (proximasDatas.length >= datasNecessarias) break;
+
+        console.log(`📊 CheckAvailabilityUseCase: ${diasDisponiveis.length} datas encontradas`);
       }
       
       // 🔄 RETRY AUTOMÁTICO: Se não encontrou vagas e ainda não buscou 100 dias, ampliar
@@ -7103,6 +7215,7 @@ async function buscarProximasDatasComPeriodo(
  */
 async function handleDoctorSchedules(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
+    const scope = getRequestScope(body);
     console.log('📥 [DOCTOR-SCHEDULES] Buscando horários para cliente:', clienteId);
     
     const { medico_nome, servico_nome } = body;
@@ -7114,6 +7227,10 @@ async function handleDoctorSchedules(supabase: any, body: any, clienteId: string
       .eq('cliente_id', clienteId)
       .eq('ativo', true)
       .order('nome');
+
+    if (scope.doctorIds.length > 0) {
+      query = query.in('id', scope.doctorIds);
+    }
     
     // Filtrar por nome do médico se fornecido
     if (medico_nome) {
@@ -7128,7 +7245,9 @@ async function handleDoctorSchedules(supabase: any, body: any, clienteId: string
       return errorResponse(`Erro ao buscar médicos: ${error.message}`);
     }
     
-    if (!medicos || medicos.length === 0) {
+    const medicosFiltrados = filterDoctorsByScope(medicos || [], scope);
+
+    if (!medicosFiltrados || medicosFiltrados.length === 0) {
       return successResponse({
         success: true,
         medicos: [],
@@ -7185,7 +7304,7 @@ async function handleDoctorSchedules(supabase: any, body: any, clienteId: string
     const medicosComHorarios = [];
     const mensagensWhatsApp: string[] = [];
     
-    for (const medico of medicos) {
+    for (const medico of medicosFiltrados) {
       // Obter business_rules do médico
       const regras = config?.business_rules?.[medico.id]?.config;
       
@@ -7336,14 +7455,21 @@ async function handleDoctorSchedules(supabase: any, body: any, clienteId: string
 
 async function handleListDoctors(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
+    const scope = getRequestScope(body);
     console.log('📥 [LIST-DOCTORS] Buscando médicos para cliente:', clienteId);
     
-    const { data: medicos, error } = await supabase
+    let query = supabase
       .from('medicos')
       .select('id, nome, especialidade, convenios_aceitos, horarios, ativo, crm, rqe')
       .eq('cliente_id', clienteId)
       .eq('ativo', true)
       .order('nome');
+
+    if (scope.doctorIds.length > 0) {
+      query = query.in('id', scope.doctorIds);
+    }
+
+    const { data: medicos, error } = await query;
 
     if (error) {
       console.error('❌ Erro ao buscar médicos:', error);
@@ -7351,7 +7477,9 @@ async function handleListDoctors(supabase: any, body: any, clienteId: string, co
     }
 
     // Enriquecer com business_rules se disponíveis
-    const medicosEnriquecidos = medicos?.map((medico: any) => {
+    const medicosNoEscopo = filterDoctorsByScope(medicos || [], scope);
+
+    const medicosEnriquecidos = medicosNoEscopo.map((medico: any) => {
       const rules = config?.business_rules?.[medico.id]?.config;
       return {
         id: medico.id,
@@ -7364,7 +7492,7 @@ async function handleListDoctors(supabase: any, body: any, clienteId: string, co
         crm: medico.crm,
         rqe: medico.rqe
       };
-    }) || [];
+    });
 
     console.log(`✅ [LIST-DOCTORS] ${medicosEnriquecidos.length} médico(s) encontrado(s)`);
 

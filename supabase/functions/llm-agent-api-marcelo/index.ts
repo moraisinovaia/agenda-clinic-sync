@@ -84,6 +84,29 @@ const CONFIG_ID_MARCELO = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 // Cliente ID do IPADO (para acessar mesmos pacientes/agendamentos)
 const CLIENTE_ID_IPADO = '2bfb98b5-ae41-4f96-8ba7-acc797c22054';
 
+// Escopo explícito do canal exclusivo do Dr. Marcelo
+const MARCELO_DOCTOR_SCOPE_IDS = [
+  '1e110923-50df-46ff-a57a-29d88e372900', // Dr. Marcelo D'Carli
+  'e6453b94-840d-4adf-ab0f-fc22be7cd7f5', // MAPA - Dr. Marcelo
+  '9d5d0e63-098b-4282-aa03-db3c7e012579', // Teste Ergométrico - Dr. Marcelo
+];
+
+const MARCELO_DOCTOR_SCOPE_NAMES = [
+  "Dr. Marcelo D'Carli",
+  'MAPA - Dr. Marcelo',
+  'Teste Ergométrico - Dr. Marcelo',
+];
+
+const MARCELO_ALLOWED_SERVICES = [
+  'Consulta Cardiológica',
+  'Retorno Cardiológico',
+  'ECG (Eletrocardiograma)',
+  'Teste Ergométrico',
+  'MAPA 24H',
+  'MRPA',
+  'Parecer Cardiológico',
+];
+
 const MAIN_API_URL = 'https://qxlvzbvzajibdtlzngdy.supabase.co/functions/v1/llm-agent-api';
 
 serve(async (req) => {
@@ -117,7 +140,9 @@ serve(async (req) => {
       }
     }
 
-    console.log(`🔄 [MARCELO PROXY v1.2.0] Redirecionando: ${req.method} /${action || '(root)'}`);
+    console.log(`🔄 [MARCELO PROXY v1.1.0] Redirecionando: ${req.method} /${action || '(root)'}`);
+    console.log(`📍 [MARCELO PROXY] Config ID: ${CONFIG_ID_MARCELO}`);
+    console.log(`🏥 [MARCELO PROXY] Cliente ID (IPADO): ${CLIENTE_ID_IPADO}`);
     
     // Parse body se POST
     let body: any = {};
@@ -138,20 +163,27 @@ serve(async (req) => {
     const enrichedBody = {
       ...body,
       config_id: CONFIG_ID_MARCELO,
-      cliente_id: CLIENTE_ID_IPADO
+      cliente_id: CLIENTE_ID_IPADO,
+      allowed_doctor_ids: MARCELO_DOCTOR_SCOPE_IDS,
+      allowed_doctor_names: MARCELO_DOCTOR_SCOPE_NAMES,
+      allowed_services: MARCELO_ALLOWED_SERVICES,
+      channel_label: 'dr_marcelo_exclusivo',
     };
 
-    console.log(`📦 [MARCELO PROXY] Body enriquecido, action: ${action || 'root'}`);
+    console.log(`📦 [MARCELO PROXY] Body enriquecido com config_id, cliente_id e escopo`);
+    console.log(`📝 [MARCELO PROXY] Ação: ${action || 'root'}, Medico solicitado: ${body.medico || body.medico_nome || 'não especificado'}`);
 
     // Construir URL de destino
     const targetUrl = action ? `${MAIN_API_URL}/${action}` : MAIN_API_URL;
 
-    // Fazer requisição para API principal repassando x-api-key
+    console.log(`🎯 [MARCELO PROXY] Chamando: ${targetUrl}`);
+
+    // Fazer requisição para API principal
     const response = await fetch(targetUrl, {
       method: req.method,
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': apiKey!
+        'x-api-key': apiKey
       },
       body: req.method === 'POST' ? JSON.stringify(enrichedBody) : undefined
     });

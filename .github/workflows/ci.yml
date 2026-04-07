@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Type check & unit tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: deno check — scheduling-core
+        working-directory: supabase/functions/_shared/scheduling-core
+        run: deno check index.ts
+
+      - name: deno lint — scheduling-core
+        working-directory: supabase/functions/_shared/scheduling-core
+        run: deno lint
+
+      - name: Unit tests — scheduling-core
+        working-directory: supabase/functions/_shared/scheduling-core
+        run: deno task test

@@ -1,0 +1,2061 @@
+{
+  "name": "MLTC_WH__RecepcaoMensagemWhatsapp_v3.0",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "configuracoes_clinica",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "evolution_instance_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.body.data.instanceId }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        4176,
+        4416
+      ],
+      "id": "5f8eb64c-1a60-4a0b-856d-304a1958bdc6",
+      "name": "buscarClinicaSupabase",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "MzdUmafjf6IsjMwD",
+          "name": "supabase-geral"
+        }
+      },
+      "notes": "Busca configuração da clínica na tabela configuracoes_clinica do Supabase.\nInput: dados do webhook\nOutput: {clinica_id, configurações}"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "recp",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        3728,
+        4400
+      ],
+      "id": "94076ab5-2cfe-4cce-a5fa-410160f939a5",
+      "name": "receberMensagemWebhook",
+      "webhookId": "2af651ba-fc73-4890-8319-b74d51708bb0",
+      "notes": "Webhook POST da Evolution API.\nInput: body.data (mensagem WhatsApp), body.server_url, body.instance\nOutput: dados brutos da mensagem"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "4f3b7c78-b02c-4cb8-b8c3-abd27b50cd6f",
+              "leftValue": "={{ $node[\"buscarClinicaSupabase\"].json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        4384,
+        4416
+      ],
+      "id": "91fa5924-bd66-4e3d-bd7f-9e04a0776e6a",
+      "name": "checarClinicaExiste",
+      "notes": "Verifica se o Supabase retornou dados da clínica.\nTrue: clínica encontrada → segue fluxo\nFalse: clínica não encontrada → notifica e para"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('receberMensagemWebhook').item.json.body.server_url }}/message/sendText/{{ $('receberMensagemWebhook').item.json.body.instance }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('receberMensagemWebhook').item.json.body.apikey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('receberMensagemWebhook').item.json.body.data.key.remoteJid.replace('@s.whatsapp.net', '').replace('@lid', '') }}\",\n  \"text\": \"Olá! No momento, este serviço de agendamento automático está em manutenção para esta clínica. Por favor, tente novamente mais tarde ou ligue diretamente para a recepção.\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        5200,
+        4336
+      ],
+      "id": "a2e2226b-517c-41cb-9765-4bbcd4af7fd1",
+      "name": "notificarPacienteClinicaNaoEncontrada",
+      "notes": "Envia mensagem ao paciente informando que a clínica não foi encontrada.\nAPI: Evolution API sendText"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('receberMensagemWebhook').item.json.body.server_url }}/message/sendText/{{ $('receberMensagemWebhook').item.json.body.instance }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('receberMensagemWebhook').item.json.body.apikey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"5587991311991\",\n  \"text\": \"🚨 ALERTA DE SISTEMA - INOVAIA MEDICAL\\n\\nErro: Tentativa de acesso de instância não cadastrada.\\n\\n📌 Instância: {{ $('receberMensagemWebhook').item.json.body.instance }}\\n🆔 ID: {{ $('receberMensagemWebhook').item.json.body.data.instanceId }}\\n👤 Remetente: {{ $('receberMensagemWebhook').item.json.body.data.key.remoteJid.replace('@s.whatsapp.net', '').replace('@lid', '') }}\\n📅 Data/Hora: {{ $now.setZone('America/Recife').toFormat('dd/LL/yyyy HH:mm') }}\\n\\n⛔ Ação: Fluxo interrompido automaticamente.\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        5808,
+        4352
+      ],
+      "id": "b662514e-f4a1-49f8-a6c8-25e2a7c4d6e9",
+      "name": "notificarAdminClinicaNaoEncontrada",
+      "notes": "Envia mensagem ao admin notificando clínica não encontrada.\nAPI: Evolution API sendText"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        4304,
+        4144
+      ],
+      "id": "d72962a7-a0c6-4733-ba2e-7a8c0c4b4a30",
+      "name": "pararFluxoSemClinica"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "59d41093-01a2-410b-a0a2-01df3ffbe9d7",
+              "leftValue": "={{ $json.body.data.key.fromMe }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3968,
+        4400
+      ],
+      "id": "7c966756-8abc-4ea4-8cb7-f5173242bcb3",
+      "name": "checarMensagemPropria",
+      "notes": "Filtra mensagens enviadas pelo próprio bot (fromMe).\nTrue: mensagem própria → ignora\nFalse: mensagem de paciente → segue fluxo"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "88e7a93d-18bc-44c6-88dd-0480dc5c128d",
+              "name": "nome",
+              "value": "={{ $('receberMensagemWebhook').item.json.body.data.pushName }}",
+              "type": "string"
+            },
+            {
+              "id": "47c9100b-b6f0-4fe2-9f39-972aec715e0c",
+              "name": "numero",
+              "value": "={{ $('receberMensagemWebhook').item.json.body.data.key.remoteJid.split('@')[0] }}",
+              "type": "string"
+            },
+            {
+              "id": "f4329046-ab6e-4d24-9476-cd3226db2f1e",
+              "name": "tipo_de_mensagem",
+              "value": "={{ $('checarMensagemPropria').item.json.body.data.messageType }}",
+              "type": "string"
+            },
+            {
+              "id": "c27bcb70-c425-4c65-a9bb-b7fbbfcca40d",
+              "name": "mensagem",
+              "value": "={{ \n  $('receberMensagemWebhook').item.json.body.data.message?.conversation\n  || $('receberMensagemWebhook').item.json.body.data.message?.extendedTextMessage?.text\n  || ''\n}}",
+              "type": "string"
+            },
+            {
+              "id": "93aa5c38-85cb-4770-a3e3-040c4ce5d855",
+              "name": "id_mensagem",
+              "value": "={{ $node[\"receberMensagemWebhook\"].json.body.data.key.id }}",
+              "type": "string"
+            },
+            {
+              "id": "2b7a12b8-a1dd-4512-894a-c4aa69555c7c",
+              "name": "instancia",
+              "value": "={{ $('receberMensagemWebhook').item.json.body.instance }}",
+              "type": "string"
+            },
+            {
+              "id": "6de8a668-89e5-4dc6-b00a-5959956581fb",
+              "name": "url_instancia",
+              "value": "={{ $('checarMensagemPropria').item.json.body.server_url }}",
+              "type": "string"
+            },
+            {
+              "id": "a65ecb6f-d9ce-4945-9eb4-fc13a9e3d35d",
+              "name": "Timestamp",
+              "value": "={{ $('checarMensagemPropria').item.json.body.data.messageTimestamp }}",
+              "type": "number"
+            },
+            {
+              "id": "74a4b3f5-e18d-456c-820e-f9b8136d1149",
+              "name": "nome_clinica",
+              "value": "={{ $('buscarClinicaSupabase').first().json.nome_clinica }}",
+              "type": "string"
+            },
+            {
+              "id": "aae592a2-ed53-4692-afde-4268b12b5b1a",
+              "name": "clinica_id",
+              "value": "={{ $('buscarClinicaSupabase').first().json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "f7dd7f96-3f96-4f9c-a0d6-6700bb19b3fd",
+              "name": "agendamento_api_base_url",
+              "value": "={{ $('buscarClinicaSupabase').first().json.agendamento_api_base_url || 'https://qxlvzbvzajibdtlzngdy.supabase.co/functions/v1/llm-agent-api' }}",
+              "type": "string"
+            },
+            {
+              "id": "d4c0d1ec-7a0e-4b8a-a4f9-8f2ac87b73a2",
+              "name": "allowed_services_json",
+              "value": "={{ (() => {\n  const clinic = $('buscarClinicaSupabase').first().json || {};\n  const candidates = [\n    clinic.allowed_services,\n    clinic.servicos_permitidos,\n    clinic.agendamento_allowed_services,\n    clinic.allowed_services_json,\n    clinic.servicos_permitidos_json\n  ];\n  const resolved = candidates.find((value) => value !== undefined && value !== null && value !== '');\n  if (Array.isArray(resolved)) return JSON.stringify(resolved);\n  if (typeof resolved === 'string') return resolved.trim() || '[]';\n  return '[]';\n})() }}",
+              "type": "string"
+            },
+            {
+              "id": "a31577a7-f951-4812-af58-bb149925d8f9",
+              "name": "apikey",
+              "value": "={{ $('receberMensagemWebhook').item.json.body.apikey }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        4960,
+        4176
+      ],
+      "id": "26e3c4f3-eabc-42d4-95c5-f137f1697acc",
+      "name": "formatarDadosCredenciais",
+      "notes": "Estrutura dados essenciais para uso nos nodos seguintes.\nOutput: {nome, numero, mensagem, server_url, instancia, apikey, clinica_id}"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "0zvTZI93Maj32QibIqDSa",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/0zvTZI93Maj32QibIqDSa",
+          "cachedResultName": "MLTC_WF__TriagemMidia_v3.0"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "tipo_de_mensagem": "={{ $('formatarDadosCredenciais').item.json.tipo_de_mensagem }}",
+            "remoteJid": "={{ $('formatarDadosCredenciais').item.json.numero }}",
+            "key_id": "={{ $('receberMensagemWebhook').item.json.body.data.key.id }}",
+            "server_url": "={{ $('receberMensagemWebhook').item.json.body.server_url }}",
+            "instance": "={{ $('receberMensagemWebhook').item.json.body.instance }}",
+            "apikey": "={{ $('receberMensagemWebhook').item.json.body.apikey }}",
+            "numero": "={{ $json.numero }}",
+            "mensagem": "={{ $json.mensagem }}",
+            "messageTimestamp": "={{ DateTime.fromSeconds($('receberMensagemWebhook').item.json.body.data.messageTimestamp).setZone('America/Sao_Paulo').toFormat('dd/MM/yyyy HH:mm:ss') }}",
+            "caption": "={{ $('receberMensagemWebhook').item.json.body.data.message.imageMessage.caption || $('receberMensagemWebhook').item.json.body.data.message.documentMessage.caption || '' }}",
+            "document_title": "={{ $('receberMensagemWebhook').item.json.body.data.message.documentMessage.title || '' }}",
+            "document_fileName": "={{ $('receberMensagemWebhook').item.json.body.data.message.documentMessage.fileName || '' }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "tipo_de_mensagem",
+              "displayName": "tipo_de_mensagem",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "remoteJid",
+              "displayName": "remoteJid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "key_id",
+              "displayName": "key_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "server_url",
+              "displayName": "server_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "instance",
+              "displayName": "instance",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "apikey",
+              "displayName": "apikey",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "numero",
+              "displayName": "numero",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "mensagem",
+              "displayName": "mensagem",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "messageTimestamp",
+              "displayName": "messageTimestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "caption",
+              "displayName": "caption",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "document_title",
+              "displayName": "document_title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "document_fileName",
+              "displayName": "document_fileName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        6112,
+        4000
+      ],
+      "id": "911093a1-bd6c-47ca-943c-6c8f9039d6a3",
+      "name": "chamarSubTriagemMidia",
+      "notes": "Chama sub-workflow de triagem de mídia para processar áudio, imagem, etc.\nInput: dados da mensagem\nOutput: {tipo_de_mensagem, conteudo_processado}"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('formatarDadosCredenciais').item.json.tipo_de_mensagem }}",
+                    "rightValue": "conversation|extendedTextMessage",
+                    "operator": {
+                      "type": "string",
+                      "operation": "regex"
+                    },
+                    "id": "1c188535-b9e1-4b8e-9ac2-e780cc13f999"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "texto"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "413e9ba1-a63a-4a7f-bc2d-55dbd3dd6dd8",
+                    "leftValue": "={{ $('formatarDadosCredenciais').item.json.tipo_de_mensagem }}",
+                    "rightValue": "audioMessage|imageMessage|documentMessage",
+                    "operator": {
+                      "type": "string",
+                      "operation": "regex"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "áudio"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "fallback"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        5776,
+        3872
+      ],
+      "id": "dc6ce5ad-bc50-49c7-b6c8-77c167e536ab",
+      "name": "rotearTipoMensagem",
+      "notes": "Roteia com base no tipo de mensagem retornado pela triagem.\nTexto/áudio → segue processamento\nMídia não suportada → notifica paciente"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        6208,
+        4288
+      ],
+      "id": "2bda9ea4-f991-480e-a1fa-8484f1170a93",
+      "name": "pararFluxoMidiaNaoSuportada"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('receberMensagemWebhook').item.json.body.server_url }}/message/sendText/{{ $('receberMensagemWebhook').item.json.body.instance }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('receberMensagemWebhook').item.json.body.apikey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('receberMensagemWebhook').item.json.body.data.key.remoteJid.replace('@s.whatsapp.net', '').replace('@lid', '') }}\",\n  \"text\": \"Desculpe não consigo interpretar ou responder a conteúdos enviados neste formato. Poderia descrevê-lo em texto, áudio, PDF ou imagem para que eu possa ajudar melhor?\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        5984,
+        4176
+      ],
+      "id": "ff51dd87-569f-4e78-ab50-177a3419ff71",
+      "name": "notificarPacienteMidiaNaoSuportada",
+      "notes": "Envia mensagem ao paciente informando que o tipo de mídia não é suportado.\nAPI: Evolution API sendText"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "656b2601-c1b6-4505-87f9-8b216dfeb6e0",
+              "name": "remoteJid",
+              "value": "={{ $item(\"0\").$node[\"formatarDadosCredenciais\"].json[\"numero\"] }}",
+              "type": "string"
+            },
+            {
+              "id": "224366c3-cd3b-4563-8716-04be9ae667e9",
+              "name": "chatInput",
+              "value": "={{ $item(\"0\").$node[\"formatarDadosCredenciais\"].json[\"mensagem\"] }}",
+              "type": "string"
+            },
+            {
+              "id": "5e719b09-91fb-4649-986b-22ad6e5aaafa",
+              "name": "id",
+              "value": "={{ $node[\"receberMensagemWebhook\"].json.body.data.key.id }}",
+              "type": "string"
+            },
+            {
+              "id": "f5eafa62-fee4-4a40-9960-0677e32fa1c1",
+              "name": "timestamp",
+              "value": "={{ DateTime.fromSeconds($('receberMensagemWebhook').item.json.body.data.messageTimestamp).setZone('America/Sao_Paulo').toFormat('dd/MM/yyyy HH:mm:ss') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        6112,
+        3808
+      ],
+      "id": "cceeae6a-d80c-4c9f-abcb-66e76ecaf246",
+      "name": "formatarDadosConversacao",
+      "notes": "Monta objeto de conversação para inserir na fila Redis.\nOutput: {remoteJid, chatInput, ...}"
+    },
+    {
+      "parameters": {
+        "operation": "push",
+        "list": "={{ `fila:${$('formatarDadosCredenciais').first().json.clinica_id}:${$json.remoteJid}` }}",
+        "messageData": "={{ $json.toJsonString() }}",
+        "tail": true
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        6512,
+        3776
+      ],
+      "id": "454c92f5-c4eb-4fc1-8685-02ccc8f7b86a",
+      "name": "adicionarMensagemFilaRedis",
+      "credentials": {
+        "redis": {
+          "id": "CaFYd95wS87jeCcl",
+          "name": "redis-fila"
+        }
+      },
+      "notes": "Adiciona mensagem processada à fila Redis do paciente.\nOperation: PUSH"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "propertyName": "messages",
+        "key": "={{ `fila:${$('formatarDadosCredenciais').first().json.clinica_id}:${$('formatarDadosCredenciais').first().json.numero}` }}",
+        "keyType": "list",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        6704,
+        3616
+      ],
+      "id": "ea9a539b-c9c4-4173-b9b1-2ede6f9f9842",
+      "name": "buscarFilaMensagensRedis",
+      "credentials": {
+        "redis": {
+          "id": "CaFYd95wS87jeCcl",
+          "name": "redis-fila"
+        }
+      },
+      "notes": "Busca fila de mensagens do paciente no Redis.\nKey: numero do paciente\nOperation: GET"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ (Array.isArray($json.messages) && $json.messages.length) ? JSON.parse($json.messages[$json.messages.length - 1]).id : '' }}",
+                    "rightValue": "={{ $('formatarDadosCredenciais').first().json.id_mensagem }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "f8028e88-2af2-43ea-bdf6-c82c19019fb6"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Liberado para IA"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "Morrer (Fazer Nada)"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        7520,
+        3392
+      ],
+      "id": "a2203e04-8b6e-445d-903b-9faa7df7d568",
+      "name": "checarMensagemDuplicada",
+      "notes": "Verifica se a última mensagem na fila é duplicada (mesmo ID).\nEvita processamento duplicado em cenários de retry"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        7104,
+        3728
+      ],
+      "id": "30d971ae-29e9-44cf-a4de-8cbf87915e28",
+      "name": "pararFluxoMensagemDuplicada"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        7728,
+        3504
+      ],
+      "id": "e23155d6-23c1-49c5-916f-475b20bd7a9a",
+      "name": "pararFluxoFilaVazia"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "propertyName": "messages",
+        "key": "={{ `fila:${$('formatarDadosCredenciais').item.json.clinica_id}:${$('formatarDadosCredenciais').item.json.numero}` }}",
+        "keyType": "list",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        7312,
+        3456
+      ],
+      "id": "3d033730-7519-4248-804b-5107df0509b0",
+      "name": "buscarFilaParaProcessamento",
+      "credentials": {
+        "redis": {
+          "id": "CaFYd95wS87jeCcl",
+          "name": "redis-fila"
+        }
+      },
+      "notes": "Busca fila completa do Redis para agrupar e processar.\nOperation: GET"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pega a lista de mensagens do nó Redis\nconst messages = $input.first().json.messages;\n\nlet textoAgrupado = \"\";\nlet telefone = \"\";\nconst idsProcessados = new Set(); // evita colar msg duplicada em testes\n\nconst clinicaId = $('formatarDadosCredenciais').first().json.clinica_id;\n\n// Se não tiver mensagens, devolve vazio de forma segura\nif (!Array.isArray(messages) || messages.length === 0) {\n  return [{\n    json: {\n      telefone: \"\",\n      mensagem_final: \"\",\n      clinica_id: clinicaId,\n      chave_fila_redis: `fila:${clinicaId}:`\n    }\n  }];\n}\n\n// Percorre cada mensagem da fila\nmessages.forEach(msgString => {\n  try {\n    const msg = JSON.parse(msgString);\n    telefone = msg.remoteJid;\n\n    if (!idsProcessados.has(msg.id)) {\n      idsProcessados.add(msg.id);\n      textoAgrupado += msg.chatInput + \"\\n\\n\";\n    }\n  } catch (error) {\n    // ignora erros de parse\n  }\n});\n\nreturn [{\n  json: {\n    telefone: telefone,\n    mensagem_final: textoAgrupado.trim(),\n    clinica_id: clinicaId,\n    chave_fila_redis: `fila:${clinicaId}:${telefone}`\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7792,
+        3280
+      ],
+      "id": "62a5ff48-878c-45c5-bfd9-10add981a192",
+      "name": "agruparMensagensFila",
+      "notes": "Agrupa todas as mensagens da fila em texto único para enviar ao LLM.\nOutput: {textoAgrupado, telefone}"
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "key": "={{ $json.chave_fila_redis }}"
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        8000,
+        3280
+      ],
+      "id": "a98e4e20-56b9-4f78-a001-295693927e11",
+      "name": "limparFilaProcessada",
+      "credentials": {
+        "redis": {
+          "id": "CaFYd95wS87jeCcl",
+          "name": "redis-fila"
+        }
+      },
+      "notes": "Remove fila do Redis após processamento.\nOperation: DELETE"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT lock_conversa \nFROM n8n_status_atendimento \nWHERE session_id = '{{ $json.telefone }}' \n  AND cliente_id = '{{ $('formatarDadosCredenciais').item.json.clinica_id }}'\nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        8208,
+        3280
+      ],
+      "id": "43b3b09b-226e-45a5-9589-eddaca4a9c18",
+      "name": "consultarLockConversa",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "CQz4auLNBpiEofO7",
+          "name": "supabase-gerais"
+        }
+      },
+      "notes": "Consulta PostgreSQL para verificar se a conversa está bloqueada (atendimento humano ativo).\nQuery: SELECT lock_conversa FROM n8n_status_atendimento"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "43d047e2-1720-445c-b37e-c64af72c5661",
+              "leftValue": "={{ $json.lock_conversa }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        8416,
+        3280
+      ],
+      "id": "856131fd-1f99-488c-84a9-51c08f86cb5d",
+      "name": "checarConversaBloqueada",
+      "notes": "Se lock_conversa = true → para fluxo (humano atendendo)\nSe lock_conversa = false → segue para IA"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        8816,
+        3232
+      ],
+      "id": "0b5c8b3b-22fe-4e45-beca-1ea07eb5018f",
+      "name": "pararFluxoConversaBloqueada"
+    },
+    {
+      "parameters": {
+        "amount": 10
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        7104,
+        3456
+      ],
+      "id": "65f0f7cb-4bf8-444d-8104-2b93b9ed59d2",
+      "name": "aguardarDebounce",
+      "webhookId": "ae0ca991-c233-4def-9279-0849a0cf6723",
+      "notes": "Delay de 10s para agrupar mensagens consecutivas do paciente.\nEvita processar cada mensagem individualmente (debounce pattern)"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ (Array.isArray($json.messages) && $json.messages.length) ? JSON.parse($json.messages[$json.messages.length - 1]).id : '' }}",
+                    "rightValue": "={{ $('formatarDadosCredenciais').first().json.id_mensagem }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "f8028e88-2af2-43ea-bdf6-c82c19019fb6"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Sou a Última"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "Morrer (Fazer Nada)"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        6896,
+        3616
+      ],
+      "id": "271a8f9f-4efa-41c4-a5ed-6841599307be",
+      "name": "checarNovaMensagemDuranteEspera",
+      "notes": "Após o debounce, verifica se chegou nova mensagem durante a espera.\nSe sim: descarta este ciclo (o novo ciclo processará tudo)\nSe não: segue para processamento"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  COALESCE(\n    (\n      SELECT modo_atendimento\n      FROM n8n_status_atendimento\n      WHERE session_id = '{{ $(\"receberMensagemWebhook\").item.json.body.data.key.remoteJid.replace(\"@s.whatsapp.net\",\"\").replace(\"@g.us\",\"\") }}'\n        AND cliente_id = '{{ $(\"buscarClinicaSupabase\").first().json.id }}'\n    ),\n    'ia'\n  ) AS modo_atendimento_final;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        4560,
+        4240
+      ],
+      "id": "0026637e-f085-4c80-ac02-6aac081d525e",
+      "name": "consultarModoAtendimento",
+      "credentials": {
+        "postgres": {
+          "id": "CQz4auLNBpiEofO7",
+          "name": "supabase-gerais"
+        }
+      },
+      "notes": "Consulta PostgreSQL para consultarModoAtendimento de atendimento (ia/humano/novo).\nQuery: SELECT modo_atendimento FROM n8n_status_atendimento"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.modo_atendimento_final }}",
+                    "rightValue": "humano",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "89d82d96-4803-47f9-8d83-a8e5c5056224"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "humano"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "7c23b41d-1d88-46bc-be64-e8d5f3c68dd2",
+                    "leftValue": "={{ $json.modo_atendimento_final }}",
+                    "rightValue": "ia",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "ia"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        4768,
+        4112
+      ],
+      "id": "35f0f422-9010-4680-9291-e31d1aeebbc2",
+      "name": "rotearModoAtendimento",
+      "notes": "Roteia com base no modo:\nia → chama sub-workflow de atendimento IA\nhumano → para fluxo\noutro → para fluxo"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        4992,
+        3840
+      ],
+      "id": "eb00029f-e53b-4e11-8afb-acb9e8049f63",
+      "name": "pararFluxoModoDesconhecido"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "ce15bLOd_CPUiF-eoWvEv",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/ce15bLOd_CPUiF-eoWvEv",
+          "cachedResultName": "MLTC_WF__MotorAtendimentoIA_v3.0"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "telefone": "={{ $('agruparMensagensFila').first().json.telefone }}",
+            "mensagem_final": "={{ $('agruparMensagensFila').first().json.mensagem_final }}",
+            "clinica_id": "={{ $('formatarDadosCredenciais').first().json.clinica_id }}",
+            "numero": "={{ $('formatarDadosCredenciais').first().json.numero }}",
+            "nome": "={{ $('formatarDadosCredenciais').first().json.nome }}",
+            "server_url": "={{ $('receberMensagemWebhook').first().json.body.server_url }}",
+            "instance": "={{ $('receberMensagemWebhook').first().json.body.instance }}",
+            "apikey": "={{ $('receberMensagemWebhook').first().json.body.apikey }}",
+            "agendamento_api_base_url": "={{ $('formatarDadosCredenciais').first().json.agendamento_api_base_url }}",
+            "allowed_services_json": "={{ $('formatarDadosCredenciais').first().json.allowed_services_json || '[]' }}",
+            "transbordo_humano_ativo": "={{ String($('buscarClinicaSupabase').first().json.transbordo_humano_ativo) }}",
+            "mensagem_transbordo": "={{ $('buscarClinicaSupabase').first().json.mensagem_transbordo }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "telefone",
+              "displayName": "telefone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "mensagem_final",
+              "displayName": "mensagem_final",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "clinica_id",
+              "displayName": "clinica_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "numero",
+              "displayName": "numero",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "nome",
+              "displayName": "nome",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "server_url",
+              "displayName": "server_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "instance",
+              "displayName": "instance",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "apikey",
+              "displayName": "apikey",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "agendamento_api_base_url",
+              "displayName": "agendamento_api_base_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "allowed_services_json",
+              "displayName": "allowed_services_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "transbordo_humano_ativo",
+              "displayName": "transbordo_humano_ativo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "mensagem_transbordo",
+              "displayName": "mensagem_transbordo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        8672,
+        3456
+      ],
+      "id": "c5e28590-58b2-4961-b07e-9b2748a6ed3a",
+      "name": "chamarSubAtendimento",
+      "notes": "Chama sub-workflow de atendimento (IA/processamento).\nInput: mensagens agrupadas + dados do paciente"
+    },
+    {
+      "parameters": {
+        "content": "## MLTC — Recepção Mensagem WhatsApp\n\n**Owner:** @gabi\n**Trigger:** Webhook POST (Evolution API)\n**Security:** Sem autenticação (⚠️ configurar Header Auth)\n**Criticality:** P1 — Importante\n**Version:** v3.0\n**Docs:** —\n\n---\n\n### Fluxo\n1. Recebe mensagem → Identifica clínica\n2. Filtra mensagens próprias\n3. Triagem de mídia (sub-workflow)\n4. Fila Redis + debounce 10s\n5. Verifica lock e modo de atendimento\n6. Roteia para IA ou para fluxo humano",
+        "height": 560,
+        "width": 692,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3264,
+        2352
+      ],
+      "id": "6f201eea-cf7f-4e79-9d70-9ca35f032d05",
+      "name": "stickyNotePadrao"
+    },
+    {
+      "parameters": {
+        "content": "## 1️⃣ Entrada e Validação\n\nWebhook recebe a mensagem da Evolution API (WhatsApp).\n\n**Filtros iniciais:**\n- Ignora mensagens enviadas pelo próprio bot (fromMe)\n- Busca configuração da clínica no Supabase\n- Se a clínica não existir → notifica paciente e admin, encerra fluxo",
+        "height": 300,
+        "width": 600,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4080,
+        1376
+      ],
+      "id": "b400f9df-bcef-4e3c-b650-177b1a7b0fe2",
+      "name": "stickyNota01Entrada"
+    },
+    {
+      "parameters": {
+        "content": "## 2️⃣ Modo de Atendimento\n\nConsulta no PostgreSQL o modo atual de atendimento do paciente (tabela `n8n_status_atendimento`).\n\n**Roteamento:**\n- `ia` → segue para credenciais e triagem de mídia\n- `humano` / outro → encerra fluxo (atendente humano no controle)",
+        "height": 284,
+        "width": 520,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4160,
+        1728
+      ],
+      "id": "cf2918ed-33f9-4137-af50-b609fcff3657",
+      "name": "stickyNota02ModoAtendimento"
+    },
+    {
+      "parameters": {
+        "content": "## 3️⃣ Credenciais e Triagem de Mídia\n\nFormata dados essenciais (nome, número, apikey, clinica_id) e roteia por tipo de mensagem.\n\n**Fluxo:**\n- Texto → formata dados de conversação direto\n- Áudio/imagem → chama sub-workflow `Triagem de Mídia` para transcrever/processar\n- Mídia não suportada → notifica paciente, encerra",
+        "height": 252,
+        "width": 650,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4112,
+        2064
+      ],
+      "id": "4159b72a-7459-4877-8f92-c6247f886433",
+      "name": "stickyNota03TriagemMidia"
+    },
+    {
+      "parameters": {
+        "content": "## 4️⃣ Fila Redis + Debounce\n\nMensagem processada é adicionada à fila Redis do paciente.\n\n**Lógica de debounce (10s):**\n1. Adiciona mensagem à fila\n2. Busca fila atual e verifica se há mensagem nova\n3. Aguarda 10 segundos (debounce)\n4. Se chegou nova mensagem durante a espera → descarta este ciclo (o ciclo mais recente processará tudo)\n5. Se não → segue para agrupamento\n\n⚡ **Por quê?** Evita processar cada mensagem isoladamente quando o paciente envia várias seguidas.",
+        "height": 320,
+        "width": 700,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4112,
+        2352
+      ],
+      "id": "343032bf-de36-40bc-8125-58efd9a74e7c",
+      "name": "stickyNota04FilaDebounce"
+    },
+    {
+      "parameters": {
+        "content": "## 5️⃣ Agrupamento e Processamento\n\nApós debounce, agrupa todas as mensagens da fila em texto único.\n\n**Etapas:**\n1. Busca fila completa do Redis\n2. Filtra duplicadas e mensagens vazias\n3. Agrupa em texto único (Code node)\n4. Limpa fila do Redis após agrupar",
+        "height": 300,
+        "width": 600,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4176,
+        2784
+      ],
+      "id": "91e049d2-a20e-4c63-89e3-1dc7c8b0691a",
+      "name": "stickyNota05Processamento"
+    },
+    {
+      "parameters": {
+        "content": "## 6️⃣ Lock e Roteamento Final\n\nVerifica no PostgreSQL se a conversa está bloqueada (atendente humano assumiu).\n\n**Decisão:**\n- `lock_conversa = true` → encerra (humano no controle)\n- `lock_conversa = false` → chama sub-workflow de atendimento IA\n\n⚠️ O lock impede que IA e humano respondam simultaneamente.",
+        "height": 300,
+        "width": 620
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4192,
+        3168
+      ],
+      "id": "7613b1f7-a6b6-46a6-8733-6ea9b95a82e9",
+      "name": "stickyNota06LockERoteiro"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  id,\n  fila_id,\n  celular,\n  cliente_id,\n  cliente_id_agendamento,\n  data_agendamento,\n  hora_agendamento,\n  medico_nome,\n  atendimento_nome,\n  notif_id,\n  tempo_limite\nFROM fila_pendente_resposta\nWHERE celular = '{{ $json.numero }}'\n  AND cliente_id = '{{ $json.clinica_id }}'\n  AND tempo_limite > NOW()\nORDER BY tempo_limite DESC\nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        5232,
+        4064
+      ],
+      "id": "883bf5a2-eeab-47b4-84c4-fef38d387e81",
+      "name": "checarFilaPendente",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "CQz4auLNBpiEofO7",
+          "name": "supabase-gerais"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        5840,
+        3632
+      ],
+      "id": "9c6e6c8b-e60c-4d8d-b099-f103a6cbe79b",
+      "name": "No Operation, do nothing"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "ZVNNqpyqBQeVZ2fV",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/ZVNNqpyqBQeVZ2fV",
+          "cachedResultName": "MLTC_SUB__ProcessarRespostaFila_v3.0"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "mensagem": "={{ $('formatarDadosCredenciais').first().json.mensagem }}",
+            "numero": "={{ $('formatarDadosCredenciais').first().json.numero }}",
+            "celular_fila": "={{ $('checarFilaPendente').first().json.celular }}",
+            "fila_id": "={{ $('checarFilaPendente').first().json.fila_id }}",
+            "fila_pendente_id": "={{ $('checarFilaPendente').first().json.id }}",
+            "cliente_id_agendamento": "={{ $('checarFilaPendente').first().json.cliente_id_agendamento }}",
+            "data_agendamento": "={{ $('checarFilaPendente').first().json.data_agendamento }}",
+            "hora_agendamento": "={{ $('checarFilaPendente').first().json.hora_agendamento }}",
+            "medico_nome": "={{ $('checarFilaPendente').first().json.medico_nome }}",
+            "atendimento_nome": "={{ $('checarFilaPendente').first().json.atendimento_nome }}",
+            "instancia": "={{ $('formatarDadosCredenciais').first().json.instancia }}",
+            "notif_id": "={{ $('checarFilaPendente').first().json.notif_id }}",
+            "cliente_id": "={{ $('checarFilaPendente').first().json.cliente_id }}",
+            "server_url": "={{ $('formatarDadosCredenciais').first().json.url_instancia }}",
+            "apikey": "={{ $('formatarDadosCredenciais').first().json.apikey }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "mensagem",
+              "displayName": "mensagem",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "numero",
+              "displayName": "numero",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "celular_fila",
+              "displayName": "celular_fila",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "fila_id",
+              "displayName": "fila_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "fila_pendente_id",
+              "displayName": "fila_pendente_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "cliente_id_agendamento",
+              "displayName": "cliente_id_agendamento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "data_agendamento",
+              "displayName": "data_agendamento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "hora_agendamento",
+              "displayName": "hora_agendamento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "medico_nome",
+              "displayName": "medico_nome",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "atendimento_nome",
+              "displayName": "atendimento_nome",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "instancia",
+              "displayName": "instancia",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "notif_id",
+              "displayName": "notif_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "cliente_id",
+              "displayName": "cliente_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "server_url",
+              "displayName": "server_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "apikey",
+              "displayName": "apikey",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        5616,
+        3728
+      ],
+      "id": "ac9f10d8-adc8-4629-aa8f-8d048d4ab18d",
+      "name": "Call 'MLTC_SUB__ProcessarRespostaFila_v3.0'"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "d3e6f205-5063-4d46-8ed0-e420ce435096",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        5472,
+        3952
+      ],
+      "id": "e7a9b1df-6dbc-4124-ac75-1b566bba70da",
+      "name": "temFilaPendente"
+    }
+  ],
+  "pinData": {
+    "receberMensagemWebhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "n8n-medical.inovaia-automacao.com.br",
+            "user-agent": "axios/1.13.2",
+            "content-length": "1473",
+            "accept": "application/json, text/plain, */*",
+            "accept-encoding": "gzip, compress, deflate, br",
+            "content-type": "application/json",
+            "x-forwarded-for": "10.0.1.1",
+            "x-forwarded-host": "n8n-medical.inovaia-automacao.com.br",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "d3bfcb0cfb3c",
+            "x-real-ip": "10.0.1.1"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "event": "messages.upsert",
+            "instance": "GABRIELA",
+            "data": {
+              "key": {
+                "remoteJid": "558799438993@s.whatsapp.net",
+                "remoteJidAlt": "558799438993@s.whatsapp.net",
+                "fromMe": false,
+                "id": "3A6B07D25895BDA60D17",
+                "participant": "",
+                "addressingMode": "lid"
+              },
+              "pushName": "Jeniffe Kelle",
+              "status": "DELIVERY_ACK",
+              "message": {
+                "conversation": "Quero uma receita",
+                "messageContextInfo": {
+                  "threadId": [],
+                  "deviceListMetadata": {
+                    "senderKeyIndexes": [],
+                    "recipientKeyIndexes": [],
+                    "senderKeyHash": {
+                      "0": 8,
+                      "1": 161,
+                      "2": 122,
+                      "3": 35,
+                      "4": 217,
+                      "5": 255,
+                      "6": 47,
+                      "7": 29,
+                      "8": 66,
+                      "9": 40
+                    },
+                    "senderTimestamp": {
+                      "low": 1774222425,
+                      "high": 0,
+                      "unsigned": true
+                    },
+                    "recipientKeyHash": {
+                      "0": 83,
+                      "1": 148,
+                      "2": 67,
+                      "3": 255,
+                      "4": 118,
+                      "5": 30,
+                      "6": 249,
+                      "7": 185,
+                      "8": 85,
+                      "9": 4
+                    },
+                    "recipientTimestamp": {
+                      "low": 1774301052,
+                      "high": 0,
+                      "unsigned": true
+                    }
+                  },
+                  "deviceListMetadataVersion": 2,
+                  "messageSecret": {
+                    "0": 243,
+                    "1": 111,
+                    "2": 218,
+                    "3": 251,
+                    "4": 101,
+                    "5": 187,
+                    "6": 251,
+                    "7": 200,
+                    "8": 56,
+                    "9": 215,
+                    "10": 65,
+                    "11": 221,
+                    "12": 240,
+                    "13": 74,
+                    "14": 127,
+                    "15": 54,
+                    "16": 190,
+                    "17": 150,
+                    "18": 33,
+                    "19": 208,
+                    "20": 165,
+                    "21": 139,
+                    "22": 106,
+                    "23": 174,
+                    "24": 49,
+                    "25": 192,
+                    "26": 169,
+                    "27": 251,
+                    "28": 79,
+                    "29": 178,
+                    "30": 211,
+                    "31": 235
+                  }
+                }
+              },
+              "messageType": "conversation",
+              "messageTimestamp": 1774303283,
+              "instanceId": "c8d9e807-2a03-4604-b19b-46c90bb25de6",
+              "source": "ios"
+            },
+            "destination": "https://n8n-medical.inovaia-automacao.com.br/webhook/recp",
+            "date_time": "2026-03-23T19:01:23.813Z",
+            "sender": "558791311991@s.whatsapp.net",
+            "server_url": "http://evo-w0c0g0swcgk04cocgo4o0gww.148.230.74.128.sslip.io",
+            "apikey": "0E80929AB8DA-4FC9-B54B-B443ED2CFA43"
+          },
+          "webhookUrl": "https://n8n-medical.inovaia-automacao.com.br/webhook/recp",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "buscarClinicaSupabase": {
+      "main": [
+        [
+          {
+            "node": "checarClinicaExiste",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "receberMensagemWebhook": {
+      "main": [
+        [
+          {
+            "node": "checarMensagemPropria",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "checarClinicaExiste": {
+      "main": [
+        [
+          {
+            "node": "consultarModoAtendimento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "notificarPacienteClinicaNaoEncontrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "notificarPacienteClinicaNaoEncontrada": {
+      "main": [
+        [
+          {
+            "node": "notificarAdminClinicaNaoEncontrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "notificarAdminClinicaNaoEncontrada": {
+      "main": [
+        [
+          {
+            "node": "pararFluxoMidiaNaoSuportada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "checarMensagemPropria": {
+      "main": [
+        [
+          {
+            "node": "pararFluxoSemClinica",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "buscarClinicaSupabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "formatarDadosCredenciais": {
+      "main": [
+        [
+          {
+            "node": "checarFilaPendente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "chamarSubTriagemMidia": {
+      "main": [
+        [
+          {
+            "node": "adicionarMensagemFilaRedis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "rotearTipoMensagem": {
+      "main": [
+        [
+          {
+            "node": "formatarDadosConversacao",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "chamarSubTriagemMidia",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "notificarPacienteMidiaNaoSuportada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "notificarPacienteMidiaNaoSuportada": {
+      "main": [
+        [
+          {
+            "node": "pararFluxoMidiaNaoSuportada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "formatarDadosConversacao": {
+      "main": [
+        [
+          {
+            "node": "adicionarMensagemFilaRedis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "adicionarMensagemFilaRedis": {
+      "main": [
+        [
+          {
+            "node": "buscarFilaMensagensRedis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "buscarFilaMensagensRedis": {
+      "main": [
+        [
+          {
+            "node": "checarNovaMensagemDuranteEspera",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "checarMensagemDuplicada": {
+      "main": [
+        [
+          {
+            "node": "agruparMensagensFila",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "pararFluxoFilaVazia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "buscarFilaParaProcessamento": {
+      "main": [
+        [
+          {
+            "node": "checarMensagemDuplicada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "agruparMensagensFila": {
+      "main": [
+        [
+          {
+            "node": "limparFilaProcessada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "limparFilaProcessada": {
+      "main": [
+        [
+          {
+            "node": "consultarLockConversa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "consultarLockConversa": {
+      "main": [
+        [
+          {
+            "node": "checarConversaBloqueada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "checarConversaBloqueada": {
+      "main": [
+        [
+          {
+            "node": "pararFluxoConversaBloqueada",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "chamarSubAtendimento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "aguardarDebounce": {
+      "main": [
+        [
+          {
+            "node": "buscarFilaParaProcessamento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "checarNovaMensagemDuranteEspera": {
+      "main": [
+        [
+          {
+            "node": "aguardarDebounce",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "pararFluxoMensagemDuplicada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "consultarModoAtendimento": {
+      "main": [
+        [
+          {
+            "node": "rotearModoAtendimento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "rotearModoAtendimento": {
+      "main": [
+        [
+          {
+            "node": "pararFluxoModoDesconhecido",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "formatarDadosCredenciais",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "chamarSubAtendimento": {
+      "main": [
+        [
+          {
+            "node": "pararFluxoConversaBloqueada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "checarFilaPendente": {
+      "main": [
+        [
+          {
+            "node": "temFilaPendente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call 'MLTC_SUB__ProcessarRespostaFila_v3.0'": {
+      "main": [
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "temFilaPendente": {
+      "main": [
+        [
+          {
+            "node": "Call 'MLTC_SUB__ProcessarRespostaFila_v3.0'",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "rotearTipoMensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "5a0fc9cf-338f-4217-85f7-eec39d0f1c68",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "29904fb7452e8c571d1daed834613de10cd7bd3fb8c86085e9fca2451931424c"
+  },
+  "id": "-fppc5y_y7ynbecKyqo45",
+  "tags": []
+}

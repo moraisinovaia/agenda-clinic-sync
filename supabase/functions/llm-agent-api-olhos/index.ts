@@ -58,7 +58,9 @@ serve(async (req) => {
       }
     }
 
-    console.log(`🔄 [OLHOS PROXY v1.1.0] Redirecionando: ${req.method} /${action || '(root)'}`);
+    console.log(`🔄 [OLHOS PROXY v1.0.0] Redirecionando: ${req.method} /${action || '(root)'}`);
+    console.log(`📍 [OLHOS PROXY] Config ID: ${CONFIG_ID_OLHOS}`);
+    console.log(`🏥 [OLHOS PROXY] Cliente ID: ${CLIENTE_ID_OLHOS}`);
     
     let body: any = {};
     if (req.method === 'POST') {
@@ -80,15 +82,17 @@ serve(async (req) => {
       cliente_id: CLIENTE_ID_OLHOS
     };
 
-    console.log(`📦 [OLHOS PROXY] Body enriquecido, action: ${action || 'root'}`);
+    console.log(`📦 [OLHOS PROXY] Body enriquecido com config_id e cliente_id`);
+    console.log(`📝 [OLHOS PROXY] Ação: ${action || 'root'}, Medico: ${body.medico || body.medico_nome || 'não especificado'}`);
 
     const targetUrl = action ? `${MAIN_API_URL}/${action}` : MAIN_API_URL;
+    console.log(`🎯 [OLHOS PROXY] Chamando: ${targetUrl}`);
 
     const response = await fetch(targetUrl, {
       method: req.method,
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': apiKey!
+        'x-api-key': apiKey
       },
       body: req.method === 'POST' ? JSON.stringify(enrichedBody) : undefined
     });

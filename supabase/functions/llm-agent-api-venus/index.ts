@@ -58,20 +58,29 @@ serve(async (req) => {
       }
     }
 
-    console.log(`🔄 [VENUS PROXY v3.1.0] Redirecionando: ${req.method} /${action || '(root)'}`);
+    console.log(`🔄 [VENUS PROXY v3.0.0] Redirecionando: ${req.method} /${action || '(root)'}`);
     
     // Obter o body da requisição original
     let body: any = {};
     if (req.method === 'POST') {
       try {
         body = await req.json();
+        console.log(`📥 [VENUS PROXY] Tipo do body:`, typeof body);
+        console.log(`📥 [VENUS PROXY] É array?:`, Array.isArray(body));
+        if (body && typeof body === 'object') {
+          console.log(`📥 [VENUS PROXY] Keys do body original:`, Object.keys(body));
+        }
+        
         // ✅ Normalizar body se for array (n8n às vezes envia [{...}] ao invés de {...})
         if (Array.isArray(body) && body.length > 0) {
           console.log('⚠️ [VENUS PROXY] Body recebido como array, extraindo primeiro elemento');
           body = body[0];
+          console.log(`📥 [VENUS PROXY] Body após normalização:`, {
+            keys: body && typeof body === 'object' ? Object.keys(body) : []
+          });
         }
       } catch (e) {
-        console.log(`⚠️ [VENUS PROXY] Body vazio ou inválido`);
+        console.log(`⚠️ [VENUS PROXY] Body vazio ou inválido:`, e.message);
         body = {};
       }
     }
@@ -82,17 +91,22 @@ serve(async (req) => {
       cliente_id: CLINICA_VENUS_ID
     };
 
-    console.log(`📦 [VENUS PROXY] Body enriquecido com cliente_id, action: ${action || 'root'}`);
+    console.log(`📦 [VENUS PROXY] Body enriquecido com cliente_id: ${CLINICA_VENUS_ID}`);
+    console.log(`📤 [VENUS PROXY] Body enriquecido:`, {
+      keys: Object.keys(enrichedBody),
+      has_cliente_id: !!enrichedBody.cliente_id
+    });
+    console.log(`📡 [VENUS PROXY] Chamando API principal: ${MAIN_API_URL}/${action}`);
 
     // Construir URL da API principal
     const targetUrl = action ? `${MAIN_API_URL}/${action}` : MAIN_API_URL;
 
-    // Fazer a chamada para a API principal repassando x-api-key
+    // Fazer a chamada para a API principal
     const response = await fetch(targetUrl, {
       method: req.method,
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': apiKey!
+        'x-api-key': apiKey
       },
       body: req.method === 'POST' ? JSON.stringify(enrichedBody) : undefined
     });
