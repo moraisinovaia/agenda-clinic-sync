@@ -1255,6 +1255,7 @@ export type Database = {
       }
       llm_clinic_config: {
         Row: {
+          antecedencia_minima_minutos: number | null
           ativo: boolean | null
           cliente_id: string
           created_at: string | null
@@ -1270,6 +1271,7 @@ export type Database = {
           whatsapp: string | null
         }
         Insert: {
+          antecedencia_minima_minutos?: number | null
           ativo?: boolean | null
           cliente_id: string
           created_at?: string | null
@@ -1285,6 +1287,7 @@ export type Database = {
           whatsapp?: string | null
         }
         Update: {
+          antecedencia_minima_minutos?: number | null
           ativo?: boolean | null
           cliente_id?: string
           created_at?: string | null
