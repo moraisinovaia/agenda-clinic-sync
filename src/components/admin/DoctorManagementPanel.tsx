@@ -633,7 +633,7 @@ export const DoctorManagementPanel: React.FC = () => {
 
     const dataToSubmit = {
       ...formData,
-      convenios_aceitos: conveniosFinal,
+      convenios_aceitos: conveniosUnicos,
       atendimentos_ids: atendimentosIdsFinal
     };
 
