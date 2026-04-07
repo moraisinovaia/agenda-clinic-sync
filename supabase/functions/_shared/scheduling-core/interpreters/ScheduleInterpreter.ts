@@ -1,13 +1,42 @@
 import type { BookingMode, PeriodKey, PeriodConfig, OrdemChegadaConfig } from '../domain/types.ts';
 import type { ScheduleConfig } from '../interfaces/ScheduleRepository.ts';
 
+// ─── Raw shapes (JSONB de business_rules) ────────────────────────────────────
+
+interface RawPeriodo {
+  inicio?: string;
+  horario_inicio?: string;
+  fim?: string;
+  horario_fim?: string;
+  limite?: number;
+  limite_pacientes?: number;
+  dias_especificos?: number[];
+  distribuicao_fichas?: string;
+}
+
+interface RawServico {
+  tipo?: string;
+  tipo_agendamento?: string;
+  periodos?: Record<string, RawPeriodo>;
+  dias_semana?: number[];
+  ordem_chegada_config?: OrdemChegadaConfig;
+}
+
+interface RawConfig {
+  tipo_agendamento?: string;
+  servicos?: Record<string, RawServico> | null;
+  periodos?: Record<string, RawPeriodo> | null;
+  dias_semana?: number[];
+  ordem_chegada_config?: OrdemChegadaConfig;
+}
+
 /**
  * Transforma o JSON bruto de business_rules em ScheduleConfig canônico.
  * Função pura — sem I/O. Todos os detalhes do JSONB heterogêneo ficam aqui.
  */
 export class ScheduleInterpreter {
   interpret(params: {
-    rawConfig: Record<string, any>;
+    rawConfig: RawConfig;
     servicoKey?: string;
     minimumDate?: string;
   }): ScheduleConfig | null {
@@ -18,9 +47,9 @@ export class ScheduleInterpreter {
 
     // 2. Resolver booking mode: serviço.tipo → raiz.tipo_agendamento → fallback
     const rawTipo: string =
-      servico?.tipo ||
-      servico?.tipo_agendamento ||
-      rawConfig.tipo_agendamento ||
+      servico?.tipo ??
+      servico?.tipo_agendamento ??
+      rawConfig.tipo_agendamento ??
       'ordem_chegada';
 
     const bookingMode: BookingMode =
@@ -52,9 +81,9 @@ export class ScheduleInterpreter {
   // ─── private ────────────────────────────────────────────────────────────────
 
   private resolveServico(
-    rawConfig: Record<string, any>,
+    rawConfig: RawConfig,
     servicoKey?: string,
-  ): Record<string, any> | null {
+  ): RawServico | null {
     const servicos = rawConfig.servicos;
     if (!servicos || typeof servicos !== 'object') return null;
 
@@ -64,13 +93,13 @@ export class ScheduleInterpreter {
 
     // Fallback: primeiro serviço com períodos configurados
     const found = Object.values(servicos).find(
-      (s: any) => s?.periodos && Object.keys(s.periodos).length > 0,
+      (s) => s?.periodos && Object.keys(s.periodos).length > 0,
     );
-    return (found as Record<string, any>) ?? null;
+    return found ?? null;
   }
 
   private normalizePeriodos(
-    periodos: Record<string, any> | null | undefined,
+    periodos: Record<string, RawPeriodo> | null | undefined,
   ): Partial<Record<PeriodKey, PeriodConfig>> {
     if (!periodos || typeof periodos !== 'object') return {};
 
@@ -85,7 +114,7 @@ export class ScheduleInterpreter {
     return result;
   }
 
-  private normalizePeriodo(raw: any): PeriodConfig | null {
+  private normalizePeriodo(raw: RawPeriodo | null | undefined): PeriodConfig | null {
     if (!raw || typeof raw !== 'object') return null;
 
     // Aceitar ambas nomenclaturas (inicio/horario_inicio, fim/horario_fim)
