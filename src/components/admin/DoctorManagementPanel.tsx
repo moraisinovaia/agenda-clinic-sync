@@ -585,11 +585,20 @@ export const DoctorManagementPanel: React.FC = () => {
       return;
     }
 
-    // Processar convênios: remover "OUTRO" e adicionar o convênio personalizado
+    // Processar convênios: remover "OUTRO" e separar convênios personalizados por vírgula
+    const conveniosPersonalizados = formData.outroConvenio.trim()
+      ? formData.outroConvenio.split(',').map(c => c.trim().toUpperCase()).filter(c => c.length > 0)
+      : [];
     const conveniosFinal = [
       ...formData.convenios_aceitos.filter(c => c !== 'OUTRO'),
-      ...(formData.outroConvenio.trim() ? [formData.outroConvenio.trim().toUpperCase()] : [])
+      ...conveniosPersonalizados
     ];
+    // Normalizar: expandir qualquer item que contenha vírgulas internas (dados legados)
+    const conveniosNormalizados = conveniosFinal.flatMap(c => 
+      c.includes(',') ? c.split(',').map(s => s.trim().toUpperCase()).filter(s => s.length > 0) : [c]
+    );
+    // Remover duplicatas
+    const conveniosUnicos = [...new Set(conveniosNormalizados)];
 
     let atendimentosIdsFinal = [...formData.atendimentos_ids];
 
