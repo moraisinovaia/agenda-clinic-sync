@@ -7,7 +7,7 @@
         "schema": {
           "__rl": true,
           "mode": "list",
-          "value": "public"
+          "value": "public" //OK
         },
         "table": {
           "__rl": true,
