@@ -2318,6 +2318,7 @@ export type Database = {
           p_data_nascimento: string
           p_force_conflict?: boolean
           p_hora_agendamento: string
+          p_idempotency_key?: string
           p_medico_id: string
           p_nome_completo: string
           p_observacoes?: string
