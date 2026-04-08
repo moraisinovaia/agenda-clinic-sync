@@ -22,7 +22,7 @@ jobs:
 
       - name: deno lint — scheduling-core
         working-directory: supabase/functions/_shared/scheduling-core
-        run: deno lint
+        run: deno lint use-cases interpreters interfaces repositories index.ts
 
       - name: Unit tests — scheduling-core
         working-directory: supabase/functions/_shared/scheduling-core

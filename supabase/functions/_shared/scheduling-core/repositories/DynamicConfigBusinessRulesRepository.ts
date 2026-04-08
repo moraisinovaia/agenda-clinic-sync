@@ -2,6 +2,12 @@ import type {
   BusinessRulesRepository,
   RawBusinessRules,
 } from '../interfaces/BusinessRulesRepository.ts';
+import type { RawConfig } from '../interpreters/ScheduleInterpreter.ts';
+
+/** Formato mínimo do DynamicConfig consumido por este repositório. */
+interface DynamicConfigShape {
+  business_rules?: Record<string, { config?: RawConfig }>;
+}
 
 /**
  * Implementação Opção B: lê do DynamicConfig já carregado em memória.
@@ -9,18 +15,14 @@ import type {
  * dívida conhecida a resolver quando DynamicConfig for descontinuado (Onda 3).
  */
 export class DynamicConfigBusinessRulesRepository implements BusinessRulesRepository {
-  /**
-   * @param dynamicConfig - O objeto DynamicConfig já carregado no início da request.
-   *   Tipado como `any` para não criar dependência circular com o monolito.
-   */
-  constructor(private readonly dynamicConfig: any) {}
+  constructor(private readonly dynamicConfig: DynamicConfigShape) {}
 
-  async getRawConfig(params: {
+  getRawConfig(params: {
     medicoId: string;
     clienteId: string;
   }): Promise<RawBusinessRules | null> {
     const entry = this.dynamicConfig?.business_rules?.[params.medicoId];
-    if (!entry?.config) return null;
-    return { config: entry.config };
+    if (!entry?.config) return Promise.resolve(null);
+    return Promise.resolve({ config: entry.config });
   }
 }

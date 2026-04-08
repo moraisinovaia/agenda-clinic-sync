@@ -1,4 +1,4 @@
-import { assertEquals, assertRejects } from 'https://deno.land/std@0.224.0/assert/mod.ts';
+import { assertEquals, assertRejects } from '@std/assert';
 import { CancelAppointmentUseCase } from './CancelAppointmentUseCase.ts';
 import {
   AppointmentNotFoundError,

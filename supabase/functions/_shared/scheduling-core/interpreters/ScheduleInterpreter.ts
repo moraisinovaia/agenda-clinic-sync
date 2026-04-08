@@ -3,7 +3,7 @@ import type { ScheduleConfig } from '../interfaces/ScheduleRepository.ts';
 
 // ─── Raw shapes (JSONB de business_rules) ────────────────────────────────────
 
-interface RawPeriodo {
+export interface RawPeriodo {
   inicio?: string;
   horario_inicio?: string;
   fim?: string;
@@ -14,7 +14,7 @@ interface RawPeriodo {
   distribuicao_fichas?: string;
 }
 
-interface RawServico {
+export interface RawServico {
   tipo?: string;
   tipo_agendamento?: string;
   periodos?: Record<string, RawPeriodo>;
@@ -22,7 +22,7 @@ interface RawServico {
   ordem_chegada_config?: OrdemChegadaConfig;
 }
 
-interface RawConfig {
+export interface RawConfig {
   tipo_agendamento?: string;
   servicos?: Record<string, RawServico> | null;
   periodos?: Record<string, RawPeriodo> | null;

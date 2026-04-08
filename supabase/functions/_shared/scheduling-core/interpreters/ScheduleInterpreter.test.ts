@@ -1,4 +1,4 @@
-import { assertEquals, assertExists } from 'https://deno.land/std@0.224.0/assert/mod.ts';
+import { assertEquals, assertExists } from '@std/assert';
 import { ScheduleInterpreter } from './ScheduleInterpreter.ts';
 
 const interpreter = new ScheduleInterpreter();
@@ -107,7 +107,7 @@ Deno.test('ScheduleInterpreter — ignora chaves de período desconhecidas', () 
   });
   assertExists(result);
   assertExists(result!.periodos.manha);
-  assertEquals((result!.periodos as any).noite, undefined);
+  assertEquals((result!.periodos as Record<string, unknown>).noite, undefined);
 });
 
 Deno.test('ScheduleInterpreter — preserva dias_especificos no período', () => {

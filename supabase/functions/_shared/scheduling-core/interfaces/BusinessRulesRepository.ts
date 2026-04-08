@@ -1,3 +1,5 @@
+import type { RawConfig } from '../interpreters/ScheduleInterpreter.ts';
+
 /**
  * Acesso ao JSON bruto de business_rules por médico.
  * A implementação lê do DynamicConfig já carregado (Opção B) para evitar
@@ -6,7 +8,7 @@
  */
 export interface RawBusinessRules {
   /** JSON bruto do campo config da tabela business_rules */
-  config: Record<string, any>;
+  config: RawConfig;
 }
 
 export interface BusinessRulesRepository {

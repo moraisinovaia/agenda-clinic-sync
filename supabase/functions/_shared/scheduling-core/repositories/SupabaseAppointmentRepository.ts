@@ -14,6 +14,7 @@ import type { AppointmentDetails, AppointmentStatus } from '../domain/types.ts';
 import { InvalidStatusTransitionError } from '../domain/types.ts';
 
 export class SupabaseAppointmentRepository implements AppointmentRepository {
+  // deno-lint-ignore no-explicit-any
   constructor(private readonly supabase: any) {}
 
   async countByPeriod(params: CountByPeriodParams): Promise<number> {
