@@ -2895,6 +2895,64 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
                   }
                 }
               }
+              
+              // 🆕 2.5 VERIFICAR SUBLIMITE POR CONVÊNIO (ex: HGU max 18/turno)
+              if (convenio && regras?.convenio_sublimites) {
+                const resultadoConvenioSublimite = await verificarSublimiteConvenio(
+                  supabase, clienteId, medico.id, data_consulta, convenio, regras,
+                  periodo, servicoLocal
+                );
+                
+                if (!resultadoConvenioSublimite.permitido) {
+                  console.log(`❌ [CONVENIO SUBLIMITE] Bloqueado: ${resultadoConvenioSublimite.erro_codigo}`);
+                  
+                  // Buscar próximas datas com vagas para esse convênio
+                  const proximasDatasConvenio: Array<{data: string; dia_semana: string; vagas_disponiveis: number}> = [];
+                  const diasSemanaArr = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+                  
+                  for (let dias = 1; dias <= 30 && proximasDatasConvenio.length < 5; dias++) {
+                    const dataFutura = new Date(data_consulta + 'T00:00:00');
+                    dataFutura.setDate(dataFutura.getDate() + dias);
+                    const dataFuturaStr = dataFutura.toISOString().split('T')[0];
+                    const diaSemanaNum = dataFutura.getDay();
+                    if (diaSemanaNum === 0 || diaSemanaNum === 6) continue;
+                    if (servicoLocal?.dias_semana && !servicoLocal.dias_semana.includes(diaSemanaNum)) continue;
+                    
+                    const checkResult = await verificarSublimiteConvenio(
+                      supabase, clienteId, medico.id, dataFuturaStr, convenio, regras,
+                      periodo, servicoLocal
+                    );
+                    if (checkResult.permitido) {
+                      proximasDatasConvenio.push({
+                        data: dataFuturaStr,
+                        dia_semana: diasSemanaArr[diaSemanaNum],
+                        vagas_disponiveis: (resultadoConvenioSublimite.detalhes?.sublimite || 0) - ((checkResult as any).detalhes?.ocupado || 0)
+                      });
+                    }
+                  }
+                  
+                  let msgConvenio = `❌ ${resultadoConvenioSublimite.mensagem}\n\n`;
+                  if (proximasDatasConvenio.length > 0) {
+                    msgConvenio += `✅ Próximas datas com vagas ${convenio}:\n\n`;
+                    proximasDatasConvenio.forEach(d => {
+                      msgConvenio += `📅 ${formatarDataPorExtenso(d.data)} (${d.dia_semana})\n`;
+                    });
+                    msgConvenio += `\n💡 Gostaria de agendar em uma destas datas?`;
+                  } else {
+                    msgConvenio += `📞 Entre em contato com a clínica para mais opções.`;
+                  }
+                  
+                  return businessErrorResponse({
+                    codigo_erro: 'SUBLIMITE_CONVENIO_ATINGIDO',
+                    mensagem_usuario: msgConvenio,
+                    detalhes: resultadoConvenioSublimite.detalhes,
+                    sugestoes: proximasDatasConvenio.length > 0 ? {
+                      proximas_datas: proximasDatasConvenio,
+                      acao_sugerida: 'reagendar_data_alternativa'
+                    } : null
+                  });
+                }
+              }
             } else {
               console.log(`⚠️ Serviço "${atendimento_nome}" não encontrado nas regras, prosseguindo sem validação específica`);
             }
