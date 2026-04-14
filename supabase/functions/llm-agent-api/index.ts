@@ -855,6 +855,111 @@ async function calcularVagasDisponiveisComLimites(
   return Math.min(vagasPool, vagasSublimite);
 }
 
+// ============= SISTEMA DE SUBLIMITES POR CONVÊNIO =============
+
+interface ConvenioSublimiteResult {
+  permitido: boolean;
+  erro_codigo?: 'SUBLIMITE_CONVENIO_ATINGIDO';
+  mensagem?: string;
+  detalhes?: {
+    convenio: string;
+    sublimite: number;
+    ocupado: number;
+    limite_geral_turno: number;
+  };
+}
+
+/**
+ * Verifica se o sublimite de um convênio específico foi atingido para um turno.
+ * Ex: HGU max 18 pacientes/turno mesmo que o turno total aceite 25.
+ * Busca `convenio_sublimites` na config do médico (business_rules).
+ */
+async function verificarSublimiteConvenio(
+  supabase: any,
+  clienteId: string,
+  medicoId: string,
+  dataAgendamento: string,
+  convenio: string | null | undefined,
+  regras: any,
+  periodo?: string,
+  servicoConfig?: any,
+  excludeAgendamentoId?: string
+): Promise<ConvenioSublimiteResult> {
+  if (!convenio) return { permitido: true };
+  
+  const convenioSublimites: Record<string, number> = regras?.convenio_sublimites || {};
+  if (Object.keys(convenioSublimites).length === 0) return { permitido: true };
+  
+  const convenioNorm = convenio.toUpperCase().trim().replace(/[-_]/g, ' ');
+  let sublimite: number | null = null;
+  let convenioKey = '';
+  
+  for (const [key, limite] of Object.entries(convenioSublimites)) {
+    const keyNorm = key.toUpperCase().trim().replace(/[-_]/g, ' ');
+    if (keyNorm === convenioNorm || keyNorm.includes(convenioNorm) || convenioNorm.includes(keyNorm)) {
+      sublimite = limite;
+      convenioKey = key;
+      break;
+    }
+  }
+  
+  if (sublimite === null) return { permitido: true };
+  
+  console.log(`🔍 [CONVENIO SUBLIMITE] Verificando sublimite de ${sublimite} para "${convenioKey}" em ${dataAgendamento}...`);
+  
+  // Determinar faixa de horário do período
+  const servicoNorm = servicoConfig ? normalizarServicoPeriodos(servicoConfig) : null;
+  let inicioContagem: string | null = null;
+  let fimContagem: string | null = null;
+  
+  if (periodo && servicoNorm?.periodos?.[periodo]) {
+    const configPeriodo = servicoNorm.periodos[periodo];
+    inicioContagem = configPeriodo.contagem_inicio || configPeriodo.inicio;
+    fimContagem = configPeriodo.contagem_fim || configPeriodo.fim;
+  }
+  
+  let query = supabase
+    .from('agendamentos')
+    .select('id', { count: 'exact', head: true })
+    .eq('medico_id', medicoId)
+    .eq('data_agendamento', dataAgendamento)
+    .eq('cliente_id', clienteId)
+    .is('excluido_em', null)
+    .is('cancelado_em', null)
+    .in('status', ['agendado', 'confirmado'])
+    .ilike('convenio', `%${convenioKey}%`);
+  
+  if (inicioContagem && fimContagem) {
+    query = query.gte('hora_agendamento', inicioContagem).lt('hora_agendamento', fimContagem);
+  }
+  if (excludeAgendamentoId) {
+    query = query.neq('id', excludeAgendamentoId);
+  }
+  
+  const { count, error } = await query;
+  if (error) {
+    console.error(`❌ [CONVENIO SUBLIMITE] Erro:`, error);
+    return { permitido: true };
+  }
+  
+  const ocupado = count || 0;
+  const limiteGeralTurno = regras?.limite_por_turno || 25;
+  console.log(`📊 [CONVENIO SUBLIMITE] "${convenioKey}": ${ocupado}/${sublimite} (turno geral: ${limiteGeralTurno})`);
+  
+  if (ocupado >= sublimite) {
+    console.log(`❌ [CONVENIO SUBLIMITE] Limite de ${convenioKey} ATINGIDO! ${ocupado}/${sublimite}`);
+    return {
+      permitido: false,
+      erro_codigo: 'SUBLIMITE_CONVENIO_ATINGIDO',
+      mensagem: `O limite de ${sublimite} pacientes ${convenioKey} por turno já foi atingido para ${formatarDataPorExtenso(dataAgendamento)}. O médico atende até ${limiteGeralTurno} pacientes no total, mas apenas ${sublimite} podem ser ${convenioKey}.`,
+      detalhes: { convenio: convenioKey, sublimite, ocupado, limite_geral_turno: limiteGeralTurno }
+    };
+  }
+  
+  console.log(`✅ [CONVENIO SUBLIMITE] "${convenioKey}" OK: ${sublimite - ocupado} vaga(s) restante(s)`);
+  return { permitido: true };
+}
+
 // 🚨 VALORES HARDCODED (fallback quando banco não disponível)
 const FALLBACK_PHONE = ''; // Vazio para forçar uso de mensagem genérica
 const FALLBACK_DIAS_BUSCA_INICIAL = 14;
