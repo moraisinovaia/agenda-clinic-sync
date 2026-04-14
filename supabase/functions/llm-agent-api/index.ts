@@ -2362,6 +2362,53 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
       });
     }
 
+    // 🏥 VALIDAR CONVÊNIO ANTES DE PROSSEGUIR
+    console.log('🔍 Validando convênio do paciente...');
+    if (convenio) {
+      // Buscar convênios aceitos do médico (da tabela medicos)
+      const { data: medicoConvenios } = await supabase
+        .from('medicos')
+        .select('convenios_aceitos')
+        .eq('id', medico.id)
+        .eq('cliente_id', clienteId)
+        .single();
+      
+      const conveniosAceitosMedico: string[] = medicoConvenios?.convenios_aceitos || [];
+      
+      // Também verificar nas business_rules
+      const regrasConvenio = getMedicoRules(config, medico.id, BUSINESS_RULES.medicos[medico.id]);
+      const conveniosRegras: string[] = regrasConvenio?.convenios_aceitos || [];
+      
+      // Unir convênios de ambas as fontes
+      const todosConveniosAceitos = [...new Set([...conveniosAceitosMedico, ...conveniosRegras])];
+      
+      if (todosConveniosAceitos.length > 0) {
+        const convenioNorm = convenio.toUpperCase().trim().replace(/[-_]/g, ' ');
+        const convenioAceito = todosConveniosAceitos.some(c => {
+          const cNorm = c.toUpperCase().trim().replace(/[-_]/g, ' ');
+          return cNorm === convenioNorm || 
+                 cNorm.includes(convenioNorm) || 
+                 convenioNorm.includes(cNorm);
+        });
+        
+        if (!convenioAceito) {
+          console.log(`❌ [CONVENIO] "${convenio}" não aceito por ${medico.nome}. Aceitos: ${todosConveniosAceitos.join(', ')}`);
+          return businessErrorResponse({
+            codigo_erro: 'CONVENIO_NAO_ACEITO',
+            mensagem_usuario: `❌ O convênio "${convenio}" não é aceito pelo(a) ${medico.nome}.\n\n✅ Convênios aceitos:\n${todosConveniosAceitos.map(c => `   • ${c}`).join('\n')}\n\n💡 Verifique se o convênio está correto ou escolha outro profissional.`,
+            detalhes: {
+              convenio_solicitado: convenio,
+              convenios_aceitos: todosConveniosAceitos,
+              medico: medico.nome
+            }
+          });
+        }
+        console.log(`✅ [CONVENIO] "${convenio}" aceito por ${medico.nome}`);
+      } else {
+        console.log(`ℹ️ [CONVENIO] Médico ${medico.nome} sem restrições de convênio configuradas`);
+      }
+    }
+
     console.log('🔍 Buscando regras de negócio...');
     // ===== VALIDAÇÕES DE REGRAS DE NEGÓCIO (APENAS PARA N8N) =====
     const regras = getMedicoRules(config, medico.id, BUSINESS_RULES.medicos[medico.id]);
