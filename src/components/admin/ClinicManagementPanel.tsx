@@ -173,9 +173,23 @@ export function ClinicManagementPanel() {
     }
   };
 
+  const fetchParceiros = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('parceiros')
+        .select('id, nome, slug')
+        .eq('ativo', true)
+        .order('nome');
+      if (!error && data) setParceiros(data);
+    } catch (err) {
+      console.error('Erro ao buscar parceiros:', err);
+    }
+  };
+
   useEffect(() => {
     if (isAdmin) {
       fetchClientes();
+      fetchParceiros();
     }
   }, [isAdmin]);
 
