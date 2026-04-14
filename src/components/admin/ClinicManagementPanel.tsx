@@ -20,6 +20,12 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useStableAuth } from '@/hooks/useStableAuth';
 
+interface Parceiro {
+  id: string;
+  nome: string;
+  slug: string;
+}
+
 interface Cliente {
   id: string;
   nome: string;
@@ -29,6 +35,7 @@ interface Cliente {
   logo_url: string | null;
   ativo: boolean;
   created_at: string;
+  parceiro?: string | null;
 }
 
 interface LLMConfig {
