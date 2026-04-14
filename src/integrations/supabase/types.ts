@@ -2380,10 +2380,16 @@ export type Database = {
         }
         Returns: Json
       }
-      criar_cliente: {
-        Args: { p_admin_user_id?: string; p_nome: string }
-        Returns: Json
-      }
+      criar_cliente:
+        | { Args: { p_admin_user_id?: string; p_nome: string }; Returns: Json }
+        | {
+            Args: {
+              p_admin_user_id?: string
+              p_nome: string
+              p_parceiro_id?: string
+            }
+            Returns: Json
+          }
       criar_cliente_ipado: { Args: never; Returns: Json }
       criar_medico: {
         Args: {

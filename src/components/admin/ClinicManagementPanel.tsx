@@ -11,6 +11,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Loader2, Building2, Plus, Users, Calendar, Stethoscope, Edit, RefreshCw, 
   Phone, MapPin, MessageSquare, Settings, AlertCircle, CheckCircle2, Bot
@@ -18,6 +19,12 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useStableAuth } from '@/hooks/useStableAuth';
+
+interface Parceiro {
+  id: string;
+  nome: string;
+  slug: string;
+}
 
 interface Cliente {
   id: string;
@@ -28,6 +35,7 @@ interface Cliente {
   logo_url: string | null;
   ativo: boolean;
   created_at: string;
+  parceiro?: string | null;
 }
 
 interface LLMConfig {
@@ -71,8 +79,10 @@ export function ClinicManagementPanel() {
     nome: '',
     telefone: '',
     whatsapp: '',
-    endereco: ''
+    endereco: '',
+    parceiro_id: ''
   });
+  const [parceiros, setParceiros] = useState<Parceiro[]>([]);
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
   const [editFormData, setEditFormData] = useState<EditFormData>({
     nome: '',
@@ -163,9 +173,23 @@ export function ClinicManagementPanel() {
     }
   };
 
+  const fetchParceiros = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('parceiros')
+        .select('id, nome, slug')
+        .eq('ativo', true)
+        .order('nome');
+      if (!error && data) setParceiros(data);
+    } catch (err) {
+      console.error('Erro ao buscar parceiros:', err);
+    }
+  };
+
   useEffect(() => {
     if (isAdmin) {
       fetchClientes();
+      fetchParceiros();
     }
   }, [isAdmin]);
 
@@ -179,13 +203,23 @@ export function ClinicManagementPanel() {
       return;
     }
 
+    if (!newClienteData.parceiro_id) {
+      toast({
+        title: 'Erro',
+        description: 'Selecione o parceiro',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setCreating(true);
     try {
       // Criar cliente
       const { data, error } = await supabase.rpc('criar_cliente', {
         p_nome: newClienteData.nome.trim(),
-        p_admin_user_id: profile?.user_id
-      });
+        p_admin_user_id: profile?.user_id,
+        p_parceiro_id: newClienteData.parceiro_id || undefined
+      } as any);
 
       if (error) throw error;
 
@@ -224,7 +258,7 @@ export function ClinicManagementPanel() {
         description: 'Clínica criada com sucesso',
       });
 
-      setNewClienteData({ nome: '', telefone: '', whatsapp: '', endereco: '' });
+      setNewClienteData({ nome: '', telefone: '', whatsapp: '', endereco: '', parceiro_id: '' });
       setShowCreateModal(false);
       fetchClientes();
       queryClient.invalidateQueries({ queryKey: ['clientes'] });
@@ -515,6 +549,23 @@ export function ClinicManagementPanel() {
                 onChange={(e) => setNewClienteData(prev => ({ ...prev, nome: e.target.value }))}
                 placeholder="Ex: Clínica São José"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Parceiro *</Label>
+              <Select
+                value={newClienteData.parceiro_id}
+                onValueChange={(value) => setNewClienteData(prev => ({ ...prev, parceiro_id: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o parceiro" />
+                </SelectTrigger>
+                <SelectContent>
+                  {parceiros.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             
             <Separator />
