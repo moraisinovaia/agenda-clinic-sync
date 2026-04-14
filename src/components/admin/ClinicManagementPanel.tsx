@@ -203,6 +203,15 @@ export function ClinicManagementPanel() {
       return;
     }
 
+    if (!newClienteData.parceiro_id) {
+      toast({
+        title: 'Erro',
+        description: 'Selecione o parceiro',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setCreating(true);
     try {
       // Criar cliente
