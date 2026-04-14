@@ -4405,22 +4405,21 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
           }
         }
       }
-    }
-
-    // 🆕 VERIFICAR SUBLIMITE POR CONVÊNIO NO RESCHEDULE
-    if (agendamento.convenio && regrasRescheduleValidacao?.convenio_sublimites) {
-      const resultadoConvSublimResch = await verificarSublimiteConvenio(
-        supabase, clienteId, agendamento.medico_id, nova_data, agendamento.convenio,
-        regrasRescheduleValidacao, periodoReschedule, servicoConfigReschedule, agendamento_id
-      );
-      
-      if (!resultadoConvSublimResch.permitido) {
-        console.log(`❌ [RESCHEDULE CONVENIO SUBLIMITE] Bloqueado: ${resultadoConvSublimResch.mensagem}`);
-        return businessErrorResponse({
-          codigo_erro: 'SUBLIMITE_CONVENIO_ATINGIDO',
-          mensagem_usuario: `❌ ${resultadoConvSublimResch.mensagem}\n\n💡 Por favor, escolha outra data para remarcar.`,
-          detalhes: resultadoConvSublimResch.detalhes
-        });
+      // 🆕 VERIFICAR SUBLIMITE POR CONVÊNIO NO RESCHEDULE
+      if (agendamento.convenio && regrasRescheduleValidacao?.convenio_sublimites) {
+        const resultadoConvSublimResch = await verificarSublimiteConvenio(
+          supabase, clienteId, agendamento.medico_id, nova_data, agendamento.convenio,
+          regrasRescheduleValidacao, periodoReschedule, servicoConfigReschedule, agendamento_id
+        );
+        
+        if (!resultadoConvSublimResch.permitido) {
+          console.log(`❌ [RESCHEDULE CONVENIO SUBLIMITE] Bloqueado: ${resultadoConvSublimResch.mensagem}`);
+          return businessErrorResponse({
+            codigo_erro: 'SUBLIMITE_CONVENIO_ATINGIDO',
+            mensagem_usuario: `❌ ${resultadoConvSublimResch.mensagem}\n\n💡 Por favor, escolha outra data para remarcar.`,
+            detalhes: resultadoConvSublimResch.detalhes
+          });
+        }
       }
     }
 
