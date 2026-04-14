@@ -4195,6 +4195,7 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
         data_agendamento,
         hora_agendamento,
         status,
+        convenio,
         pacientes(nome_completo),
         medicos(nome),
         atendimentos(nome)
