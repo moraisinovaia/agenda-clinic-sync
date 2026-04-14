@@ -208,8 +208,9 @@ export function ClinicManagementPanel() {
       // Criar cliente
       const { data, error } = await supabase.rpc('criar_cliente', {
         p_nome: newClienteData.nome.trim(),
-        p_admin_user_id: profile?.user_id
-      });
+        p_admin_user_id: profile?.user_id,
+        p_parceiro_id: newClienteData.parceiro_id || undefined
+      } as any);
 
       if (error) throw error;
 
