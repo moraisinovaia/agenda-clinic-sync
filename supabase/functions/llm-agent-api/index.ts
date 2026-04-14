@@ -855,6 +855,111 @@ async function calcularVagasDisponiveisComLimites(
   return Math.min(vagasPool, vagasSublimite);
 }
 
+// ============= SISTEMA DE SUBLIMITES POR CONVÊNIO =============
+
+interface ConvenioSublimiteResult {
+  permitido: boolean;
+  erro_codigo?: 'SUBLIMITE_CONVENIO_ATINGIDO';
+  mensagem?: string;
+  detalhes?: {
+    convenio: string;
+    sublimite: number;
+    ocupado: number;
+    limite_geral_turno: number;
+  };
+}
+
+/**
+ * Verifica se o sublimite de um convênio específico foi atingido para um turno.
+ * Ex: HGU max 18 pacientes/turno mesmo que o turno total aceite 25.
+ * Busca `convenio_sublimites` na config do médico (business_rules).
+ */
+async function verificarSublimiteConvenio(
+  supabase: any,
+  clienteId: string,
+  medicoId: string,
+  dataAgendamento: string,
+  convenio: string | null | undefined,
+  regras: any,
+  periodo?: string,
+  servicoConfig?: any,
+  excludeAgendamentoId?: string
+): Promise<ConvenioSublimiteResult> {
+  if (!convenio) return { permitido: true };
+  
+  const convenioSublimites: Record<string, number> = regras?.convenio_sublimites || {};
+  if (Object.keys(convenioSublimites).length === 0) return { permitido: true };
+  
+  const convenioNorm = convenio.toUpperCase().trim().replace(/[-_]/g, ' ');
+  let sublimite: number | null = null;
+  let convenioKey = '';
+  
+  for (const [key, limite] of Object.entries(convenioSublimites)) {
+    const keyNorm = key.toUpperCase().trim().replace(/[-_]/g, ' ');
+    if (keyNorm === convenioNorm || keyNorm.includes(convenioNorm) || convenioNorm.includes(keyNorm)) {
+      sublimite = limite;
+      convenioKey = key;
+      break;
+    }
+  }
+  
+  if (sublimite === null) return { permitido: true };
+  
+  console.log(`🔍 [CONVENIO SUBLIMITE] Verificando sublimite de ${sublimite} para "${convenioKey}" em ${dataAgendamento}...`);
+  
+  // Determinar faixa de horário do período
+  const servicoNorm = servicoConfig ? normalizarServicoPeriodos(servicoConfig) : null;
+  let inicioContagem: string | null = null;
+  let fimContagem: string | null = null;
+  
+  if (periodo && servicoNorm?.periodos?.[periodo]) {
+    const configPeriodo = servicoNorm.periodos[periodo];
+    inicioContagem = configPeriodo.contagem_inicio || configPeriodo.inicio;
+    fimContagem = configPeriodo.contagem_fim || configPeriodo.fim;
+  }
+  
+  let query = supabase
+    .from('agendamentos')
+    .select('id', { count: 'exact', head: true })
+    .eq('medico_id', medicoId)
+    .eq('data_agendamento', dataAgendamento)
+    .eq('cliente_id', clienteId)
+    .is('excluido_em', null)
+    .is('cancelado_em', null)
+    .in('status', ['agendado', 'confirmado'])
+    .ilike('convenio', `%${convenioKey}%`);
+  
+  if (inicioContagem && fimContagem) {
+    query = query.gte('hora_agendamento', inicioContagem).lt('hora_agendamento', fimContagem);
+  }
+  if (excludeAgendamentoId) {
+    query = query.neq('id', excludeAgendamentoId);
+  }
+  
+  const { count, error } = await query;
+  if (error) {
+    console.error(`❌ [CONVENIO SUBLIMITE] Erro:`, error);
+    return { permitido: true };
+  }
+  
+  const ocupado = count || 0;
+  const limiteGeralTurno = regras?.limite_por_turno || 25;
+  console.log(`📊 [CONVENIO SUBLIMITE] "${convenioKey}": ${ocupado}/${sublimite} (turno geral: ${limiteGeralTurno})`);
+  
+  if (ocupado >= sublimite) {
+    console.log(`❌ [CONVENIO SUBLIMITE] Limite de ${convenioKey} ATINGIDO! ${ocupado}/${sublimite}`);
+    return {
+      permitido: false,
+      erro_codigo: 'SUBLIMITE_CONVENIO_ATINGIDO',
+      mensagem: `O limite de ${sublimite} pacientes ${convenioKey} por turno já foi atingido para ${formatarDataPorExtenso(dataAgendamento)}. O médico atende até ${limiteGeralTurno} pacientes no total, mas apenas ${sublimite} podem ser ${convenioKey}.`,
+      detalhes: { convenio: convenioKey, sublimite, ocupado, limite_geral_turno: limiteGeralTurno }
+    };
+  }
+  
+  console.log(`✅ [CONVENIO SUBLIMITE] "${convenioKey}" OK: ${sublimite - ocupado} vaga(s) restante(s)`);
+  return { permitido: true };
+}
+
 // 🚨 VALORES HARDCODED (fallback quando banco não disponível)
 const FALLBACK_PHONE = ''; // Vazio para forçar uso de mensagem genérica
 const FALLBACK_DIAS_BUSCA_INICIAL = 14;
@@ -2790,6 +2895,64 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
                   }
                 }
               }
+              
+              // 🆕 2.5 VERIFICAR SUBLIMITE POR CONVÊNIO (ex: HGU max 18/turno)
+              if (convenio && regras?.convenio_sublimites) {
+                const resultadoConvenioSublimite = await verificarSublimiteConvenio(
+                  supabase, clienteId, medico.id, data_consulta, convenio, regras,
+                  periodo, servicoLocal
+                );
+                
+                if (!resultadoConvenioSublimite.permitido) {
+                  console.log(`❌ [CONVENIO SUBLIMITE] Bloqueado: ${resultadoConvenioSublimite.erro_codigo}`);
+                  
+                  // Buscar próximas datas com vagas para esse convênio
+                  const proximasDatasConvenio: Array<{data: string; dia_semana: string; vagas_disponiveis: number}> = [];
+                  const diasSemanaArr = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+                  
+                  for (let dias = 1; dias <= 30 && proximasDatasConvenio.length < 5; dias++) {
+                    const dataFutura = new Date(data_consulta + 'T00:00:00');
+                    dataFutura.setDate(dataFutura.getDate() + dias);
+                    const dataFuturaStr = dataFutura.toISOString().split('T')[0];
+                    const diaSemanaNum = dataFutura.getDay();
+                    if (diaSemanaNum === 0 || diaSemanaNum === 6) continue;
+                    if (servicoLocal?.dias_semana && !servicoLocal.dias_semana.includes(diaSemanaNum)) continue;
+                    
+                    const checkResult = await verificarSublimiteConvenio(
+                      supabase, clienteId, medico.id, dataFuturaStr, convenio, regras,
+                      periodo, servicoLocal
+                    );
+                    if (checkResult.permitido) {
+                      proximasDatasConvenio.push({
+                        data: dataFuturaStr,
+                        dia_semana: diasSemanaArr[diaSemanaNum],
+                        vagas_disponiveis: (resultadoConvenioSublimite.detalhes?.sublimite || 0) - ((checkResult as any).detalhes?.ocupado || 0)
+                      });
+                    }
+                  }
+                  
+                  let msgConvenio = `❌ ${resultadoConvenioSublimite.mensagem}\n\n`;
+                  if (proximasDatasConvenio.length > 0) {
+                    msgConvenio += `✅ Próximas datas com vagas ${convenio}:\n\n`;
+                    proximasDatasConvenio.forEach(d => {
+                      msgConvenio += `📅 ${formatarDataPorExtenso(d.data)} (${d.dia_semana})\n`;
+                    });
+                    msgConvenio += `\n💡 Gostaria de agendar em uma destas datas?`;
+                  } else {
+                    msgConvenio += `📞 Entre em contato com a clínica para mais opções.`;
+                  }
+                  
+                  return businessErrorResponse({
+                    codigo_erro: 'SUBLIMITE_CONVENIO_ATINGIDO',
+                    mensagem_usuario: msgConvenio,
+                    detalhes: resultadoConvenioSublimite.detalhes,
+                    sugestoes: proximasDatasConvenio.length > 0 ? {
+                      proximas_datas: proximasDatasConvenio,
+                      acao_sugerida: 'reagendar_data_alternativa'
+                    } : null
+                  });
+                }
+              }
             } else {
               console.log(`⚠️ Serviço "${atendimento_nome}" não encontrado nas regras, prosseguindo sem validação específica`);
             }
@@ -4032,6 +4195,7 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
         data_agendamento,
         hora_agendamento,
         status,
+        convenio,
         pacientes(nome_completo),
         medicos(nome),
         atendimentos(nome)
@@ -4239,6 +4403,22 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
             }
             console.log(`✅ [RESCHEDULE] Vagas disponíveis: ${configPeriodoResch.limite - ocupadas}/${configPeriodoResch.limite}`);
           }
+        }
+      }
+      // 🆕 VERIFICAR SUBLIMITE POR CONVÊNIO NO RESCHEDULE
+      if (agendamento.convenio && regrasRescheduleValidacao?.convenio_sublimites) {
+        const resultadoConvSublimResch = await verificarSublimiteConvenio(
+          supabase, clienteId, agendamento.medico_id, nova_data, agendamento.convenio,
+          regrasRescheduleValidacao, periodoReschedule, servicoConfigReschedule, agendamento_id
+        );
+        
+        if (!resultadoConvSublimResch.permitido) {
+          console.log(`❌ [RESCHEDULE CONVENIO SUBLIMITE] Bloqueado: ${resultadoConvSublimResch.mensagem}`);
+          return businessErrorResponse({
+            codigo_erro: 'SUBLIMITE_CONVENIO_ATINGIDO',
+            mensagem_usuario: `❌ ${resultadoConvSublimResch.mensagem}\n\n💡 Por favor, escolha outra data para remarcar.`,
+            detalhes: resultadoConvSublimResch.detalhes
+          });
         }
       }
     }
