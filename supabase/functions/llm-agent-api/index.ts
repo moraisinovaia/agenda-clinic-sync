@@ -2362,6 +2362,53 @@ async function handleSchedule(supabase: any, body: any, clienteId: string, confi
       });
     }
 
+    // 🏥 VALIDAR CONVÊNIO ANTES DE PROSSEGUIR
+    console.log('🔍 Validando convênio do paciente...');
+    if (convenio) {
+      // Buscar convênios aceitos do médico (da tabela medicos)
+      const { data: medicoConvenios } = await supabase
+        .from('medicos')
+        .select('convenios_aceitos')
+        .eq('id', medico.id)
+        .eq('cliente_id', clienteId)
+        .single();
+      
+      const conveniosAceitosMedico: string[] = medicoConvenios?.convenios_aceitos || [];
+      
+      // Também verificar nas business_rules
+      const regrasConvenio = getMedicoRules(config, medico.id, BUSINESS_RULES.medicos[medico.id]);
+      const conveniosRegras: string[] = regrasConvenio?.convenios_aceitos || [];
+      
+      // Unir convênios de ambas as fontes
+      const todosConveniosAceitos = [...new Set([...conveniosAceitosMedico, ...conveniosRegras])];
+      
+      if (todosConveniosAceitos.length > 0) {
+        const convenioNorm = convenio.toUpperCase().trim().replace(/[-_]/g, ' ');
+        const convenioAceito = todosConveniosAceitos.some(c => {
+          const cNorm = c.toUpperCase().trim().replace(/[-_]/g, ' ');
+          return cNorm === convenioNorm || 
+                 cNorm.includes(convenioNorm) || 
+                 convenioNorm.includes(cNorm);
+        });
+        
+        if (!convenioAceito) {
+          console.log(`❌ [CONVENIO] "${convenio}" não aceito por ${medico.nome}. Aceitos: ${todosConveniosAceitos.join(', ')}`);
+          return businessErrorResponse({
+            codigo_erro: 'CONVENIO_NAO_ACEITO',
+            mensagem_usuario: `❌ O convênio "${convenio}" não é aceito pelo(a) ${medico.nome}.\n\n✅ Convênios aceitos:\n${todosConveniosAceitos.map(c => `   • ${c}`).join('\n')}\n\n💡 Verifique se o convênio está correto ou escolha outro profissional.`,
+            detalhes: {
+              convenio_solicitado: convenio,
+              convenios_aceitos: todosConveniosAceitos,
+              medico: medico.nome
+            }
+          });
+        }
+        console.log(`✅ [CONVENIO] "${convenio}" aceito por ${medico.nome}`);
+      } else {
+        console.log(`ℹ️ [CONVENIO] Médico ${medico.nome} sem restrições de convênio configuradas`);
+      }
+    }
+
     console.log('🔍 Buscando regras de negócio...');
     // ===== VALIDAÇÕES DE REGRAS DE NEGÓCIO (APENAS PARA N8N) =====
     const regras = getMedicoRules(config, medico.id, BUSINESS_RULES.medicos[medico.id]);
@@ -4047,6 +4094,154 @@ async function handleReschedule(supabase: any, body: any, clienteId: string, con
       });
     }
 
+    // 🔒 VERIFICAR SE A NOVA DATA ESTÁ BLOQUEADA
+    console.log(`🔒 [RESCHEDULE] Verificando bloqueios para ${nova_data}...`);
+    const { data: bloqueiosReschedule, error: bloqueioRescheduleError } = await supabase
+      .from('bloqueios_agenda')
+      .select('id, motivo')
+      .eq('medico_id', agendamento.medico_id)
+      .eq('status', 'ativo')
+      .eq('cliente_id', clienteId)
+      .lte('data_inicio', nova_data)
+      .gte('data_fim', nova_data);
+
+    if (!bloqueioRescheduleError && bloqueiosReschedule && bloqueiosReschedule.length > 0) {
+      console.log(`⛔ [RESCHEDULE] Data ${nova_data} bloqueada:`, bloqueiosReschedule[0].motivo);
+      return businessErrorResponse({
+        codigo_erro: 'DATA_BLOQUEADA',
+        mensagem_usuario: `❌ A agenda do(a) ${agendamento.medicos?.nome} está bloqueada em ${formatarDataPorExtenso(nova_data)}.\n\n📋 Motivo: ${bloqueiosReschedule[0].motivo}\n\n💡 Por favor, escolha outra data para remarcar.`,
+        detalhes: {
+          nova_data,
+          motivo_bloqueio: bloqueiosReschedule[0].motivo
+        }
+      });
+    }
+
+    // 🔢 VERIFICAR LIMITE DE VAGAS NO PERÍODO (evitar overbooking)
+    const regrasRescheduleValidacao = getMedicoRules(config, agendamento.medico_id, BUSINESS_RULES.medicos[agendamento.medico_id]);
+    if (regrasRescheduleValidacao && regrasRescheduleValidacao.servicos) {
+      console.log(`📋 [RESCHEDULE] Verificando limites de vagas...`);
+      
+      // Classificar período pela hora
+      const [horaReschedule] = nova_hora.split(':').map(Number);
+      const periodoReschedule = horaReschedule < 12 ? 'manha' : 'tarde';
+      
+      // Verificar dia da semana permitido
+      const dataObjReschedule = new Date(nova_data + 'T00:00:00');
+      const diaSemanaReschedule = dataObjReschedule.getDay();
+      const diasSemanaNames = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
+      const diaSemanaNameReschedule = diasSemanaNames[diaSemanaReschedule];
+      
+      // Buscar serviço correspondente ao atendimento atual
+      const atendimentoNomeReschedule = agendamento.atendimentos?.nome;
+      let servicoKeyReschedule: string | null = null;
+      let servicoConfigReschedule: any = null;
+      
+      if (atendimentoNomeReschedule) {
+        const normalizarNomeResch = (texto: string): string =>
+          texto.toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/\b(de|da|do|das|dos)\b/g, '')
+            .replace(/[_\-\s]+/g, '')
+            .replace(/oi/g, 'o')
+            .replace(/ai/g, 'a');
+        
+        const atendNorm = normalizarNomeResch(atendimentoNomeReschedule);
+        servicoKeyReschedule = Object.keys(regrasRescheduleValidacao.servicos).find(s => {
+          const sNorm = normalizarNomeResch(s);
+          return sNorm.includes(atendNorm) || atendNorm.includes(sNorm) || sNorm === atendNorm;
+        }) || null;
+        
+        if (servicoKeyReschedule) {
+          servicoConfigReschedule = regrasRescheduleValidacao.servicos[servicoKeyReschedule];
+        }
+      }
+      
+      // Se não encontrou serviço específico, usar o primeiro
+      if (!servicoKeyReschedule) {
+        servicoKeyReschedule = Object.keys(regrasRescheduleValidacao.servicos)[0];
+        servicoConfigReschedule = regrasRescheduleValidacao.servicos[servicoKeyReschedule];
+      }
+      
+      if (servicoConfigReschedule) {
+        // Verificar dia permitido
+        if (servicoConfigReschedule.dias_permitidos && !servicoConfigReschedule.dias_permitidos.includes(diaSemanaNameReschedule)) {
+          const diasPermitidos = servicoConfigReschedule.dias_permitidos.join(', ');
+          return businessErrorResponse({
+            codigo_erro: 'DIA_NAO_PERMITIDO',
+            mensagem_usuario: `❌ ${regrasRescheduleValidacao.nome} não atende ${servicoKeyReschedule} no dia escolhido.\n\n✅ Dias disponíveis: ${diasPermitidos}\n\n💡 Escolha uma data em um dos dias disponíveis.`,
+            detalhes: {
+              medico: regrasRescheduleValidacao.nome,
+              servico: servicoKeyReschedule,
+              dia_solicitado: diaSemanaNameReschedule,
+              dias_permitidos: servicoConfigReschedule.dias_permitidos
+            }
+          });
+        }
+        
+        // Verificar limites compartilhados/sublimites
+        if (servicoConfigReschedule.compartilha_limite_com || servicoConfigReschedule.limite_proprio) {
+          const resultadoLimitesResch = await verificarLimitesCompartilhados(
+            supabase, clienteId, agendamento.medico_id, nova_data,
+            servicoKeyReschedule, servicoConfigReschedule, regrasRescheduleValidacao
+          );
+          
+          if (!resultadoLimitesResch.permitido) {
+            return businessErrorResponse({
+              codigo_erro: resultadoLimitesResch.erro_codigo || 'LIMITE_ATINGIDO',
+              mensagem_usuario: `❌ ${resultadoLimitesResch.mensagem}\n\n💡 Por favor, escolha outra data para remarcar.`,
+              detalhes: resultadoLimitesResch.detalhes
+            });
+          }
+        }
+        
+        // Verificar limite de vagas do período
+        const servicoNormalizado = normalizarServicoPeriodos(servicoConfigReschedule);
+        if (servicoNormalizado?.periodos?.[periodoReschedule]) {
+          const configPeriodoResch = servicoNormalizado.periodos[periodoReschedule];
+          if (configPeriodoResch.limite) {
+            const inicioContagem = configPeriodoResch.contagem_inicio || configPeriodoResch.inicio;
+            const fimContagem = configPeriodoResch.contagem_fim || configPeriodoResch.fim;
+            
+            let queryLimite = supabase
+              .from('agendamentos')
+              .select('id', { count: 'exact', head: true })
+              .eq('medico_id', agendamento.medico_id)
+              .eq('data_agendamento', nova_data)
+              .eq('cliente_id', clienteId)
+              .is('excluido_em', null)
+              .is('cancelado_em', null)
+              .in('status', ['agendado', 'confirmado'])
+              .neq('id', agendamento_id); // Excluir o próprio agendamento sendo remarcado
+            
+            if (inicioContagem && fimContagem) {
+              queryLimite = queryLimite
+                .gte('hora_agendamento', inicioContagem)
+                .lt('hora_agendamento', fimContagem);
+            }
+            
+            const { count: vagasOcupadasResch } = await queryLimite;
+            const ocupadas = vagasOcupadasResch || 0;
+            
+            if (ocupadas >= configPeriodoResch.limite) {
+              console.log(`❌ [RESCHEDULE] Limite atingido: ${ocupadas}/${configPeriodoResch.limite}`);
+              return businessErrorResponse({
+                codigo_erro: 'LIMITE_VAGAS_ATINGIDO',
+                mensagem_usuario: `❌ Não há mais vagas para ${regrasRescheduleValidacao.nome} no período da ${periodoReschedule === 'manha' ? 'manhã' : 'tarde'} em ${formatarDataPorExtenso(nova_data)}.\n\n📊 Status: ${ocupadas}/${configPeriodoResch.limite} vagas ocupadas\n\n💡 Por favor, escolha outra data ou período para remarcar.`,
+                detalhes: {
+                  medico: regrasRescheduleValidacao.nome,
+                  data_solicitada: nova_data,
+                  limite_vagas: configPeriodoResch.limite,
+                  vagas_ocupadas: ocupadas
+                }
+              });
+            }
+            console.log(`✅ [RESCHEDULE] Vagas disponíveis: ${configPeriodoResch.limite - ocupadas}/${configPeriodoResch.limite}`);
+          }
+        }
+      }
+    }
 
     // Verificar disponibilidade do novo horário COM filtro de cliente
     console.log(`🔍 Verificando disponibilidade em ${nova_data} às ${nova_hora}...`);
