@@ -541,6 +541,23 @@ export function ClinicManagementPanel() {
                 placeholder="Ex: Clínica São José"
               />
             </div>
+
+            <div className="space-y-2">
+              <Label>Parceiro *</Label>
+              <Select
+                value={newClienteData.parceiro_id}
+                onValueChange={(value) => setNewClienteData(prev => ({ ...prev, parceiro_id: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o parceiro" />
+                </SelectTrigger>
+                <SelectContent>
+                  {parceiros.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             
             <Separator />
             
