@@ -249,7 +249,7 @@ export function ClinicManagementPanel() {
         description: 'Clínica criada com sucesso',
       });
 
-      setNewClienteData({ nome: '', telefone: '', whatsapp: '', endereco: '' });
+      setNewClienteData({ nome: '', telefone: '', whatsapp: '', endereco: '', parceiro_id: '' });
       setShowCreateModal(false);
       fetchClientes();
       queryClient.invalidateQueries({ queryKey: ['clientes'] });
