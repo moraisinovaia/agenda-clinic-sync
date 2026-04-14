@@ -11,6 +11,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Loader2, Building2, Plus, Users, Calendar, Stethoscope, Edit, RefreshCw, 
   Phone, MapPin, MessageSquare, Settings, AlertCircle, CheckCircle2, Bot
