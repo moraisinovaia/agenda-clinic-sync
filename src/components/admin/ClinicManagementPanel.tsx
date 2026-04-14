@@ -79,8 +79,10 @@ export function ClinicManagementPanel() {
     nome: '',
     telefone: '',
     whatsapp: '',
-    endereco: ''
+    endereco: '',
+    parceiro_id: ''
   });
+  const [parceiros, setParceiros] = useState<Parceiro[]>([]);
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
   const [editFormData, setEditFormData] = useState<EditFormData>({
     nome: '',
