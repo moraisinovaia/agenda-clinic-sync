@@ -6251,6 +6251,16 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         console.log(`📊 Após ampliação: ${proximasDatas.length} datas encontradas`);
       }
       
+      // 🕐 FILTRAR PERÍODOS DO DIA ATUAL QUE JÁ PASSARAM
+      const proximasDatasFiltradas = filtrarPeriodosPassados(proximasDatas);
+      const removidos = proximasDatas.length - proximasDatasFiltradas.length;
+      if (removidos > 0) {
+        console.log(`🕐 [FILTRO] Removidas ${removidos} data(s) com todos os períodos já passados`);
+      }
+      // Substituir array original pelo filtrado
+      proximasDatas.length = 0;
+      proximasDatas.push(...proximasDatasFiltradas);
+
       // 🚫 SE AINDA NÃO ENCONTROU NADA, retornar erro claro
       if (proximasDatas.length === 0) {
         const mensagemSemVagas = 
