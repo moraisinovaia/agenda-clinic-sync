@@ -6771,6 +6771,17 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         });
       }
 
+      // 🕐 FILTRAR PERÍODOS DO DIA ATUAL QUE JÁ PASSARAM (hora marcada)
+      {
+        const filtradas = filtrarPeriodosPassados(proximasDatas);
+        const removidos = proximasDatas.length - filtradas.length;
+        if (removidos > 0) {
+          console.log(`🕐 [FILTRO-HM] Removidas ${removidos} data(s) com períodos já passados`);
+        }
+        proximasDatas.length = 0;
+        proximasDatas.push(...filtradas);
+      }
+
       if (proximasDatas.length === 0) {
         return businessErrorResponse({
           codigo_erro: 'SEM_VAGAS_DISPONIVEIS',
