@@ -7379,6 +7379,12 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         const minSlotMinutos = data_consulta === dataAtualSlots ? horarioAtualMinSlots + 60 : 0;
 
         while (horaAtual < horaLimite) {
+          // 🕐 Pular horários que já passaram (hoje + 60min antecedência)
+          if (horaAtual < minSlotMinutos) {
+            horaAtual += intervaloMinutos;
+            continue;
+          }
+
           const h = Math.floor(horaAtual / 60);
           const m = horaAtual % 60;
           const horarioFormatado = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:00`;
