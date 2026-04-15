@@ -1261,6 +1261,49 @@ function getDataHoraAtualBrasil() {
   };
 }
 
+/**
+ * 🕐 FILTRAR PERÍODOS PASSADOS DO DIA ATUAL
+ * Remove períodos cujo horário de fim já passou (com antecedência mínima de 60min).
+ * Para datas futuras, mantém todos os períodos.
+ */
+function filtrarPeriodosPassados(
+  proximasDatas: Array<{
+    data: string;
+    dia_semana: string;
+    periodos: Array<Record<string, any>>;
+  }>
+): Array<{ data: string; dia_semana: string; periodos: Array<Record<string, any>> }> {
+  const { data: dataAtual, horarioEmMinutos } = getDataHoraAtualBrasil();
+  const ANTECEDENCIA_MIN = 60; // minutos
+  const limiteMinutos = horarioEmMinutos + ANTECEDENCIA_MIN;
+
+  return proximasDatas
+    .map(dia => {
+      if (dia.data !== dataAtual) return dia; // datas futuras: manter tudo
+
+      // Para hoje: filtrar períodos cujo fim já passou
+      const periodosValidos = dia.periodos.filter(p => {
+        // Extrair hora de fim do campo horario_distribuicao (ex: "07:00 às 12:00")
+        const match = (p.horario_distribuicao || '').match(/(\d{2}:\d{2})\s*(?:às|a|-)\s*(\d{2}:\d{2})/);
+        if (!match) return true; // se não conseguir parsear, manter
+
+        const [, , fimStr] = match;
+        const [fimH, fimM] = fimStr.split(':').map(Number);
+        const fimMinutos = fimH * 60 + fimM;
+
+        // Período válido se o fim > hora atual + antecedência
+        if (fimMinutos <= limiteMinutos) {
+          console.log(`🕐 [FILTRO] Removendo período "${p.periodo}" de hoje (${dia.data}) — fim ${fimStr} já passou (atual+60min: ${Math.floor(limiteMinutos/60)}:${String(limiteMinutos%60).padStart(2,'0')})`);
+          return false;
+        }
+        return true;
+      });
+
+      return { ...dia, periodos: periodosValidos };
+    })
+    .filter(dia => dia.periodos.length > 0); // remover dias sem períodos válidos
+}
+
 // Manter compatibilidade - retorna apenas a data
 function getDataAtualBrasil(): string {
   return getDataHoraAtualBrasil().data;
@@ -6208,6 +6251,16 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         console.log(`📊 Após ampliação: ${proximasDatas.length} datas encontradas`);
       }
       
+      // 🕐 FILTRAR PERÍODOS DO DIA ATUAL QUE JÁ PASSARAM
+      const proximasDatasFiltradas = filtrarPeriodosPassados(proximasDatas);
+      const removidos = proximasDatas.length - proximasDatasFiltradas.length;
+      if (removidos > 0) {
+        console.log(`🕐 [FILTRO] Removidas ${removidos} data(s) com todos os períodos já passados`);
+      }
+      // Substituir array original pelo filtrado
+      proximasDatas.length = 0;
+      proximasDatas.push(...proximasDatasFiltradas);
+
       // 🚫 SE AINDA NÃO ENCONTROU NADA, retornar erro claro
       if (proximasDatas.length === 0) {
         const mensagemSemVagas = 
@@ -6718,6 +6771,17 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         });
       }
 
+      // 🕐 FILTRAR PERÍODOS DO DIA ATUAL QUE JÁ PASSARAM (hora marcada)
+      {
+        const filtradas = filtrarPeriodosPassados(proximasDatas);
+        const removidos = proximasDatas.length - filtradas.length;
+        if (removidos > 0) {
+          console.log(`🕐 [FILTRO-HM] Removidas ${removidos} data(s) com períodos já passados`);
+        }
+        proximasDatas.length = 0;
+        proximasDatas.push(...filtradas);
+      }
+
       if (proximasDatas.length === 0) {
         return businessErrorResponse({
           codigo_erro: 'SEM_VAGAS_DISPONIVEIS',
@@ -7201,7 +7265,17 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         let horaAtual = horaInicio * 60 + minInicio;
         const horaLimite = horaFim * 60 + minFim;
         
+        // 🕐 Calcular horário mínimo se for hoje (antecedência de 60min)
+        const { data: dataAtualEst, horarioEmMinutos: horarioAtualMinEst } = getDataHoraAtualBrasil();
+        const minEstMinutos = data_consulta === dataAtualEst ? horarioAtualMinEst + 60 : 0;
+
         while (horaAtual < horaLimite) {
+          // 🕐 Pular horários que já passaram
+          if (horaAtual < minEstMinutos) {
+            horaAtual += intervaloMinutos;
+            continue;
+          }
+
           const h = Math.floor(horaAtual / 60);
           const m = horaAtual % 60;
           const horarioFormatado = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:00`;
@@ -7310,7 +7384,17 @@ async function handleAvailability(supabase: any, body: any, clienteId: string, c
         let horaAtual = horaInicio * 60 + minInicio;
         const horaLimite = horaFim * 60 + minFim;
         
+        // 🕐 Calcular horário mínimo se for hoje (antecedência de 60min)
+        const { data: dataAtualSlots, horarioEmMinutos: horarioAtualMinSlots } = getDataHoraAtualBrasil();
+        const minSlotMinutos = data_consulta === dataAtualSlots ? horarioAtualMinSlots + 60 : 0;
+
         while (horaAtual < horaLimite) {
+          // 🕐 Pular horários que já passaram (hoje + 60min antecedência)
+          if (horaAtual < minSlotMinutos) {
+            horaAtual += intervaloMinutos;
+            continue;
+          }
+
           const h = Math.floor(horaAtual / 60);
           const m = horaAtual % 60;
           const horarioFormatado = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:00`;
