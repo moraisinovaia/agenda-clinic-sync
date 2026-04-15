@@ -1261,6 +1261,49 @@ function getDataHoraAtualBrasil() {
   };
 }
 
+/**
+ * 🕐 FILTRAR PERÍODOS PASSADOS DO DIA ATUAL
+ * Remove períodos cujo horário de fim já passou (com antecedência mínima de 60min).
+ * Para datas futuras, mantém todos os períodos.
+ */
+function filtrarPeriodosPassados(
+  proximasDatas: Array<{
+    data: string;
+    dia_semana: string;
+    periodos: Array<Record<string, any>>;
+  }>
+): Array<{ data: string; dia_semana: string; periodos: Array<Record<string, any>> }> {
+  const { data: dataAtual, horarioEmMinutos } = getDataHoraAtualBrasil();
+  const ANTECEDENCIA_MIN = 60; // minutos
+  const limiteMinutos = horarioEmMinutos + ANTECEDENCIA_MIN;
+
+  return proximasDatas
+    .map(dia => {
+      if (dia.data !== dataAtual) return dia; // datas futuras: manter tudo
+
+      // Para hoje: filtrar períodos cujo fim já passou
+      const periodosValidos = dia.periodos.filter(p => {
+        // Extrair hora de fim do campo horario_distribuicao (ex: "07:00 às 12:00")
+        const match = (p.horario_distribuicao || '').match(/(\d{2}:\d{2})\s*(?:às|a|-)\s*(\d{2}:\d{2})/);
+        if (!match) return true; // se não conseguir parsear, manter
+
+        const [, , fimStr] = match;
+        const [fimH, fimM] = fimStr.split(':').map(Number);
+        const fimMinutos = fimH * 60 + fimM;
+
+        // Período válido se o fim > hora atual + antecedência
+        if (fimMinutos <= limiteMinutos) {
+          console.log(`🕐 [FILTRO] Removendo período "${p.periodo}" de hoje (${dia.data}) — fim ${fimStr} já passou (atual+60min: ${Math.floor(limiteMinutos/60)}:${String(limiteMinutos%60).padStart(2,'0')})`);
+          return false;
+        }
+        return true;
+      });
+
+      return { ...dia, periodos: periodosValidos };
+    })
+    .filter(dia => dia.periodos.length > 0); // remover dias sem períodos válidos
+}
+
 // Manter compatibilidade - retorna apenas a data
 function getDataAtualBrasil(): string {
   return getDataHoraAtualBrasil().data;
