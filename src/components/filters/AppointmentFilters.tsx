@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CalendarDays, Filter, X, Stethoscope, Search } from 'lucide-react';
+import { CalendarDays, Filter, X, Stethoscope, Search, Sun, Sunset, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DoctorSearchField } from './DoctorSearchField';
+import { cn } from '@/lib/utils';
+import { PERIOD_LABELS, type PeriodFilter } from '@/utils/periodFilter';
 
 interface AppointmentFiltersProps {
   searchTerm: string;
@@ -21,6 +23,8 @@ interface AppointmentFiltersProps {
   onDoctorFilterChange: (value: string) => void;
   convenioFilter: string;
   onConvenioFilterChange: (value: string) => void;
+  periodFilter?: PeriodFilter;
+  onPeriodFilterChange?: (value: PeriodFilter) => void;
   doctors: any[];
   appointments: any[];
 }
@@ -36,6 +40,8 @@ export const AppointmentFilters = ({
   onDoctorFilterChange,
   convenioFilter,
   onConvenioFilterChange,
+  periodFilter = 'all',
+  onPeriodFilterChange,
   doctors,
   appointments,
 }: AppointmentFiltersProps) => {
@@ -56,6 +62,7 @@ export const AppointmentFilters = ({
     if (dateFilter !== 'all') count++;
     if (doctorFilter !== 'all') count++;
     if (convenioFilter !== 'all') count++;
+    if (periodFilter !== 'all') count++;
     return count;
   };
 
@@ -65,6 +72,7 @@ export const AppointmentFilters = ({
     onDateFilterChange('all');
     onDoctorFilterChange('all');
     onConvenioFilterChange('all');
+    onPeriodFilterChange?.('all');
   };
 
   const getDateFilterLabel = (value: string) => {
