@@ -30,9 +30,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { FilaEsperaForm } from '@/components/fila-espera/FilaEsperaForm';
 import { FilaEsperaFormData } from '@/types/fila-espera';
 import { RelatorioAgenda } from './RelatorioAgenda';
-import { FileText } from 'lucide-react';
+import { FileText, Sun, Sunset, Moon } from 'lucide-react';
 import { DoctorScheduleGenerator } from './DoctorScheduleGenerator';
 import { toast } from 'sonner';
+import { matchesPeriod, PERIOD_LABELS, type PeriodFilter } from '@/utils/periodFilter';
 
 interface DoctorScheduleProps {
   doctor: Doctor;
@@ -192,6 +193,7 @@ export function DoctorSchedule({
   const [patientSearch, setPatientSearch] = useState('');
   const [patientSearchResults, setPatientSearchResults] = useState<AppointmentWithRelations[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('all');
 
   // Função de busca de pacientes agendados
   const searchPatients = (searchTerm: string) => {
