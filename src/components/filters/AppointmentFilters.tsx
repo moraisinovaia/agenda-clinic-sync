@@ -328,6 +328,15 @@ export const AppointmentFilters = ({
                     />
                   </Badge>
                 )}
+                {periodFilter !== 'all' && onPeriodFilterChange && (
+                  <Badge variant="outline" className="gap-1">
+                    Turno: {PERIOD_LABELS[periodFilter]}
+                    <X
+                      className="h-3 w-3 cursor-pointer"
+                      onClick={() => onPeriodFilterChange('all')}
+                    />
+                  </Badge>
+                )}
               </div>
             )}
           </CardContent>
