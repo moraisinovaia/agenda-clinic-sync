@@ -341,11 +341,16 @@ export function DoctorSchedule({
   }, [selectedDate, doctor.id, blockedDates]);
 
   const selectedDateAppointments = getAppointmentsForDate(selectedDate);
-  const activeAppointments = selectedDateAppointments.filter(
+  // Aplica o filtro de período (Todos / Manhã / Tarde / Noite)
+  const periodFilteredAppointments = useMemo(
+    () => selectedDateAppointments.filter(apt => matchesPeriod(apt.hora_agendamento, periodFilter)),
+    [selectedDateAppointments, periodFilter]
+  );
+  const activeAppointments = periodFilteredAppointments.filter(
     apt => apt.status === 'agendado' || apt.status === 'confirmado' || apt.status === 'cancelado_bloqueio'
   );
 
-  // Contagem de agendamentos por tipo de atendimento
+  // Contagem de agendamentos por tipo de atendimento (respeita o filtro de período)
   const appointmentsByType = useMemo(() => {
     const counts: Record<string, number> = {};
     activeAppointments.forEach(apt => {
@@ -361,15 +366,16 @@ export function DoctorSchedule({
       const filtered = (emptySlots || []).filter(
         slot => slot.medico_id === doctor.id && 
                 slot.data === dateStr &&
-                slot.status === 'disponivel'
+                slot.status === 'disponivel' &&
+                matchesPeriod(slot.hora, periodFilter)
       );
-      console.log(`📊 Horários vazios para ${dateStr}:`, filtered.length);
+      console.log(`📊 Horários vazios para ${dateStr} (período=${periodFilter}):`, filtered.length);
       return filtered;
     } catch (error) {
       console.error('❌ Erro ao filtrar horários vazios:', error);
       return [];
     }
-  }, [emptySlots, doctor.id, selectedDate]);
+  }, [emptySlots, doctor.id, selectedDate, periodFilter]);
 
   const allSlots = useMemo(() => {
     try {
@@ -379,7 +385,7 @@ export function DoctorSchedule({
           hora: slot.hora,
           data: slot
         })),
-        ...selectedDateAppointments.map(apt => ({
+        ...periodFilteredAppointments.map(apt => ({
           type: 'appointment' as const,
           hora: apt.hora_agendamento,
           data: apt
@@ -389,7 +395,7 @@ export function DoctorSchedule({
       console.error('❌ Erro ao combinar slots:', error);
       return [];
     }
-  }, [emptyTimeSlots, selectedDateAppointments]);
+  }, [emptyTimeSlots, periodFilteredAppointments]);
 
   const handlePrint = () => {
     window.print();
