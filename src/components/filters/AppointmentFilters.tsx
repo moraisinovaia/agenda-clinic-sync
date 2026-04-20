@@ -123,6 +123,35 @@ export const AppointmentFilters = ({
         
         <CollapsibleContent>
           <CardContent className="pt-0">
+            {/* Filtro de Período (Turno) */}
+            {onPeriodFilterChange && (
+              <div className="mb-4 pb-4 border-b">
+                <label className="text-sm font-medium mb-2 block">Turno</label>
+                <div className="inline-flex rounded-md border bg-muted/30 p-1 gap-1">
+                  {(['all', 'manha', 'tarde', 'noite'] as PeriodFilter[]).map((p) => {
+                    const Icon = p === 'manha' ? Sun : p === 'tarde' ? Sunset : p === 'noite' ? Moon : Filter;
+                    const isActive = periodFilter === p;
+                    return (
+                      <Button
+                        key={p}
+                        type="button"
+                        variant={isActive ? 'default' : 'ghost'}
+                        size="sm"
+                        onClick={() => onPeriodFilterChange(p)}
+                        className={cn(
+                          'h-8 px-3 gap-1.5 transition-all',
+                          isActive ? 'shadow-sm' : 'hover:bg-background'
+                        )}
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                        {PERIOD_LABELS[p]}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Botões de Acesso Rápido */}
             <div className="flex flex-wrap gap-2 mb-4 pb-4 border-b">
               <Button
