@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CalendarDays, Filter, X, Stethoscope, Search } from 'lucide-react';
+import { CalendarDays, Filter, X, Stethoscope, Search, Sun, Sunset, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DoctorSearchField } from './DoctorSearchField';
+import { cn } from '@/lib/utils';
+import { PERIOD_LABELS, type PeriodFilter } from '@/utils/periodFilter';
 
 interface AppointmentFiltersProps {
   searchTerm: string;
@@ -21,6 +23,8 @@ interface AppointmentFiltersProps {
   onDoctorFilterChange: (value: string) => void;
   convenioFilter: string;
   onConvenioFilterChange: (value: string) => void;
+  periodFilter?: PeriodFilter;
+  onPeriodFilterChange?: (value: PeriodFilter) => void;
   doctors: any[];
   appointments: any[];
 }
@@ -36,6 +40,8 @@ export const AppointmentFilters = ({
   onDoctorFilterChange,
   convenioFilter,
   onConvenioFilterChange,
+  periodFilter = 'all',
+  onPeriodFilterChange,
   doctors,
   appointments,
 }: AppointmentFiltersProps) => {
@@ -56,6 +62,7 @@ export const AppointmentFilters = ({
     if (dateFilter !== 'all') count++;
     if (doctorFilter !== 'all') count++;
     if (convenioFilter !== 'all') count++;
+    if (periodFilter !== 'all') count++;
     return count;
   };
 
@@ -65,6 +72,7 @@ export const AppointmentFilters = ({
     onDateFilterChange('all');
     onDoctorFilterChange('all');
     onConvenioFilterChange('all');
+    onPeriodFilterChange?.('all');
   };
 
   const getDateFilterLabel = (value: string) => {
@@ -115,6 +123,35 @@ export const AppointmentFilters = ({
         
         <CollapsibleContent>
           <CardContent className="pt-0">
+            {/* Filtro de Período (Turno) */}
+            {onPeriodFilterChange && (
+              <div className="mb-4 pb-4 border-b">
+                <label className="text-sm font-medium mb-2 block">Turno</label>
+                <div className="inline-flex rounded-md border bg-muted/30 p-1 gap-1">
+                  {(['all', 'manha', 'tarde', 'noite'] as PeriodFilter[]).map((p) => {
+                    const Icon = p === 'manha' ? Sun : p === 'tarde' ? Sunset : p === 'noite' ? Moon : Filter;
+                    const isActive = periodFilter === p;
+                    return (
+                      <Button
+                        key={p}
+                        type="button"
+                        variant={isActive ? 'default' : 'ghost'}
+                        size="sm"
+                        onClick={() => onPeriodFilterChange(p)}
+                        className={cn(
+                          'h-8 px-3 gap-1.5 transition-all',
+                          isActive ? 'shadow-sm' : 'hover:bg-background'
+                        )}
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                        {PERIOD_LABELS[p]}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Botões de Acesso Rápido */}
             <div className="flex flex-wrap gap-2 mb-4 pb-4 border-b">
               <Button
@@ -288,6 +325,15 @@ export const AppointmentFilters = ({
                     <X 
                       className="h-3 w-3 cursor-pointer" 
                       onClick={() => onConvenioFilterChange('all')}
+                    />
+                  </Badge>
+                )}
+                {periodFilter !== 'all' && onPeriodFilterChange && (
+                  <Badge variant="outline" className="gap-1">
+                    Turno: {PERIOD_LABELS[periodFilter]}
+                    <X
+                      className="h-3 w-3 cursor-pointer"
+                      onClick={() => onPeriodFilterChange('all')}
                     />
                   </Badge>
                 )}

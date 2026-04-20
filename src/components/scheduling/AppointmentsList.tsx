@@ -59,11 +59,13 @@ export const AppointmentsList = React.memo(({ appointments, doctors, onEditAppoi
     dateFilter,
     doctorFilter,
     convenioFilter,
+    periodFilter,
     setSearchTerm,
     setStatusFilter,
     setDateFilter,
     setDoctorFilter,
     setConvenioFilter,
+    setPeriodFilter,
     filteredAppointments,
     getFilterStats,
   } = useAdvancedAppointmentFilters(appointments, allowCanceled);
@@ -194,6 +196,8 @@ export const AppointmentsList = React.memo(({ appointments, doctors, onEditAppoi
         onDoctorFilterChange={setDoctorFilter}
         convenioFilter={convenioFilter}
         onConvenioFilterChange={setConvenioFilter}
+        periodFilter={periodFilter}
+        onPeriodFilterChange={setPeriodFilter}
         doctors={doctors}
         appointments={appointments}
       />

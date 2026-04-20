@@ -9,6 +9,7 @@ import {
   isAfter,
   startOfDay 
 } from 'date-fns';
+import { matchesPeriod, type PeriodFilter } from '@/utils/periodFilter';
 
 // Helper functions for date search
 const isDateSearch = (term: string): boolean => {
@@ -57,6 +58,7 @@ export const useAdvancedAppointmentFilters = (
   const [dateFilter, setDateFilter] = useState('all');
   const [doctorFilter, setDoctorFilter] = useState('all');
   const [convenioFilter, setConvenioFilter] = useState('all');
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('all');
 
   const filteredAppointments = useMemo(() => {
     // 🔍 LOG: Estado inicial
@@ -129,7 +131,10 @@ export const useAdvancedAppointmentFilters = (
       const matchesConvenio = convenioFilter === 'all' || 
         appointment.pacientes?.convenio === convenioFilter;
 
-      const matches = matchesSearch && matchesStatus && matchesDate && matchesDoctor && matchesConvenio;
+      // Period filter (manhã/tarde/noite)
+      const matchesPeriodFilter = matchesPeriod(appointment.hora_agendamento, periodFilter);
+
+      const matches = matchesSearch && matchesStatus && matchesDate && matchesDoctor && matchesConvenio && matchesPeriodFilter;
       
       // 🔍 LOG: Debug para registros que não passam
       if (!matches) {
@@ -154,7 +159,7 @@ export const useAdvancedAppointmentFilters = (
     });
 
     return filtered;
-  }, [appointments, searchTerm, statusFilter, dateFilter, doctorFilter, convenioFilter, allowCanceled]);
+  }, [appointments, searchTerm, statusFilter, dateFilter, doctorFilter, convenioFilter, periodFilter, allowCanceled]);
 
   const sortedAppointments = useMemo(() => {
     return filteredAppointments.sort((a, b) => {
@@ -181,6 +186,7 @@ export const useAdvancedAppointmentFilters = (
     setDateFilter('all');
     setDoctorFilter('all');
     setConvenioFilter('all');
+    setPeriodFilter('all');
   };
 
   const getFilterStats = () => {
@@ -204,6 +210,7 @@ export const useAdvancedAppointmentFilters = (
     dateFilter,
     doctorFilter,
     convenioFilter,
+    periodFilter,
     
     // Setters
     setSearchTerm,
@@ -211,6 +218,7 @@ export const useAdvancedAppointmentFilters = (
     setDateFilter,
     setDoctorFilter,
     setConvenioFilter,
+    setPeriodFilter,
     
     // Results
     filteredAppointments: sortedAppointments,
