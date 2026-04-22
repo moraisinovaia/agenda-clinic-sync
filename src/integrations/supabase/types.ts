@@ -2558,6 +2558,10 @@ export type Database = {
         }[]
       }
       get_all_clinics_stats: { Args: never; Returns: Json }
+      get_appointment_tenant: {
+        Args: { p_agendamento_id: string }
+        Returns: string
+      }
       get_approved_users_for_clinic: {
         Args: { p_cliente_id: string }
         Returns: {
