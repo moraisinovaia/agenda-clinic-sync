@@ -92,4 +92,5 @@ export interface SchedulingFormData {
   dataAgendamento: string;
   horaAgendamento: string;
   observacoes?: string;
+  dataNascimentoOpcional?: boolean;
 }

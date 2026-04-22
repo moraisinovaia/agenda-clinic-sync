@@ -24,6 +24,7 @@ interface PatientDataFormFixedProps {
     idade_minima?: number;
     idade_maxima?: number;
     convenios_aceitos?: string[];
+    data_nascimento_opcional?: boolean;
   };
   onFillLastPatient?: (fn: () => void) => void;
 }
@@ -36,18 +37,14 @@ export function PatientDataFormFixed({
   selectedDoctor,
   onFillLastPatient
 }: PatientDataFormFixedProps) {
-  // Helper function to identify Dr. Marcelo doctors
-  const isDrMarcelo = (medicoId: string) => {
-    const drMarceloIds = [
-      '1e110923-50df-46ff-a57a-29d88e372900', // Dr. Marcelo D'Carli
-      'e6453b94-840d-4adf-ab0f-fc22be7cd7f5', // MAPA - Dr. Marcelo  
-      '9d5d0e63-098b-4282-aa03-db3c7e012579'  // Teste Ergométrico - Dr. Marcelo
-    ];
-    return drMarceloIds.includes(medicoId);
-  };
+  const isDateOfBirthRequired = !(selectedDoctor?.data_nascimento_opcional ?? false);
 
-  const isDateOfBirthRequired = !isDrMarcelo(formData.medicoId || '');
-  const { 
+  useEffect(() => {
+    const val = selectedDoctor?.data_nascimento_opcional ?? false;
+    setFormData(prev => prev.dataNascimentoOpcional === val ? prev : { ...prev, dataNascimentoOpcional: val });
+  }, [selectedDoctor?.data_nascimento_opcional, setFormData]);
+
+  const {
     loading: searchingPatients, 
     foundPatients, 
     showResults, 

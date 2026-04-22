@@ -30,16 +30,6 @@ export function useAtomicAppointmentCreation() {
   // Função de delay para retry
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-  // Helper function to identify Dr. Marcelo doctors
-  const isDrMarcelo = (medicoId: string) => {
-    const drMarceloIds = [
-      '1e110923-50df-46ff-a57a-29d88e372900', // Dr. Marcelo D'Carli
-      'e6453b94-840d-4adf-ab0f-fc22be7cd7f5', // MAPA - Dr. Marcelo  
-      '9d5d0e63-098b-4282-aa03-db3c7e012579'  // Teste Ergométrico - Dr. Marcelo
-    ];
-    return drMarceloIds.includes(medicoId);
-  };
-
   // Validações básicas no frontend
   const validateFormData = (formData: SchedulingFormData) => {
     if (!formData.medicoId?.trim()) {
@@ -54,8 +44,7 @@ export function useAtomicAppointmentCreation() {
     if (formData.nomeCompleto.trim().length < 3) {
       throw new Error('Nome completo deve ter pelo menos 3 caracteres');
     }
-    // Birth date is only required for non-Dr. Marcelo doctors
-    if (!formData.dataNascimento && !isDrMarcelo(formData.medicoId)) {
+    if (!formData.dataNascimento && !(formData.dataNascimentoOpcional ?? false)) {
       throw new Error('Data de nascimento é obrigatória');
     }
     if (!formData.convenio?.trim()) {
