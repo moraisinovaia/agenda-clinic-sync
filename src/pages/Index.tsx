@@ -5,7 +5,6 @@ import { useSupabaseScheduling } from '@/hooks/useSupabaseScheduling';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useNotifications } from '@/hooks/useNotifications';
 
-import { SchedulingForm } from '@/components/scheduling/SchedulingForm';
 import { SimpleSchedulingForm } from '@/components/scheduling/SimpleSchedulingForm';
 import { MultipleSchedulingModal } from '@/components/scheduling/MultipleSchedulingModal';
 
@@ -31,12 +30,11 @@ import { LLMConfigPanel } from '@/components/admin/LLMConfigPanel';
 import { PreparosManagementPanel } from '@/components/admin/PreparosManagementPanel';
 import { SubscriptionPlansPanel } from '@/components/admin/SubscriptionPlansPanel';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  LazyDashboard, 
-  LazySchedulingForm, 
-  LazyAppointmentsList, 
+import {
+  LazyDashboard,
+  LazyAppointmentsList,
   LazyFilaEspera,
-  LazyWrapper 
+  LazyWrapper
 } from '@/components/performance/LazyComponents';
 
 import { SystemMonitor } from '@/components/system/SystemMonitor';

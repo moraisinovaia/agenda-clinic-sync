@@ -8,12 +8,6 @@ export const LazyDashboard = lazy(() =>
   }))
 );
 
-export const LazySchedulingForm = lazy(() => 
-  import('@/components/scheduling/SchedulingForm').then(module => ({
-    default: module.SchedulingForm
-  }))
-);
-
 export const LazyAppointmentsList = lazy(() => 
   import('@/components/scheduling/AppointmentsList').then(module => ({
     default: module.AppointmentsList
