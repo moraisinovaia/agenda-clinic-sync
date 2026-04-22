@@ -125,24 +125,36 @@ export async function handleCreateAppointment(supabase: any, body: any) {
     );
   }
 
-  // Verificar se o paciente já tem agendamento no mesmo dia e horário
-  const { data: patientConflict } = await supabase
-    .from('agendamentos')
-    .select('id, medicos!inner(nome)')
-    .eq('data_agendamento', dataAgendamento)
-    .eq('hora_agendamento', horaAgendamento)
-    .in('status', ['agendado', 'confirmado'])
-    .or(`pacientes.nome_completo.ilike.%${nomeCompleto}%,pacientes.celular.eq.${celular}`)
-    .maybeSingle();
+  // Verificar se o paciente já tem agendamento no mesmo dia e horário.
+  // Feito em 2 passos para evitar join ausente e interpolação direta de string no .or()
+  // (nomes com vírgula ou parênteses quebravam a sintaxe PostgREST).
+  {
+    const { data: matchingPatients } = await supabase
+      .from('pacientes')
+      .select('id')
+      .or(`nome_completo.ilike.%${nomeCompleto.replace(/[%_\\]/g, '\\$&')}%,celular.eq.${celular}`);
 
-  if (patientConflict) {
-    return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: 'Paciente já possui agendamento neste horário' 
-      }),
-      { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    if (matchingPatients && matchingPatients.length > 0) {
+      const patientIds = matchingPatients.map((p: any) => p.id);
+      const { data: patientConflict } = await supabase
+        .from('agendamentos')
+        .select('id')
+        .eq('data_agendamento', dataAgendamento)
+        .eq('hora_agendamento', horaAgendamento)
+        .in('status', ['agendado', 'confirmado'])
+        .in('paciente_id', patientIds)
+        .maybeSingle();
+
+      if (patientConflict) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'Paciente já possui agendamento neste horário',
+          }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
   }
 
   // Validar limite de recursos (MAPA, HOLTER, ECG)
@@ -288,9 +300,17 @@ export async function handleCreateAppointment(supabase: any, body: any) {
   }
 }
 
+// Helper: resolve cliente_id via RPC SECURITY DEFINER (funciona com ANON_KEY)
+async function resolveClienteId(supabase: any, appointmentId: string): Promise<string | null> {
+  const { data } = await supabase.rpc('get_appointment_tenant', { p_agendamento_id: appointmentId });
+  return data ?? null;
+}
+
 // PUT /scheduling-api/:id - Remarcar agendamento
+// Usa rpc_remarcar_agendamento (SECURITY DEFINER) em vez de UPDATE direto,
+// que era bloqueado silenciosamente pelo RLS com ANON_KEY.
 export async function handleUpdateAppointment(supabase: any, appointmentId: string, body: any) {
-  const { dataAgendamento, horaAgendamento, observacoes } = body;
+  const { dataAgendamento, horaAgendamento, observacoes, criadoPor } = body;
 
   console.log(`🔄 Remarcando agendamento ${appointmentId}`);
 
@@ -301,101 +321,108 @@ export async function handleUpdateAppointment(supabase: any, appointmentId: stri
     );
   }
 
-  // Buscar agendamento atual
-  const { data: currentAppointment } = await supabase
-    .from('agendamentos')
-    .select('medico_id')
-    .eq('id', appointmentId)
-    .single();
-
-  if (!currentAppointment) {
+  const clienteId = await resolveClienteId(supabase, appointmentId);
+  if (!clienteId) {
     return new Response(
       JSON.stringify({ success: false, error: 'Agendamento não encontrado' }),
       { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 
-  // Verificar conflito no novo horário
-  const { data: conflictCheck } = await supabase
-    .from('agendamentos')
-    .select('id')
-    .eq('medico_id', currentAppointment.medico_id)
-    .eq('data_agendamento', dataAgendamento)
-    .eq('hora_agendamento', horaAgendamento)
-    .eq('status', 'agendado')
-    .neq('id', appointmentId)
-    .maybeSingle();
-
-  if (conflictCheck) {
-    return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: 'O novo horário já está ocupado para este médico' 
-      }),
-      { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  }
-
-  // Atualizar agendamento
-  const { data: updatedAppointment, error } = await supabase
-    .from('agendamentos')
-    .update({
-      data_agendamento: dataAgendamento,
-      hora_agendamento: horaAgendamento,
-      observacoes: observacoes,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', appointmentId)
-    .select(`
-      *,
-      pacientes:paciente_id(*),
-      medicos:medico_id(*),
-      atendimentos:atendimento_id(*)
-    `)
-    .single();
+  const { data: result, error } = await supabase.rpc('rpc_remarcar_agendamento', {
+    p_agendamento_id: appointmentId,
+    p_cliente_id: clienteId,
+    p_nova_data: dataAgendamento,
+    p_nova_hora: horaAgendamento,
+    p_actor: criadoPor || 'Assistente Noah (WhatsApp)',
+    p_origem: 'scheduling-api',
+    p_observacoes: observacoes || null,
+  });
 
   if (error) throw error;
 
+  if (!result?.success) {
+    const statusMap: Record<string, number> = {
+      NAO_ENCONTRADO: 404, JA_CANCELADO: 422, JA_EXCLUIDO: 422,
+      JA_REALIZADO: 422, CONFLICT: 409, AGENDA_BLOQUEADA: 422,
+      LIMITE_PERIODO_ATINGIDO: 422, DATA_PASSADA: 400, MESMA_DATA_HORA: 400,
+    };
+    const statusCode = statusMap[result?.error] ?? 500;
+    return new Response(
+      JSON.stringify({ success: false, error: result?.message || result?.error }),
+      { status: statusCode, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
   console.log('✅ Agendamento remarcado:', appointmentId);
   return new Response(
-    JSON.stringify({ success: true, data: updatedAppointment }),
+    JSON.stringify({ success: true, data: result }),
     { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   );
 }
 
 // PATCH /scheduling-api/:id/status - Alterar status (cancelar/confirmar)
+// Usa rpc_cancelar_agendamento / rpc_confirmar_agendamento (SECURITY DEFINER)
+// em vez de UPDATE direto, que era bloqueado silenciosamente pelo RLS com ANON_KEY.
 export async function handleUpdateAppointmentStatus(supabase: any, appointmentId: string, body: any) {
-  const { status } = body;
+  const { status, motivo, observacoes, criadoPor } = body;
 
   console.log(`📋 Alterando status do agendamento ${appointmentId} para ${status}`);
 
-  if (!['agendado', 'confirmado', 'cancelado', 'realizado'].includes(status)) {
+  if (!['confirmado', 'cancelado'].includes(status)) {
     return new Response(
-      JSON.stringify({ success: false, error: 'Status inválido. Use: agendado, confirmado, cancelado, realizado' }),
+      JSON.stringify({ success: false, error: 'Status inválido. Use: confirmado, cancelado' }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 
-  const { data: updatedAppointment, error } = await supabase
-    .from('agendamentos')
-    .update({ 
-      status: status,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', appointmentId)
-    .select(`
-      *,
-      pacientes:paciente_id(*),
-      medicos:medico_id(*),
-      atendimentos:atendimento_id(*)
-    `)
-    .single();
+  const clienteId = await resolveClienteId(supabase, appointmentId);
+  if (!clienteId) {
+    return new Response(
+      JSON.stringify({ success: false, error: 'Agendamento não encontrado' }),
+      { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  const actor = criadoPor || 'Assistente Noah (WhatsApp)';
+  let result: any;
+  let error: any;
+
+  if (status === 'cancelado') {
+    ({ data: result, error } = await supabase.rpc('rpc_cancelar_agendamento', {
+      p_agendamento_id: appointmentId,
+      p_cliente_id: clienteId,
+      p_actor: actor,
+      p_origem: 'scheduling-api',
+      p_motivo: motivo || null,
+    }));
+  } else {
+    ({ data: result, error } = await supabase.rpc('rpc_confirmar_agendamento', {
+      p_agendamento_id: appointmentId,
+      p_cliente_id: clienteId,
+      p_actor: actor,
+      p_origem: 'scheduling-api',
+      p_observacoes: observacoes || null,
+    }));
+  }
 
   if (error) throw error;
 
+  if (!result?.success) {
+    const statusMap: Record<string, number> = {
+      NAO_ENCONTRADO: 404, JA_CANCELADO: 422, JA_EXCLUIDO: 422,
+      JA_REALIZADO: 422, JA_CONFIRMADO: 200, DATA_PASSADA: 422,
+    };
+    const statusCode = statusMap[result?.error] ?? 500;
+    return new Response(
+      JSON.stringify({ success: false, error: result?.message || result?.error }),
+      { status: statusCode, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
   console.log(`✅ Status alterado para ${status}:`, appointmentId);
   return new Response(
-    JSON.stringify({ success: true, data: updatedAppointment }),
+    JSON.stringify({ success: true, data: result }),
     { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   );
 }
