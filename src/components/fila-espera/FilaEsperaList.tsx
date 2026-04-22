@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -34,23 +35,20 @@ export function FilaEsperaList({
   const [filtroMedico, setFiltroMedico] = useState<string>('todos');
   const [busca, setBusca] = useState('');
   const [dataLoaded, setDataLoaded] = useState(false);
-  const [notificadosExpirados, setNotificadosExpirados] = useState(0);
 
-  // Contar notificados com prazo expirado
-  useEffect(() => {
-    const checkExpired = async () => {
+  const { data: notificadosExpirados = 0 } = useQuery({
+    queryKey: ['fila-notificacoes-expirados'],
+    queryFn: async () => {
       const { count } = await supabase
         .from('fila_notificacoes')
         .select('*', { count: 'exact', head: true })
         .in('status_envio', ['pendente', 'enviado', 'pending_n8n'])
         .lt('tempo_limite', new Date().toISOString())
         .eq('resposta_paciente', 'sem_resposta');
-      setNotificadosExpirados(count || 0);
-    };
-    checkExpired();
-    const interval = setInterval(checkExpired, 30000);
-    return () => clearInterval(interval);
-  }, [filaEspera]);
+      return count || 0;
+    },
+    refetchInterval: 30000,
+  });
 
   // Carregar dados automaticamente quando o componente monta
   useEffect(() => {

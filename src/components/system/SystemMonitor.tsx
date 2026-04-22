@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Wifi, WifiOff, Database, DatabaseZap } from 'lucide-react';
@@ -20,61 +21,45 @@ export const SystemMonitor = () => {
     lastUpdate: new Date(),
     responseTime: 0
   });
+  const prevConnectedRef = useRef<boolean | null>(null);
 
-  const checkDatabaseConnection = async () => {
-    const startTime = Date.now();
-    try {
-      // Teste simples de conectividade com a base de dados
-      const { error } = await supabase
-        .from('medicos')
-        .select('id')
-        .limit(1);
-      
-      const endTime = Date.now();
-      const responseTime = endTime - startTime;
+  // DB health check via TanStack Query (substitui setInterval de 30s)
+  const { data: dbCheckResult } = useQuery({
+    queryKey: ['system-db-connection'],
+    queryFn: async () => {
+      const startTime = Date.now();
+      const { error } = await supabase.from('medicos').select('id').limit(1);
+      return { connected: !error, responseTime: Date.now() - startTime, error: error || null };
+    },
+    refetchInterval: 30000,
+    staleTime: 0,
+  });
 
-      const wasConnected = status.databaseConnected;
-      const isNowConnected = !error;
+  // Detecta transição conectado→desconectado e envia alerta
+  useEffect(() => {
+    if (!dbCheckResult) return;
+    const wasConnected = prevConnectedRef.current;
+    const isNowConnected = dbCheckResult.connected;
 
-      // Enviar alerta se o status mudou de conectado para desconectado
-      if (wasConnected && !isNowConnected && error) {
-        await sendDatabaseIssueAlert(error);
-      }
-
-      setStatus(prev => ({
-        ...prev,
-        databaseConnected: isNowConnected,
-        responseTime,
-        lastUpdate: new Date()
-      }));
-    } catch (error) {
-      const wasConnected = status.databaseConnected;
-      
-      // Enviar alerta se estava conectado e agora não está
-      if (wasConnected) {
-        await sendSystemDownAlert({ error });
-      }
-
-      setStatus(prev => ({
-        ...prev,
-        databaseConnected: false,
-        responseTime: 0,
-        lastUpdate: new Date()
-      }));
+    if (wasConnected === true && !isNowConnected) {
+      if (dbCheckResult.error) sendDatabaseIssueAlert(dbCheckResult.error);
+      else sendSystemDownAlert({});
     }
-  };
+
+    prevConnectedRef.current = isNowConnected;
+    setStatus(prev => ({
+      ...prev,
+      databaseConnected: isNowConnected,
+      responseTime: dbCheckResult.responseTime,
+      lastUpdate: new Date(),
+    }));
+  }, [dbCheckResult]);
 
   useEffect(() => {
-    // Check database connection immediately
-    checkDatabaseConnection();
-
-    // Setup periodic health checks
-    const interval = setInterval(checkDatabaseConnection, 30000); // Every 30 seconds
-    
     // Check connectivity every 5 minutes for proactive monitoring
     const healthInterval = setInterval(async () => {
       try {
-        const response = await fetch('https://www.google.com/favicon.ico', { mode: 'no-cors' });
+        await fetch('https://www.google.com/favicon.ico', { mode: 'no-cors' });
         setStatus(prev => ({ ...prev, isOnline: true }));
       } catch {
         setStatus(prev => ({ ...prev, isOnline: false }));
@@ -89,7 +74,6 @@ export const SystemMonitor = () => {
     window.addEventListener('offline', handleOffline);
 
     return () => {
-      clearInterval(interval);
       clearInterval(healthInterval);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
