@@ -1,58 +1,20 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Navigate } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuth';
 import { useSupabaseScheduling } from '@/hooks/useSupabaseScheduling';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useNotifications } from '@/hooks/useNotifications';
-
-import { SimpleSchedulingForm } from '@/components/scheduling/SimpleSchedulingForm';
 import { MultipleSchedulingModal } from '@/components/scheduling/MultipleSchedulingModal';
-
-import { DoctorSchedule } from '@/components/scheduling/DoctorSchedule';
-import { AppointmentsList } from '@/components/scheduling/AppointmentsList';
-import { BloqueioAgenda } from '@/components/scheduling/BloqueioAgenda';
-import { FilaEsperaForm } from '@/components/fila-espera/FilaEsperaForm';
-import { FilaEsperaList } from '@/components/fila-espera/FilaEsperaList';
-import { RelatorioAgenda } from '@/components/scheduling/RelatorioAgenda';
-
-import { StatsCards } from '@/components/dashboard/StatsCards';
-import { SystemHealthDashboard } from '@/components/dashboard/SystemHealthDashboard';
-import { DoctorsView } from '@/components/dashboard/DoctorsView';
-import { DashboardActions } from '@/components/dashboard/DashboardActions';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
-import { UserApprovalPanel } from '@/components/admin/UserApprovalPanel';
-import { ClinicManagementPanel } from '@/components/admin/ClinicManagementPanel';
-import { DoctorManagementPanel } from '@/components/admin/DoctorManagementPanel';
-import { ServiceManagementPanel } from '@/components/admin/ServiceManagementPanel';
-import DoctorScheduleConfigPanel from '@/components/admin/DoctorScheduleConfigPanel';
-import { MultiClinicDashboard } from '@/components/admin/MultiClinicDashboard';
-import { LLMConfigPanel } from '@/components/admin/LLMConfigPanel';
-import { PreparosManagementPanel } from '@/components/admin/PreparosManagementPanel';
-import { SubscriptionPlansPanel } from '@/components/admin/SubscriptionPlansPanel';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  LazyDashboard,
-  LazyAppointmentsList,
-  LazyFilaEspera,
-  LazyWrapper
-} from '@/components/performance/LazyComponents';
-
-import { SystemMonitor } from '@/components/system/SystemMonitor';
-import { SchedulingErrorBoundary } from '@/components/error/SchedulingErrorBoundary';
-
 import { useFilaEspera } from '@/hooks/useFilaEspera';
 import { useViewMode } from '@/hooks/useViewMode';
 import { useGoogleTranslateDetection } from '@/hooks/useGoogleTranslateDetection';
 import { SchedulingFormData, AppointmentWithRelations } from '@/types/scheduling';
 import { useStableAuth } from '@/hooks/useStableAuth';
-import { Button } from '@/components/ui/button';
-import { NavigationHeader } from '@/components/ui/navigation-header';
 import { GoogleTranslateWarning } from '@/components/ui/google-translate-warning';
-import PendingApproval from '@/components/PendingApproval';
 import { DoctorScheduleGenerator } from '@/components/scheduling/DoctorScheduleGenerator';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { usePartnerBranding } from '@/hooks/usePartnerBranding';
+import { AppViews } from '@/pages/AppViews';
 
 const Index = () => {
   const { user, profile, loading: authLoading, signOut, isAdmin, isClinicAdmin, clinicAdminClienteId } = useStableAuth();
@@ -580,6 +542,24 @@ const Index = () => {
     }
   };
 
+  const handleDoctorChange = useCallback((doctorId: string) => {
+    const newDoctor = doctors.find(d => d.id === doctorId);
+    if (newDoctor) {
+      setSelectedDoctor(newDoctor);
+      setLastAppointmentDate(null);
+    }
+  }, [doctors, setSelectedDoctor, setLastAppointmentDate]);
+
+  const handleNewAppointmentFromCalendar = useCallback((selectedDate?: string) => {
+    if (selectedDate) setSelectedAppointmentDate(selectedDate);
+    setSelectedAppointmentTime(undefined);
+    setViewMode('new-appointment');
+  }, [setSelectedAppointmentDate, setSelectedAppointmentTime, setViewMode]);
+
+  const handleConfigureSchedule = useCallback(() => {
+    setScheduleGenOpen(true);
+  }, [setScheduleGenOpen]);
+
 
   if (loading) {
     return (
@@ -612,325 +592,65 @@ const Index = () => {
         onSignOut={signOut}
       />
 
-      {/* Aviso sobre Google Translate */}
       <div className="container mx-auto px-4 pt-4">
-        <GoogleTranslateWarning 
+        <GoogleTranslateWarning
           isVisible={showGoogleTranslateWarning}
           onDismiss={handleDismissGoogleWarning}
         />
       </div>
 
-      <div className="container mx-auto px-4 py-6">
-        {viewMode === 'doctors' && (
-          <div className="space-y-6">
-            {/* Admin view - gerenciamento de usuários, médicos, serviços */}
-            {(isAdmin || isClinicAdmin) ? (
-              <Tabs defaultValue="usuarios" className="w-full">
-                <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-9' : 'grid-cols-6'} max-w-6xl mb-6`}>
-                  {isAdmin && <TabsTrigger value="dashboard">Dashboard</TabsTrigger>}
-                  <TabsTrigger value="usuarios">Usuários</TabsTrigger>
-                  {isAdmin && <TabsTrigger value="clinicas">Clínicas</TabsTrigger>}
-                  <TabsTrigger value="medicos">Médicos</TabsTrigger>
-                  <TabsTrigger value="servicos">Serviços</TabsTrigger>
-                  <TabsTrigger value="preparos">Preparos</TabsTrigger>
-                  <TabsTrigger value="horarios">Horários</TabsTrigger>
-                  <TabsTrigger value="llm-config">LLM API</TabsTrigger>
-                  {isAdmin && <TabsTrigger value="planos">Planos</TabsTrigger>}
-                </TabsList>
-                {isAdmin && (
-                  <TabsContent value="dashboard">
-                    <MultiClinicDashboard />
-                  </TabsContent>
-                )}
-                <TabsContent value="usuarios">
-                  <UserApprovalPanel />
-                </TabsContent>
-                {isAdmin && (
-                  <TabsContent value="clinicas">
-                    <ClinicManagementPanel />
-                  </TabsContent>
-                )}
-                <TabsContent value="medicos">
-                  <DoctorManagementPanel />
-                </TabsContent>
-                <TabsContent value="servicos">
-                  <ServiceManagementPanel />
-                </TabsContent>
-                <TabsContent value="preparos">
-                  <PreparosManagementPanel />
-                </TabsContent>
-                <TabsContent value="horarios">
-                  <DoctorScheduleConfigPanel />
-                </TabsContent>
-                <TabsContent value="llm-config">
-                  <LLMConfigPanel />
-                </TabsContent>
-                {isAdmin && (
-                  <TabsContent value="planos">
-                    <SubscriptionPlansPanel />
-                  </TabsContent>
-                )}
-              </Tabs>
-            ) : (
-              // Receptionist view - dashboard completo
-              <>
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                  <div className="lg:col-span-3">
-                    <StatsCards doctors={doctors} appointments={appointments} />
-                    
-                    <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                      <div className="relative max-w-md">
-                        {/* This will be moved to DoctorsView component */}
-                      </div>
-                      <DashboardActions 
-                        onViewChange={setViewMode}
-                        onConfigureSchedule={() => setScheduleGenOpen(true)}
-                      />
-                    </div>
+      <AppViews
+        viewMode={viewMode}
+        setViewMode={setViewMode}
+        goBack={goBack}
+        goBackToFilaEspera={goBackToFilaEspera}
+        isAdmin={isAdmin}
+        isClinicAdmin={isClinicAdmin}
+        doctors={doctors}
+        appointments={appointments}
+        atendimentos={atendimentos}
+        blockedDates={blockedDates}
+        emptySlots={emptySlots}
+        selectedDoctor={selectedDoctor ?? undefined}
+        lastAppointmentDate={lastAppointmentDate}
+        selectedAppointmentDate={selectedAppointmentDate}
+        selectedAppointmentTime={selectedAppointmentTime}
+        editingAppointment={editingAppointment}
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        fillLastPatientRef={fillLastPatientRef}
+        filaEspera={filaEspera}
+        filaLoading={filaLoading}
+        filaError={filaError}
+        getFilaStatus={getFilaStatus}
+        isDateBlocked={isDateBlocked}
+        getAtendimentosByDoctor={getAtendimentosByDoctor}
+        searchPatientsByBirthDate={searchPatientsByBirthDate}
+        cancelAppointment={cancelAppointment}
+        deleteAppointment={deleteAppointment}
+        confirmAppointment={confirmAppointment}
+        unconfirmAppointment={unconfirmAppointment}
+        adicionarFilaEspera={adicionarFilaEspera}
+        atualizarStatusFila={atualizarStatusFila}
+        removerDaFila={removerDaFila}
+        fetchFilaEspera={fetchFilaEspera}
+        refetch={refetch}
+        reloadEmptySlots={reloadEmptySlots}
+        handleSimpleAppointmentSubmit={handleSimpleAppointmentSubmit}
+        handleSimpleAppointmentSubmitWithForce={handleSimpleAppointmentSubmitWithForce}
+        handleScheduleDoctor={handleScheduleDoctor}
+        handleViewSchedule={handleViewSchedule}
+        handleEditAppointment={handleEditAppointment}
+        handleConfirmAppointment={handleConfirmAppointment}
+        handleUnconfirmAppointment={handleUnconfirmAppointment}
+        handleNavigateToAppointment={handleNavigateToAppointment}
+        handleNewAppointmentWithTime={handleNewAppointmentWithTime}
+        handleMultipleAppointmentSuccess={handleMultipleAppointmentSuccess}
+        handleDoctorChange={handleDoctorChange}
+        handleNewAppointmentFromCalendar={handleNewAppointmentFromCalendar}
+        handleConfigureSchedule={handleConfigureSchedule}
+      />
 
-                    <DoctorsView
-                      doctors={doctors}
-                      searchTerm={searchTerm}
-                      onSearchChange={setSearchTerm}
-                      onScheduleDoctor={handleScheduleDoctor}
-                      onViewSchedule={handleViewSchedule}
-                    />
-                  </div>
-                  
-                  <div className="lg:col-span-1">
-                    <SystemMonitor />
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {viewMode === 'schedule' && selectedDoctor && (
-          <div className="space-y-6">
-            <NavigationHeader
-              title={`Agenda - ${selectedDoctor.nome}`}
-              subtitle={selectedDoctor.especialidade}
-              onBack={goBack}
-              onHome={() => setViewMode('doctors')}
-              showBack={true}
-              showHome={true}
-            />
-            <SchedulingErrorBoundary>
-              <DoctorSchedule
-                doctor={selectedDoctor}
-                doctors={doctors}
-                onDoctorChange={(doctorId) => {
-                  const newDoctor = doctors.find(d => d.id === doctorId);
-                  if (newDoctor) {
-                    setSelectedDoctor(newDoctor);
-                    setLastAppointmentDate(null);
-                  }
-                }}
-                appointments={appointments.filter(apt => apt.medico_id === selectedDoctor.id)}
-                blockedDates={blockedDates}
-                isDateBlocked={isDateBlocked}
-                onCancelAppointment={cancelAppointment}
-                onDeleteAppointment={deleteAppointment}
-                onConfirmAppointment={handleConfirmAppointment}
-                onUnconfirmAppointment={handleUnconfirmAppointment}
-                onEditAppointment={handleEditAppointment}
-                onNewAppointment={(selectedDate) => {
-                if (selectedDate) {
-                  setSelectedAppointmentDate(selectedDate);
-                  setSelectedAppointmentTime(undefined);
-                }
-                setViewMode('new-appointment');
-              }}
-              onNewAppointmentWithTime={handleNewAppointmentWithTime}
-              initialDate={lastAppointmentDate || undefined}
-              atendimentos={atendimentos}
-              adicionarFilaEspera={adicionarFilaEspera}
-              searchPatientsByBirthDate={searchPatientsByBirthDate}
-              emptySlots={emptySlots}
-              onSlotsChanged={reloadEmptySlots}
-            />
-            </SchedulingErrorBoundary>
-          </div>
-        )}
-
-        {viewMode === 'new-appointment' && (
-          <div className="space-y-6">
-            <NavigationHeader
-              title="Novo Agendamento"
-              subtitle={selectedDoctor ? `${selectedDoctor.nome} - ${selectedDoctor.especialidade}` : undefined}
-              onBack={goBack}
-              onHome={() => setViewMode('doctors')}
-              showBack={true}
-              showHome={true}
-            />
-            <SchedulingErrorBoundary key={`scheduling-form-${selectedDoctor?.id || 'new'}`}>
-              <SimpleSchedulingForm
-                key={`simple-form-${selectedDoctor?.id || 'new'}-${editingAppointment?.id || 'new'}`}
-                doctors={doctors}
-                atendimentos={atendimentos}
-                appointments={appointments}
-                blockedDates={blockedDates}
-                isDateBlocked={isDateBlocked}
-                onSubmit={handleSimpleAppointmentSubmit}
-                onSubmitWithForce={handleSimpleAppointmentSubmitWithForce}
-                onCancel={goBack}
-                getAtendimentosByDoctor={getAtendimentosByDoctor}
-                searchPatientsByBirthDate={searchPatientsByBirthDate}
-                preSelectedDoctor={selectedDoctor?.id}
-                preSelectedDate={selectedAppointmentDate || undefined}
-                preSelectedTime={selectedAppointmentTime}
-                adicionarFilaEspera={adicionarFilaEspera}
-                onMultipleSuccess={handleMultipleAppointmentSuccess}
-                onFillLastPatient={(fn: () => void) => {
-                  fillLastPatientRef.current = fn;
-                }}
-                onCancelAppointment={cancelAppointment}
-                onDeleteAppointment={deleteAppointment}
-                onConfirmAppointment={confirmAppointment}
-                onUnconfirmAppointment={unconfirmAppointment}
-              />
-            </SchedulingErrorBoundary>
-          </div>
-        )}
-
-
-        {viewMode === 'appointments-list' && (
-          <div className="space-y-6">
-            <NavigationHeader
-              title="Lista de Agendamentos"
-              subtitle="Gerencie todos os agendamentos"
-              onBack={goBack}
-              onHome={() => setViewMode('doctors')}
-              showBack={true}
-              showHome={true}
-            />
-            <AppointmentsList 
-              appointments={appointments}
-              doctors={doctors}
-              allowCanceled={true}
-              onEditAppointment={handleEditAppointment}
-              onNavigateToAppointment={handleNavigateToAppointment}
-              onCancelAppointment={cancelAppointment}
-              onDeleteAppointment={deleteAppointment}
-              onConfirmAppointment={handleConfirmAppointment}
-              onUnconfirmAppointment={handleUnconfirmAppointment}
-            />
-          </div>
-        )}
-
-        {viewMode === 'canceled-appointments' && (
-          <div className="space-y-6">
-            <NavigationHeader
-              title="Agendamentos Cancelados"
-              subtitle="Visualize todos os agendamentos cancelados"
-              onBack={goBack}
-              onHome={() => setViewMode('doctors')}
-              showBack={true}
-              showHome={true}
-            />
-            <AppointmentsList 
-              appointments={appointments.filter(apt => 
-                apt.status === 'cancelado' || 
-                apt.status === 'cancelado_bloqueio' || 
-                apt.status === 'excluido'
-              )}
-              doctors={doctors}
-              onEditAppointment={handleEditAppointment}
-              onNavigateToAppointment={handleNavigateToAppointment}
-              onCancelAppointment={cancelAppointment}
-              onDeleteAppointment={deleteAppointment}
-              onConfirmAppointment={handleConfirmAppointment}
-              onUnconfirmAppointment={handleUnconfirmAppointment}
-              allowCanceled={true}
-            />
-          </div>
-        )}
-
-        {viewMode === 'edit-appointment' && editingAppointment && (
-          <div className="space-y-6">
-            <NavigationHeader
-              title="Editar Agendamento"
-              subtitle={`${editingAppointment.pacientes?.nome_completo} - ${editingAppointment.medicos?.nome}`}
-              onBack={goBack}
-              onHome={() => setViewMode('doctors')}
-              showBack={true}
-              showHome={true}
-            />
-            <SchedulingErrorBoundary key={`scheduling-form-edit-${editingAppointment?.id}`}>
-              <SimpleSchedulingForm
-                key={`edit-form-${editingAppointment?.id}`}
-                doctors={doctors}
-                atendimentos={atendimentos}
-                appointments={appointments}
-                blockedDates={blockedDates}
-                isDateBlocked={isDateBlocked}
-                onSubmit={handleSimpleAppointmentSubmit}
-                onCancel={goBack}
-                getAtendimentosByDoctor={getAtendimentosByDoctor}
-                searchPatientsByBirthDate={searchPatientsByBirthDate}
-                editingAppointment={editingAppointment}
-                adicionarFilaEspera={adicionarFilaEspera}
-                onMultipleSuccess={handleMultipleAppointmentSuccess}
-                onFillLastPatient={(fn: () => void) => {
-                  fillLastPatientRef.current = fn;
-                }}
-                onCancelAppointment={cancelAppointment}
-                onDeleteAppointment={deleteAppointment}
-                onConfirmAppointment={confirmAppointment}
-                onUnconfirmAppointment={unconfirmAppointment}
-              />
-            </SchedulingErrorBoundary>
-          </div>
-        )}
-
-        {viewMode === 'fila-espera' && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold">Fila de Espera</h2>
-                <p className="text-muted-foreground mt-1">
-                  Gerencie a fila de espera para otimizar ocupação dos médicos
-                </p>
-              </div>
-              <Button onClick={() => setViewMode('nova-fila')}>
-                Adicionar à Fila
-              </Button>
-            </div>
-            <FilaEsperaList 
-              filaEspera={filaEspera}
-              status={getFilaStatus()}
-              loading={filaLoading}
-              error={filaError}
-              onUpdateStatus={atualizarStatusFila}
-              onRemove={removerDaFila}
-              onLoadData={() => fetchFilaEspera(true)}
-            />
-          </div>
-        )}
-
-        {viewMode === 'nova-fila' && (
-          <FilaEsperaForm
-            doctors={doctors}
-            atendimentos={atendimentos}
-            onSubmit={adicionarFilaEspera}
-            onCancel={goBackToFilaEspera}
-            searchPatientsByBirthDate={searchPatientsByBirthDate}
-          />
-        )}
-
-        {viewMode === 'relatorio-agenda' && (
-          <RelatorioAgenda
-            doctors={doctors}
-            appointments={appointments}
-            onBack={goBack}
-          />
-        )}
-
-        {viewMode === 'bloqueio-agenda' && (
-          <BloqueioAgenda onBack={goBack} onRefresh={refetch} />
-        )}
-      </div>
 
       {/* Modal de Agendamento Múltiplo */}
       <MultipleSchedulingModal
