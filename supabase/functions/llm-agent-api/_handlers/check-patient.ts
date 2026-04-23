@@ -271,4 +271,40 @@ export async function handleCheckPatient(supabase: any, body: any, clienteId: st
   }
 }
 
-// Remarcar consulta
+function consolidatePatients(patients: any[], lastConvenios: Record<string, string>): Array<{
+  id: string; all_ids: string[]; nome_completo: string; data_nascimento: string;
+  celular: string | null; telefone: string | null; ultimo_convenio: string;
+  updated_at: string; created_at: string;
+}> {
+  const consolidated = new Map<string, ReturnType<typeof consolidatePatients>[number]>();
+
+  patients.forEach(patient => {
+    const key = `${patient.nome_completo.toLowerCase().trim()}-${patient.data_nascimento}`;
+
+    if (consolidated.has(key)) {
+      const existing = consolidated.get(key)!;
+      existing.all_ids.push(patient.id);
+      if (new Date(patient.updated_at) > new Date(existing.updated_at)) {
+        existing.id = patient.id;
+        existing.celular = patient.celular;
+        existing.telefone = patient.telefone;
+        existing.updated_at = patient.updated_at;
+      }
+    } else {
+      const ultimoConvenio = lastConvenios[key] || patient.convenio;
+      consolidated.set(key, {
+        id: patient.id,
+        all_ids: [patient.id],
+        nome_completo: patient.nome_completo,
+        data_nascimento: patient.data_nascimento,
+        celular: patient.celular,
+        telefone: patient.telefone,
+        ultimo_convenio: ultimoConvenio,
+        created_at: patient.created_at,
+        updated_at: patient.updated_at,
+      });
+    }
+  });
+
+  return Array.from(consolidated.values());
+}

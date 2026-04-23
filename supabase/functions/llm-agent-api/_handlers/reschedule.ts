@@ -2,9 +2,8 @@ import type { DynamicConfig } from '../_lib/types.ts'
 import { successResponse, errorResponse, businessErrorResponse } from '../_lib/responses.ts'
 import { getRequestScope, isAppointmentAllowed, getScopeSummary } from '../_lib/scope.ts'
 import { getMedicoRules, verificarLimitesCompartilhados, verificarSublimiteConvenio } from '../_lib/limites.ts'
-import { BUSINESS_RULES } from '../_lib/tipo-agendamento.ts'
+import { BUSINESS_RULES, getDataHoraAtualBrasil, validarDataHoraFutura } from '../_lib/tipo-agendamento.ts'
 import { sanitizarCampoOpcional, formatarDataPorExtenso } from '../_lib/normalizacao.ts'
-import { getDataHoraAtualBrasil, validarDataHoraFutura } from '../_lib/tipo-agendamento.ts'
 import { normalizarServicoPeriodos } from '../_lib/config.ts'
 
 export async function handleReschedule(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
