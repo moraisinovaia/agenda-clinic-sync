@@ -258,11 +258,17 @@ export function ServiceManagementPanel() {
   const handleVincularMedico = async (medicoId: string) => {
     if (!editingService) return;
     try {
-      const { data: result } = await supabase.rpc('upsert_medico_atendimento_valor', {
+      const { data: result, error } = await supabase.rpc('upsert_medico_atendimento_valor', {
         p_medico_id: medicoId,
         p_atendimento_id: editingService.id,
         p_valor_override: null,
       } as any);
+      if (error) throw error;
+      const resultObj = result as { success: boolean; error?: string };
+      if (!resultObj?.success) {
+        toast.error('Erro ao vincular médico: ' + (resultObj?.error || 'Falha desconhecida'));
+        return;
+      }
       const medico = medicos.find((m: any) => m.id === medicoId);
       setMedicosVinculados(prev => [...prev, { medico_id: medicoId, nome: medico?.nome || '', valor_override: '' }]);
       queryClient.invalidateQueries({ queryKey: ['medicos-por-clinica'] });
@@ -274,11 +280,12 @@ export function ServiceManagementPanel() {
   const handleDesvincularMedico = async (medicoId: string) => {
     if (!editingService) return;
     try {
-      await supabase
+      const { error } = await supabase
         .from('medico_atendimento')
         .delete()
         .eq('medico_id', medicoId)
         .eq('atendimento_id', editingService.id);
+      if (error) throw error;
       setMedicosVinculados(prev => prev.filter(m => m.medico_id !== medicoId));
       queryClient.invalidateQueries({ queryKey: ['medicos-por-clinica'] });
     } catch (e: any) {
@@ -289,11 +296,17 @@ export function ServiceManagementPanel() {
   const handleSalvarOverrideMedico = async (medicoId: string, valor: string) => {
     if (!editingService) return;
     try {
-      await supabase.rpc('upsert_medico_atendimento_valor', {
+      const { data: result, error } = await supabase.rpc('upsert_medico_atendimento_valor', {
         p_medico_id: medicoId,
         p_atendimento_id: editingService.id,
         p_valor_override: valor.trim() ? parseFloat(valor) : null,
       } as any);
+      if (error) throw error;
+      const resultObj = result as { success: boolean; error?: string };
+      if (!resultObj?.success) {
+        toast.error('Erro ao salvar valor: ' + (resultObj?.error || 'Falha desconhecida'));
+        return;
+      }
       setMedicosVinculados(prev =>
         prev.map(m => m.medico_id === medicoId ? { ...m, valor_override: valor } : m)
       );

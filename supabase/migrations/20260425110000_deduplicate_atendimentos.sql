@@ -82,11 +82,15 @@ BEGIN
       c.canonical_id,
       a.codigo,
       a.valor_particular,
+      a.valor_particular_avista,
+      a.valor_monocular,
+      a.valor_monocular_avista,
       a.coparticipacao_unimed_20,
       a.coparticipacao_unimed_40,
       a.forma_pagamento,
       a.observacoes,
       a.restricoes,
+      a.horarios,
       a.ativo,
       COALESCE(a.updated_at, a.created_at) AS ts
     FROM public.atendimentos a
@@ -99,26 +103,34 @@ BEGIN
   melhores AS (
     SELECT
       canonical_id,
-      (array_agg(codigo           ORDER BY ts DESC NULLS LAST) FILTER (WHERE codigo           IS NOT NULL AND codigo           != ''))[1] AS melhor_codigo,
-      (array_agg(valor_particular  ORDER BY ts DESC NULLS LAST) FILTER (WHERE valor_particular  IS NOT NULL))[1] AS melhor_valor_particular,
+      (array_agg(codigo                ORDER BY ts DESC NULLS LAST) FILTER (WHERE codigo                IS NOT NULL AND codigo                != ''))[1] AS melhor_codigo,
+      (array_agg(valor_particular      ORDER BY ts DESC NULLS LAST) FILTER (WHERE valor_particular      IS NOT NULL))[1] AS melhor_valor_particular,
+      (array_agg(valor_particular_avista ORDER BY ts DESC NULLS LAST) FILTER (WHERE valor_particular_avista IS NOT NULL))[1] AS melhor_valor_particular_avista,
+      (array_agg(valor_monocular       ORDER BY ts DESC NULLS LAST) FILTER (WHERE valor_monocular       IS NOT NULL))[1] AS melhor_valor_monocular,
+      (array_agg(valor_monocular_avista ORDER BY ts DESC NULLS LAST) FILTER (WHERE valor_monocular_avista IS NOT NULL))[1] AS melhor_valor_monocular_avista,
       (array_agg(coparticipacao_unimed_20 ORDER BY ts DESC NULLS LAST) FILTER (WHERE coparticipacao_unimed_20 IS NOT NULL))[1] AS melhor_copart_20,
       (array_agg(coparticipacao_unimed_40 ORDER BY ts DESC NULLS LAST) FILTER (WHERE coparticipacao_unimed_40 IS NOT NULL))[1] AS melhor_copart_40,
-      (array_agg(forma_pagamento   ORDER BY ts DESC NULLS LAST) FILTER (WHERE forma_pagamento   IS NOT NULL AND forma_pagamento   != ''))[1] AS melhor_forma_pagamento,
-      (array_agg(observacoes       ORDER BY ts DESC NULLS LAST) FILTER (WHERE observacoes       IS NOT NULL AND observacoes       != ''))[1] AS melhor_observacoes,
-      (array_agg(restricoes        ORDER BY ts DESC NULLS LAST) FILTER (WHERE restricoes        IS NOT NULL AND restricoes        != ''))[1] AS melhor_restricoes,
+      (array_agg(forma_pagamento       ORDER BY ts DESC NULLS LAST) FILTER (WHERE forma_pagamento       IS NOT NULL AND forma_pagamento       != ''))[1] AS melhor_forma_pagamento,
+      (array_agg(observacoes           ORDER BY ts DESC NULLS LAST) FILTER (WHERE observacoes           IS NOT NULL AND observacoes           != ''))[1] AS melhor_observacoes,
+      (array_agg(restricoes            ORDER BY ts DESC NULLS LAST) FILTER (WHERE restricoes            IS NOT NULL AND restricoes            != ''))[1] AS melhor_restricoes,
+      (array_agg(horarios              ORDER BY ts DESC NULLS LAST) FILTER (WHERE horarios              IS NOT NULL))[1] AS melhor_horarios,
       bool_or(ativo) AS melhor_ativo
     FROM todos
     GROUP BY canonical_id
   )
   UPDATE public.atendimentos a
   SET
-    codigo                   = COALESCE(m.melhor_codigo,            a.codigo),
-    valor_particular         = COALESCE(m.melhor_valor_particular,  a.valor_particular),
-    coparticipacao_unimed_20 = COALESCE(m.melhor_copart_20,         a.coparticipacao_unimed_20),
-    coparticipacao_unimed_40 = COALESCE(m.melhor_copart_40,         a.coparticipacao_unimed_40),
-    forma_pagamento          = COALESCE(m.melhor_forma_pagamento,   a.forma_pagamento),
-    observacoes              = COALESCE(m.melhor_observacoes,       a.observacoes),
-    restricoes               = COALESCE(m.melhor_restricoes,        a.restricoes),
+    codigo                   = COALESCE(m.melhor_codigo,                    a.codigo),
+    valor_particular         = COALESCE(m.melhor_valor_particular,          a.valor_particular),
+    valor_particular_avista  = COALESCE(m.melhor_valor_particular_avista,   a.valor_particular_avista),
+    valor_monocular          = COALESCE(m.melhor_valor_monocular,           a.valor_monocular),
+    valor_monocular_avista   = COALESCE(m.melhor_valor_monocular_avista,    a.valor_monocular_avista),
+    coparticipacao_unimed_20 = COALESCE(m.melhor_copart_20,                 a.coparticipacao_unimed_20),
+    coparticipacao_unimed_40 = COALESCE(m.melhor_copart_40,                 a.coparticipacao_unimed_40),
+    forma_pagamento          = COALESCE(m.melhor_forma_pagamento,            a.forma_pagamento),
+    observacoes              = COALESCE(m.melhor_observacoes,                a.observacoes),
+    restricoes               = COALESCE(m.melhor_restricoes,                 a.restricoes),
+    horarios                 = COALESCE(m.melhor_horarios,                   a.horarios),
     ativo                    = m.melhor_ativo,
     updated_at               = now()
   FROM melhores m
