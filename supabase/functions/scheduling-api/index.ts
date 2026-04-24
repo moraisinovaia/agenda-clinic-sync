@@ -44,7 +44,7 @@ serve(async (req) => {
 
     // GET /scheduling-api - Listar agendamentos
     if (method === 'GET' && pathParts.length === 1) {
-      return await handleGetAppointments(supabase);
+      return await handleGetAppointments(supabase, url.searchParams);
     }
 
     // POST /scheduling-api - Criar agendamento

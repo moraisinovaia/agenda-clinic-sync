@@ -12,8 +12,30 @@ const corsHeaders = {
 }
 
 // GET /scheduling-api - Listar agendamentos
-export async function handleGetAppointments(supabase: any) {
-  const { data: appointments, error } = await supabase
+// Requer medicoId ou clienteId como query param para garantir isolamento de tenant.
+export async function handleGetAppointments(supabase: any, params: URLSearchParams) {
+  const medicoId = params.get('medicoId');
+  const clienteIdParam = params.get('clienteId');
+
+  let clienteId = clienteIdParam;
+
+  if (!clienteId && medicoId) {
+    const { data: medico } = await supabase
+      .from('medicos')
+      .select('cliente_id')
+      .eq('id', medicoId)
+      .single();
+    clienteId = medico?.cliente_id ?? null;
+  }
+
+  if (!clienteId) {
+    return new Response(
+      JSON.stringify({ success: false, error: 'medicoId ou clienteId é obrigatório' }),
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  let query = supabase
     .from('agendamentos')
     .select(`
       *,
@@ -21,9 +43,13 @@ export async function handleGetAppointments(supabase: any) {
       medicos:medico_id(*),
       atendimentos:atendimento_id(*)
     `)
+    .eq('cliente_id', clienteId)
     .order('data_agendamento', { ascending: true })
     .order('hora_agendamento', { ascending: true });
 
+  if (medicoId) query = query.eq('medico_id', medicoId);
+
+  const { data: appointments, error } = await query;
   if (error) throw error;
 
   return new Response(
@@ -348,6 +374,7 @@ export async function handleUpdateAppointmentStatus(supabase: any, appointmentId
 export async function handleCheckAvailability(supabase: any, params: URLSearchParams) {
   const medicoId = params.get('medicoId');
   const medicoNome = params.get('medicoNome');
+  const clienteId = params.get('clienteId');
   const dataInicio = params.get('dataInicio') || new Date().toISOString().split('T')[0];
   const dataFim = params.get('dataFim') || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
@@ -355,11 +382,19 @@ export async function handleCheckAvailability(supabase: any, params: URLSearchPa
 
   let doctorId = medicoId;
 
-  // Se foi passado nome do médico, buscar o ID
+  // Se foi passado nome do médico, buscar o ID — requer clienteId para isolamento de tenant
   if (!doctorId && medicoNome) {
+    if (!clienteId) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'clienteId é obrigatório ao buscar médico por nome' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const { data: doctor } = await supabase
       .from('medicos')
       .select('id, nome')
+      .eq('cliente_id', clienteId)
       .ilike('nome', `%${medicoNome}%`)
       .eq('ativo', true)
       .maybeSingle();
