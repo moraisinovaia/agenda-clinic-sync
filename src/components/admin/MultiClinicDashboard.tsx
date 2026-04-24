@@ -361,15 +361,15 @@ export function MultiClinicDashboard() {
           description: 'Dados da clínica atualizados, mas a sincronização LLM falhou. Tente salvar novamente.',
           variant: 'destructive',
         });
+        // Modal permanece aberto para o admin poder tentar novamente
       } else {
         toast({
           title: 'Sucesso',
           description: 'Clínica atualizada com sucesso',
         });
+        setShowManageModal(false);
+        fetchData();
       }
-
-      setShowManageModal(false);
-      fetchData();
     } catch (error: any) {
       toast({
         title: 'Erro',

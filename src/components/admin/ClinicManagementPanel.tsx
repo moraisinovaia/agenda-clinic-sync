@@ -99,6 +99,7 @@ export function ClinicManagementPanel() {
   const [clienteStats, setClienteStats] = useState<Record<string, ClienteStats>>({});
   const [loadingStats, setLoadingStats] = useState<string | null>(null);
   const [loadingLLMConfig, setLoadingLLMConfig] = useState(false);
+  const [openingEditModal, setOpeningEditModal] = useState<string | null>(null);
   const { toast } = useToast();
   const { profile, isAdmin } = useStableAuth();
   const queryClient = useQueryClient();
@@ -317,17 +318,17 @@ export function ClinicManagementPanel() {
           description: 'Dados da clínica atualizados, mas a sincronização LLM falhou. Tente salvar novamente.',
           variant: 'destructive',
         });
+        // Modal permanece aberto para o admin poder tentar novamente
       } else {
         toast({
           title: 'Sucesso',
           description: 'Clínica atualizada e sincronizada com sucesso',
         });
+        setShowEditModal(false);
+        setEditingCliente(null);
+        fetchClientes();
+        queryClient.invalidateQueries({ queryKey: ['clientes'] });
       }
-
-      setShowEditModal(false);
-      setEditingCliente(null);
-      fetchClientes();
-      queryClient.invalidateQueries({ queryKey: ['clientes'] });
     } catch (error: any) {
       toast({
         title: 'Erro',
@@ -340,6 +341,7 @@ export function ClinicManagementPanel() {
   };
 
   const openEditModal = async (cliente: Cliente) => {
+    setOpeningEditModal(cliente.id);
     setEditingCliente(cliente);
     setEditFormData({
       nome: cliente.nome,
@@ -354,10 +356,14 @@ export function ClinicManagementPanel() {
     });
     setLlmConfig(null);
 
-    // Buscar config LLM antes de abrir o modal — evita salvar valores default
-    // caso o admin clique em Salvar antes da hidratação terminar
-    await fetchLLMConfig(cliente.id);
-    setShowEditModal(true);
+    try {
+      // Buscar config LLM antes de abrir o modal — evita salvar valores default
+      // caso o admin clique em Salvar antes da hidratação terminar
+      await fetchLLMConfig(cliente.id);
+    } finally {
+      setOpeningEditModal(null);
+      setShowEditModal(true);
+    }
   };
 
   const getConfigStatus = (cliente: Cliente) => {
@@ -520,8 +526,13 @@ export function ClinicManagementPanel() {
                           size="sm"
                           variant="outline"
                           onClick={() => openEditModal(cliente)}
+                          disabled={openingEditModal === cliente.id}
                         >
-                          <Edit className="h-4 w-4 mr-1" />
+                          {openingEditModal === cliente.id ? (
+                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                          ) : (
+                            <Edit className="h-4 w-4 mr-1" />
+                          )}
                           Editar
                         </Button>
                       </TableCell>
