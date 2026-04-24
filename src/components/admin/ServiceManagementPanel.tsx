@@ -27,7 +27,6 @@ interface AtendimentoFormData {
   forma_pagamento: string;
   observacoes: string;
   restricoes: string;
-  medico_id: string | null;
   ativo: boolean;
 }
 
@@ -41,7 +40,6 @@ const emptyFormData: AtendimentoFormData = {
   forma_pagamento: '',
   observacoes: '',
   restricoes: '',
-  medico_id: null,
   ativo: true,
 };
 
@@ -95,23 +93,6 @@ export function ServiceManagementPanel() {
     enabled: !!effectiveClinicId,
   });
 
-  // Query: Médicos da clínica (para vínculo opcional)
-  const { data: medicos = [] } = useQuery({
-    queryKey: ['medicos-admin', effectiveClinicId],
-    queryFn: async () => {
-      if (!effectiveClinicId) return [];
-      const { data, error } = await supabase
-        .from('medicos')
-        .select('id, nome, especialidade')
-        .eq('cliente_id', effectiveClinicId)
-        .eq('ativo', true)
-        .order('nome');
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!effectiveClinicId,
-  });
-
   // Filtrar atendimentos
   const filteredAtendimentos = useMemo(() => {
     return atendimentos.filter((atendimento) => {
@@ -144,7 +125,6 @@ export function ServiceManagementPanel() {
         forma_pagamento: data.forma_pagamento || null,
         observacoes: data.observacoes || null,
         restricoes: data.restricoes || null,
-        medico_id: data.medico_id || null,
         ativo: data.ativo,
       });
       if (error) throw error;
@@ -172,7 +152,6 @@ export function ServiceManagementPanel() {
         forma_pagamento: data.forma_pagamento || null,
         observacoes: data.observacoes || null,
         restricoes: data.restricoes || null,
-        medico_id: data.medico_id || null,
         ativo: data.ativo,
       }).eq('id', id);
       if (error) throw error;
@@ -224,7 +203,6 @@ export function ServiceManagementPanel() {
       forma_pagamento: service.forma_pagamento || '',
       observacoes: service.observacoes || '',
       restricoes: service.restricoes || '',
-      medico_id: service.medico_id || null,
       ativo: service.ativo ?? true,
     });
     setIsModalOpen(true);
@@ -466,37 +444,14 @@ export function ServiceManagementPanel() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="codigo">Código</Label>
-                <Input
-                  id="codigo"
-                  value={formData.codigo}
-                  onChange={(e) => setFormData({ ...formData, codigo: e.target.value })}
-                  placeholder="Ex: CONS-001"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="medico">Médico Vinculado (opcional)</Label>
-                <Select
-                  value={formData.medico_id || 'none'}
-                  onValueChange={(v) => 
-                    setFormData({ ...formData, medico_id: v === 'none' ? null : v })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Nenhum" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nenhum (disponível para todos)</SelectItem>
-                    {medicos.map((medico: any) => (
-                      <SelectItem key={medico.id} value={medico.id}>
-                        {medico.nome} - {medico.especialidade}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="codigo">Código</Label>
+              <Input
+                id="codigo"
+                value={formData.codigo}
+                onChange={(e) => setFormData({ ...formData, codigo: e.target.value })}
+                placeholder="Ex: CONS-001"
+              />
             </div>
 
             <div className="grid grid-cols-3 gap-4">

@@ -59,6 +59,7 @@ interface Medico {
   telefone_alternativo?: string | null;
   atende_criancas?: boolean;
   atende_adultos?: boolean;
+  atendimentos_ids?: string[];
 }
 
 interface Atendimento {
@@ -88,6 +89,7 @@ interface MedicoFormData {
   convenios_restricoes: Record<string, string>;
   outroConvenio: string;
   atendimentos_ids: string[];
+  valoresOverride: Record<string, string>; // atendimento_id → valor_override (vazio = sem override)
   outroAtendimento: string;
   outroAtendimentoTipo: string;
   idade_minima: number | null;
@@ -173,6 +175,7 @@ export const DoctorManagementPanel: React.FC = () => {
     convenios_restricoes: {},
     outroConvenio: '',
     atendimentos_ids: [],
+    valoresOverride: {},
     outroAtendimento: '',
     outroAtendimentoTipo: 'exame',
     idade_minima: null,
@@ -235,22 +238,43 @@ export const DoctorManagementPanel: React.FC = () => {
     enabled: !!effectiveClinicId
   });
 
-  // Buscar atendimentos disponíveis da clínica
+  // Buscar atendimentos disponíveis da clínica (sem medico_id — modelo M:N)
   const { data: atendimentosDisponiveis } = useQuery({
     queryKey: ['atendimentos-clinica', effectiveClinicId],
     queryFn: async () => {
       if (!effectiveClinicId) return [];
       const { data, error } = await supabase
         .from('atendimentos')
-        .select('id, nome, tipo, medico_id')
+        .select('id, nome, tipo, valor_particular')
         .eq('cliente_id', effectiveClinicId)
         .eq('ativo', true)
         .order('nome');
       if (error) throw error;
-      return (data || []) as (Atendimento & { medico_id?: string })[];
+      return (data || []) as (Atendimento & { valor_particular?: number | null })[];
     },
     enabled: !!effectiveClinicId
   });
+
+  // Salva valor_override por médico+serviço via pivot (só funciona pós-migration M:N)
+  const saveValoresOverride = async (
+    medicoId: string,
+    atendimentosIds: string[],
+    valoresOverride: Record<string, string>
+  ) => {
+    const overrideEntries = atendimentosIds.filter(id => id in valoresOverride);
+    if (overrideEntries.length === 0) return;
+    await Promise.all(
+      overrideEntries.map(id => {
+        const raw = valoresOverride[id];
+        const valor = raw && raw.trim() ? parseFloat(raw) : null;
+        return supabase.rpc('upsert_medico_atendimento_valor', {
+          p_medico_id: medicoId,
+          p_atendimento_id: id,
+          p_valor_override: valor
+        } as any);
+      })
+    );
+  };
 
   // Mutation para criar médico
   const createMutation = useMutation({
@@ -307,11 +331,16 @@ export const DoctorManagementPanel: React.FC = () => {
         });
       }
       
-      // Salvar horários de atendimento
+      // Salvar horários de atendimento e overrides de valor
       if (resultObj.medico_id) {
         await saveHorariosConfig(resultObj.medico_id);
+        try {
+          await saveValoresOverride(resultObj.medico_id, data.atendimentos_ids, data.valoresOverride);
+        } catch (e) {
+          console.warn('Overrides de valor não salvos (migration M:N pendente?):', e);
+        }
       }
-      
+
       return resultObj;
     },
     onSuccess: () => {
@@ -359,9 +388,14 @@ export const DoctorManagementPanel: React.FC = () => {
         throw new Error(resultObj.error || 'Erro ao atualizar médico');
       }
       
-      // Salvar horários de atendimento e sincronizar business_rules
+      // Salvar horários de atendimento, overrides de valor e sincronizar business_rules
       await saveHorariosConfig(medicoId);
-      
+      try {
+        await saveValoresOverride(medicoId, data.atendimentos_ids, data.valoresOverride);
+      } catch (e) {
+        console.warn('Overrides de valor não salvos (migration M:N pendente?):', e);
+      }
+
       // Sincronizar convênios e restrições de idade com business_rules
       if (effectiveClinicId) {
         try {
@@ -433,6 +467,7 @@ export const DoctorManagementPanel: React.FC = () => {
       convenios_restricoes: {},
       outroConvenio: '',
       atendimentos_ids: [],
+      valoresOverride: {},
       outroAtendimento: '',
       outroAtendimentoTipo: 'exame',
       idade_minima: null,
@@ -465,10 +500,31 @@ export const DoctorManagementPanel: React.FC = () => {
     const conveniosPersonalizados = medico.convenios_aceitos?.filter(c => !CONVENIOS_DISPONIVEIS.includes(c)) || [];
     const outroConvenioExistente = conveniosPersonalizados.length > 0 ? conveniosPersonalizados.join(', ') : '';
     
-    // Buscar atendimentos vinculados ao médico
-    const atendimentosDoMedico = atendimentosDisponiveis?.filter(a => 
-      a.medico_id === medico.id
-    ).map(a => a.id) || [];
+    // Buscar atendimentos vinculados ao médico via pivot (pós-migration) ou fallback por medico_id
+    const atendimentosDoMedico: string[] =
+      (medico.atendimentos_ids && medico.atendimentos_ids.length > 0)
+        ? medico.atendimentos_ids
+        : (atendimentosDisponiveis?.filter((a: any) => a.medico_id === medico.id).map(a => a.id) || []);
+
+    // Buscar valor_override por serviço (via pivot — só disponível pós-migration M:N)
+    let overrides: Record<string, string> = {};
+    if (effectiveClinicId) {
+      try {
+        const { data: atendComOverride } = await supabase.rpc('get_atendimentos_por_medico', {
+          p_medico_id: medico.id,
+          p_cliente_id: effectiveClinicId
+        } as any);
+        if (atendComOverride) {
+          for (const a of atendComOverride as any[]) {
+            if (a.valor_override != null) {
+              overrides[a.id] = String(a.valor_override);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('get_atendimentos_por_medico indisponível (migration M:N pendente?):', e);
+      }
+    }
 
     // Buscar horários configurados
     let periodosConfig: HorariosPeriodos = JSON.parse(JSON.stringify(initialPeriodos));
@@ -526,6 +582,7 @@ export const DoctorManagementPanel: React.FC = () => {
       convenios_restricoes: (medico.convenios_restricoes as Record<string, string>) || {},
       outroConvenio: outroConvenioExistente,
       atendimentos_ids: atendimentosDoMedico,
+      valoresOverride: overrides,
       outroAtendimento: '',
       outroAtendimentoTipo: 'exame',
       idade_minima: medico.idade_minima,
@@ -1578,25 +1635,50 @@ export const DoctorManagementPanel: React.FC = () => {
                 <Label>Tipos de Atendimento</Label>
                 <div className="p-3 border rounded-lg space-y-3">
                   {atendimentosDisponiveis && atendimentosDisponiveis.length > 0 ? (
-                    <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-                      {atendimentosDisponiveis.map((atend) => (
-                        <div key={atend.id} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`atend-${atend.id}`}
-                            checked={formData.atendimentos_ids.includes(atend.id)}
-                            onCheckedChange={() => handleAtendimentoToggle(atend.id)}
-                          />
-                          <label 
-                            htmlFor={`atend-${atend.id}`}
-                            className="text-sm cursor-pointer"
+                    <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
+                      {atendimentosDisponiveis.map((atend) => {
+                        const isChecked = formData.atendimentos_ids.includes(atend.id);
+                        const valorPadrao = atend.valor_particular
+                          ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(atend.valor_particular)
+                          : null;
+                        return (
+                          <div
+                            key={atend.id}
+                            className={`flex items-center gap-2 p-2 rounded-md transition-colors ${isChecked ? 'bg-muted/50' : 'hover:bg-muted/20'}`}
                           >
-                            {atend.nome}
-                            <span className="text-xs text-muted-foreground ml-1">
-                              ({atend.tipo})
-                            </span>
-                          </label>
-                        </div>
-                      ))}
+                            <Checkbox
+                              id={`atend-${atend.id}`}
+                              checked={isChecked}
+                              onCheckedChange={() => handleAtendimentoToggle(atend.id)}
+                            />
+                            <label
+                              htmlFor={`atend-${atend.id}`}
+                              className="flex-1 text-sm cursor-pointer min-w-0"
+                            >
+                              <span className="font-medium">{atend.nome}</span>
+                              <span className="text-xs text-muted-foreground ml-1">({atend.tipo})</span>
+                              {valorPadrao && (
+                                <span className="text-xs text-muted-foreground ml-1">— padrão: {valorPadrao}</span>
+                              )}
+                            </label>
+                            {isChecked && (
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                placeholder="Valor próprio"
+                                title="Valor personalizado para este médico (opcional)"
+                                value={formData.valoresOverride[atend.id] ?? ''}
+                                onChange={(e) => setFormData(prev => ({
+                                  ...prev,
+                                  valoresOverride: { ...prev.valoresOverride, [atend.id]: e.target.value }
+                                }))}
+                                className="w-32 h-7 text-xs shrink-0"
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   ) : (
                     <p className="text-sm text-muted-foreground">

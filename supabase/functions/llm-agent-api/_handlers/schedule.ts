@@ -777,101 +777,81 @@ export async function handleSchedule(supabase: any, body: any, clienteId: string
       console.log(`ℹ️ Médico ${medico.nome} sem regras específicas - prosseguindo com agendamento padrão`);
     }
 
-    // Buscar atendimento por nome (se especificado) COM filtro de cliente
+    // ── Buscar serviços do médico via pivot M:N (com fallback para modelo antigo medico_id) ──
+    let todosAtendimentosMedico: Array<{ id: string; nome: string; tipo: string }> = [];
+
+    // Tentativa 1: RPC pivot (disponível após migration M:N)
+    const { data: pivotAtend, error: pivotError } = await supabase.rpc('get_atendimentos_por_medico', {
+      p_medico_id: medico.id,
+      p_cliente_id: clienteId
+    } as any);
+
+    if (!pivotError && pivotAtend && (pivotAtend as any[]).length > 0) {
+      todosAtendimentosMedico = pivotAtend as any[];
+      console.log(`📋 Serviços via pivot: ${todosAtendimentosMedico.length}`);
+    } else {
+      // Fallback: filtro legado por medico_id
+      console.log(`📋 Fallback: buscando serviços por medico_id (pré-migration)`);
+      const { data: legacyAtend } = await supabase
+        .from('atendimentos')
+        .select('id, nome, tipo')
+        .eq('medico_id', medico.id)
+        .eq('cliente_id', clienteId)
+        .eq('ativo', true);
+      todosAtendimentosMedico = legacyAtend || [];
+    }
+
+    // Buscar atendimento por nome (se especificado)
     let atendimento_id = null;
     if (atendimento_nome) {
       console.log(`🔍 Buscando atendimento: "${atendimento_nome}" para médico ${medico.nome}`);
-      
-      // Tentativa 1: Busca pelo nome fornecido
-      let { data: atendimento, error: atendimentoError } = await supabase
-        .from('atendimentos')
-        .select('id, nome, tipo')
-        .ilike('nome', `%${atendimento_nome}%`)
-        .eq('medico_id', medico.id)
-        .eq('cliente_id', clienteId)
-        .eq('ativo', true)
-        .single();
+      const nomeLower = atendimento_nome.toLowerCase();
 
-      // Tentativa 2: Fallback inteligente por tipo
-      if (atendimentoError || !atendimento) {
-        console.log(`⚠️ Não encontrado com nome exato, tentando busca por tipo...`);
-        
-        const nomeLower = atendimento_nome.toLowerCase();
-        let tipoAtendimento = null;
-        
-        // Detectar tipo baseado em palavras-chave
-        if (nomeLower.includes('consult')) {
-          tipoAtendimento = 'consulta';
-        } else if (nomeLower.includes('retorn')) {
-          tipoAtendimento = 'retorno';
-        } else if (nomeLower.includes('exam')) {
-          tipoAtendimento = 'exame';
-        }
-        
+      // Tentativa 1: correspondência parcial no nome
+      let atendimento = todosAtendimentosMedico.find(a =>
+        a.nome.toLowerCase().includes(nomeLower) || nomeLower.includes(a.nome.toLowerCase())
+      );
+
+      // Tentativa 2: fallback por tipo (consulta/retorno/exame)
+      if (!atendimento) {
+        console.log(`⚠️ Não encontrado com nome exato, tentando por tipo...`);
+        let tipoAtendimento: string | null = null;
+        if (nomeLower.includes('consult')) tipoAtendimento = 'consulta';
+        else if (nomeLower.includes('retorn')) tipoAtendimento = 'retorno';
+        else if (nomeLower.includes('exam')) tipoAtendimento = 'exame';
+
         if (tipoAtendimento) {
-          console.log(`🎯 Detectado tipo: ${tipoAtendimento}, buscando...`);
-          
-          const { data: atendimentosPorTipo } = await supabase
-            .from('atendimentos')
-            .select('id, nome, tipo')
-            .eq('tipo', tipoAtendimento)
-            .eq('medico_id', medico.id)
-            .eq('cliente_id', clienteId)
-            .eq('ativo', true)
-            .limit(1);
-          
-          if (atendimentosPorTipo && atendimentosPorTipo.length > 0) {
-            atendimento = atendimentosPorTipo[0];
-            console.log(`✅ Encontrado por tipo: ${atendimento.nome}`);
-          }
+          console.log(`🎯 Detectado tipo: ${tipoAtendimento}`);
+          atendimento = todosAtendimentosMedico.find(a => a.tipo === tipoAtendimento);
+          if (atendimento) console.log(`✅ Encontrado por tipo: ${atendimento.nome}`);
         }
       }
 
-      // Se ainda não encontrou, listar opções disponíveis
+      // Não encontrado: listar opções disponíveis
       if (!atendimento) {
-        const { data: atendimentosDisponiveis } = await supabase
-          .from('atendimentos')
-          .select('nome, tipo')
-          .eq('medico_id', medico.id)
-          .eq('cliente_id', clienteId)
-          .eq('ativo', true);
-        
-        const listaAtendimentos = atendimentosDisponiveis
-          ?.map(a => `"${a.nome}" (${a.tipo})`)
-          .join(', ') || 'nenhum';
-        
-        console.error(`❌ Atendimento "${atendimento_nome}" não encontrado. Disponíveis: ${listaAtendimentos}`);
-        
+        console.error(`❌ Atendimento "${atendimento_nome}" não encontrado. Disponíveis: ${todosAtendimentosMedico.map(a => a.nome).join(', ')}`);
         return businessErrorResponse({
           codigo_erro: 'SERVICO_NAO_ENCONTRADO',
-          mensagem_usuario: `❌ O serviço "${atendimento_nome}" não foi encontrado para ${medico.nome}.\n\n✅ Serviços disponíveis:\n${atendimentosDisponiveis?.map(a => `   • ${a.nome} (${a.tipo})`).join('\n') || '   (nenhum cadastrado)'}\n\n💡 Escolha um dos serviços disponíveis acima.`,
+          mensagem_usuario: `❌ O serviço "${atendimento_nome}" não foi encontrado para ${medico.nome}.\n\n✅ Serviços disponíveis:\n${todosAtendimentosMedico.map(a => `   • ${a.nome} (${a.tipo})`).join('\n') || '   (nenhum cadastrado)'}\n\n💡 Escolha um dos serviços disponíveis acima.`,
           detalhes: {
             servico_solicitado: atendimento_nome,
             medico: medico.nome,
-            servicos_disponiveis: atendimentosDisponiveis || []
+            servicos_disponiveis: todosAtendimentosMedico
           }
         });
       }
-      
+
       atendimento_id = atendimento.id;
       console.log(`✅ Atendimento selecionado: ${atendimento.nome} (ID: ${atendimento_id})`);
-      
-    } else {
-      // Buscar primeiro atendimento disponível do médico COM filtro de cliente
-      console.log(`🔍 Nenhum atendimento especificado, buscando primeiro disponível...`);
-      const { data: atendimentos } = await supabase
-        .from('atendimentos')
-        .select('id, nome')
-        .eq('medico_id', medico.id)
-        .eq('cliente_id', clienteId)
-        .eq('ativo', true)
-        .limit(1);
 
-      if (!atendimentos || atendimentos.length === 0) {
+    } else {
+      // Nenhum atendimento especificado: usar primeiro disponível
+      console.log(`🔍 Nenhum atendimento especificado, usando primeiro disponível...`);
+      if (!todosAtendimentosMedico.length) {
         return errorResponse(`Nenhum atendimento disponível para o médico ${medico.nome}`);
       }
-      atendimento_id = atendimentos[0].id;
-      console.log(`✅ Primeiro atendimento disponível selecionado: ${atendimentos[0].nome}`);
+      atendimento_id = todosAtendimentosMedico[0].id;
+      console.log(`✅ Primeiro atendimento selecionado: ${todosAtendimentosMedico[0].nome}`);
     }
 
     // 🆕 PARSEAR INTERVALO DE HORÁRIO (ex: "13:00 às 15:00" → "13:00")
