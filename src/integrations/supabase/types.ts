@@ -1,3 +1,4 @@
+Initialising login role...
 export type Json =
   | string
   | number
@@ -11,6 +12,31 @@ export type Database = {
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "12.2.3 (519615d)"
+  }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -1377,6 +1403,7 @@ export type Database = {
           convenios_restricoes: Json | null
           created_at: string | null
           crm: string | null
+          data_nascimento_opcional: boolean | null
           especialidade: string
           horarios: Json | null
           id: string
@@ -1397,6 +1424,7 @@ export type Database = {
           convenios_restricoes?: Json | null
           created_at?: string | null
           crm?: string | null
+          data_nascimento_opcional?: boolean | null
           especialidade: string
           horarios?: Json | null
           id?: string
@@ -1417,6 +1445,7 @@ export type Database = {
           convenios_restricoes?: Json | null
           created_at?: string | null
           crm?: string | null
+          data_nascimento_opcional?: boolean | null
           especialidade?: string
           horarios?: Json | null
           id?: string
@@ -2558,6 +2587,10 @@ export type Database = {
         }[]
       }
       get_all_clinics_stats: { Args: never; Returns: Json }
+      get_appointment_tenant: {
+        Args: { p_agendamento_id: string }
+        Returns: string
+      }
       get_approved_users_for_clinic: {
         Args: { p_cliente_id: string }
         Returns: {
@@ -3333,6 +3366,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: [
@@ -3345,3 +3381,5 @@ export const Constants = {
     },
   },
 } as const
+A new version of Supabase CLI is available: v2.90.0 (currently installed v2.84.2)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli

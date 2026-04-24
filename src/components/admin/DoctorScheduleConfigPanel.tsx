@@ -109,13 +109,6 @@ export default function DoctorScheduleConfigPanel() {
     });
     setScheduleConfig(initialConfig);
   }, []);
-  useEffect(() => {
-    const initialConfig: Record<number, DayConfig> = {};
-    DIAS_SEMANA.forEach(dia => {
-      initialConfig[dia.value] = { ...DEFAULT_DAY_CONFIG };
-    });
-    setScheduleConfig(initialConfig);
-  }, []);
 
   // Set clinic for clinic admin users
   useEffect(() => {
@@ -227,6 +220,19 @@ export default function DoctorScheduleConfigPanel() {
     mutationFn: async () => {
       if (!selectedMedicoId || !selectedClinicId) {
         throw new Error("Selecione um médico");
+      }
+
+      // Validar hora_fim > hora_inicio em todos os períodos ativos
+      for (const [diaSemana, dayConfig] of Object.entries(scheduleConfig)) {
+        const diaNome = DIAS_SEMANA.find(d => d.value === parseInt(diaSemana))?.label ?? diaSemana;
+        for (const periodo of ['manha', 'tarde', 'noite'] as const) {
+          const p = dayConfig[periodo];
+          if (p.ativo && p.hora_inicio && p.hora_fim && p.hora_fim <= p.hora_inicio) {
+            throw new Error(
+              `${diaNome} — ${periodo}: hora de fim (${p.hora_fim}) deve ser depois da hora de início (${p.hora_inicio})`
+            );
+          }
+        }
       }
 
       // Delete existing configs

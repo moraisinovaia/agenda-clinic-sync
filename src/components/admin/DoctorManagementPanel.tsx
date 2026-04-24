@@ -663,6 +663,20 @@ export const DoctorManagementPanel: React.FC = () => {
       return;
     }
 
+    // Validar períodos ativos
+    for (const periodo of ['manha', 'tarde', 'noite'] as const) {
+      const p = formData.horarios_periodos[periodo];
+      if (!p.ativo) continue;
+      if (p.hora_inicio && p.hora_fim && p.hora_fim <= p.hora_inicio) {
+        toast.error(`Período ${periodo}: hora de fim (${p.hora_fim}) deve ser depois da hora de início (${p.hora_inicio})`);
+        return;
+      }
+      if (p.dias_semana.length === 0) {
+        toast.error(`Período ${periodo} está ativo mas nenhum dia da semana foi selecionado`);
+        return;
+      }
+    }
+
     // Processar convênios: remover "OUTRO" e separar convênios personalizados por vírgula
     const conveniosPersonalizados = formData.outroConvenio.trim()
       ? formData.outroConvenio.split(',').map(c => c.trim().toUpperCase()).filter(c => c.length > 0)

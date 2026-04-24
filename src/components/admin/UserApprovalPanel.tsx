@@ -263,13 +263,12 @@ export function UserApprovalPanel() {
         }
       }
 
-      // @ts-ignore - p_role foi adicionado na migração mas types ainda não foram atualizados
       const { data, error } = await supabase.rpc('aprovar_usuario', {
         p_user_id: userId,
         p_aprovador_user_id: profile.user_id,
         p_cliente_id: clienteId,
         p_role: role
-      } as any);
+      });
 
       console.log('📡 Resposta da função aprovar_usuario:', { data, error });
 
