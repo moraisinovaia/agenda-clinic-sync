@@ -92,7 +92,7 @@ BEGIN
       a.restricoes,
       a.horarios,
       a.ativo,
-      COALESCE(a.updated_at, a.created_at) AS ts
+      a.created_at AS ts
     FROM public.atendimentos a
     JOIN canonicos c
       ON  c.cliente_id = a.cliente_id
@@ -131,12 +131,14 @@ BEGIN
     observacoes              = COALESCE(m.melhor_observacoes,                a.observacoes),
     restricoes               = COALESCE(m.melhor_restricoes,                 a.restricoes),
     horarios                 = COALESCE(m.melhor_horarios,                   a.horarios),
-    ativo                    = m.melhor_ativo,
-    updated_at               = now()
+    ativo                    = m.melhor_ativo
   FROM melhores m
   WHERE a.id = m.canonical_id;
 
   RAISE NOTICE 'Passo 0 concluído: canônicos atualizados com melhores valores do grupo.';
+
+  -- Desabilitar triggers de validação em agendamentos para o redirect de FK
+  ALTER TABLE public.agendamentos DISABLE TRIGGER USER;
 
   -- ─── Passo 1: Redirecionar agendamentos ──────────────────────────────────
   WITH canonicos AS (
@@ -163,6 +165,8 @@ BEGIN
   WHERE ag.atendimento_id = d.dup_id;
 
   GET DIAGNOSTICS v_agendamentos_atualizados = ROW_COUNT;
+
+  ALTER TABLE public.agendamentos ENABLE TRIGGER USER;
 
   -- ─── Passo 2: Redirecionar fila_espera ───────────────────────────────────
   WITH canonicos AS (
