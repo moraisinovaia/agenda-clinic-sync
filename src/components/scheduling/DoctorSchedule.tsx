@@ -30,9 +30,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { FilaEsperaForm } from '@/components/fila-espera/FilaEsperaForm';
 import { FilaEsperaFormData } from '@/types/fila-espera';
 import { RelatorioAgenda } from './RelatorioAgenda';
-import { FileText } from 'lucide-react';
+import { FileText, Sun, Sunset, Moon } from 'lucide-react';
 import { DoctorScheduleGenerator } from './DoctorScheduleGenerator';
 import { toast } from 'sonner';
+import { matchesPeriod, PERIOD_LABELS, type PeriodFilter } from '@/utils/periodFilter';
 
 interface DoctorScheduleProps {
   doctor: Doctor;
@@ -192,6 +193,7 @@ export function DoctorSchedule({
   const [patientSearch, setPatientSearch] = useState('');
   const [patientSearchResults, setPatientSearchResults] = useState<AppointmentWithRelations[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('all');
 
   // Função de busca de pacientes agendados
   const searchPatients = (searchTerm: string) => {
@@ -339,11 +341,16 @@ export function DoctorSchedule({
   }, [selectedDate, doctor.id, blockedDates]);
 
   const selectedDateAppointments = getAppointmentsForDate(selectedDate);
-  const activeAppointments = selectedDateAppointments.filter(
+  // Aplica o filtro de período (Todos / Manhã / Tarde / Noite)
+  const periodFilteredAppointments = useMemo(
+    () => selectedDateAppointments.filter(apt => matchesPeriod(apt.hora_agendamento, periodFilter)),
+    [selectedDateAppointments, periodFilter]
+  );
+  const activeAppointments = periodFilteredAppointments.filter(
     apt => apt.status === 'agendado' || apt.status === 'confirmado' || apt.status === 'cancelado_bloqueio'
   );
 
-  // Contagem de agendamentos por tipo de atendimento
+  // Contagem de agendamentos por tipo de atendimento (respeita o filtro de período)
   const appointmentsByType = useMemo(() => {
     const counts: Record<string, number> = {};
     activeAppointments.forEach(apt => {
@@ -359,15 +366,16 @@ export function DoctorSchedule({
       const filtered = (emptySlots || []).filter(
         slot => slot.medico_id === doctor.id && 
                 slot.data === dateStr &&
-                slot.status === 'disponivel'
+                slot.status === 'disponivel' &&
+                matchesPeriod(slot.hora, periodFilter)
       );
-      console.log(`📊 Horários vazios para ${dateStr}:`, filtered.length);
+      console.log(`📊 Horários vazios para ${dateStr} (período=${periodFilter}):`, filtered.length);
       return filtered;
     } catch (error) {
       console.error('❌ Erro ao filtrar horários vazios:', error);
       return [];
     }
-  }, [emptySlots, doctor.id, selectedDate]);
+  }, [emptySlots, doctor.id, selectedDate, periodFilter]);
 
   const allSlots = useMemo(() => {
     try {
@@ -377,7 +385,7 @@ export function DoctorSchedule({
           hora: slot.hora,
           data: slot
         })),
-        ...selectedDateAppointments.map(apt => ({
+        ...periodFilteredAppointments.map(apt => ({
           type: 'appointment' as const,
           hora: apt.hora_agendamento,
           data: apt
@@ -387,7 +395,7 @@ export function DoctorSchedule({
       console.error('❌ Erro ao combinar slots:', error);
       return [];
     }
-  }, [emptyTimeSlots, selectedDateAppointments]);
+  }, [emptyTimeSlots, periodFilteredAppointments]);
 
   const handlePrint = () => {
     window.print();
@@ -573,12 +581,12 @@ export function DoctorSchedule({
               </div>
               
               <div className="p-3 border-b bg-muted/30 print:hidden">
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
                   <div>
                     <h3 className="font-semibold text-base">
                       Agendamentos para {format(selectedDate, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
                     </h3>
-                    {selectedDateAppointments.length > 0 && (
+                    {periodFilteredAppointments.length > 0 && (
                       <div className="mt-1 text-xs text-muted-foreground">
                         <span>
                           {appointmentsByType.map(([tipo, count], index) => (
@@ -589,9 +597,37 @@ export function DoctorSchedule({
                           ))}
                           {appointmentsByType.length > 0 && ' | '}
                           Total: {activeAppointments.length}
+                          {periodFilter !== 'all' && (
+                            <span className="ml-1 italic">(filtrado: {PERIOD_LABELS[periodFilter]})</span>
+                          )}
                         </span>
                       </div>
                     )}
+                  </div>
+
+                  {/* Filtro de Turno (Todos / Manhã / Tarde / Noite) */}
+                  <div className="inline-flex rounded-md border bg-background p-1 gap-1 shadow-sm">
+                    {(['all', 'manha', 'tarde', 'noite'] as PeriodFilter[]).map((p) => {
+                      const Icon = p === 'manha' ? Sun : p === 'tarde' ? Sunset : p === 'noite' ? Moon : CalendarIcon;
+                      const isActive = periodFilter === p;
+                      return (
+                        <Button
+                          key={p}
+                          type="button"
+                          variant={isActive ? 'default' : 'ghost'}
+                          size="sm"
+                          onClick={() => setPeriodFilter(p)}
+                          className={cn(
+                            'h-8 px-3 gap-1.5 transition-all',
+                            isActive ? 'shadow-sm' : 'hover:bg-muted'
+                          )}
+                          title={`Mostrar apenas ${PERIOD_LABELS[p].toLowerCase()}`}
+                        >
+                          <Icon className="h-3.5 w-3.5" />
+                          {PERIOD_LABELS[p]}
+                        </Button>
+                      );
+                    })}
                   </div>
                   
                   {/* Campo de busca de pacientes */}

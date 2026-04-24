@@ -247,13 +247,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "atendimentos_medico_id_fkey"
-            columns: ["medico_id"]
-            isOneToOne: false
-            referencedRelation: "medicos"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "fk_atendimentos_cliente"
             columns: ["cliente_id"]
             isOneToOne: false
@@ -1386,6 +1379,61 @@ export type Database = {
           },
           {
             foreignKeyName: "llm_mensagens_medico_id_fkey"
+            columns: ["medico_id"]
+            isOneToOne: false
+            referencedRelation: "medicos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      medico_atendimento: {
+        Row: {
+          atendimento_id: string
+          ativo: boolean
+          cliente_id: string
+          created_at: string
+          id: string
+          medico_id: string
+          updated_at: string
+          valor_override: number | null
+        }
+        Insert: {
+          atendimento_id: string
+          ativo?: boolean
+          cliente_id: string
+          created_at?: string
+          id?: string
+          medico_id: string
+          updated_at?: string
+          valor_override?: number | null
+        }
+        Update: {
+          atendimento_id?: string
+          ativo?: boolean
+          cliente_id?: string
+          created_at?: string
+          id?: string
+          medico_id?: string
+          updated_at?: string
+          valor_override?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "medico_atendimento_atendimento_id_fkey"
+            columns: ["atendimento_id"]
+            isOneToOne: false
+            referencedRelation: "atendimentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "medico_atendimento_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "medico_atendimento_medico_id_fkey"
             columns: ["medico_id"]
             isOneToOne: false
             referencedRelation: "medicos"
@@ -2633,6 +2681,24 @@ export type Database = {
           username: string
         }[]
       }
+      get_atendimentos_por_medico: {
+        Args: { p_cliente_id: string; p_medico_id: string }
+        Returns: {
+          ativo: boolean
+          codigo: string
+          coparticipacao_unimed_20: number
+          coparticipacao_unimed_40: number
+          forma_pagamento: string
+          id: string
+          nome: string
+          observacoes: string
+          restricoes: string
+          tipo: string
+          valor_efetivo: number
+          valor_override: number
+          valor_particular: number
+        }[]
+      }
       get_backup_cron_status: {
         Args: never
         Returns: {
@@ -2769,6 +2835,7 @@ export type Database = {
         Returns: {
           atende_adultos: boolean
           atende_criancas: boolean
+          atendimentos_ids: string[]
           ativo: boolean
           convenios_aceitos: string[]
           convenios_restricoes: Json
@@ -3180,6 +3247,14 @@ export type Database = {
         Args: { p_cliente_id: string; p_config: Json; p_medico_id: string }
         Returns: Json
       }
+      upsert_medico_atendimento_valor: {
+        Args: {
+          p_atendimento_id: string
+          p_medico_id: string
+          p_valor_override?: number
+        }
+        Returns: Json
+      }
       urlencode:
         | { Args: { data: Json }; Returns: string }
         | {
@@ -3212,6 +3287,14 @@ export type Database = {
           p_medico_id: string
         }
         Returns: Json
+      }
+      validar_par_medico_atendimento: {
+        Args: {
+          p_atendimento_id: string
+          p_cliente_id: string
+          p_medico_id: string
+        }
+        Returns: boolean
       }
       validate_production_security: { Args: never; Returns: Json }
       validate_system_health: { Args: never; Returns: Json }
