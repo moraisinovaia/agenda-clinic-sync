@@ -1287,7 +1287,7 @@ export const DoctorManagementPanel: React.FC = () => {
                             min={1}
                             max={50}
                             value={formData.horarios_periodos.manha.limite_pacientes}
-                            onChange={(e) => handlePeriodoChange('manha', { ...formData.horarios_periodos.manha, limite_pacientes: parseInt(e.target.value) || 1 })}
+                            onChange={(e) => handlePeriodoChange('manha', { ...formData.horarios_periodos.manha, limite_pacientes: Math.max(1, parseInt(e.target.value) || 1) })}
                             className="w-16"
                           />
                         </div>
@@ -1366,7 +1366,7 @@ export const DoctorManagementPanel: React.FC = () => {
                             min={1}
                             max={50}
                             value={formData.horarios_periodos.tarde.limite_pacientes}
-                            onChange={(e) => handlePeriodoChange('tarde', { ...formData.horarios_periodos.tarde, limite_pacientes: parseInt(e.target.value) || 1 })}
+                            onChange={(e) => handlePeriodoChange('tarde', { ...formData.horarios_periodos.tarde, limite_pacientes: Math.max(1, parseInt(e.target.value) || 1) })}
                             className="w-16"
                           />
                         </div>
@@ -1445,7 +1445,7 @@ export const DoctorManagementPanel: React.FC = () => {
                             min={1}
                             max={50}
                             value={formData.horarios_periodos.noite.limite_pacientes}
-                            onChange={(e) => handlePeriodoChange('noite', { ...formData.horarios_periodos.noite, limite_pacientes: parseInt(e.target.value) || 1 })}
+                            onChange={(e) => handlePeriodoChange('noite', { ...formData.horarios_periodos.noite, limite_pacientes: Math.max(1, parseInt(e.target.value) || 1) })}
                             className="w-16"
                           />
                         </div>

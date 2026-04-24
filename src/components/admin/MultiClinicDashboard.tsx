@@ -354,12 +354,19 @@ export function MultiClinicDashboard() {
         p_mensagem_bloqueio_padrao: editFormData.mensagem_bloqueio_padrao || null
       });
 
-      if (llmError) console.error('Erro ao sincronizar LLM config:', llmError);
-
-      toast({
-        title: 'Sucesso',
-        description: 'Clínica atualizada com sucesso',
-      });
+      if (llmError) {
+        console.error('Erro ao sincronizar LLM config:', llmError);
+        toast({
+          title: 'Salvo parcialmente',
+          description: 'Dados da clínica atualizados, mas a sincronização LLM falhou. Tente salvar novamente.',
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Sucesso',
+          description: 'Clínica atualizada com sucesso',
+        });
+      }
 
       setShowManageModal(false);
       fetchData();

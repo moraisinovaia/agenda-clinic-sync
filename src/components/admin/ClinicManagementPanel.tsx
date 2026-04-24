@@ -312,12 +312,17 @@ export function ClinicManagementPanel() {
 
       if (llmError) {
         console.error('Erro ao sincronizar LLM config:', llmError);
+        toast({
+          title: 'Salvo parcialmente',
+          description: 'Dados da clínica atualizados, mas a sincronização LLM falhou. Tente salvar novamente.',
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Sucesso',
+          description: 'Clínica atualizada e sincronizada com sucesso',
+        });
       }
-
-      toast({
-        title: 'Sucesso',
-        description: 'Clínica atualizada e sincronizada com sucesso',
-      });
 
       setShowEditModal(false);
       setEditingCliente(null);
@@ -348,10 +353,11 @@ export function ClinicManagementPanel() {
       mensagem_bloqueio_padrao: ''
     });
     setLlmConfig(null);
-    setShowEditModal(true);
-    
-    // Buscar config LLM
+
+    // Buscar config LLM antes de abrir o modal — evita salvar valores default
+    // caso o admin clique em Salvar antes da hidratação terminar
     await fetchLLMConfig(cliente.id);
+    setShowEditModal(true);
   };
 
   const getConfigStatus = (cliente: Cliente) => {

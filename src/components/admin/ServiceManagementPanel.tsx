@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useStableAuth } from '@/hooks/useStableAuth';
@@ -73,9 +73,11 @@ export function ServiceManagementPanel() {
   const effectiveClinicId = isClinicAdmin ? clinicAdminClienteId : selectedClinicId;
 
   // Auto-selecionar primeira clínica (apenas para admin global)
-  if (isAdmin && !isClinicAdmin && clinicas.length > 0 && !selectedClinicId) {
-    setSelectedClinicId(clinicas[0].id);
-  }
+  useEffect(() => {
+    if (isAdmin && !isClinicAdmin && clinicas.length > 0 && !selectedClinicId) {
+      setSelectedClinicId(clinicas[0].id);
+    }
+  }, [isAdmin, isClinicAdmin, clinicas, selectedClinicId]);
 
   // Query: Atendimentos da clínica selecionada
   const { data: atendimentos = [], isLoading: loadingAtendimentos } = useQuery({
