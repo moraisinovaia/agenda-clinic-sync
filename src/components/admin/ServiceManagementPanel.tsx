@@ -13,7 +13,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { Plus, Search, Edit, Building2, Stethoscope, Filter } from 'lucide-react';
+import { Plus, Search, Edit, Building2, Stethoscope, Filter, Users, Trash2 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { PaginationControls } from '@/components/ui/pagination-controls';
 import { usePagination } from '@/hooks/usePagination';
 
@@ -55,6 +56,8 @@ export function ServiceManagementPanel() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingService, setEditingService] = useState<any | null>(null);
   const [formData, setFormData] = useState<AtendimentoFormData>(emptyFormData);
+  // Médicos vinculados ao serviço em edição (override de preço por médico)
+  const [medicosVinculados, setMedicosVinculados] = useState<Array<{ medico_id: string; nome: string; valor_override: string }>>([]);
 
   // Query: Clínicas (apenas admin global)
   const { data: clinicas = [] } = useQuery({
@@ -76,6 +79,23 @@ export function ServiceManagementPanel() {
       setSelectedClinicId(clinicas[0].id);
     }
   }, [isAdmin, isClinicAdmin, clinicas, selectedClinicId]);
+
+  // Query: Médicos da clínica (para vínculo por serviço)
+  const { data: medicos = [] } = useQuery({
+    queryKey: ['medicos-admin', effectiveClinicId],
+    queryFn: async () => {
+      if (!effectiveClinicId) return [];
+      const { data, error } = await supabase
+        .from('medicos')
+        .select('id, nome, especialidade')
+        .eq('cliente_id', effectiveClinicId)
+        .eq('ativo', true)
+        .order('nome');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!effectiveClinicId,
+  });
 
   // Query: Atendimentos da clínica selecionada
   const { data: atendimentos = [], isLoading: loadingAtendimentos } = useQuery({
@@ -188,10 +208,11 @@ export function ServiceManagementPanel() {
   const openCreateModal = () => {
     setEditingService(null);
     setFormData(emptyFormData);
+    setMedicosVinculados([]);
     setIsModalOpen(true);
   };
 
-  const openEditModal = (service: any) => {
+  const openEditModal = async (service: any) => {
     setEditingService(service);
     setFormData({
       nome: service.nome || '',
@@ -205,6 +226,25 @@ export function ServiceManagementPanel() {
       restricoes: service.restricoes || '',
       ativo: service.ativo ?? true,
     });
+    // Carregar médicos vinculados via pivot (pós-migration M:N)
+    try {
+      const { data: pivot } = await supabase
+        .from('medico_atendimento')
+        .select('medico_id, valor_override, medicos(nome)')
+        .eq('atendimento_id', service.id)
+        .eq('ativo', true);
+      if (pivot) {
+        setMedicosVinculados(pivot.map((p: any) => ({
+          medico_id: p.medico_id,
+          nome: p.medicos?.nome || '',
+          valor_override: p.valor_override != null ? String(p.valor_override) : '',
+        })));
+      } else {
+        setMedicosVinculados([]);
+      }
+    } catch {
+      setMedicosVinculados([]);
+    }
     setIsModalOpen(true);
   };
 
@@ -212,6 +252,54 @@ export function ServiceManagementPanel() {
     setIsModalOpen(false);
     setEditingService(null);
     setFormData(emptyFormData);
+    setMedicosVinculados([]);
+  };
+
+  const handleVincularMedico = async (medicoId: string) => {
+    if (!editingService) return;
+    try {
+      const { data: result } = await supabase.rpc('upsert_medico_atendimento_valor', {
+        p_medico_id: medicoId,
+        p_atendimento_id: editingService.id,
+        p_valor_override: null,
+      } as any);
+      const medico = medicos.find((m: any) => m.id === medicoId);
+      setMedicosVinculados(prev => [...prev, { medico_id: medicoId, nome: medico?.nome || '', valor_override: '' }]);
+      queryClient.invalidateQueries({ queryKey: ['medicos-por-clinica'] });
+    } catch (e: any) {
+      toast.error('Erro ao vincular médico: ' + e.message);
+    }
+  };
+
+  const handleDesvincularMedico = async (medicoId: string) => {
+    if (!editingService) return;
+    try {
+      await supabase
+        .from('medico_atendimento')
+        .delete()
+        .eq('medico_id', medicoId)
+        .eq('atendimento_id', editingService.id);
+      setMedicosVinculados(prev => prev.filter(m => m.medico_id !== medicoId));
+      queryClient.invalidateQueries({ queryKey: ['medicos-por-clinica'] });
+    } catch (e: any) {
+      toast.error('Erro ao desvincular médico: ' + e.message);
+    }
+  };
+
+  const handleSalvarOverrideMedico = async (medicoId: string, valor: string) => {
+    if (!editingService) return;
+    try {
+      await supabase.rpc('upsert_medico_atendimento_valor', {
+        p_medico_id: medicoId,
+        p_atendimento_id: editingService.id,
+        p_valor_override: valor.trim() ? parseFloat(valor) : null,
+      } as any);
+      setMedicosVinculados(prev =>
+        prev.map(m => m.medico_id === medicoId ? { ...m, valor_override: valor } : m)
+      );
+    } catch (e: any) {
+      toast.error('Erro ao salvar valor: ' + e.message);
+    }
   };
 
   const handleSubmit = () => {
@@ -539,6 +627,73 @@ export function ServiceManagementPanel() {
               />
               <Label htmlFor="ativo">Serviço ativo</Label>
             </div>
+
+            {/* Médicos vinculados — só visível ao editar (pós-migration M:N) */}
+            {editingService && (
+              <div className="space-y-3 border rounded-lg p-4">
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-primary" />
+                  <Label className="text-sm font-medium">Médicos vinculados</Label>
+                </div>
+
+                {medicosVinculados.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Nenhum médico vinculado a este serviço.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {medicosVinculados.map((mv) => (
+                      <div key={mv.medico_id} className="flex items-center gap-2 p-2 bg-muted/30 rounded-md">
+                        <span className="flex-1 text-sm font-medium">{mv.nome}</span>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="Valor próprio"
+                          title="Valor personalizado para este médico (vazio = valor padrão)"
+                          value={mv.valor_override}
+                          onChange={(e) => setMedicosVinculados(prev =>
+                            prev.map(m => m.medico_id === mv.medico_id ? { ...m, valor_override: e.target.value } : m)
+                          )}
+                          onBlur={(e) => handleSalvarOverrideMedico(mv.medico_id, e.target.value)}
+                          className="w-32 h-7 text-sm"
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive"
+                          onClick={() => handleDesvincularMedico(mv.medico_id)}
+                          title="Desvincular médico"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Adicionar médico ao serviço */}
+                {medicos.filter((m: any) => !medicosVinculados.some(mv => mv.medico_id === m.id)).length > 0 && (
+                  <div className="pt-2 border-t">
+                    <p className="text-xs text-muted-foreground mb-2">Adicionar médico:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {medicos
+                        .filter((m: any) => !medicosVinculados.some(mv => mv.medico_id === m.id))
+                        .map((m: any) => (
+                          <Button
+                            key={m.id}
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => handleVincularMedico(m.id)}
+                          >
+                            <Plus className="h-3 w-3 mr-1" />
+                            {m.nome}
+                          </Button>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={closeModal}>

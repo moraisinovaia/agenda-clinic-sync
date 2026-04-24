@@ -8,6 +8,8 @@ export function useSchedulingData() {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [atendimentos, setAtendimentos] = useState<Atendimento[]>([]);
   const [blockedDates, setBlockedDates] = useState<any[]>([]);
+  // Map medico_id → atendimento_id[] from pivot table (populated after M:N migration)
+  const [pivotMap, setPivotMap] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const retryCount = useRef(0);
@@ -84,6 +86,27 @@ export function useSchedulingData() {
     }
   }, []);
 
+  // Buscar pivot medico_atendimento (modelo M:N — disponível pós-migration)
+  const fetchPivotMap = useCallback(async (): Promise<void> => {
+    try {
+      const { data } = await supabase
+        .from('medico_atendimento')
+        .select('medico_id, atendimento_id')
+        .eq('ativo', true);
+
+      if (data) {
+        const map: Record<string, string[]> = {};
+        for (const row of data) {
+          if (!map[row.medico_id]) map[row.medico_id] = [];
+          map[row.medico_id].push(row.atendimento_id);
+        }
+        setPivotMap(map);
+      }
+    } catch {
+      setPivotMap({});
+    }
+  }, []);
+
   // Buscar bloqueios de agenda
   const fetchBlockedDates = useCallback(async (): Promise<void> => {
     try {
@@ -106,12 +129,19 @@ export function useSchedulingData() {
       fetchDoctors(),
       fetchAtendimentos(),
       fetchBlockedDates(),
+      fetchPivotMap(),
     ]);
-  }, [fetchDoctors, fetchAtendimentos, fetchBlockedDates]);
+  }, [fetchDoctors, fetchAtendimentos, fetchBlockedDates, fetchPivotMap]);
 
-  // Buscar atendimentos por médico
-  const getAtendimentosByDoctor = (doctorId: string) => {
-    return atendimentos.filter(atendimento => atendimento.medico_id === doctorId);
+  // Buscar atendimentos por médico — pivot M:N com fallback legado por medico_id
+  const getAtendimentosByDoctor = (doctorId: string): Atendimento[] => {
+    const pivotIds = pivotMap[doctorId];
+    if (pivotIds?.length) {
+      const idSet = new Set(pivotIds);
+      return atendimentos.filter(a => idSet.has(a.id));
+    }
+    // Fallback: modelo antigo com medico_id direto (pré-migration)
+    return atendimentos.filter(a => (a as any).medico_id === doctorId);
   };
 
   // Verificar se uma data está bloqueada para um médico
@@ -140,6 +170,7 @@ export function useSchedulingData() {
           fetchDoctors(),
           fetchAtendimentos(),
           fetchBlockedDates(),
+          fetchPivotMap(),
         ]);
       } finally {
         setLoading(false);
@@ -147,7 +178,7 @@ export function useSchedulingData() {
     };
 
     loadData();
-  }, [fetchDoctors, fetchAtendimentos, fetchBlockedDates]);
+  }, [fetchDoctors, fetchAtendimentos, fetchBlockedDates, fetchPivotMap]);
 
   return {
     doctors,
