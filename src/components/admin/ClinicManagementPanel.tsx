@@ -145,7 +145,7 @@ export function ClinicManagementPanel() {
     }
   };
 
-  const fetchLLMConfig = async (clienteId: string) => {
+  const fetchLLMConfig = async (clienteId: string): Promise<boolean> => {
     try {
       setLoadingLLMConfig(true);
       const { data, error } = await supabase
@@ -156,8 +156,7 @@ export function ClinicManagementPanel() {
 
       if (error && error.code !== 'PGRST116') throw error;
       setLlmConfig(data as LLMConfig | null);
-      
-      // Atualizar form com dados do LLM config
+
       if (data) {
         setEditFormData(prev => ({
           ...prev,
@@ -167,8 +166,10 @@ export function ClinicManagementPanel() {
           mensagem_bloqueio_padrao: data.mensagem_bloqueio_padrao || ''
         }));
       }
+      return true;
     } catch (error: any) {
       console.error('Erro ao buscar config LLM:', error);
+      return false;
     } finally {
       setLoadingLLMConfig(false);
     }
@@ -356,14 +357,17 @@ export function ClinicManagementPanel() {
     });
     setLlmConfig(null);
 
-    try {
-      // Buscar config LLM antes de abrir o modal — evita salvar valores default
-      // caso o admin clique em Salvar antes da hidratação terminar
-      await fetchLLMConfig(cliente.id);
-    } finally {
-      setOpeningEditModal(null);
-      setShowEditModal(true);
+    const llmOk = await fetchLLMConfig(cliente.id);
+    if (!llmOk) {
+      toast({
+        title: 'Aviso',
+        description: 'Não foi possível carregar a configuração LLM. Os campos de integração podem estar desatualizados.',
+        variant: 'destructive',
+      });
     }
+
+    setOpeningEditModal(null);
+    setShowEditModal(true);
   };
 
   const getConfigStatus = (cliente: Cliente) => {
