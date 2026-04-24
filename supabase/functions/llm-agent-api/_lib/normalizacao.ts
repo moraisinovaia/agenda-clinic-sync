@@ -64,6 +64,16 @@ export function normalizarTelefone(telefone: string | null | undefined): string 
 }
 
 /**
+ * Normaliza convênio para comparação — espelha o regexp do banco:
+ *   regexp_replace(upper(trim(c)), '[^A-Z0-9%]+', '', 'g')
+ * Remove tudo exceto letras A-Z, dígitos e %. Usar só para comparar,
+ * nunca para armazenar (armazenamento usa upper(trim())).
+ */
+export function normalizarConvenioParaComparacao(convenio: string): string {
+  return convenio.toUpperCase().trim().replace(/[^A-Z0-9%]/g, '');
+}
+
+/**
  * Normaliza nome do paciente
  * Remove espaços extras e capitaliza corretamente
  */

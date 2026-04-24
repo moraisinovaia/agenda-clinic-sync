@@ -11,7 +11,7 @@ import { successResponse, errorResponse, businessErrorResponse } from '../_lib/r
 import { getRequestScope, isDoctorAllowed, isServiceAllowed, filterDoctorsByScope, getDoctorScopeSummary, hasDoctorScope } from '../_lib/scope.ts'
 import { getMedicoRules, getMensagemPersonalizada, verificarLimitesCompartilhados, calcularVagasDisponiveisComLimites, verificarSublimiteConvenio } from '../_lib/limites.ts'
 import { normalizarServicoPeriodos, buscarAgendaDedicada } from '../_lib/config.ts'
-import { mapSchedulingData, sanitizarCampoOpcional, normalizarNome, formatarDataPorExtenso } from '../_lib/normalizacao.ts'
+import { mapSchedulingData, sanitizarCampoOpcional, normalizarNome, formatarDataPorExtenso, normalizarConvenioParaComparacao } from '../_lib/normalizacao.ts'
 import { getTipoAgendamentoEfetivo, isOrdemChegada, isEstimativaHorario, getMensagemEstimativa, getDataHoraAtualBrasil, validarDataHoraFutura, calcularIdade, BUSINESS_RULES } from '../_lib/tipo-agendamento.ts'
 import { fuzzyMatchMedicos, formatarConvenioParaBanco } from '../_lib/fuzzy-match.ts'
 
@@ -287,11 +287,12 @@ export async function handleSchedule(supabase: any, body: any, clienteId: string
       const todosConveniosAceitos = [...new Set([...conveniosAceitosMedico, ...conveniosRegras])];
       
       if (todosConveniosAceitos.length > 0) {
-        const convenioNorm = convenio.toUpperCase().trim().replace(/[-_]/g, ' ');
+        // Normalizar espelhando o regexp do banco: regexp_replace(upper(trim(c)), '[^A-Z0-9%]+', '', 'g')
+        const convenioNorm = normalizarConvenioParaComparacao(convenio);
         const convenioAceito = todosConveniosAceitos.some(c => {
-          const cNorm = c.toUpperCase().trim().replace(/[-_]/g, ' ');
-          return cNorm === convenioNorm || 
-                 cNorm.includes(convenioNorm) || 
+          const cNorm = normalizarConvenioParaComparacao(c);
+          return cNorm === convenioNorm ||
+                 cNorm.includes(convenioNorm) ||
                  convenioNorm.includes(cNorm);
         });
         
@@ -316,6 +317,8 @@ export async function handleSchedule(supabase: any, body: any, clienteId: string
     console.log('🔍 Buscando regras de negócio...');
     // ===== VALIDAÇÕES DE REGRAS DE NEGÓCIO (APENAS PARA N8N) =====
     const regras = getMedicoRules(config, medico.id, BUSINESS_RULES.medicos[medico.id]);
+    // Aviso de idade para appending em observacoes quando bloquear_por_idade=false
+    let ageWarning = '';
     console.log(`📋 Regras encontradas para médico ID ${medico.id}: ${regras ? 'SIM' : 'NÃO'}`);
     
     if (regras) {
@@ -333,24 +336,31 @@ export async function handleSchedule(supabase: any, body: any, clienteId: string
         console.log(`✅ regras.servicos válido, contém ${Object.keys(regras.servicos).length} serviço(s)`);
         
         // 1. Validar idade mínima
+        // bloquear_por_idade controla o comportamento:
+        //   true (padrão): bloqueia o agendamento — adequado para o bot WhatsApp
+        //   false: apenas anota aviso em observacoes — mesmo comportamento do portal/recepção
         if (regras.idade_minima && regras.idade_minima > 0) {
           const idade = calcularIdade(data_nascimento);
           if (idade < regras.idade_minima) {
-            // 🆕 Usar mensagem personalizada se configurada
-            const mensagemIdadeMinima = regras.mensagem_idade_minima ||
-              `❌ ${regras.nome} atende apenas pacientes com ${regras.idade_minima}+ anos.\n\n📋 Idade informada: ${idade} anos\n\n💡 Por favor, consulte outro profissional adequado para a faixa etária.`;
-            
-            console.log(`🚫 [IDADE] Paciente com ${idade} anos bloqueado (mínimo: ${regras.idade_minima})`);
-            
-            return businessErrorResponse({
-              codigo_erro: 'IDADE_INCOMPATIVEL',
-              mensagem_usuario: mensagemIdadeMinima,
-              detalhes: {
-                medico: regras.nome,
-                idade_minima: regras.idade_minima,
-                idade_paciente: idade
-              }
-            });
+            if (regras.bloquear_por_idade !== false) {
+              const mensagemIdadeMinima = regras.mensagem_idade_minima ||
+                `❌ ${regras.nome} atende apenas pacientes com ${regras.idade_minima}+ anos.\n\n📋 Idade informada: ${idade} anos\n\n💡 Por favor, consulte outro profissional adequado para a faixa etária.`;
+
+              console.log(`🚫 [IDADE] Paciente com ${idade} anos bloqueado (mínimo: ${regras.idade_minima})`);
+
+              return businessErrorResponse({
+                codigo_erro: 'IDADE_INCOMPATIVEL',
+                mensagem_usuario: mensagemIdadeMinima,
+                detalhes: {
+                  medico: regras.nome,
+                  idade_minima: regras.idade_minima,
+                  idade_paciente: idade
+                }
+              });
+            } else {
+              ageWarning = ` [ATENÇÃO: idade ${idade} anos abaixo do mínimo ${regras.idade_minima} anos]`;
+              console.log(`⚠️ [IDADE] ${idade} anos abaixo do mínimo ${regras.idade_minima} — bloquear_por_idade=false, anotando em observacoes`);
+            }
           }
           console.log(`✅ Validação de idade OK: ${idade} anos (mínimo: ${regras.idade_minima})`);
         }
@@ -1019,8 +1029,11 @@ export async function handleSchedule(supabase: any, body: any, clienteId: string
     // Criar agendamento via BookAppointmentUseCase
     console.log(`📅 Criando agendamento para ${paciente_nome} com médico ${medico.nome} às ${horarioFinal}`);
 
-    // Chave heurística de idempotência gerada pelo adapter
-    const idempotencyKey = `${clienteId}:${celular}:${medico.id}:${data_consulta}:${horarioFinal}`;
+    // Chave de idempotência baseada no input original (hora_consulta), não no slot resolvido.
+    // Para pedidos de período ("manhã"/"tarde"), horarioFinal muda a cada retry se o slot anterior
+    // já foi ocupado — mas hora_consulta permanece igual, garantindo que findDuplicate encontre
+    // o agendamento já criado e evite duplicatas.
+    const idempotencyKey = `${clienteId}:${celular}:${medico.id}:${data_consulta}:${hora_consulta}`;
     const bookRepo = new SupabaseAppointmentRepository(supabase);
 
     // result mantém shape { success, agendamento_id, paciente_id } compatível com código legado abaixo
@@ -1040,7 +1053,7 @@ export async function handleSchedule(supabase: any, body: any, clienteId: string
           atendimentoId: atendimento_id,
           date: data_consulta,
           time: horarioFinal,
-          observacoes: (observacoes || 'Agendamento via LLM Agent WhatsApp').toUpperCase(),
+          observacoes: ((observacoes || 'Agendamento via LLM Agent WhatsApp') + ageWarning).toUpperCase(),
         },
         meta: {
           criadoPor: 'LLM Agent WhatsApp',
@@ -1134,7 +1147,7 @@ export async function handleSchedule(supabase: any, body: any, clienteId: string
                 atendimentoId: atendimento_id,
                 date: data_consulta,
                 time: horarioTeste,
-                observacoes: (observacoes || 'Agendamento via LLM Agent WhatsApp').toUpperCase(),
+                observacoes: ((observacoes || 'Agendamento via LLM Agent WhatsApp') + ageWarning).toUpperCase(),
                 criadoPor: 'LLM Agent WhatsApp',
                 idempotencyKey,
               });

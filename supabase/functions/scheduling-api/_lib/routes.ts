@@ -1,4 +1,9 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import {
+  BookAppointmentUseCase,
+  SupabaseAppointmentRepository,
+  SlotAlreadyTakenError,
+} from '../../_shared/scheduling-core/index.ts'
 import { enviarPreparosAutomaticos } from './preparos.ts'
 
 const corsHeaders = {
@@ -27,275 +32,187 @@ export async function handleGetAppointments(supabase: any) {
   );
 }
 
-// POST /scheduling-api - Criar agendamento usando função atômica
+// POST /scheduling-api - Criar agendamento
+// Centralizado no BookAppointmentUseCase (shared com llm-agent-api).
+// Isso garante: idempotência, conflict check com excluido_em IS NULL,
+// e uso de criar_agendamento_atomico_externo como única RPC de criação.
 export async function handleCreateAppointment(supabase: any, body: any) {
   console.log('📝 Dados recebidos do n8n:', body);
 
-  const { 
-    nomeCompleto, 
-    dataNascimento, 
-    convenio, 
-    telefone, 
+  const {
+    nomeCompleto,
+    dataNascimento,
+    convenio,
+    telefone,
     celular,
-    medicoId, 
+    medicoId,
     atendimentoId,
-    dataAgendamento, 
-    horaAgendamento, 
+    dataAgendamento,
+    horaAgendamento,
     observacoes,
     criadoPor = 'Assistente Noah (WhatsApp)',
-    usuarioResponsavel = null
+    idempotencyKey = null,
   } = body;
 
-  // Validações básicas
-  if (!nomeCompleto || !dataNascimento || !convenio || !celular || !medicoId || !dataAgendamento || !horaAgendamento) {
+  // Validações de entrada (boundary validation — RPC não valida formato de celular)
+  if (!nomeCompleto || !dataNascimento || !convenio || !celular || !medicoId || !atendimentoId || !dataAgendamento || !horaAgendamento) {
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: 'Campos obrigatórios: nomeCompleto, dataNascimento, convenio, celular, medicoId, dataAgendamento, horaAgendamento' 
+      JSON.stringify({
+        success: false,
+        error: 'Campos obrigatórios: nomeCompleto, dataNascimento, convenio, celular, medicoId, atendimentoId, dataAgendamento, horaAgendamento',
       }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 
-  // Validar atendimento
-  if (!atendimentoId) {
-    return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: 'É necessário especificar atendimentoId' 
-      }),
-      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  }
-
-  // Validação de formato de celular brasileiro
   const celularRegex = /^\(\d{2}\)\s\d{4,5}-\d{4}$/;
   if (!celularRegex.test(celular)) {
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: 'Formato de celular inválido. Use o formato (XX) XXXXX-XXXX' 
-      }),
+      JSON.stringify({ success: false, error: 'Formato de celular inválido. Use o formato (XX) XXXXX-XXXX' }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 
-  // Validar nome completo
   if (nomeCompleto.trim().length < 3) {
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: 'Nome completo deve ter pelo menos 3 caracteres' 
-      }),
+      JSON.stringify({ success: false, error: 'Nome completo deve ter pelo menos 3 caracteres' }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 
-  // Validar data/hora não é no passado
   const appointmentDateTime = new Date(`${dataAgendamento}T${horaAgendamento}`);
-  const oneHourFromNow = new Date(Date.now() + 60 * 60 * 1000);
-  
-  if (appointmentDateTime <= oneHourFromNow) {
+  if (appointmentDateTime <= new Date(Date.now() + 60 * 60 * 1000)) {
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: 'Agendamento deve ser feito com pelo menos 1 hora de antecedência' 
-      }),
+      JSON.stringify({ success: false, error: 'Agendamento deve ser feito com pelo menos 1 hora de antecedência' }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 
-  // Verificar se já existe agendamento no mesmo horário para o médico
-  const { data: existingAppointment } = await supabase
-    .from('agendamentos')
-    .select('id')
-    .eq('medico_id', medicoId)
-    .eq('data_agendamento', dataAgendamento)
-    .eq('hora_agendamento', horaAgendamento)
-    .in('status', ['agendado', 'confirmado'])
-    .maybeSingle();
+  // Buscar cliente_id do médico (necessário para BookAppointmentUseCase e validar_limite_recurso)
+  const { data: medicoData } = await supabase
+    .from('medicos')
+    .select('cliente_id')
+    .eq('id', medicoId)
+    .single();
 
-  if (existingAppointment) {
+  if (!medicoData?.cliente_id) {
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: 'Este horário já está ocupado para o médico selecionado' 
-      }),
-      { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ success: false, error: 'Médico não encontrado' }),
+      { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 
-  // Verificar se o paciente já tem agendamento no mesmo dia e horário.
-  // Feito em 2 passos para evitar join ausente e interpolação direta de string no .or()
-  // (nomes com vírgula ou parênteses quebravam a sintaxe PostgREST).
-  {
-    const { data: matchingPatients } = await supabase
-      .from('pacientes')
-      .select('id')
-      .or(`nome_completo.ilike.%${nomeCompleto.replace(/[%_\\]/g, '\\$&')}%,celular.eq.${celular}`);
+  const clienteId = medicoData.cliente_id;
 
-    if (matchingPatients && matchingPatients.length > 0) {
-      const patientIds = matchingPatients.map((p: any) => p.id);
-      const { data: patientConflict } = await supabase
-        .from('agendamentos')
-        .select('id')
-        .eq('data_agendamento', dataAgendamento)
-        .eq('hora_agendamento', horaAgendamento)
-        .in('status', ['agendado', 'confirmado'])
-        .in('paciente_id', patientIds)
-        .maybeSingle();
-
-      if (patientConflict) {
-        return new Response(
-          JSON.stringify({
-            success: false,
-            error: 'Paciente já possui agendamento neste horário',
-          }),
-          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-    }
-  }
-
-  // Validar limite de recursos (MAPA, HOLTER, ECG)
+  // Validar limite de recursos (MAPA, HOLTER, ECG) — não coberto pelo BookAppointmentUseCase
   try {
-    // Buscar cliente_id do médico
-    const { data: medicoData } = await supabase
-      .from('medicos')
-      .select('cliente_id')
-      .eq('id', medicoId)
-      .single();
+    const { data: limiteResult, error: limiteError } = await supabase.rpc('validar_limite_recurso', {
+      p_atendimento_id: atendimentoId,
+      p_medico_id: medicoId,
+      p_data_agendamento: dataAgendamento,
+      p_cliente_id: clienteId,
+    });
 
-    if (medicoData?.cliente_id) {
-      const { data: limiteResult, error: limiteError } = await supabase.rpc('validar_limite_recurso', {
-        p_atendimento_id: atendimentoId,
-        p_medico_id: medicoId,
-        p_data_agendamento: dataAgendamento,
-        p_cliente_id: medicoData.cliente_id
-      });
-
-      if (limiteError) {
-        console.error('❌ Erro ao validar limite de recurso:', limiteError);
-      } else if (limiteResult && !limiteResult.disponivel) {
-        console.log('🚫 Limite de recurso atingido:', limiteResult);
-        return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: limiteResult.motivo,
-            recurso: limiteResult.recurso_nome,
-            vagas_usadas: limiteResult.vagas_usadas,
-            vagas_total: limiteResult.vagas_total
-          }),
-          { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      } else if (limiteResult?.recurso_nome) {
-        console.log(`✅ Recurso ${limiteResult.recurso_nome} disponível: ${limiteResult.vagas_usadas}/${limiteResult.vagas_total} vagas`);
-      }
+    if (limiteError) {
+      console.error('❌ Erro ao validar limite de recurso:', limiteError);
+    } else if (limiteResult && !limiteResult.disponivel) {
+      console.log('🚫 Limite de recurso atingido:', limiteResult);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: limiteResult.motivo,
+          recurso: limiteResult.recurso_nome,
+          vagas_usadas: limiteResult.vagas_usadas,
+          vagas_total: limiteResult.vagas_total,
+        }),
+        { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    } else if (limiteResult?.recurso_nome) {
+      console.log(`✅ Recurso ${limiteResult.recurso_nome} disponível: ${limiteResult.vagas_usadas}/${limiteResult.vagas_total} vagas`);
     }
   } catch (limiteCheckError) {
     console.error('❌ Erro ao verificar limite de recursos:', limiteCheckError);
-    // Não bloquear por erro de verificação, apenas logar
   }
 
+  // Criar agendamento via BookAppointmentUseCase — mesma lógica do llm-agent-api:
+  // idempotência + isSlotTaken com excluido_em IS NULL + criar_agendamento_atomico_externo
+  const derivedIdempotencyKey = idempotencyKey
+    || `scheduling-api:${clienteId}:${celular}:${medicoId}:${dataAgendamento}:${horaAgendamento}`;
+
   try {
-    // Usar sempre função atômica para agendamento simples
-    const { data: result, error } = await supabase.rpc('criar_agendamento_atomico', {
-      p_nome_completo: nomeCompleto.toUpperCase(),
-      p_data_nascimento: dataNascimento,
-      p_convenio: convenio.toUpperCase(),
-      p_telefone: telefone || null,
-      p_celular: celular,
-      p_medico_id: medicoId,
-      p_atendimento_id: atendimentoId,
-      p_data_agendamento: dataAgendamento,
-      p_hora_agendamento: horaAgendamento,
-      p_observacoes: observacoes?.toUpperCase() || null,
-      p_criado_por: criadoPor,
-      p_criado_por_user_id: usuarioResponsavel,
+    const repo = new SupabaseAppointmentRepository(supabase);
+    const bookResult = await new BookAppointmentUseCase(repo).execute({
+      patient: {
+        nomeCompleto: nomeCompleto.toUpperCase(),
+        dataNascimento,
+        convenio: convenio.toUpperCase(),
+        celular,
+        telefone: telefone || null,
+      },
+      appointment: {
+        medicoId,
+        clienteId,
+        atendimentoId,
+        date: dataAgendamento,
+        time: horaAgendamento,
+        observacoes: observacoes?.toUpperCase() || null,
+      },
+      meta: {
+        criadoPor,
+        idempotencyKey: derivedIdempotencyKey,
+      },
     });
 
-    if (error) {
-      console.error('❌ Erro na função atômica:', error);
-      throw error;
-    }
+    console.log(`✅ Agendamento N8N criado: ${bookResult.appointmentId} (created=${bookResult.created})`);
 
-    console.log('✅ Resultado da função atômica:', result);
-
-    // Verificar se a função retornou sucesso
-    if (!result?.success) {
-      const errorMessage = result?.error || result?.message || 'Erro desconhecido na criação do agendamento';
-      console.error('❌ Função retornou erro:', errorMessage);
-      
-      // Determinar status code baseado no tipo de erro
-      let statusCode = 500;
-      if (errorMessage.includes('já está ocupado')) {
-        statusCode = 409;
-      } else if (errorMessage.includes('obrigatório') || errorMessage.includes('inválido')) {
-        statusCode = 400;
-      } else if (errorMessage.includes('não encontrado')) {
-        statusCode = 404;
-      } else if (errorMessage.includes('não está ativo') || errorMessage.includes('bloqueada') || 
-                 errorMessage.includes('idade') || errorMessage.includes('convênio')) {
-        statusCode = 422;
-      }
-      
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: errorMessage 
-        }),
-        { status: statusCode, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Buscar dados completos do agendamento criado para envio de preparos
+    // Buscar dados completos para envio de preparos automáticos
     const { data: appointment, error: fetchError } = await supabase
       .from('agendamentos')
-      .select(`
-        *,
-        pacientes:paciente_id(*),
-        medicos:medico_id(*),
-        atendimentos:atendimento_id(*)
-      `)
-      .eq('id', result.agendamento_id)
+      .select('*, pacientes:paciente_id(*), medicos:medico_id(*), atendimentos:atendimento_id(*)')
+      .eq('id', bookResult.appointmentId)
       .single();
 
     if (fetchError) {
       console.error('❌ Erro ao buscar dados do agendamento:', fetchError);
-      // Não falhar por causa disso, apenas logar
-    } else {
-      // Enviar preparos automáticos se necessário
+    } else if (bookResult.created) {
       try {
         await enviarPreparosAutomaticos(appointment);
       } catch (preparosError) {
         console.error('❌ Erro ao enviar preparos automáticos:', preparosError);
-        // Não falhar por causa disso, apenas logar
       }
     }
 
-    console.log(`✅ Agendamento N8N criado com sucesso: ${result.agendamento_id}`);
-    
     return new Response(
-      JSON.stringify({ 
-        success: true, 
+      JSON.stringify({
+        success: true,
         data: {
-          id: result.agendamento_id,
-          paciente_id: result.paciente_id,
-          message: result.message
-        }
+          id: bookResult.appointmentId,
+          paciente_id: bookResult.patientId,
+          message: bookResult.created ? 'Agendamento criado com sucesso' : 'Agendamento já existia (idempotente)',
+        },
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
+  } catch (err: any) {
+    if (err instanceof SlotAlreadyTakenError) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Este horário já está ocupado para o médico selecionado' }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
-  } catch (error: any) {
-    console.error('❌ Erro crítico na criação do agendamento N8N:', error);
+    const msg: string = err?.message || '';
+    let statusCode = 500;
+    if (msg.includes('CONFLICT') || msg.includes('ocupado')) statusCode = 409;
+    else if (msg.includes('obrigatório') || msg.includes('inválido')) statusCode = 400;
+    else if (msg.includes('não encontrado')) statusCode = 404;
+    else if (msg.includes('não está ativo') || msg.includes('bloqueada') ||
+             msg.includes('idade') || msg.includes('convênio')) statusCode = 422;
+
+    console.error('❌ Erro na criação do agendamento N8N:', err);
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: 'Erro ao processar agendamento. Tente novamente mais tarde.',
-        codigo_erro: 'APPOINTMENT_CREATION_ERROR'
-      }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ success: false, error: msg || 'Erro ao processar agendamento. Tente novamente mais tarde.' }),
+      { status: statusCode, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 }
