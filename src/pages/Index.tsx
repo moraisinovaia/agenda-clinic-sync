@@ -542,23 +542,23 @@ const Index = () => {
     }
   };
 
-  const handleDoctorChange = useCallback((doctorId: string) => {
+  const handleDoctorChange = (doctorId: string) => {
     const newDoctor = doctors.find(d => d.id === doctorId);
     if (newDoctor) {
       setSelectedDoctor(newDoctor);
       setLastAppointmentDate(null);
     }
-  }, [doctors, setSelectedDoctor, setLastAppointmentDate]);
+  };
 
-  const handleNewAppointmentFromCalendar = useCallback((selectedDate?: string) => {
+  const handleNewAppointmentFromCalendar = (selectedDate?: string) => {
     if (selectedDate) setSelectedAppointmentDate(selectedDate);
     setSelectedAppointmentTime(undefined);
     setViewMode('new-appointment');
-  }, [setSelectedAppointmentDate, setSelectedAppointmentTime, setViewMode]);
+  };
 
-  const handleConfigureSchedule = useCallback(() => {
+  const handleConfigureSchedule = () => {
     setScheduleGenOpen(true);
-  }, [setScheduleGenOpen]);
+  };
 
 
   if (loading) {

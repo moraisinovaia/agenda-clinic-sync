@@ -5,6 +5,12 @@ supabase/config.toml.bak
 # Node
 node_modules/
 
+# Build
+dist/
+
+# Env
+.env
+
 # Logs
 *.log
 

@@ -1,4 +1,3 @@
-Initialising login role...
 export type Json =
   | string
   | number
@@ -12,31 +11,6 @@ export type Database = {
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "12.2.3 (519615d)"
-  }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
   }
   public: {
     Tables: {
@@ -2368,19 +2342,19 @@ export type Database = {
       criar_agendamento_atomico: {
         Args: {
           p_agendamento_id_edicao?: string
-          p_atendimento_id?: string
-          p_celular?: string
-          p_convenio?: string
+          p_atendimento_id: string
+          p_celular: string
+          p_convenio: string
           p_criado_por?: string
           p_criado_por_user_id?: string
-          p_data_agendamento?: string
-          p_data_nascimento?: string
+          p_data_agendamento: string
+          p_data_nascimento: string
           p_force_conflict?: boolean
-          p_hora_agendamento?: string
-          p_medico_id?: string
+          p_hora_agendamento: string
+          p_medico_id: string
           p_nome_completo: string
           p_observacoes?: string
-          p_telefone?: string
+          p_telefone: string
         }
         Returns: Json
       }
@@ -3449,9 +3423,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       app_role: [
@@ -3464,5 +3435,3 @@ export const Constants = {
     },
   },
 } as const
-A new version of Supabase CLI is available: v2.90.0 (currently installed v2.84.2)
-We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli

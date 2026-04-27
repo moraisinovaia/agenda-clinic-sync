@@ -128,8 +128,175 @@ const safeCalculateAge = (birthDate: any): string | null => {
   }
 };
 
-export function DoctorSchedule({ 
-  doctor, 
+// ── Seletor rápido de mês/ano para o calendário ───────────────────────────
+
+const MONTHS_PT = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+];
+
+interface MonthYearCaptionProps {
+  displayMonth: Date;
+  onMonthChange: (date: Date) => void;
+}
+
+// Páginas de 16 anos: página 0 → 2020-2035, +1 → 2036-2051, -1 → 2004-2019
+const YEAR_PAGE_SIZE = 16;
+const YEAR_BASE = 2020;
+const toYearPage = (year: number) => Math.floor((year - YEAR_BASE) / YEAR_PAGE_SIZE);
+const yearsForPage = (page: number) =>
+  Array.from({ length: YEAR_PAGE_SIZE }, (_, i) => YEAR_BASE + page * YEAR_PAGE_SIZE + i);
+
+function MonthYearCaption({ displayMonth, onMonthChange }: MonthYearCaptionProps) {
+  const [open, setOpen] = useState(false);
+  const [pickerYear, setPickerYear] = useState(displayMonth.getFullYear());
+  const [showYears, setShowYears] = useState(false);
+  const [yearPage, setYearPage] = useState(() => toYearPage(displayMonth.getFullYear()));
+
+  const handleOpen = (next: boolean) => {
+    if (next) {
+      const y = displayMonth.getFullYear();
+      setPickerYear(y);
+      setShowYears(false);
+      setYearPage(toYearPage(y));
+    }
+    setOpen(next);
+  };
+
+  const handleSelectMonth = (monthIndex: number) => {
+    onMonthChange(new Date(pickerYear, monthIndex, 1));
+    setOpen(false);
+  };
+
+  const handleSelectYear = (year: number) => {
+    setPickerYear(year);
+    setShowYears(false);
+  };
+
+  const openYearGrid = () => {
+    setYearPage(toYearPage(pickerYear));
+    setShowYears(true);
+  };
+
+  const pageYears = yearsForPage(yearPage);
+  const pageLabel = `${pageYears[0]}–${pageYears[YEAR_PAGE_SIZE - 1]}`;
+
+  return (
+    <Popover open={open} onOpenChange={handleOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="text-sm font-medium hover:bg-accent rounded px-2 py-0.5 transition-colors capitalize"
+          aria-label="Selecionar mês e ano"
+        >
+          {format(displayMonth, 'MMMM yyyy', { locale: ptBR })}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-56 p-3 z-50" align="center">
+
+        {showYears ? (
+          <>
+            {/* cabeçalho da grade de anos: setas paginam, centro mostra intervalo */}
+            <div className="flex items-center justify-between mb-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => setYearPage(p => p - 1)}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-xs font-semibold text-muted-foreground select-none">
+                {pageLabel}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => setYearPage(p => p + 1)}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+            {/* grade de anos */}
+            <div className="grid grid-cols-4 gap-1">
+              {pageYears.map(year => (
+                <button
+                  key={year}
+                  type="button"
+                  onClick={() => handleSelectYear(year)}
+                  className={cn(
+                    'text-xs py-1.5 rounded transition-colors hover:bg-accent',
+                    year === pickerYear
+                      ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                      : '',
+                  )}
+                >
+                  {year}
+                </button>
+              ))}
+            </div>
+          </>
+        ) : (
+          <>
+            {/* cabeçalho da grade de meses: setas mudam ano, centro (ano) abre grade de anos */}
+            <div className="flex items-center justify-between mb-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => setPickerYear(y => y - 1)}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <button
+                type="button"
+                onClick={openYearGrid}
+                className="text-sm font-semibold hover:bg-accent rounded px-2 py-0.5 transition-colors"
+                aria-label="Escolher ano"
+              >
+                {pickerYear}
+              </button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => setPickerYear(y => y + 1)}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+            {/* grade de meses */}
+            <div className="grid grid-cols-3 gap-1">
+              {MONTHS_PT.map((m, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => handleSelectMonth(i)}
+                  className={cn(
+                    'text-xs py-1.5 rounded transition-colors hover:bg-accent',
+                    displayMonth.getMonth() === i && displayMonth.getFullYear() === pickerYear
+                      ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                      : '',
+                  )}
+                >
+                  {m.slice(0, 3)}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+export function DoctorSchedule({
+  doctor,
   doctors = [],
   onDoctorChange,
   appointments, 
@@ -181,6 +348,8 @@ export function DoctorSchedule({
     return new Date();
   });
   
+  const [displayMonth, setDisplayMonth] = useState<Date>(selectedDate);
+
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'schedule' | 'report'>('schedule');
   const [doctorSelectOpen, setDoctorSelectOpen] = useState(false);
@@ -533,7 +702,8 @@ export function DoctorSchedule({
                 mode="single"
                 selected={selectedDate}
                 onSelect={(date) => date && setSelectedDate(date)}
-                defaultMonth={selectedDate}
+                month={displayMonth}
+                onMonthChange={setDisplayMonth}
                 locale={ptBR}
                 className="rounded-md border-none p-0 scale-90 notranslate"
                 modifiers={{
@@ -544,7 +714,12 @@ export function DoctorSchedule({
                   hasAppointments: "calendar-has-appointments !bg-primary !text-primary-foreground !font-bold hover:!bg-primary/90",
                   hasBlocks: "calendar-has-blocks !bg-destructive !text-destructive-foreground !font-bold line-through hover:!bg-destructive/90"
                 }}
-                key={`calendar-${doctor.id}-${selectedDate.getTime()}`}
+                components={{
+                  CaptionLabel: ({ displayMonth: dm }) => (
+                    <MonthYearCaption displayMonth={dm} onMonthChange={setDisplayMonth} />
+                  ),
+                }}
+                key={`calendar-${doctor.id}`}
               />
               <div className="text-xs text-muted-foreground space-y-1">
                 <div className="flex items-center gap-1">
