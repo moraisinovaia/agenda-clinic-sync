@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, AlertTriangle, Clock, User, FileText, Check, ChevronsUpDown, ArrowLeft, AlertCircle, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,7 +13,6 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 
-// Função para formatar data sem conversão de timezone
 const formatDateForDisplay = (dateString: string): string => {
   if (!dateString) return '';
   const [year, month, day] = dateString.split('-');
@@ -27,6 +27,7 @@ interface Medico {
 
 interface Bloqueio {
   id: string;
+  medico_id?: string;
   data_inicio: string;
   data_fim: string;
   motivo: string;
@@ -43,298 +44,225 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
   const [loading, setLoading] = useState(false);
   const [loadingMedicos, setLoadingMedicos] = useState(true);
   const [medicos, setMedicos] = useState<Medico[]>([]);
-  
-  // Estados para aba "Bloquear"
-  const [medicoId, setMedicoId] = useState('');
+
+  // ── Aba Bloquear ──────────────────────────────────────────────────────────
+  const [medicoIds, setMedicoIds] = useState<string[]>([]);
   const [openCombobox, setOpenCombobox] = useState(false);
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
   const [motivo, setMotivo] = useState('');
   const [showConfirmation, setShowConfirmation] = useState(false);
-  
-  // Estados para aba "Abrir Agenda"
+
+  // ── Aba Abrir ─────────────────────────────────────────────────────────────
   const [bloqueios, setBloqueios] = useState<Bloqueio[]>([]);
   const [selectedDoctorAbrir, setSelectedDoctorAbrir] = useState<string>('');
   const [openDoctorAbrir, setOpenDoctorAbrir] = useState(false);
   const [loadingBloqueios, setLoadingBloqueios] = useState(false);
   const [bloqueioParaRemover, setBloqueioParaRemover] = useState<Bloqueio | null>(null);
-  
+  const [filtroBusca, setFiltroBusca] = useState('');
+
   const { toast } = useToast();
 
-  // Carregar médicos diretamente da base de dados
   useEffect(() => {
     const carregarMedicos = async () => {
       try {
         setLoadingMedicos(true);
-        console.log('🔍 Carregando médicos da base de dados...');
-        
         const { data, error } = await supabase
           .from('medicos')
           .select('id, nome, especialidade')
           .eq('ativo', true)
           .order('nome');
-
-        if (error) {
-          console.error('❌ Erro ao carregar médicos:', error);
-          throw error;
-        }
-
-        console.log('✅ Médicos carregados:', data);
+        if (error) throw error;
         setMedicos(data || []);
-      } catch (error) {
-        console.error('❌ Erro ao carregar médicos:', error);
-        toast({
-          title: "Erro",
-          description: "Não foi possível carregar a lista de médicos",
-          variant: "destructive",
-        });
+      } catch {
+        toast({ title: 'Erro', description: 'Não foi possível carregar a lista de médicos', variant: 'destructive' });
       } finally {
         setLoadingMedicos(false);
       }
     };
-
     carregarMedicos();
   }, [toast]);
 
+  // ── helpers multi-select ──────────────────────────────────────────────────
+
+  const isAllSelected = medicoIds.includes('ALL');
+
+  const toggleMedico = (id: string) => {
+    if (id === 'ALL') {
+      setMedicoIds(isAllSelected ? [] : ['ALL']);
+      return;
+    }
+    setMedicoIds(prev => {
+      const semAll = prev.filter(x => x !== 'ALL');
+      return semAll.includes(id) ? semAll.filter(x => x !== id) : [...semAll, id];
+    });
+  };
+
+  const labelBloquear = () => {
+    if (medicoIds.length === 0) return 'Selecione o(s) médico(s)...';
+    if (isAllSelected) return 'Todos os médicos';
+    if (medicoIds.length === 1) {
+      const m = medicos.find(m => m.id === medicoIds[0]);
+      return m ? `${m.nome} - ${m.especialidade}` : '1 médico';
+    }
+    return `${medicoIds.length} médicos selecionados`;
+  };
+
+  const previewMedicos = () => {
+    if (isAllSelected) return 'todos os médicos';
+    if (medicoIds.length === 1) return medicos.find(m => m.id === medicoIds[0])?.nome ?? '1 médico';
+    return `${medicoIds.length} médicos`;
+  };
+
+  // ── criação de bloqueio ───────────────────────────────────────────────────
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!medicoId || !dataInicio || !dataFim || !motivo) {
-      toast({
-        title: "Erro",
-        description: "Todos os campos são obrigatórios",
-        variant: "destructive",
-      });
+    if (medicoIds.length === 0 || !dataInicio || !dataFim || !motivo) {
+      toast({ title: 'Erro', description: 'Todos os campos são obrigatórios', variant: 'destructive' });
       return;
     }
-
     if (new Date(dataInicio) > new Date(dataFim)) {
-      toast({
-        title: "Erro",
-        description: "A data de início deve ser anterior ou igual à data de fim",
-        variant: "destructive",
-      });
+      toast({ title: 'Erro', description: 'A data de início deve ser anterior ou igual à data de fim', variant: 'destructive' });
       return;
     }
-
     setShowConfirmation(true);
   };
 
   const handleBloqueioAgenda = async () => {
     setLoading(true);
     setShowConfirmation(false);
-
     try {
-      console.log('🔒 Enviando bloqueio de agenda...');
+      const targetIds = isAllSelected ? medicos.map(m => m.id) : medicoIds;
+      const results = await Promise.all(
+        targetIds.map(id =>
+          supabase.functions.invoke('bloqueio-agenda', {
+            body: { action: 'create', medicoId: id, dataInicio, dataFim, motivo },
+          })
+        )
+      );
 
-      if (medicoId === 'ALL') {
-        // Bloquear todos os médicos em paralelo
-        const doctorIds = medicos.map(m => m.id);
-        const results = await Promise.all(
-          doctorIds.map(id =>
-            supabase.functions.invoke('bloqueio-agenda', {
-              body: { action: 'create', medicoId: id, dataInicio, dataFim, motivo }
-            })
-          )
-        );
+      const successes = results.filter(r => r.data?.success);
+      const totalAfetados = successes.reduce((sum, r) => sum + (r.data?.data?.agendamentos_afetados || 0), 0);
+      const fails = results.length - successes.length;
 
-        // Agregar resultados
-        const successes = results.filter(r => r.data?.success);
-        const totalAfetados = successes.reduce((sum, r) => sum + (r.data?.data?.agendamentos_afetados || 0), 0);
-        const fails = results.length - successes.length;
+      if (successes.length === 0) throw new Error('Falha ao bloquear agendas. Tente novamente.');
 
-        if (successes.length === 0) {
-          throw new Error('Falha ao bloquear agendas. Tente novamente.');
-        }
+      toast({
+        title: successes.length === 1 ? 'Agenda Bloqueada!' : 'Agendas Bloqueadas!',
+        description: `${successes.length} médico(s) processados. ${totalAfetados} agendamento(s) serão cancelados${fails ? ` • ${fails} falha(s)` : ''}.`,
+      });
 
-        toast({
-          title: 'Agendas Bloqueadas!',
-          description: `${successes.length} médico(s) processados. ${totalAfetados} agendamento(s) serão cancelados${fails ? ` • ${fails} falha(s)` : ''}.`,
-        });
-      } else {
-        const { data, error } = await supabase.functions.invoke('bloqueio-agenda', {
-          body: { action: 'create', medicoId, dataInicio, dataFim, motivo }
-        });
-
-        console.log('📡 Resposta da função:', { data, error });
-
-        if (error) {
-          console.error('❌ Erro na função:', error);
-          throw new Error(error.message || 'Erro na comunicação com o servidor');
-        }
-        if (!data?.success) {
-          console.error('❌ Resposta de erro:', data);
-          throw new Error(data?.error || 'Erro desconhecido no servidor');
-        }
-
-        toast({
-          title: 'Agenda Bloqueada com Sucesso!',
-          description: data.data.agendamentos_afetados > 0
-            ? `${data.data.agendamentos_afetados} agendamento(s) foram cancelados pelo bloqueio. Eles serão restaurados se você abrir a agenda novamente.`
-            : 'Bloqueio criado com sucesso.',
-        });
-      }
-
-      // Limpar formulário
-      setMedicoId('');
+      setMedicoIds([]);
       setDataInicio('');
       setDataFim('');
       setMotivo('');
-
-      // ✅ ATUALIZAR CALENDÁRIO após bloqueio
-      if (onRefresh) {
-        onRefresh();
-      }
-
+      if (onRefresh) onRefresh();
     } catch (error) {
-      console.error('❌ Erro:', error);
-      toast({
-        title: 'Erro ao Bloquear Agenda',
-        description: error instanceof Error ? error.message : 'Erro desconhecido',
-        variant: 'destructive',
-      });
+      toast({ title: 'Erro ao Bloquear Agenda', description: error instanceof Error ? error.message : 'Erro desconhecido', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
   };
 
-  const carregarBloqueios = async (medicoId: string) => {
-    if (!medicoId) return;
+  // ── listagem de bloqueios ─────────────────────────────────────────────────
 
+  const sortBloqueios = (list: Bloqueio[]): Bloqueio[] =>
+    [...list].sort((a, b) => {
+      if (a.data_inicio !== b.data_inicio) return b.data_inicio.localeCompare(a.data_inicio);
+      return b.created_at.localeCompare(a.created_at);
+    });
+
+  const carregarBloqueios = async (id: string) => {
+    if (!id) return;
     setLoadingBloqueios(true);
     try {
-      const { data, error } = await supabase.functions.invoke('bloqueio-agenda', {
-        body: {
-          action: 'list',
-          medicoId
+      if (id === 'ALL') {
+        const results = await Promise.all(
+          medicos.map(m =>
+            supabase.functions.invoke('bloqueio-agenda', { body: { action: 'list', medicoId: m.id } })
+          )
+        );
+        const todos: Bloqueio[] = [];
+        for (let i = 0; i < results.length; i++) {
+          const { data, error } = results[i];
+          if (!error && data?.success) {
+            const comMedico = (data.data || []).map((b: Bloqueio) => ({ ...b, medico_id: medicos[i].id }));
+            todos.push(...comMedico);
+          }
         }
+        setBloqueios(sortBloqueios(todos));
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('bloqueio-agenda', {
+        body: { action: 'list', medicoId: id },
       });
-
-      if (error) {
-        console.error('❌ Erro ao carregar bloqueios:', error);
-        toast({
-          title: "Erro",
-          description: "Erro ao carregar bloqueios",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      if (!data?.success) {
-        console.error('❌ Erro na resposta:', data);
-        toast({
-          title: "Erro",
-          description: data?.error || "Erro ao carregar bloqueios",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      setBloqueios(data.data || []);
+      if (error) { toast({ title: 'Erro', description: 'Erro ao carregar bloqueios', variant: 'destructive' }); return; }
+      if (!data?.success) { toast({ title: 'Erro', description: data?.error || 'Erro ao carregar bloqueios', variant: 'destructive' }); return; }
+      setBloqueios(sortBloqueios(data.data || []));
     } catch (error: any) {
-      console.error('❌ Erro inesperado:', error);
-      toast({
-        title: "Erro",
-        description: `Erro inesperado: ${error.message}`,
-        variant: "destructive",
-      });
+      toast({ title: 'Erro', description: `Erro inesperado: ${error.message}`, variant: 'destructive' });
     } finally {
       setLoadingBloqueios(false);
     }
   };
 
+  // ── remoção de bloqueio ───────────────────────────────────────────────────
+
   const handleRemoverBloqueio = async () => {
     if (!bloqueioParaRemover) return;
-
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('bloqueio-agenda', {
-        body: {
-          action: 'remove',
-          bloqueioId: bloqueioParaRemover.id
-        }
+        body: { action: 'remove', bloqueioId: bloqueioParaRemover.id },
       });
-
-      if (error) {
-        console.error('❌ Erro ao remover bloqueio:', error);
-        toast({
-          title: "Erro",
-          description: "Erro ao remover bloqueio",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      if (!data?.success) {
-        console.error('❌ Erro na resposta:', data);
-        toast({
-          title: "Erro",
-          description: data?.error || "Erro ao remover bloqueio",
-          variant: "destructive",
-        });
-        return;
-      }
+      if (error) { toast({ title: 'Erro', description: 'Erro ao remover bloqueio', variant: 'destructive' }); return; }
+      if (!data?.success) { toast({ title: 'Erro', description: data?.error || 'Erro ao remover bloqueio', variant: 'destructive' }); return; }
 
       toast({
-        title: "Sucesso",
-        description: data.data.agendamentos_restaurados 
+        title: 'Sucesso',
+        description: data.data.agendamentos_restaurados
           ? `Bloqueio removido! ${data.data.agendamentos_restaurados} agendamento(s) restaurado(s).`
-          : "Bloqueio removido com sucesso!",
+          : 'Bloqueio removido com sucesso!',
       });
-      
-      // Recarregar lista de bloqueios
-      if (selectedDoctorAbrir) {
-        carregarBloqueios(selectedDoctorAbrir);
-      }
-      
-      // ✅ ATUALIZAR CALENDÁRIO após remoção
-      if (onRefresh) {
-        onRefresh();
-      }
-      
+
+      if (selectedDoctorAbrir) carregarBloqueios(selectedDoctorAbrir);
+      if (onRefresh) onRefresh();
       setBloqueioParaRemover(null);
     } catch (error: any) {
-      console.error('❌ Erro inesperado:', error);
-      toast({
-        title: "Erro",
-        description: `Erro inesperado: ${error.message}`,
-        variant: "destructive",
-      });
+      toast({ title: 'Erro', description: `Erro inesperado: ${error.message}`, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
   };
 
-  const medicoSelecionado = medicos.find(m => m.id === medicoId);
+  const nomeDoMedico = (id?: string) => medicos.find(m => m.id === id)?.nome ?? '';
+
+  // ── render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-4">
       {onBack && (
-        <Button 
-          onClick={onBack}
-          variant="outline" 
-          className="flex items-center gap-2"
-        >
+        <Button onClick={onBack} variant="outline" className="flex items-center gap-2">
           <ArrowLeft className="h-4 w-4" />
           Voltar ao Dashboard
         </Button>
       )}
-      
+
       <Card className="w-full">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
             Gestão de Bloqueios de Agenda
           </CardTitle>
-          <CardDescription>
-            Bloqueie ou abra períodos específicos na agenda dos médicos
-          </CardDescription>
+          <CardDescription>Bloqueie ou abra períodos específicos na agenda dos médicos</CardDescription>
         </CardHeader>
-      
+
         <CardContent>
           {loadingMedicos ? (
             <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
               <p className="text-muted-foreground">Carregando médicos...</p>
             </div>
           ) : medicos.length === 0 ? (
@@ -347,15 +275,36 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
                 <TabsTrigger value="bloquear">Bloquear Agenda</TabsTrigger>
                 <TabsTrigger value="abrir">Abrir Agenda</TabsTrigger>
               </TabsList>
-              
+
+              {/* ── ABA BLOQUEAR ─────────────────────────────────────────── */}
               <TabsContent value="bloquear" className="space-y-6 mt-6">
                 <form onSubmit={handleSubmit} className="space-y-6">
-                  {/* Seleção do Médico */}
+
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2">
                       <User className="h-4 w-4" />
-                      Médico
+                      Médico(s)
                     </Label>
+
+                    {/* badges dos médicos selecionados individualmente */}
+                    {!isAllSelected && medicoIds.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {medicoIds.map(id => {
+                          const m = medicos.find(m => m.id === id);
+                          return m ? (
+                            <Badge
+                              key={id}
+                              variant="secondary"
+                              className="cursor-pointer text-xs"
+                              onClick={() => toggleMedico(id)}
+                            >
+                              {m.nome} ×
+                            </Badge>
+                          ) : null;
+                        })}
+                      </div>
+                    )}
+
                     <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
                       <PopoverTrigger asChild>
                         <Button
@@ -364,11 +313,7 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
                           aria-expanded={openCombobox}
                           className="w-full justify-between"
                         >
-                           {medicoId
-                            ? (medicoId === "ALL"
-                              ? "Todos os médicos"
-                              : `${medicos.find((medico) => medico.id === medicoId)?.nome} - ${medicos.find((medico) => medico.id === medicoId)?.especialidade}`)
-                            : "Selecione o médico..."}
+                          {labelBloquear()}
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
@@ -381,34 +326,18 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
                               <CommandItem
                                 key="ALL"
                                 value="Todos os médicos"
-                                onSelect={() => {
-                                  setMedicoId(medicoId === "ALL" ? "" : "ALL");
-                                  setOpenCombobox(false);
-                                }}
+                                onSelect={() => toggleMedico('ALL')}
                               >
-                                <Check
-                                  className={cn(
-                                    "mr-2 h-4 w-4",
-                                    medicoId === "ALL" ? "opacity-100" : "opacity-0"
-                                  )}
-                                />
+                                <Check className={cn('mr-2 h-4 w-4', isAllSelected ? 'opacity-100' : 'opacity-0')} />
                                 Todos os médicos
                               </CommandItem>
-                              {medicos.map((medico) => (
+                              {medicos.map(medico => (
                                 <CommandItem
                                   key={medico.id}
                                   value={`${medico.nome} ${medico.especialidade}`}
-                                  onSelect={() => {
-                                    setMedicoId(medico.id === medicoId ? "" : medico.id);
-                                    setOpenCombobox(false);
-                                  }}
+                                  onSelect={() => toggleMedico(medico.id)}
                                 >
-                                  <Check
-                                    className={cn(
-                                      "mr-2 h-4 w-4",
-                                      medicoId === medico.id ? "opacity-100" : "opacity-0"
-                                    )}
-                                  />
+                                  <Check className={cn('mr-2 h-4 w-4', medicoIds.includes(medico.id) ? 'opacity-100' : 'opacity-0')} />
                                   {medico.nome} - {medico.especialidade}
                                 </CommandItem>
                               ))}
@@ -419,7 +348,6 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
                     </Popover>
                   </div>
 
-                  {/* Período do Bloqueio */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="dataInicio" className="flex items-center gap-2">
@@ -435,7 +363,6 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
                         required
                       />
                     </div>
-                    
                     <div className="space-y-2">
                       <Label htmlFor="dataFim" className="flex items-center gap-2">
                         <Calendar className="h-4 w-4" />
@@ -452,7 +379,6 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
                     </div>
                   </div>
 
-                  {/* Motivo */}
                   <div className="space-y-2">
                     <Label htmlFor="motivo" className="flex items-center gap-2">
                       <FileText className="h-4 w-4" />
@@ -468,21 +394,14 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
                     />
                   </div>
 
-                  {/* Preview da Ação */}
-                  {medicoId && dataInicio && dataFim && (
+                  {medicoIds.length > 0 && dataInicio && dataFim && (
                     <div className="bg-muted/50 p-4 rounded-lg border-l-4 border-l-destructive">
                       <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
                         <AlertTriangle className="h-4 w-4 text-destructive" />
                         Ação que será executada:
                       </h4>
                       <ul className="text-sm text-muted-foreground space-y-1">
-                        <li>
-                          • {medicoId === "ALL" ? (
-                            <>Agenda de <strong>todos os médicos</strong> será bloqueada</>
-                          ) : (
-                            <>Agenda de <strong>{medicoSelecionado?.nome}</strong> será bloqueada</>
-                          )}
-                        </li>
+                        <li>• Agenda de <strong>{previewMedicos()}</strong> será bloqueada</li>
                         <li>• Período: <strong>{formatDateForDisplay(dataInicio)}</strong> até <strong>{formatDateForDisplay(dataFim)}</strong></li>
                         <li>• Todos os agendamentos neste período serão <strong>cancelados temporariamente</strong></li>
                         <li>• Os agendamentos serão <strong>restaurados automaticamente</strong> se você abrir a agenda novamente</li>
@@ -491,29 +410,23 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
                     </div>
                   )}
 
-                  <Button 
-                    type="submit" 
-                    disabled={loading || !medicoId || !dataInicio || !dataFim || !motivo}
+                  <Button
+                    type="submit"
+                    disabled={loading || medicoIds.length === 0 || !dataInicio || !dataFim || !motivo}
                     className="w-full"
                     variant="destructive"
                   >
                     {loading ? (
-                      <>
-                        <Clock className="mr-2 h-4 w-4 animate-spin" />
-                        Processando Bloqueio...
-                      </>
+                      <><Clock className="mr-2 h-4 w-4 animate-spin" />Processando Bloqueio...</>
                     ) : (
-                      <>
-                        <AlertTriangle className="mr-2 h-4 w-4" />
-                        Bloquear Agenda e Notificar Pacientes
-                      </>
+                      <><AlertTriangle className="mr-2 h-4 w-4" />Bloquear Agenda e Notificar Pacientes</>
                     )}
                   </Button>
                 </form>
               </TabsContent>
-              
+
+              {/* ── ABA ABRIR ────────────────────────────────────────────── */}
               <TabsContent value="abrir" className="space-y-6 mt-6">
-                {/* Seleção de Médico para Abrir Agenda */}
                 <div className="space-y-2">
                   <Label htmlFor="medico-abrir">Médico</Label>
                   <Popover open={openDoctorAbrir} onOpenChange={setOpenDoctorAbrir}>
@@ -524,9 +437,11 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
                         aria-expanded={openDoctorAbrir}
                         className="w-full justify-between"
                       >
-                        {selectedDoctorAbrir
-                          ? medicos.find(medico => medico.id === selectedDoctorAbrir)?.nome
-                          : "Selecione um médico..."}
+                        {selectedDoctorAbrir === 'ALL'
+                          ? 'Todos os médicos'
+                          : selectedDoctorAbrir
+                            ? medicos.find(m => m.id === selectedDoctorAbrir)?.nome
+                            : 'Selecione um médico...'}
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
@@ -536,26 +451,33 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
                         <CommandList>
                           <CommandEmpty>Nenhum médico encontrado.</CommandEmpty>
                           <CommandGroup>
-                            {medicos.map((medico) => (
+                            <CommandItem
+                              key="ALL"
+                              value="Todos os médicos"
+                              onSelect={() => {
+                                setSelectedDoctorAbrir('ALL');
+                                setOpenDoctorAbrir(false);
+                                setFiltroBusca('');
+                                carregarBloqueios('ALL');
+                              }}
+                            >
+                              <Check className={cn('mr-2 h-4 w-4', selectedDoctorAbrir === 'ALL' ? 'opacity-100' : 'opacity-0')} />
+                              Todos os médicos
+                            </CommandItem>
+                            {medicos.map(medico => (
                               <CommandItem
                                 key={medico.id}
                                 value={medico.nome}
                                 onSelect={() => {
                                   setSelectedDoctorAbrir(medico.id);
                                   setOpenDoctorAbrir(false);
+                                  setFiltroBusca('');
                                   carregarBloqueios(medico.id);
                                 }}
                               >
-                                <Check
-                                  className={cn(
-                                    "mr-2 h-4 w-4",
-                                    selectedDoctorAbrir === medico.id ? "opacity-100" : "opacity-0"
-                                  )}
-                                />
+                                <Check className={cn('mr-2 h-4 w-4', selectedDoctorAbrir === medico.id ? 'opacity-100' : 'opacity-0')} />
                                 {medico.nome}
-                                <span className="ml-auto text-sm text-muted-foreground">
-                                  {medico.especialidade}
-                                </span>
+                                <span className="ml-auto text-sm text-muted-foreground">{medico.especialidade}</span>
                               </CommandItem>
                             ))}
                           </CommandGroup>
@@ -565,14 +487,13 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
                   </Popover>
                 </div>
 
-                {/* Lista de Bloqueios Ativos */}
                 {selectedDoctorAbrir && (
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <h3 className="text-lg font-medium">Bloqueios Ativos</h3>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => carregarBloqueios(selectedDoctorAbrir)}
                         disabled={loadingBloqueios}
                       >
@@ -580,46 +501,70 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
                       </Button>
                     </div>
 
+                    <Input
+                      placeholder="Buscar por data (dd/mm/aaaa)"
+                      value={filtroBusca}
+                      onChange={(e) => setFiltroBusca(e.target.value)}
+                    />
+
                     {loadingBloqueios ? (
                       <div className="text-center py-8">
                         <div className="text-muted-foreground">Carregando bloqueios...</div>
                       </div>
                     ) : bloqueios.length === 0 ? (
                       <div className="text-center py-8">
-                        <div className="text-muted-foreground">Nenhum bloqueio ativo encontrado para este médico.</div>
+                        <div className="text-muted-foreground">Nenhum bloqueio ativo encontrado.</div>
                       </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {bloqueios.map((bloqueio) => (
-                          <Card key={bloqueio.id}>
-                            <CardContent className="p-4">
-                              <div className="flex items-center justify-between">
-                                <div className="space-y-1">
-                                  <div className="font-medium">
-                                    {formatDateForDisplay(bloqueio.data_inicio)} até {formatDateForDisplay(bloqueio.data_fim)}
+                    ) : (() => {
+                      const filtrados = filtroBusca
+                        ? bloqueios.filter(b =>
+                            formatDateForDisplay(b.data_inicio).includes(filtroBusca) ||
+                            formatDateForDisplay(b.data_fim).includes(filtroBusca)
+                          )
+                        : bloqueios;
+
+                      return filtrados.length === 0 ? (
+                        <div className="text-center py-8">
+                          <div className="text-muted-foreground">Nenhum bloqueio encontrado para a data pesquisada.</div>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {filtrados.map(bloqueio => (
+                            <Card key={bloqueio.id}>
+                              <CardContent className="p-4">
+                                <div className="flex items-center justify-between">
+                                  <div className="space-y-1">
+                                    {selectedDoctorAbrir === 'ALL' && bloqueio.medico_id && (
+                                      <div className="text-xs font-semibold text-primary">
+                                        {nomeDoMedico(bloqueio.medico_id)}
+                                      </div>
+                                    )}
+                                    <div className="font-medium">
+                                      {formatDateForDisplay(bloqueio.data_inicio)} até {formatDateForDisplay(bloqueio.data_fim)}
+                                    </div>
+                                    <div className="text-sm text-muted-foreground">
+                                      <strong>Motivo:</strong> {bloqueio.motivo}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">
+                                      Criado em {formatDateForDisplay(bloqueio.created_at)} por {bloqueio.criado_por}
+                                    </div>
                                   </div>
-                                  <div className="text-sm text-muted-foreground">
-                                    <strong>Motivo:</strong> {bloqueio.motivo}
-                                  </div>
-                                  <div className="text-xs text-muted-foreground">
-                                    Criado em {formatDateForDisplay(bloqueio.created_at)} por {bloqueio.criado_por}
-                                  </div>
+                                  <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => setBloqueioParaRemover(bloqueio)}
+                                    disabled={loading}
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Remover
+                                  </Button>
                                 </div>
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  onClick={() => setBloqueioParaRemover(bloqueio)}
-                                  disabled={loading}
-                                >
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Remover
-                                </Button>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        ))}
-                      </div>
-                    )}
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </TabsContent>
@@ -628,7 +573,7 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
         </CardContent>
       </Card>
 
-      {/* Modal de Confirmação - Bloqueio */}
+      {/* Modal de Confirmação — Bloqueio */}
       {showConfirmation && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <Card className="w-full max-w-md">
@@ -644,37 +589,21 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
                   ⚠️ Atenção: Os agendamentos serão cancelados temporariamente
                 </p>
                 <ul className="text-sm space-y-1">
-                  <li>• Médico: <strong>{medicoId === 'ALL' ? 'Todos os médicos' : medicoSelecionado?.nome}</strong></li>
+                  <li>• Médico(s): <strong>{previewMedicos()}</strong></li>
                   <li>• Período: <strong>{formatDateForDisplay(dataInicio)}</strong> até <strong>{formatDateForDisplay(dataFim)}</strong></li>
                   <li>• Agendamentos serão <strong>cancelados temporariamente</strong></li>
                   <li>• Você pode <strong>restaurá-los</strong> abrindo a agenda novamente</li>
                   <li>• Pacientes serão notificados via WhatsApp</li>
                 </ul>
               </div>
-              
               <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
-                  onClick={() => setShowConfirmation(false)}
-                  className="flex-1"
-                  disabled={loading}
-                >
+                <Button variant="outline" onClick={() => setShowConfirmation(false)} className="flex-1" disabled={loading}>
                   Cancelar
                 </Button>
-                <Button 
-                  variant="destructive" 
-                  onClick={handleBloqueioAgenda}
-                  className="flex-1"
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <>
-                      <Clock className="mr-2 h-4 w-4 animate-spin" />
-                      Processando...
-                    </>
-                  ) : (
-                    'Confirmar Bloqueio'
-                  )}
+                <Button variant="destructive" onClick={handleBloqueioAgenda} className="flex-1" disabled={loading}>
+                  {loading
+                    ? <><Clock className="mr-2 h-4 w-4 animate-spin" />Processando...</>
+                    : 'Confirmar Bloqueio'}
                 </Button>
               </div>
             </CardContent>
@@ -682,7 +611,7 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
         </div>
       )}
 
-      {/* Modal de Confirmação - Remoção */}
+      {/* Modal de Confirmação — Remoção */}
       {bloqueioParaRemover && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <Card className="w-full max-w-md">
@@ -702,30 +631,14 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
                   <li>• Motivo: <strong>{bloqueioParaRemover.motivo}</strong></li>
                 </ul>
               </div>
-              
               <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
-                  onClick={() => setBloqueioParaRemover(null)}
-                  className="flex-1"
-                  disabled={loading}
-                >
+                <Button variant="outline" onClick={() => setBloqueioParaRemover(null)} className="flex-1" disabled={loading}>
                   Cancelar
                 </Button>
-                <Button 
-                  variant="destructive" 
-                  onClick={handleRemoverBloqueio}
-                  className="flex-1"
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <>
-                      <Clock className="mr-2 h-4 w-4 animate-spin" />
-                      Removendo...
-                    </>
-                  ) : (
-                    'Confirmar Remoção'
-                  )}
+                <Button variant="destructive" onClick={handleRemoverBloqueio} className="flex-1" disabled={loading}>
+                  {loading
+                    ? <><Clock className="mr-2 h-4 w-4 animate-spin" />Removendo...</>
+                    : 'Confirmar Remoção'}
                 </Button>
               </div>
             </CardContent>
