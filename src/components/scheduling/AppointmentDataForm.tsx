@@ -20,15 +20,17 @@ interface AppointmentDataFormProps {
   setFormData: React.Dispatch<React.SetStateAction<SchedulingFormData>>;
   doctors: Doctor[];
   atendimentos: Atendimento[];
+  getAtendimentosByDoctor: (doctorId: string) => Atendimento[];
   timeConflictError?: string;
   onClearTimeConflict?: () => void;
 }
 
-export function AppointmentDataForm({ 
-  formData, 
-  setFormData, 
+export function AppointmentDataForm({
+  formData,
+  setFormData,
   doctors,
   atendimentos,
+  getAtendimentosByDoctor,
   timeConflictError,
   onClearTimeConflict,
 }: AppointmentDataFormProps) {
@@ -46,9 +48,9 @@ export function AppointmentDataForm({
     hasUnimedRules 
   } = useIntervalValidation(formData.medicoId);
   
-  // Filtrar atendimentos baseado no médico selecionado
-  const filteredAtendimentos = formData.medicoId 
-    ? atendimentos.filter(atendimento => atendimento.medico_id === formData.medicoId)
+  // Filtrar atendimentos baseado no médico selecionado (usa pivot M:N)
+  const filteredAtendimentos = formData.medicoId
+    ? getAtendimentosByDoctor(formData.medicoId)
     : [];
 
   // Função para obter data/hora atual no timezone brasileiro
