@@ -301,6 +301,7 @@ export function SimpleSchedulingForm({
                 setFormData={setFormData}
                 doctors={doctors}
                 atendimentos={atendimentos}
+                getAtendimentosByDoctor={getAtendimentosByDoctor}
                 timeConflictError={timeConflictError || undefined}
                 onClearTimeConflict={() => setTimeConflictError(null)}
               />
