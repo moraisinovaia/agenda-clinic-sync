@@ -6,9 +6,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-api-key, x-cliente-id',
 };
 
-// Fallback para IPADO (cliente padrão)
-const IPADO_CLIENTE_ID = '2bfb98b5-ae41-4f96-8ba7-acc797c22054';
-
 interface AgendamentoRequest {
   paciente_nome: string;
   paciente_data_nascimento: string; // YYYY-MM-DD
@@ -51,7 +48,7 @@ serve(async (req) => {
     const method = req.method;
 
     // ============= SISTEMA MULTI-CLIENTE =============
-    // Prioridade: 1. Header x-cliente-id  2. Query param cliente_id  3. Fallback IPADO
+    // Prioridade: 1. Header x-cliente-id  2. Query param cliente_id  3. Body cliente_id
     let cliente_id = req.headers.get('x-cliente-id') || url.searchParams.get('cliente_id');
     
     // Para métodos POST/PUT/DELETE, também verificar no body
@@ -71,13 +68,15 @@ serve(async (req) => {
       }
     }
     
-    // Fallback para IPADO se nenhum cliente_id foi fornecido
+    // cliente_id obrigatório — sem fallback
     if (!cliente_id) {
-      cliente_id = IPADO_CLIENTE_ID;
-      console.log(`⚠️ [N8N-API] cliente_id não fornecido, usando fallback IPADO: ${cliente_id}`);
-    } else {
-      console.log(`✅ [N8N-API] Usando cliente_id: ${cliente_id}`);
+      return new Response(
+        JSON.stringify({ error: 'cliente_id é obrigatório (header x-cliente-id, query cliente_id ou body cliente_id)' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
+
+    console.log(`✅ [N8N-API] Usando cliente_id: ${cliente_id}`);
 
     // ==================== GET /medicos ====================
     if (method === 'GET' && path === '/medicos') {

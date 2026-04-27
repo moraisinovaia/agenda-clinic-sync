@@ -12,6 +12,7 @@ export async function handleListDoctors(supabase: any, body: any, clienteId: str
       .select('id, nome, especialidade, convenios_aceitos, horarios, ativo, crm, rqe')
       .eq('cliente_id', clienteId)
       .eq('ativo', true)
+      .eq('is_agenda_virtual', false)
       .order('nome');
 
     if (scope.doctorIds.length > 0) {
