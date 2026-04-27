@@ -241,7 +241,8 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         .from('medicos')
         .select('id, nome, ativo, crm, rqe')
         .eq('cliente_id', clienteId)
-        .eq('ativo', true);
+        .eq('ativo', true)
+        .eq('is_agenda_virtual', false);
       
       if (error) {
         console.error('❌ Erro ao buscar médicos:', error);

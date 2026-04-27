@@ -198,7 +198,8 @@ export async function handleSchedule(supabase: any, body: any, clienteId: string
         .from('medicos')
         .select('id, nome, ativo, crm, rqe')
         .eq('cliente_id', clienteId)
-        .eq('ativo', true);
+        .eq('ativo', true)
+        .eq('is_agenda_virtual', false);
       
       if (medicosError || !todosMedicos || todosMedicos.length === 0) {
         console.error(`❌ Erro ao buscar médicos:`, medicosError);
