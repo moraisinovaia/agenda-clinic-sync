@@ -701,28 +701,20 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     );
   };
 
-  const cancelAppointment = async (appointmentId: string) => {
+  const cancelAppointment = async (appointmentId: string, motivo?: string) => {
     console.log('🎯 [CANCEL] Iniciando cancelamento:', appointmentId);
-    
+
     if (isOperatingRef.current) {
       console.warn('⚠️ [CANCEL] Operação já em andamento');
       return;
     }
-    
+
     isOperatingRef.current = true;
     isPausedRef.current = true;
-    
+
     try {
       const profile = await getUserProfile();
-      
-      // ⚡ OTIMIZAÇÃO: Update otimista ANTES do RPC (feedback instantâneo)
-      updateLocalAppointment(appointmentId, { 
-        status: 'cancelado',
-        cancelado_em: new Date().toISOString(),
-        cancelado_por: profile.nome,
-        cancelado_por_user_id: profile.user_id
-      });
-      
+
       console.log('🔄 [CANCEL] Executando RPC...');
       const response = await retryOperation(async () => {
         return await withTimeout(
@@ -730,7 +722,8 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
             return await supabase.rpc('cancelar_agendamento_soft', {
               p_agendamento_id: appointmentId,
               p_cancelado_por: profile.nome,
-              p_cancelado_por_user_id: profile.user_id
+              p_cancelado_por_user_id: profile.user_id,
+              p_motivo: motivo || null,
             } as any);
           })(),
           10000
@@ -750,20 +743,26 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
       if (!isSuccess) {
         throw new Error(resultAny?.error || resultAny?.message || 'Falha ao cancelar');
       }
-      
-      toast({ 
-        title: 'Cancelado com sucesso', 
-        description: 'O agendamento foi cancelado' 
+
+      // Update local APÓS confirmação do RPC (sem optimistic update)
+      updateLocalAppointment(appointmentId, {
+        status: 'cancelado',
+        cancelado_em: new Date().toISOString(),
+        cancelado_por: profile.nome,
+        cancelado_por_user_id: profile.user_id,
       });
-      
-      // ⚡ Refetch em background (não-bloqueante)
+
+      toast({
+        title: 'Cancelado com sucesso',
+        description: 'O agendamento foi cancelado',
+      });
+
       invalidateCache();
       refetch().catch(() => {});
-      
+
     } catch (error) {
       console.error('❌ [CANCEL] Erro:', error);
-      
-      // Rollback otimista em caso de erro
+
       invalidateCache();
       refetch().catch(() => {});
       
@@ -1056,6 +1055,72 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     }
   };
 
+  const reactivateAppointment = async (appointmentId: string) => {
+    console.log('🎯 [REATIVAR] Iniciando reativação:', appointmentId);
+
+    if (isOperatingRef.current) {
+      console.warn('⚠️ [REATIVAR] Operação já em andamento');
+      return;
+    }
+
+    isOperatingRef.current = true;
+    isPausedRef.current = true;
+
+    try {
+      const profile = await getUserProfile();
+
+      const { data, error } = await supabase.rpc('reativar_agendamento', {
+        p_agendamento_id: appointmentId,
+        p_reativado_por: profile.nome,
+        p_reativado_por_user_id: profile.user_id,
+      } as any);
+
+      if (error) throw error;
+
+      const result = data as any;
+
+      if (result?.error === 'SLOT_OCUPADO') {
+        toast({
+          title: 'Não foi possível reativar',
+          description: result.message || 'Este horário já foi ocupado por outro paciente.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (!result?.success) {
+        throw new Error(result?.error || result?.message || 'Falha ao reativar');
+      }
+
+      updateLocalAppointment(appointmentId, {
+        status: 'agendado',
+        cancelado_em: null,
+      });
+
+      toast({
+        title: 'Agendamento reativado',
+        description: 'O agendamento foi reativado com sucesso.',
+      });
+
+      invalidateCache();
+      refetch().catch(() => {});
+
+    } catch (error) {
+      console.error('❌ [REATIVAR] Erro:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Erro desconhecido';
+      toast({
+        title: 'Erro ao reativar',
+        description: errorMsg,
+        variant: 'destructive',
+      });
+      invalidateCache();
+      refetch().catch(() => {});
+    } finally {
+      isOperatingRef.current = false;
+      isPausedRef.current = false;
+    }
+  };
+
   return {
     appointments,
     loading,
@@ -1063,6 +1128,7 @@ export function useAppointmentsList(itemsPerPage: number = 20) {
     confirmAppointment,
     unconfirmAppointment,
     deleteAppointment,
+    reactivateAppointment,
     getAppointmentsByDoctorAndDate,
     refetch,
     invalidateCache,

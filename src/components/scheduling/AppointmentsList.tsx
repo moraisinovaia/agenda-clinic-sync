@@ -8,7 +8,7 @@ import { AppointmentWithRelations } from '@/types/scheduling';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Calendar, CheckCircle, Edit, X, RotateCcw, History, Phone, Loader2 } from 'lucide-react';
+import { Calendar, CheckCircle, Edit, X, RotateCcw, History, Phone, Loader2, Undo2 } from 'lucide-react';
 import { Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
@@ -18,23 +18,29 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { usePagination } from '@/hooks/usePagination';
 import { PaginationControls } from '@/components/ui/pagination-controls';
 import { AuditHistoryModal } from './AuditHistoryModal';
+import { CancelAppointmentModal } from './CancelAppointmentModal';
+import { useAuth } from '@/hooks/useAuth';
 
 interface AppointmentsListProps {
   appointments: AppointmentWithRelations[];
   doctors: any[];
   onEditAppointment?: (appointment: AppointmentWithRelations) => void;
-  onCancelAppointment?: (appointmentId: string) => void;
+  onCancelAppointment?: (appointmentId: string, motivo?: string) => void;
   onDeleteAppointment?: (appointmentId: string) => void;
   onConfirmAppointment?: (appointmentId: string) => void;
   onUnconfirmAppointment?: (appointmentId: string) => void;
+  onReactivateAppointment?: (appointmentId: string) => void;
   onNavigateToAppointment?: (appointment: AppointmentWithRelations) => void;
   allowCanceled?: boolean;
 }
 
 // 🚨 OTIMIZAÇÃO FASE 2: Memoização do componente para evitar re-renders desnecessários
-export const AppointmentsList = React.memo(({ appointments, doctors, onEditAppointment, onCancelAppointment, onDeleteAppointment, onConfirmAppointment, onUnconfirmAppointment, onNavigateToAppointment, allowCanceled = false }: AppointmentsListProps) => {
+export const AppointmentsList = React.memo(({ appointments, doctors, onEditAppointment, onCancelAppointment, onDeleteAppointment, onConfirmAppointment, onUnconfirmAppointment, onReactivateAppointment, onNavigateToAppointment, allowCanceled = false }: AppointmentsListProps) => {
+  const { profile } = useAuth();
   const [selectedAuditId, setSelectedAuditId] = useState<string | null>(null);
   const [selectedPatientName, setSelectedPatientName] = useState<string>("");
+  const [cancelModal, setCancelModal] = useState<{ open: boolean; appointmentId: string; patientName: string; date: string; time: string; medicoNome: string; atendimentoNome: string } | null>(null);
+  const [cancelLoading, setCancelLoading] = useState(false);
   // ✅ FASE 5: Estado para rastrear operações em andamento
   const [operatingIds, setOperatingIds] = useState<Set<string>>(() => new Set());
   
@@ -161,16 +167,42 @@ export const AppointmentsList = React.memo(({ appointments, doctors, onEditAppoi
     }
   };
 
-  const handleCancel = async (appointmentId: string) => {
-    if (operatingIds.has(appointmentId)) {
-      console.log('⚠️ Operação já em andamento para este agendamento');
-      return;
-    }
-    
-    setOperatingIds(prev => new Set(prev).add(appointmentId));
-    
+  const handleCancel = (appointment: AppointmentWithRelations) => {
+    if (operatingIds.has(appointment.id)) return;
+    const date = formatInTimeZone(new Date(appointment.data_agendamento + 'T00:00:00'), BRAZIL_TIMEZONE, 'dd/MM/yyyy', { locale: ptBR });
+    setCancelModal({
+      open: true,
+      appointmentId: appointment.id,
+      patientName: (appointment.pacientes?.nome_completo || 'Paciente').toUpperCase(),
+      date,
+      time: appointment.hora_agendamento,
+      medicoNome: appointment.medicos?.nome || '',
+      atendimentoNome: appointment.atendimentos?.nome || '',
+    });
+  };
+
+  const handleConfirmCancel = async (motivo: string) => {
+    if (!cancelModal) return;
+    setCancelLoading(true);
+    setOperatingIds(prev => new Set(prev).add(cancelModal.appointmentId));
     try {
-      await onCancelAppointment?.(appointmentId);
+      await onCancelAppointment?.(cancelModal.appointmentId, motivo || undefined);
+      setCancelModal(null);
+    } finally {
+      setCancelLoading(false);
+      setOperatingIds(prev => {
+        const next = new Set(prev);
+        next.delete(cancelModal.appointmentId);
+        return next;
+      });
+    }
+  };
+
+  const handleReactivate = async (appointmentId: string) => {
+    if (operatingIds.has(appointmentId)) return;
+    setOperatingIds(prev => new Set(prev).add(appointmentId));
+    try {
+      await onReactivateAppointment?.(appointmentId);
     } finally {
       setOperatingIds(prev => {
         const next = new Set(prev);
@@ -284,6 +316,21 @@ export const AppointmentsList = React.memo(({ appointments, doctors, onEditAppoi
                           {appointment.observacoes}
                         </div>
                       )}
+                      {appointment.status === 'cancelado' && appointment.cancelado_por && (
+                        <div className="text-xs text-red-600 mt-1 space-y-0.5">
+                          <div>
+                            Cancelado por {appointment.cancelado_por}
+                            {appointment.cancelado_em && (
+                              <span> em {formatInTimeZone(new Date(appointment.cancelado_em), BRAZIL_TIMEZONE, 'dd/MM/yyyy HH:mm', { locale: ptBR })}</span>
+                            )}
+                          </div>
+                          {(appointment as any).motivo_cancelamento && (
+                            <div className="text-muted-foreground">
+                              Motivo: {(appointment as any).motivo_cancelamento}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* Telefone */}
@@ -383,7 +430,7 @@ export const AppointmentsList = React.memo(({ appointments, doctors, onEditAppoi
                           <Button 
                             variant="ghost" 
                             size="sm"
-                            onClick={() => handleCancel(appointment.id)}
+                            onClick={() => handleCancel(appointment)}
                             disabled={operatingIds.has(appointment.id)}
                             className={cn(
                               "h-8 w-8 p-0",
@@ -423,7 +470,7 @@ export const AppointmentsList = React.memo(({ appointments, doctors, onEditAppoi
                           <Button 
                             variant="ghost" 
                             size="sm"
-                            onClick={() => handleCancel(appointment.id)}
+                            onClick={() => handleCancel(appointment)}
                             disabled={operatingIds.has(appointment.id)}
                             className={cn(
                               "h-8 w-8 p-0",
@@ -441,35 +488,55 @@ export const AppointmentsList = React.memo(({ appointments, doctors, onEditAppoi
                         </>
                       )}
                       {appointment.status === 'cancelado' && (
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                              title="Excluir"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Excluir agendamento</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Tem certeza que deseja excluir este agendamento? Esta ação não pode ser desfeita.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Não</AlertDialogCancel>
-                              <AlertDialogAction 
-                                onClick={() => onDeleteAppointment?.(appointment.id)}
-                                className="bg-red-600 hover:bg-red-700"
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleReactivate(appointment.id)}
+                            disabled={operatingIds.has(appointment.id)}
+                            className={cn(
+                              "h-8 w-8 p-0",
+                              operatingIds.has(appointment.id)
+                                ? "opacity-50 cursor-not-allowed"
+                                : "text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            )}
+                            title="Desfazer cancelamento"
+                          >
+                            {operatingIds.has(appointment.id)
+                              ? <Loader2 className="h-3 w-3 animate-spin" />
+                              : <Undo2 className="h-3 w-3" />
+                            }
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                title="Excluir"
                               >
-                                Sim, excluir
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Excluir agendamento</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Tem certeza que deseja excluir este agendamento? Esta ação não pode ser desfeita.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Não</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => onDeleteAppointment?.(appointment.id)}
+                                  className="bg-red-600 hover:bg-red-700"
+                                >
+                                  Sim, excluir
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </>
                       )}
                     </div>
                   </div>
@@ -521,6 +588,22 @@ export const AppointmentsList = React.memo(({ appointments, doctors, onEditAppoi
         agendamentoId={selectedAuditId || ""}
         pacienteNome={selectedPatientName}
       />
+
+      {/* Modal de cancelamento */}
+      {cancelModal && (
+        <CancelAppointmentModal
+          open={cancelModal.open}
+          onOpenChange={(open) => { if (!open) setCancelModal(null); }}
+          patientName={cancelModal.patientName}
+          appointmentDate={cancelModal.date}
+          appointmentTime={cancelModal.time}
+          medicoNome={cancelModal.medicoNome}
+          atendimentoNome={cancelModal.atendimentoNome}
+          currentUserName={profile?.nome || 'Usuário'}
+          onConfirm={handleConfirmCancel}
+          loading={cancelLoading}
+        />
+      )}
     </div>
   );
 }, (prevProps, nextProps) => {

@@ -5,10 +5,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar } from '@/components/ui/calendar';
 import { Badge } from '@/components/ui/badge';
-import { Calendar as CalendarIcon, Clock, User, AlertCircle, Trash2, RotateCcw, Check } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, User, AlertCircle, Trash2, RotateCcw, Check, Undo2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Doctor, Atendimento, SchedulingFormData, AppointmentWithRelations } from '@/types/scheduling';
+import { CancelAppointmentModal } from './CancelAppointmentModal';
+import { useAuth } from '@/hooks/useAuth';
 import { PatientDataFormFixed } from './PatientDataFormFixed';
 import { AppointmentDataForm } from './AppointmentDataForm';
 import { useSimpleSchedulingForm } from '@/hooks/useSimpleSchedulingForm';
@@ -38,10 +40,11 @@ interface SimpleSchedulingFormProps {
   adicionarFilaEspera: (data: FilaEsperaFormData) => Promise<boolean>;
   onMultipleSuccess?: (data: MultipleAppointmentData) => void;
   onFillLastPatient?: (fn: () => void) => void;
-  onCancelAppointment?: (appointmentId: string) => Promise<void>;
+  onCancelAppointment?: (appointmentId: string, motivo?: string) => Promise<void>;
   onDeleteAppointment?: (appointmentId: string) => Promise<void>;
   onConfirmAppointment?: (appointmentId: string) => Promise<void>;
   onUnconfirmAppointment?: (appointmentId: string) => Promise<void>;
+  onReactivateAppointment?: (appointmentId: string) => Promise<void>;
 }
 
 
@@ -66,8 +69,10 @@ export function SimpleSchedulingForm({
   onCancelAppointment,
   onDeleteAppointment,
   onConfirmAppointment,
-  onUnconfirmAppointment
+  onUnconfirmAppointment,
+  onReactivateAppointment,
 }: SimpleSchedulingFormProps) {
+  const { profile } = useAuth();
   // Preparar dados iniciais para edição
   const initialEditData = editingAppointment ? {
     nomeCompleto: editingAppointment.pacientes?.nome_completo || '',
@@ -99,7 +104,7 @@ export function SimpleSchedulingForm({
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [appointmentToDelete, setAppointmentToDelete] = useState<string | null>(null);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
-  const [appointmentToCancel, setAppointmentToCancel] = useState<string | null>(null);
+  const [appointmentToCancel, setAppointmentToCancel] = useState<AppointmentWithRelations | null>(null);
   
   // ✅ Memoizar handleSubmit com detecção de conflito
   const memoizedHandleSubmit = useCallback(async (e: React.FormEvent) => {
@@ -151,13 +156,13 @@ export function SimpleSchedulingForm({
     setConflictDetails(null);
   }, []);
 
-  const handleCancelAppointment = useCallback(async (appointmentId: string) => {
-    if (onCancelAppointment) {
-      await onCancelAppointment(appointmentId);
+  const handleCancelAppointment = useCallback(async (motivo: string) => {
+    if (onCancelAppointment && appointmentToCancel) {
+      await onCancelAppointment(appointmentToCancel.id, motivo || undefined);
     }
     setCancelConfirmOpen(false);
     setAppointmentToCancel(null);
-  }, [onCancelAppointment]);
+  }, [onCancelAppointment, appointmentToCancel]);
 
   const handleDeleteAppointment = useCallback(async (appointmentId: string) => {
     if (onDeleteAppointment) {
@@ -475,12 +480,23 @@ export function SimpleSchedulingForm({
                                   variant="outline"
                                   className="h-6 w-6 p-0 text-destructive hover:bg-destructive hover:text-destructive-foreground"
                                   onClick={() => {
-                                    setAppointmentToCancel(appointment.id);
+                                    setAppointmentToCancel(appointment);
                                     setCancelConfirmOpen(true);
                                   }}
                                   title="Cancelar agendamento"
                                 >
                                   <Trash2 className="h-3 w-3" />
+                                </Button>
+                              )}
+                              {appointment.status === 'cancelado' && onReactivateAppointment && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 w-6 p-0 text-blue-600 hover:bg-blue-600 hover:text-white"
+                                  onClick={() => onReactivateAppointment(appointment.id)}
+                                  title="Desfazer cancelamento"
+                                >
+                                  <Undo2 className="h-3 w-3" />
                                 </Button>
                               )}
                               {appointment.status === 'cancelado' && onDeleteAppointment && (
@@ -591,25 +607,19 @@ export function SimpleSchedulingForm({
       </Dialog>
 
       {/* AlertDialogs de Confirmação */}
-      <AlertDialog open={cancelConfirmOpen} onOpenChange={setCancelConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Cancelar Agendamento</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tem certeza que deseja cancelar este agendamento? Esta ação pode ser revertida.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => appointmentToCancel && handleCancelAppointment(appointmentToCancel)}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Sim, cancelar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {appointmentToCancel && (
+        <CancelAppointmentModal
+          open={cancelConfirmOpen}
+          onOpenChange={(open) => { if (!open) { setCancelConfirmOpen(false); setAppointmentToCancel(null); } }}
+          patientName={(appointmentToCancel.pacientes?.nome_completo || 'Paciente').toUpperCase()}
+          appointmentDate={format(new Date(appointmentToCancel.data_agendamento + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })}
+          appointmentTime={appointmentToCancel.hora_agendamento}
+          medicoNome={appointmentToCancel.medicos?.nome || ''}
+          atendimentoNome={appointmentToCancel.atendimentos?.nome || ''}
+          currentUserName={profile?.nome || 'Usuário'}
+          onConfirm={handleCancelAppointment}
+        />
+      )}
 
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent>

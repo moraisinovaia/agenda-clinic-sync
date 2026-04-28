@@ -70,6 +70,7 @@ export interface AppViewsProps {
   deleteAppointment: (id: string) => Promise<any>;
   confirmAppointment: (id: string) => Promise<any>;
   unconfirmAppointment: (id: string) => Promise<any>;
+  reactivateAppointment: (id: string) => Promise<any>;
   adicionarFilaEspera: (...args: any[]) => Promise<boolean>;
   atualizarStatusFila: (id: string, status: string) => Promise<boolean>;
   removerDaFila: (id: string) => Promise<boolean>;
@@ -101,7 +102,7 @@ export function AppViews({
   editingAppointment, searchTerm, setSearchTerm, fillLastPatientRef,
   filaEspera, filaLoading, filaError, getFilaStatus,
   isDateBlocked, getAtendimentosByDoctor, searchPatientsByBirthDate,
-  cancelAppointment, deleteAppointment, confirmAppointment, unconfirmAppointment,
+  cancelAppointment, deleteAppointment, confirmAppointment, unconfirmAppointment, reactivateAppointment,
   adicionarFilaEspera, atualizarStatusFila, removerDaFila, fetchFilaEspera,
   refetch, reloadEmptySlots,
   handleSimpleAppointmentSubmit, handleSimpleAppointmentSubmitWithForce,
@@ -210,6 +211,7 @@ export function AppViews({
               blockedDates={blockedDates}
               isDateBlocked={isDateBlocked}
               onCancelAppointment={cancelAppointment}
+              onReactivateAppointment={reactivateAppointment}
               onDeleteAppointment={deleteAppointment}
               onConfirmAppointment={handleConfirmAppointment}
               onUnconfirmAppointment={handleUnconfirmAppointment}
@@ -257,6 +259,7 @@ export function AppViews({
               onMultipleSuccess={handleMultipleAppointmentSuccess}
               onFillLastPatient={(fn: () => void) => { fillLastPatientRef.current = fn; }}
               onCancelAppointment={cancelAppointment}
+              onReactivateAppointment={reactivateAppointment}
               onDeleteAppointment={deleteAppointment}
               onConfirmAppointment={confirmAppointment}
               onUnconfirmAppointment={unconfirmAppointment}
@@ -344,6 +347,7 @@ export function AppViews({
               onMultipleSuccess={handleMultipleAppointmentSuccess}
               onFillLastPatient={(fn: () => void) => { fillLastPatientRef.current = fn; }}
               onCancelAppointment={cancelAppointment}
+              onReactivateAppointment={reactivateAppointment}
               onDeleteAppointment={deleteAppointment}
               onConfirmAppointment={confirmAppointment}
               onUnconfirmAppointment={unconfirmAppointment}
