@@ -532,7 +532,7 @@
   "settings": {
     "executionOrder": "v1",
     "errorWorkflow": "",
-    "notes": "P3 pendente: criar Error Workflow separado para falha no HTTP: Evolution sendText (nó 017). Quando sendText falhar, mensagens.status fica 'pendente' como indicador correto, mas webhooks_log.processado fica false sem erro_processamento registrado. Error Workflow deve: PATCH webhooks_log com erro_processamento='evolution_error: <msg>'"
+    "notes": "Escopo: IPADO — Dr. Marcelo. Este canal atende exclusivamente o Dr. Marcelo D'Carli. provider_phone_id = instance name técnico da Evolution. Vault secret: evolution_ipado_dr_marcelo. Quando a IPADO tiver WhatsApp geral (outros médicos/recepção), criar fluxo/roteador separado com config_id diferente.\n\nP3 pendente: criar Error Workflow separado para falha no HTTP: Evolution sendText (nó 017). Quando sendText falhar, mensagens.status fica 'pendente' como indicador correto, mas webhooks_log.processado fica false sem erro_processamento registrado. Error Workflow deve: PATCH webhooks_log com erro_processamento='evolution_error: <msg>'"
   },
   "versionId": "evolution-chat-v2",
   "meta": {
