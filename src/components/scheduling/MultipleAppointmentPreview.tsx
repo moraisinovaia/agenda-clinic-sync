@@ -78,7 +78,7 @@ export function MultipleAppointmentPreview({
           {appointmentDate && appointmentTime && (
             <div className="flex items-center gap-2 text-sm">
               <Clock className="h-4 w-4 text-muted-foreground" />
-              <span>{formattedDate} às {appointmentTime}</span>
+              <span>{formattedDate} a partir das {appointmentTime}</span>
             </div>
           )}
         </div>
@@ -112,8 +112,9 @@ export function MultipleAppointmentPreview({
         {/* Observação */}
         <div className="bg-primary/5 p-3 rounded-lg">
           <p className="text-xs text-muted-foreground">
-            <strong>Importante:</strong> Todos os exames serão agendados para o mesmo horário. 
-            O sistema criará {selectedExams.length} agendamentos separados.
+            <strong>Importante:</strong> Os exames serão distribuídos nos próximos horários
+            disponíveis a partir do horário indicado, pulando slots já ocupados.
+            O sistema garante que todos sejam agendados juntos ou nenhum é criado.
           </p>
         </div>
       </CardContent>
