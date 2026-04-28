@@ -19,7 +19,9 @@
 #   ./chat-e2e.sh all           → Todos os cenários (default)
 # ============================================================================
 
-set -euo pipefail
+# Apenas nounset: -e e pipefail causam saída silenciosa quando jq/grep retornam
+# não-zero em condicionais, mascarando falhas reais de lógica nos cenários.
+set -u
 
 ENDPOINT="${ENDPOINT:-http://localhost:54321/functions/v1/llm-agent-api}"
 API_KEY="${API_KEY:-test-key}"
@@ -36,26 +38,56 @@ RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
+# ── Helper: retorna JSON válido ou fallback se vazio/inválido ─────────────
+safe_json() {
+  local val="${1:-}" fallback="$2"
+  if [ -z "$val" ]; then
+    echo "$fallback"
+    return
+  fi
+  if echo "$val" | jq empty 2>/dev/null; then
+    echo "$val"
+  else
+    echo >&2 "[safe_json] JSON inválido, usando fallback ${fallback}: $(echo "$val" | head -c 80)"
+    echo "$fallback"
+  fi
+}
+
 # ── Helper: enviar mensagem de chat ───────────────────────────────────────
 # Uso: chat_turn <mensagem> [estado] [dados_json] [historico_json]
 # Retorna o JSON completo da resposta.
+# jq -n --arg/--argjson garante JSON válido. safe_json protege os parâmetros.
 chat_turn() {
   local mensagem="$1"
   local estado="${2:-inicio}"
-  local dados="${3:-{}}"
-  local historico="${4:-[]}"
+  local dados="${3:-}"
+  local historico="${4:-}"
+
+  # Validar e normalizar antes de passar para --argjson
+  dados=$(safe_json "$dados" '{}')
+  historico=$(safe_json "$historico" '[]')
+
+  local payload
+  payload=$(jq -n \
+    --arg  cliente_id   "$CLIENTE_ID" \
+    --arg  config_id    "$CONFIG_ID" \
+    --arg  mensagem     "$mensagem" \
+    --arg  estado       "$estado" \
+    --argjson dados     "$dados" \
+    --argjson historico "$historico" \
+    '{
+      cliente_id:         $cliente_id,
+      config_id:          $config_id,
+      mensagem:           $mensagem,
+      estado_atual:       $estado,
+      dados_coletados:    $dados,
+      historico_contexto: $historico
+    }')
 
   curl -s -X POST "${ENDPOINT}/chat" \
     -H "Content-Type: application/json" \
     -H "x-api-key: ${API_KEY}" \
-    -d "{
-      \"cliente_id\": \"${CLIENTE_ID}\",
-      \"config_id\": \"${CONFIG_ID}\",
-      \"mensagem\": ${mensagem@Q},
-      \"estado_atual\": \"${estado}\",
-      \"dados_coletados\": ${dados},
-      \"historico_contexto\": ${historico}
-    }"
+    -d "$payload"
 }
 
 # ── Helper: extrair campo do JSON ─────────────────────────────────────────
