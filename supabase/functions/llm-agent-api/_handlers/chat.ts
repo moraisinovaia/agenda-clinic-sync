@@ -170,6 +170,8 @@ const CAMPO_LABELS: Record<string, string> = {
   convenio:         'convênio (ou "particular")',
   tem_guia:         'guia médica para o MAPA',
   periodo:          'período (manhã ou tarde)',
+  peso:             'seu peso em kg',
+  fistula:          'se possui fístula no braço',
 };
 
 function computeMissingFields(intent: string, dados: DadosColetados): string[] {
@@ -190,6 +192,13 @@ function computeMissingFields(intent: string, dados: DadosColetados): string[] {
   // MAPA: exige guia médica antes de verificar disponibilidade ou agendar
   if (isServicoMapa(dados.servico) && dados.tem_guia !== true) {
     if (!missing.includes('tem_guia')) missing.push('tem_guia');
+  }
+
+  // Ergométrico: coletar peso e fístula ANTES de verificar disponibilidade ou agendar
+  // Sem esses dados o agente não consegue validar as restrições clínicas
+  if (isServicoTergo(dados.servico) && (intent === 'disponibilidade' || intent === 'agendar')) {
+    if (dados.peso === null && !missing.includes('peso')) missing.push('peso');
+    if (dados.fistula === null && !missing.includes('fistula')) missing.push('fistula');
   }
 
   return missing;
@@ -470,6 +479,9 @@ async function callHandler(
     default: return null;
   }
 }
+
+// ── Exports para testes unitários ────────────────────────────────────────
+export { auditRules, mergeDados, computeMissingFields, isServicoTergo, isServicoMapa, isConvenioParceiro };
 
 // ── Handler principal ──────────────────────────────────────────────────────
 

@@ -22,10 +22,18 @@ function buildBusinessRulesText(config: DynamicConfig | null): string {
     if (Array.isArray(cfg.convenios_aceitos) && cfg.convenios_aceitos.length) {
       sections.push(`Convênios aceitos: ${cfg.convenios_aceitos.join(', ')}`);
     }
-    if (Array.isArray(cfg.convenios_parceiros) && cfg.convenios_parceiros.length) {
-      sections.push(
-        `Convênios PARCEIROS (não atendemos diretamente): ${cfg.convenios_parceiros.join(', ')}`,
-      );
+    // convenios_parceiros pode ser array simples (legado) ou { lista: [], mensagem: '' } (atual)
+    {
+      const raw = cfg.convenios_parceiros;
+      const lista: string[] | null = Array.isArray(raw)
+        ? raw
+        : Array.isArray(raw?.lista)
+          ? raw.lista
+          : null;
+      if (lista && lista.length) {
+        const msg = raw?.mensagem ?? 'não atendemos diretamente';
+        sections.push(`Convênios PARCEIROS (${msg}): ${lista.join(', ')}`);
+      }
     }
     if (cfg.nota_fiscal_prazo) {
       sections.push(`Nota fiscal: ${cfg.nota_fiscal_prazo}`);
