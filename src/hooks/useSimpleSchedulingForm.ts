@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { SchedulingFormData } from '@/types/scheduling';
+import { isValidPhone } from '@/utils/phoneFormatter';
 
 const initialFormData: SchedulingFormData = {
   nomeCompleto: '',
@@ -50,7 +51,17 @@ export function useSimpleSchedulingForm(props?: UseSimpleSchedulingFormProps) {
     
     setLoading(true);
     setError(null);
-    
+
+    if (!formData.celular || !isValidPhone(formData.celular)) {
+      toast({
+        variant: 'destructive',
+        title: 'Celular obrigatório',
+        description: 'Informe o celular do paciente com DDD (ex: (87) 99999-9999 ou (87) 9999-9999).',
+      });
+      setLoading(false);
+      return;
+    }
+
     try {
       await onSubmit(formData);
       console.log('✅ SimpleSchedulingForm: Sucesso - resetando formulário');
