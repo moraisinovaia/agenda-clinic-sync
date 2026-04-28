@@ -80,7 +80,7 @@ serve(async (req) => {
     const body = await req.json();
     console.log('📋 Dados recebidos:', body);
 
-    const { action, medicoId, dataInicio, dataFim, motivo, bloqueioId } = body;
+    const { action, medicoId, dataInicio, dataFim, motivo, bloqueioId, horaInicio, horaFim } = body;
 
     // Determinar ação padrão se não especificada
     const acao = action || 'create';
@@ -107,6 +107,8 @@ serve(async (req) => {
           id,
           data_inicio,
           data_fim,
+          hora_inicio,
+          hora_fim,
           motivo,
           created_at,
           criado_por
@@ -185,13 +187,21 @@ serve(async (req) => {
       // 🔥 RESTAURAR agendamentos que foram cancelados por este bloqueio
       console.log('🔄 Restaurando agendamentos cancelados pelo bloqueio...');
       
-      const { data: agendamentosCancelados, error: agendamentosError } = await supabase
+      let restoreQuery = supabase
         .from('agendamentos')
         .select('id, data_agendamento, hora_agendamento')
         .eq('medico_id', bloqueio.medico_id)
         .gte('data_agendamento', bloqueio.data_inicio)
         .lte('data_agendamento', bloqueio.data_fim)
         .eq('status', 'cancelado_bloqueio');
+
+      if (bloqueio.hora_inicio && bloqueio.hora_fim) {
+        restoreQuery = restoreQuery
+          .gte('hora_agendamento', bloqueio.hora_inicio)
+          .lt('hora_agendamento', bloqueio.hora_fim);
+      }
+
+      const { data: agendamentosCancelados, error: agendamentosError } = await restoreQuery;
 
       console.log(`📋 Encontrados ${agendamentosCancelados?.length || 0} agendamentos para restaurar`);
 
@@ -302,7 +312,7 @@ serve(async (req) => {
     console.log(`🏥 Cliente ID: ${clienteIdFinal} (fonte: ${body.cliente_id ? 'body' : medico.cliente_id ? 'médico' : 'fallback IPADO'})`);
     
     // Preparar dados para inserção
-    const insertData = {
+    const insertData: Record<string, unknown> = {
       medico_id: medicoId,
       data_inicio: dataInicio,
       data_fim: dataFim,
@@ -310,6 +320,11 @@ serve(async (req) => {
       criado_por: 'recepcionista',
       cliente_id: clienteIdFinal
     };
+
+    if (horaInicio && horaFim) {
+      insertData.hora_inicio = horaInicio;
+      insertData.hora_fim    = horaFim;
+    }
     
     console.log('📝 Inserindo bloqueio:', insertData);
 
@@ -337,13 +352,21 @@ serve(async (req) => {
     // 🔥 CANCELAR agendamentos afetados com status cancelado_bloqueio
     console.log('🔍 Buscando e cancelando agendamentos afetados...');
     
-    const { data: agendamentos, error: agendamentosError } = await supabase
+    let cancelQuery = supabase
       .from('agendamentos')
       .select('id, data_agendamento, hora_agendamento')
       .eq('medico_id', medicoId)
       .gte('data_agendamento', dataInicio)
       .lte('data_agendamento', dataFim)
       .eq('status', 'agendado');
+
+    if (horaInicio && horaFim) {
+      cancelQuery = cancelQuery
+        .gte('hora_agendamento', horaInicio)
+        .lt('hora_agendamento', horaFim);
+    }
+
+    const { data: agendamentos, error: agendamentosError } = await cancelQuery;
 
     console.log(`📋 Encontrados ${agendamentos?.length || 0} agendamentos para cancelar`);
 

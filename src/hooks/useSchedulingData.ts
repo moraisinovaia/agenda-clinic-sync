@@ -144,12 +144,14 @@ export function useSchedulingData() {
     return atendimentos.filter(a => (a as any).medico_id === doctorId);
   };
 
-  // Verificar se uma data está bloqueada para um médico
+  // Verificar se uma data está COMPLETAMENTE bloqueada para um médico.
+  // Bloqueios parciais (hora_inicio != null) não bloqueiam o dia inteiro no calendário.
   const isDateBlocked = (doctorId: string, date: Date) => {
     const dateStr = date.toISOString().split('T')[0];
-    return blockedDates.some(blocked => 
+    return blockedDates.some(blocked =>
       blocked.medico_id === doctorId &&
       blocked.status === 'ativo' &&
+      blocked.hora_inicio == null &&
       dateStr >= blocked.data_inicio &&
       dateStr <= blocked.data_fim
     );
