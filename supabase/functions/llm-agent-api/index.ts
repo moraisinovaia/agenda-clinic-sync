@@ -17,6 +17,7 @@ import { handlePatientSearch } from './_handlers/patient-search.ts'
 import { handleDoctorSchedules } from './_handlers/doctor-schedules.ts'
 import { handleListDoctors } from './_handlers/list-doctors.ts'
 import { handleClinicInfo } from './_handlers/clinic-info.ts'
+import { handleChat } from './_handlers/chat.ts'
 
 serve(async (req) => {
   const requestId = generateRequestId();
@@ -107,7 +108,8 @@ serve(async (req) => {
         'pesquisa-pacientes': 'patient-search',
         'lista-consultas': 'list-appointments',
         'lista-medicos': 'list-doctors',
-        'info-clinica': 'clinic-info'
+        'info-clinica': 'clinic-info',
+        'chat': 'chat'
       };
       const action = actionMap[rawAction] || rawAction;
 
@@ -194,6 +196,9 @@ serve(async (req) => {
         case 'responder-fila':
           return await withLogging('responder-fila', CLIENTE_ID, requestId, body,
             () => handleResponderFila(supabase, body, CLIENTE_ID, dynamicConfig));
+        case 'chat':
+          return await withLogging('chat', CLIENTE_ID, requestId, body,
+            () => handleChat(supabase, body, CLIENTE_ID, dynamicConfig));
         default:
           structuredLog({
             timestamp: new Date().toISOString(),
