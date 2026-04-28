@@ -205,6 +205,22 @@ const Index = () => {
     }
   }, [userClienteId, selectedDoctor?.id]);
 
+  // ── Wrappers: adicionam reloadEmptySlots após operações de agendamento ──
+  const cancelAppointmentWithSync = useCallback(async (appointmentId: string, motivo?: string) => {
+    await cancelAppointment(appointmentId, motivo);
+    reloadEmptySlots().catch(() => {});
+  }, [cancelAppointment, reloadEmptySlots]);
+
+  const deleteAppointmentWithSync = useCallback(async (appointmentId: string) => {
+    await deleteAppointment(appointmentId);
+    reloadEmptySlots().catch(() => {});
+  }, [deleteAppointment, reloadEmptySlots]);
+
+  const reactivateAppointmentWithSync = useCallback(async (appointmentId: string) => {
+    await reactivateAppointment(appointmentId);
+    reloadEmptySlots().catch(() => {});
+  }, [reactivateAppointment, reloadEmptySlots]);
+
   const {
     filaEspera,
     loading: filaLoading,
@@ -333,6 +349,8 @@ const Index = () => {
 
   const handleMultipleAppointmentSuccess = async (data: { medicoId: string; dataAgendamento: string }) => {
     await refetch();
+    // Reload slots: múltiplos horários foram ocupados, não temos a lista exata — reload completo
+    reloadEmptySlots().catch(() => {});
     await fetchFilaEspera(true);
     setMultipleSchedulingOpen(false);
     const doctor = doctors.find(d => d.id === data.medicoId);
@@ -417,7 +435,19 @@ const Index = () => {
       await createAppointment(formData, editingAppointment?.id);
       
       console.log('✅ Index.tsx: Agendamento criado com sucesso - navegando');
-      
+
+      // ── Opção C: update otimista + reload em background ──────────
+      // 1. Remover imediatamente o slot da UI (sem round-trip)
+      setEmptySlots(prev => prev.filter(slot =>
+        !(slot.medico_id === formData.medicoId &&
+          slot.data     === formData.dataAgendamento &&
+          slot.hora     === formData.horaAgendamento)
+      ));
+      // 2. Reload em background para confirmar estado real do banco
+      reloadEmptySlots().catch(() => {});
+      // 3. Refetch appointments para o novo agendamento aparecer na lista
+      refetch();
+
       // SUCESSO - navegar APENAS após sucesso confirmado
       const doctor = doctors.find(d => d.id === formData.medicoId);
       if (doctor) {
@@ -429,7 +459,7 @@ const Index = () => {
             formData.horaAgendamento
           );
         }
-        
+
         // Navigate based on context
         if (editingAppointment) {
           setSelectedDoctor(doctor);
@@ -459,7 +489,16 @@ const Index = () => {
       await createAppointment(formData, editingAppointment?.id, true); // force = true
       
       console.log('✅ Index.tsx: Agendamento criado com conflito forçado - navegando');
-      
+
+      // ── Opção C: update otimista + reload em background ──────────
+      setEmptySlots(prev => prev.filter(slot =>
+        !(slot.medico_id === formData.medicoId &&
+          slot.data     === formData.dataAgendamento &&
+          slot.hora     === formData.horaAgendamento)
+      ));
+      reloadEmptySlots().catch(() => {});
+      refetch();
+
       // SUCESSO - navegar APENAS após sucesso confirmado
       const doctor = doctors.find(d => d.id === formData.medicoId);
       if (doctor) {
@@ -471,7 +510,7 @@ const Index = () => {
             formData.horaAgendamento
           );
         }
-        
+
         // Navigate based on context
         if (editingAppointment) {
           setSelectedDoctor(doctor);
@@ -627,9 +666,9 @@ const Index = () => {
         isDateBlocked={isDateBlocked}
         getAtendimentosByDoctor={getAtendimentosByDoctor}
         searchPatientsByBirthDate={searchPatientsByBirthDate}
-        cancelAppointment={cancelAppointment}
-        reactivateAppointment={reactivateAppointment}
-        deleteAppointment={deleteAppointment}
+        cancelAppointment={cancelAppointmentWithSync}
+        reactivateAppointment={reactivateAppointmentWithSync}
+        deleteAppointment={deleteAppointmentWithSync}
         confirmAppointment={confirmAppointment}
         unconfirmAppointment={unconfirmAppointment}
         adicionarFilaEspera={adicionarFilaEspera}
