@@ -38,6 +38,10 @@ export interface OptimizedAppointmentRow {
   cancelado_por: string | null;
   cancelado_por_user_id: string | null;
   cancelado_em: string | null;
+  motivo_cancelamento: string | null;
+  reativado_por: string | null;
+  reativado_por_user_id: string | null;
+  reativado_em: string | null;
   confirmado_por: string | null;
   confirmado_por_user_id: string | null;
   confirmado_em: string | null;

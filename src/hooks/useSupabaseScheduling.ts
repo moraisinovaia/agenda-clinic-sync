@@ -64,14 +64,21 @@ export function useSupabaseScheduling() {
   }, [appointmentCreation.createAppointment, appointmentsList]);
 
   // ✅ ESTABILIZAR: Envolver cancelAppointment para usar a funcionalidade existente
-  const cancelAppointment = useCallback(async (appointmentId: string) => {
+  const cancelAppointment = useCallback(async (appointmentId: string, motivo?: string) => {
     try {
-      await appointmentsList.cancelAppointment(appointmentId);
-      // O refetch já é feito automaticamente no useAppointmentsList
+      await appointmentsList.cancelAppointment(appointmentId, motivo);
     } catch (error) {
       throw error;
     }
   }, [appointmentsList.cancelAppointment]);
+
+  const reactivateAppointment = useCallback(async (appointmentId: string) => {
+    try {
+      await appointmentsList.reactivateAppointment(appointmentId);
+    } catch (error) {
+      throw error;
+    }
+  }, [appointmentsList.reactivateAppointment]);
 
   // ✅ ESTABILIZAR: Envolver confirmAppointment para usar a funcionalidade existente
   const confirmAppointment = useCallback(async (appointmentId: string) => {
@@ -116,6 +123,7 @@ export function useSupabaseScheduling() {
     // Operações - AGORA TODAS ESTÁVEIS
     createAppointment,
     cancelAppointment,
+    reactivateAppointment,
     deleteAppointment,
     confirmAppointment,
     unconfirmAppointment,
@@ -142,6 +150,7 @@ export function useSupabaseScheduling() {
     // Funções estáveis
     createAppointment,
     cancelAppointment,
+    reactivateAppointment,
     deleteAppointment,
     confirmAppointment,
     unconfirmAppointment,

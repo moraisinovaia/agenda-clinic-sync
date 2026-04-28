@@ -91,7 +91,8 @@ const Index = () => {
     blockedDates,
     loading,
     createAppointment,
-    cancelAppointment, 
+    cancelAppointment,
+    reactivateAppointment,
     deleteAppointment,
     confirmAppointment,
     unconfirmAppointment,
@@ -627,6 +628,7 @@ const Index = () => {
         getAtendimentosByDoctor={getAtendimentosByDoctor}
         searchPatientsByBirthDate={searchPatientsByBirthDate}
         cancelAppointment={cancelAppointment}
+        reactivateAppointment={reactivateAppointment}
         deleteAppointment={deleteAppointment}
         confirmAppointment={confirmAppointment}
         unconfirmAppointment={unconfirmAppointment}
