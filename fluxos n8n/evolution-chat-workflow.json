@@ -17,24 +17,39 @@
       }
     },
     {
+      "id": "set-000",
+      "name": "Set: Configuração",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [460, 80],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "cfg01", "name": "SUPABASE_KEY", "value": "COLE_AQUI_O_SERVICE_ROLE_KEY_DO_SXNRUD", "type": "string" },
+            { "id": "cfg02", "name": "LLM_KEY",      "value": "COLE_AQUI_O_LLM_AGENT_API_KEY",          "type": "string" }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
       "id": "set-002",
       "name": "Set: Extrair payload",
       "type": "n8n-nodes-base.set",
-      "typeVersion": 3,
+      "typeVersion": 3.3,
       "position": [460, 300],
       "parameters": {
-        "mode": "manual",
         "assignments": {
           "assignments": [
-            { "id": "f01", "name": "instance_name",       "value": "={{ $json.instance }}",                                                                                       "type": "string"  },
-            { "id": "f02", "name": "event_type",           "value": "={{ $json.event }}",                                                                                         "type": "string"  },
-            { "id": "f03", "name": "from_me",              "value": "={{ $json.data.key.fromMe }}",                                                                               "type": "boolean" },
-            { "id": "f04", "name": "whatsapp_message_id",  "value": "={{ $json.data.key.id }}",                                                                                   "type": "string"  },
-            { "id": "f05", "name": "phone_paciente",       "value": "={{ '+' + $json.data.key.remoteJid.replace(/@.*$/, '') }}",                                                  "type": "string"  },
-            { "id": "f06", "name": "nome_paciente",        "value": "={{ $json.data.pushName || '' }}",                                                                           "type": "string"  },
-            { "id": "f07", "name": "message_type",         "value": "={{ $json.data.messageType }}",                                                                              "type": "string"  },
-            { "id": "f08", "name": "mensagem_texto",       "value": "={{ $json.data.message?.conversation || $json.data.message?.extendedTextMessage?.text || '' }}",            "type": "string"  },
-            { "id": "f09", "name": "raw_payload",          "value": "={{ $json }}",                                                                                               "type": "object"  }
+            { "id": "f01", "name": "instance_name",      "value": "={{ $('Webhook Evolution').item.json.instance }}",                                                                                                                                          "type": "string"  },
+            { "id": "f02", "name": "event_type",          "value": "={{ $('Webhook Evolution').item.json.event }}",                                                                                                                                            "type": "string"  },
+            { "id": "f03", "name": "from_me",             "value": "={{ $('Webhook Evolution').item.json.data.key.fromMe }}",                                                                                                                                  "type": "boolean" },
+            { "id": "f04", "name": "whatsapp_message_id", "value": "={{ $('Webhook Evolution').item.json.data.key.id }}",                                                                                                                                      "type": "string"  },
+            { "id": "f05", "name": "phone_paciente",      "value": "={{ '+' + $('Webhook Evolution').item.json.data.key.remoteJid.replace(/@.*$/, '') }}",                                                                                                     "type": "string"  },
+            { "id": "f06", "name": "nome_paciente",       "value": "={{ $('Webhook Evolution').item.json.data.pushName || '' }}",                                                                                                                              "type": "string"  },
+            { "id": "f07", "name": "message_type",        "value": "={{ $('Webhook Evolution').item.json.data.messageType }}",                                                                                                                                 "type": "string"  },
+            { "id": "f08", "name": "mensagem_texto",      "value": "={{ $('Webhook Evolution').item.json.data.message?.conversation || $('Webhook Evolution').item.json.data.message?.extendedTextMessage?.text || '' }}",                                     "type": "string"  },
+            { "id": "f09", "name": "raw_payload",         "value": "={{ $('Webhook Evolution').item.json }}",                                                                                                                                                  "type": "object"  }
           ]
         },
         "options": {}
@@ -77,12 +92,12 @@
       "position": [920, 120],
       "parameters": {
         "method": "GET",
-        "url": "={{ $vars.INOVAIA_SUPABASE_URL }}/rest/v1/canais_whatsapp",
+        "url": "https://sxnrudxsidqggapxyvpn.supabase.co/rest/v1/canais_whatsapp",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "apikey",        "value": "={{ $vars.INOVAIA_SERVICE_ROLE_KEY }}" },
-            { "name": "Authorization", "value": "={{ 'Bearer ' + $vars.INOVAIA_SERVICE_ROLE_KEY }}" }
+            { "name": "apikey",        "value": "={{ $('Set: Configuração').first().json.SUPABASE_KEY }}" },
+            { "name": "Authorization", "value": "={{ 'Bearer ' + $('Set: Configuração').first().json.SUPABASE_KEY }}" }
           ]
         },
         "sendQuery": true,
@@ -135,12 +150,12 @@
       "position": [1360, 0],
       "parameters": {
         "method": "POST",
-        "url": "={{ $vars.INOVAIA_SUPABASE_URL }}/rest/v1/webhooks_log",
+        "url": "https://sxnrudxsidqggapxyvpn.supabase.co/rest/v1/webhooks_log",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "apikey",        "value": "={{ $vars.INOVAIA_SERVICE_ROLE_KEY }}" },
-            { "name": "Authorization", "value": "={{ 'Bearer ' + $vars.INOVAIA_SERVICE_ROLE_KEY }}" },
+            { "name": "apikey",        "value": "={{ $('Set: Configuração').first().json.SUPABASE_KEY }}" },
+            { "name": "Authorization", "value": "={{ 'Bearer ' + $('Set: Configuração').first().json.SUPABASE_KEY }}" },
             { "name": "Content-Type",  "value": "application/json" },
             { "name": "Prefer",        "value": "return=representation,resolution=ignore-duplicates" }
           ]
@@ -188,12 +203,12 @@
       "position": [1800, -140],
       "parameters": {
         "method": "POST",
-        "url": "={{ $vars.INOVAIA_SUPABASE_URL }}/rest/v1/rpc/upsert_conversa",
+        "url": "https://sxnrudxsidqggapxyvpn.supabase.co/rest/v1/rpc/upsert_conversa",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "apikey",        "value": "={{ $vars.INOVAIA_SERVICE_ROLE_KEY }}" },
-            { "name": "Authorization", "value": "={{ 'Bearer ' + $vars.INOVAIA_SERVICE_ROLE_KEY }}" },
+            { "name": "apikey",        "value": "={{ $('Set: Configuração').first().json.SUPABASE_KEY }}" },
+            { "name": "Authorization", "value": "={{ 'Bearer ' + $('Set: Configuração').first().json.SUPABASE_KEY }}" },
             { "name": "Content-Type",  "value": "application/json" }
           ]
         },
@@ -211,12 +226,12 @@
       "position": [2020, -140],
       "parameters": {
         "method": "POST",
-        "url": "={{ $vars.INOVAIA_SUPABASE_URL }}/rest/v1/mensagens",
+        "url": "https://sxnrudxsidqggapxyvpn.supabase.co/rest/v1/mensagens",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "apikey",        "value": "={{ $vars.INOVAIA_SERVICE_ROLE_KEY }}" },
-            { "name": "Authorization", "value": "={{ 'Bearer ' + $vars.INOVAIA_SERVICE_ROLE_KEY }}" },
+            { "name": "apikey",        "value": "={{ $('Set: Configuração').first().json.SUPABASE_KEY }}" },
+            { "name": "Authorization", "value": "={{ 'Bearer ' + $('Set: Configuração').first().json.SUPABASE_KEY }}" },
             { "name": "Content-Type",  "value": "application/json" },
             { "name": "Prefer",        "value": "return=minimal" }
           ]
@@ -235,11 +250,11 @@
       "position": [2240, -140],
       "parameters": {
         "method": "POST",
-        "url": "={{ $vars.LLM_AGENT_API_URL }}/chat",
+        "url": "https://qxlvzbvzajibdtlzngdy.supabase.co/functions/v1/llm-agent-api/chat",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "x-api-key",    "value": "={{ $vars.LLM_AGENT_API_KEY }}" },
+            { "name": "x-api-key",    "value": "={{ $('Set: Configuração').first().json.LLM_KEY }}" },
             { "name": "Content-Type", "value": "application/json" }
           ]
         },
@@ -284,12 +299,12 @@
       "position": [2680, 100],
       "parameters": {
         "method": "PATCH",
-        "url": "={{ $vars.INOVAIA_SUPABASE_URL }}/rest/v1/webhooks_log",
+        "url": "https://sxnrudxsidqggapxyvpn.supabase.co/rest/v1/webhooks_log",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "apikey",        "value": "={{ $vars.INOVAIA_SERVICE_ROLE_KEY }}" },
-            { "name": "Authorization", "value": "={{ 'Bearer ' + $vars.INOVAIA_SERVICE_ROLE_KEY }}" },
+            { "name": "apikey",        "value": "={{ $('Set: Configuração').first().json.SUPABASE_KEY }}" },
+            { "name": "Authorization", "value": "={{ 'Bearer ' + $('Set: Configuração').first().json.SUPABASE_KEY }}" },
             { "name": "Content-Type",  "value": "application/json" },
             { "name": "Prefer",        "value": "return=minimal" }
           ]
@@ -314,12 +329,12 @@
       "position": [2680, -140],
       "parameters": {
         "method": "PATCH",
-        "url": "={{ $vars.INOVAIA_SUPABASE_URL }}/rest/v1/conversas",
+        "url": "https://sxnrudxsidqggapxyvpn.supabase.co/rest/v1/conversas",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "apikey",        "value": "={{ $vars.INOVAIA_SERVICE_ROLE_KEY }}" },
-            { "name": "Authorization", "value": "={{ 'Bearer ' + $vars.INOVAIA_SERVICE_ROLE_KEY }}" },
+            { "name": "apikey",        "value": "={{ $('Set: Configuração').first().json.SUPABASE_KEY }}" },
+            { "name": "Authorization", "value": "={{ 'Bearer ' + $('Set: Configuração').first().json.SUPABASE_KEY }}" },
             { "name": "Content-Type",  "value": "application/json" },
             { "name": "Prefer",        "value": "return=minimal" }
           ]
@@ -344,12 +359,12 @@
       "position": [2900, -140],
       "parameters": {
         "method": "POST",
-        "url": "={{ $vars.INOVAIA_SUPABASE_URL }}/rest/v1/mensagens",
+        "url": "https://sxnrudxsidqggapxyvpn.supabase.co/rest/v1/mensagens",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "apikey",        "value": "={{ $vars.INOVAIA_SERVICE_ROLE_KEY }}" },
-            { "name": "Authorization", "value": "={{ 'Bearer ' + $vars.INOVAIA_SERVICE_ROLE_KEY }}" },
+            { "name": "apikey",        "value": "={{ $('Set: Configuração').first().json.SUPABASE_KEY }}" },
+            { "name": "Authorization", "value": "={{ 'Bearer ' + $('Set: Configuração').first().json.SUPABASE_KEY }}" },
             { "name": "Content-Type",  "value": "application/json" },
             { "name": "Prefer",        "value": "return=representation" }
           ]
@@ -368,12 +383,12 @@
       "position": [3120, -140],
       "parameters": {
         "method": "POST",
-        "url": "={{ $vars.INOVAIA_SUPABASE_URL }}/rest/v1/rpc/get_canal_api_key",
+        "url": "https://sxnrudxsidqggapxyvpn.supabase.co/rest/v1/rpc/get_canal_api_key",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "apikey",        "value": "={{ $vars.INOVAIA_SERVICE_ROLE_KEY }}" },
-            { "name": "Authorization", "value": "={{ 'Bearer ' + $vars.INOVAIA_SERVICE_ROLE_KEY }}" },
+            { "name": "apikey",        "value": "={{ $('Set: Configuração').first().json.SUPABASE_KEY }}" },
+            { "name": "Authorization", "value": "={{ 'Bearer ' + $('Set: Configuração').first().json.SUPABASE_KEY }}" },
             { "name": "Content-Type",  "value": "application/json" }
           ]
         },
@@ -391,7 +406,7 @@
       "position": [3340, -140],
       "parameters": {
         "method": "POST",
-        "url": "={{ $vars.EVOLUTION_API_URL + '/message/sendText/' + $('HTTP: Buscar canal').item.json[0].provider_phone_id }}",
+        "url": "={{ 'https://evo-w0c0g0swcgk04cocgo4o0gww.148.230.74.128.sslip.io/message/sendText/' + $('HTTP: Buscar canal').item.json[0].provider_phone_id }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -413,12 +428,12 @@
       "position": [3560, -140],
       "parameters": {
         "method": "PATCH",
-        "url": "={{ $vars.INOVAIA_SUPABASE_URL }}/rest/v1/mensagens",
+        "url": "https://sxnrudxsidqggapxyvpn.supabase.co/rest/v1/mensagens",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "apikey",        "value": "={{ $vars.INOVAIA_SERVICE_ROLE_KEY }}" },
-            { "name": "Authorization", "value": "={{ 'Bearer ' + $vars.INOVAIA_SERVICE_ROLE_KEY }}" },
+            { "name": "apikey",        "value": "={{ $('Set: Configuração').first().json.SUPABASE_KEY }}" },
+            { "name": "Authorization", "value": "={{ 'Bearer ' + $('Set: Configuração').first().json.SUPABASE_KEY }}" },
             { "name": "Content-Type",  "value": "application/json" },
             { "name": "Prefer",        "value": "return=minimal" }
           ]
@@ -443,12 +458,12 @@
       "position": [3780, -140],
       "parameters": {
         "method": "PATCH",
-        "url": "={{ $vars.INOVAIA_SUPABASE_URL }}/rest/v1/webhooks_log",
+        "url": "https://sxnrudxsidqggapxyvpn.supabase.co/rest/v1/webhooks_log",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "apikey",        "value": "={{ $vars.INOVAIA_SERVICE_ROLE_KEY }}" },
-            { "name": "Authorization", "value": "={{ 'Bearer ' + $vars.INOVAIA_SERVICE_ROLE_KEY }}" },
+            { "name": "apikey",        "value": "={{ $('Set: Configuração').first().json.SUPABASE_KEY }}" },
+            { "name": "Authorization", "value": "={{ 'Bearer ' + $('Set: Configuração').first().json.SUPABASE_KEY }}" },
             { "name": "Content-Type",  "value": "application/json" },
             { "name": "Prefer",        "value": "return=minimal" }
           ]
@@ -468,10 +483,13 @@
   ],
   "connections": {
     "Webhook Evolution": {
-      "main": [[{ "node": "Set: Extrair payload",     "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Set: Configuração",   "type": "main", "index": 0 }]]
+    },
+    "Set: Configuração": {
+      "main": [[{ "node": "Set: Extrair payload", "type": "main", "index": 0 }]]
     },
     "Set: Extrair payload": {
-      "main": [[{ "node": "IF: Inbound text?",         "type": "main", "index": 0 }]]
+      "main": [[{ "node": "IF: Inbound text?",    "type": "main", "index": 0 }]]
     },
     "IF: Inbound text?": {
       "main": [
@@ -532,9 +550,9 @@
   "settings": {
     "executionOrder": "v1",
     "errorWorkflow": "",
-    "notes": "Escopo: IPADO — Dr. Marcelo. Este canal atende exclusivamente o Dr. Marcelo D'Carli. provider_phone_id = instance name técnico da Evolution. Vault secret: evolution_ipado_dr_marcelo. Quando a IPADO tiver WhatsApp geral (outros médicos/recepção), criar fluxo/roteador separado com config_id diferente.\n\nP3 pendente: criar Error Workflow separado para falha no HTTP: Evolution sendText (nó 017). Quando sendText falhar, mensagens.status fica 'pendente' como indicador correto, mas webhooks_log.processado fica false sem erro_processamento registrado. Error Workflow deve: PATCH webhooks_log com erro_processamento='evolution_error: <msg>'"
+    "notes": "Escopo: IPADO — Dr. Marcelo. Este canal atende exclusivamente o Dr. Marcelo D'Carli. provider_phone_id = instance name técnico da Evolution (INOVAIA). Vault secret: evolution_ipado_dr_marcelo.\n\nApós importar: editar APENAS o node 'Set: Configuração' e substituir os dois placeholders pelas chaves reais.\n\nP3 pendente: criar Error Workflow separado para falha no HTTP: Evolution sendText (nó 017). Quando sendText falhar, mensagens.status fica 'pendente' como indicador correto, mas webhooks_log.processado fica false sem erro_processamento registrado. Error Workflow deve: PATCH webhooks_log com erro_processamento='evolution_error: <msg>'"
   },
-  "versionId": "evolution-chat-v2",
+  "versionId": "evolution-chat-v3",
   "meta": {
     "instanceId": ""
   }

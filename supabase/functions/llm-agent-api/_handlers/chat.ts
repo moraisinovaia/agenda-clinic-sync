@@ -515,8 +515,20 @@ export async function handleChat(
     const historicoContexto: Array<{ role: string; content: string }> =
       body.historico_contexto ?? [];
 
+    // Auto-fill médico único: config com 1 médico nunca pergunta "qual médico?"
+    // Feito ANTES do prompt para que DADOS JÁ COLETADOS já mostre o médico ao LLM.
+    const dadosComPrefill: Record<string, unknown> = { ...dadosAnteriores };
+    if (!dadosComPrefill.medico_nome && config?.business_rules) {
+      const medicoEntries = Object.values(config.business_rules);
+      if (medicoEntries.length === 1) {
+        dadosComPrefill.medico_nome = medicoEntries[0].medico_nome;
+        dadosComPrefill.medico_id   = medicoEntries[0].medico_id;
+        console.log(`[CHAT] medico auto-fill: ${medicoEntries[0].medico_nome}`);
+      }
+    }
+
     // ── Phase 1: Extração semântica via OpenAI ────────────────────────────
-    const systemPrompt = buildExtractionSystemPrompt(config, estadoAtual, dadosAnteriores);
+    const systemPrompt = buildExtractionSystemPrompt(config, estadoAtual, dadosComPrefill);
 
     const messages = [
       { role: 'system' as const, content: systemPrompt },
@@ -544,7 +556,7 @@ export async function handleChat(
     console.log(`[CHAT] intent=${extraction.intent} next_action=${extraction.next_action} confidence=${extraction.confidence}`);
 
     // ── Phase 2: Merge + normalização + auditoria de regras de negócio ──────
-    const dadosMerged  = mergeDados(dadosAnteriores, extraction.dados_extraidos);
+    const dadosMerged  = mergeDados(dadosComPrefill, extraction.dados_extraidos);
 
     // Normalizar data_consulta se o LLM não converteu formato curto (DD/MM)
     if (!dadosMerged.data_consulta) {
@@ -563,6 +575,29 @@ export async function handleChat(
       if (convenioNorm) {
         dadosMerged.convenio = convenioNorm;
         console.log(`[CHAT] convenio normalizado: ${convenioNorm}`);
+      }
+    }
+
+    // ── Overrides contextuais determinísticos ────────────────────────────
+    // Backend interpreta mensagens curtas pelo estado atual — sem depender do LLM.
+    {
+      const msgLower = mensagem.toLowerCase().trim().replace(/[!?.]/g, '');
+      const isConfirmacao = /^(sim|ok|pode|pode ser|confirmo|confirmado|isso|exato|claro|s|certo|perfeito|vai|vamos|bora)$/.test(msgLower);
+      const isCobrandoEspera = /cad[eê]|onde est|quanto tem|estou esperand|demor(ou|ando)|aguardando|esperand/.test(mensagem.toLowerCase());
+
+      if (estadoAtual === 'confirmando_dados' && isConfirmacao) {
+        extraction.intent      = 'agendar';
+        extraction.next_action = 'execute_schedule';
+        dadosMerged.confirmado  = true;
+        console.log('[CHAT] override: confirmação contextual em confirmando_dados');
+      }
+
+      if (isCobrandoEspera) {
+        extraction.intent      = 'humano';
+        extraction.next_action = 'escalate_human';
+        extraction.resposta    =
+          'Peço desculpas pela demora! Vou encaminhar seu atendimento para nossa equipe, que entrará em contato em breve.';
+        console.log('[CHAT] override: cobrança de espera → escalate_human');
       }
     }
 
@@ -627,8 +662,19 @@ export async function handleChat(
           respostaFinal = extraction.resposta;
         }
       } else {
-        // Sem handler: usar resposta humanizada do LLM diretamente
-        respostaFinal = extraction.resposta;
+        // Sem handler disponível
+        if (
+          estadoAtual === 'verificando_disponibilidade' &&
+          extraction.next_action === 'check_availability'
+        ) {
+          // Loop detectado: já estava verificando e continua sem avançar
+          respostaFinal =
+            'Vou encaminhar sua solicitação para nossa equipe verificar os horários disponíveis e retornar com as opções em breve.';
+          extraction.next_action = 'escalate_human';
+          console.log('[CHAT] override: loop verificando_disponibilidade → escalate_human');
+        } else {
+          respostaFinal = extraction.resposta;
+        }
       }
     }
 
