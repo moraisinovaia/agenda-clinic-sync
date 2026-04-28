@@ -30,6 +30,8 @@ interface Bloqueio {
   medico_id?: string;
   data_inicio: string;
   data_fim: string;
+  hora_inicio?: string | null;
+  hora_fim?: string | null;
   motivo: string;
   created_at: string;
   criado_por: string;
@@ -50,6 +52,8 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
   const [openCombobox, setOpenCombobox] = useState(false);
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
+  const [horaInicio, setHoraInicio] = useState('');
+  const [horaFim, setHoraFim] = useState('');
   const [motivo, setMotivo] = useState('');
   const [showConfirmation, setShowConfirmation] = useState(false);
 
@@ -126,6 +130,14 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
       toast({ title: 'Erro', description: 'A data de início deve ser anterior ou igual à data de fim', variant: 'destructive' });
       return;
     }
+    if ((horaInicio && !horaFim) || (!horaInicio && horaFim)) {
+      toast({ title: 'Erro', description: 'Informe ambos os horários (início e fim) ou deixe os dois em branco', variant: 'destructive' });
+      return;
+    }
+    if (horaInicio && horaFim && horaInicio >= horaFim) {
+      toast({ title: 'Erro', description: 'O horário de início deve ser anterior ao horário de fim', variant: 'destructive' });
+      return;
+    }
     setShowConfirmation(true);
   };
 
@@ -137,7 +149,14 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
       const results = await Promise.all(
         targetIds.map(id =>
           supabase.functions.invoke('bloqueio-agenda', {
-            body: { action: 'create', medicoId: id, dataInicio, dataFim, motivo },
+            body: {
+              action: 'create',
+              medicoId: id,
+              dataInicio,
+              dataFim,
+              motivo,
+              ...(horaInicio && horaFim ? { horaInicio, horaFim } : {}),
+            },
           })
         )
       );
@@ -156,6 +175,8 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
       setMedicoIds([]);
       setDataInicio('');
       setDataFim('');
+      setHoraInicio('');
+      setHoraFim('');
       setMotivo('');
       if (onRefresh) onRefresh();
     } catch (error) {
@@ -379,6 +400,39 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
                     </div>
                   </div>
 
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="horaInicio" className="flex items-center gap-2">
+                        <Clock className="h-4 w-4" />
+                        Horário de Início <span className="text-muted-foreground font-normal">(opcional)</span>
+                      </Label>
+                      <Input
+                        id="horaInicio"
+                        type="time"
+                        value={horaInicio}
+                        onChange={(e) => setHoraInicio(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="horaFim" className="flex items-center gap-2">
+                        <Clock className="h-4 w-4" />
+                        Horário de Fim <span className="text-muted-foreground font-normal">(opcional)</span>
+                      </Label>
+                      <Input
+                        id="horaFim"
+                        type="time"
+                        value={horaFim}
+                        onChange={(e) => setHoraFim(e.target.value)}
+                        min={horaInicio || undefined}
+                      />
+                    </div>
+                  </div>
+                  {(!horaInicio && !horaFim) && (
+                    <p className="text-xs text-muted-foreground -mt-2">
+                      Deixe em branco para bloquear o dia inteiro.
+                    </p>
+                  )}
+
                   <div className="space-y-2">
                     <Label htmlFor="motivo" className="flex items-center gap-2">
                       <FileText className="h-4 w-4" />
@@ -402,8 +456,10 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
                       </h4>
                       <ul className="text-sm text-muted-foreground space-y-1">
                         <li>• Agenda de <strong>{previewMedicos()}</strong> será bloqueada</li>
-                        <li>• Período: <strong>{formatDateForDisplay(dataInicio)}</strong> até <strong>{formatDateForDisplay(dataFim)}</strong></li>
-                        <li>• Todos os agendamentos neste período serão <strong>cancelados temporariamente</strong></li>
+                        <li>• Período: <strong>{formatDateForDisplay(dataInicio)}</strong> até <strong>{formatDateForDisplay(dataFim)}</strong>
+                          {horaInicio && horaFim && <> &mdash; das <strong>{horaInicio}</strong>h às <strong>{horaFim}</strong>h</>}
+                        </li>
+                        <li>• {horaInicio ? 'Agendamentos no intervalo indicado' : 'Todos os agendamentos neste período'} serão <strong>cancelados temporariamente</strong></li>
                         <li>• Os agendamentos serão <strong>restaurados automaticamente</strong> se você abrir a agenda novamente</li>
                         <li>• Pacientes serão <strong>notificados via WhatsApp</strong> sobre o cancelamento</li>
                       </ul>
@@ -541,6 +597,11 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
                                     )}
                                     <div className="font-medium">
                                       {formatDateForDisplay(bloqueio.data_inicio)} até {formatDateForDisplay(bloqueio.data_fim)}
+                                      {bloqueio.hora_inicio && bloqueio.hora_fim && (
+                                        <span className="ml-2 text-sm font-normal text-muted-foreground">
+                                          ({bloqueio.hora_inicio.substring(0, 5)}h–{bloqueio.hora_fim.substring(0, 5)}h)
+                                        </span>
+                                      )}
                                     </div>
                                     <div className="text-sm text-muted-foreground">
                                       <strong>Motivo:</strong> {bloqueio.motivo}
@@ -590,8 +651,10 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
                 </p>
                 <ul className="text-sm space-y-1">
                   <li>• Médico(s): <strong>{previewMedicos()}</strong></li>
-                  <li>• Período: <strong>{formatDateForDisplay(dataInicio)}</strong> até <strong>{formatDateForDisplay(dataFim)}</strong></li>
-                  <li>• Agendamentos serão <strong>cancelados temporariamente</strong></li>
+                  <li>• Período: <strong>{formatDateForDisplay(dataInicio)}</strong> até <strong>{formatDateForDisplay(dataFim)}</strong>
+                    {horaInicio && horaFim && <> &mdash; das <strong>{horaInicio}</strong>h às <strong>{horaFim}</strong>h</>}
+                  </li>
+                  <li>• Agendamentos {horaInicio ? 'no horário indicado' : 'neste período'} serão <strong>cancelados temporariamente</strong></li>
                   <li>• Você pode <strong>restaurá-los</strong> abrindo a agenda novamente</li>
                   <li>• Pacientes serão notificados via WhatsApp</li>
                 </ul>
@@ -627,7 +690,11 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
                   ✅ Ao remover este bloqueio, os agendamentos cancelados pelo bloqueio serão automaticamente restaurados.
                 </p>
                 <ul className="text-sm space-y-1">
-                  <li>• Período: <strong>{formatDateForDisplay(bloqueioParaRemover.data_inicio)}</strong> até <strong>{formatDateForDisplay(bloqueioParaRemover.data_fim)}</strong></li>
+                  <li>• Período: <strong>{formatDateForDisplay(bloqueioParaRemover.data_inicio)}</strong> até <strong>{formatDateForDisplay(bloqueioParaRemover.data_fim)}</strong>
+                    {bloqueioParaRemover.hora_inicio && bloqueioParaRemover.hora_fim && (
+                      <> &mdash; das <strong>{bloqueioParaRemover.hora_inicio.substring(0, 5)}</strong>h às <strong>{bloqueioParaRemover.hora_fim.substring(0, 5)}</strong>h</>
+                    )}
+                  </li>
                   <li>• Motivo: <strong>{bloqueioParaRemover.motivo}</strong></li>
                 </ul>
               </div>

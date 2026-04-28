@@ -323,32 +323,10 @@ export function DoctorSchedule({
   
   // Estado para data selecionada com validação segura
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
-    try {
-      if (initialDate) {
-        console.log('🎯 Usando initialDate:', initialDate);
-        const parsed = parse(initialDate, 'yyyy-MM-dd', new Date());
-        if (isValid(parsed)) return parsed;
-      }
-      
-      if (appointments && appointments.length > 0) {
-        const doctorAppointments = appointments.filter(apt => apt.medico_id === doctor.id);
-        if (doctorAppointments.length > 0) {
-          const mostRecent = doctorAppointments.sort((a, b) => 
-            new Date(b.data_agendamento).getTime() - new Date(a.data_agendamento).getTime()
-          )[0];
-          
-          const parsed = parse(mostRecent.data_agendamento, 'yyyy-MM-dd', new Date());
-          if (isValid(parsed)) {
-            console.log('🎯 Usando data do agendamento:', mostRecent.data_agendamento);
-            return parsed;
-          }
-        }
-      }
-    } catch (error) {
-      console.error('❌ Erro ao inicializar data:', error);
+    if (initialDate) {
+      const parsed = parse(initialDate, 'yyyy-MM-dd', new Date());
+      if (isValid(parsed)) return parsed;
     }
-    
-    console.log('🎯 Usando data atual');
     return new Date();
   });
   
@@ -359,7 +337,7 @@ export function DoctorSchedule({
   const [doctorSelectOpen, setDoctorSelectOpen] = useState(false);
   const [scheduleGenOpen, setScheduleGenOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [activeBloqueio, setActiveBloqueio] = useState<{motivo: string, data_inicio: string, data_fim: string} | null>(null);
+  const [activeBloqueio, setActiveBloqueio] = useState<{motivo: string, data_inicio: string, data_fim: string, hora_inicio?: string | null, hora_fim?: string | null} | null>(null);
   const { profile } = useAuth();
   const [isCancelling, setIsCancelling] = useState(false);
   const [appointmentToCancel, setAppointmentToCancel] = useState<AppointmentWithRelations | null>(null);
@@ -449,9 +427,10 @@ export function DoctorSchedule({
         return isDateBlocked(doctor.id, date);
       }
       const dateStr = date.toISOString().split('T')[0];
-      return blockedDates.some(blocked => 
+      return blockedDates.some(blocked =>
         blocked.medico_id === doctor.id &&
         blocked.status === 'ativo' &&
+        blocked.hora_inicio == null &&
         dateStr >= blocked.data_inicio &&
         dateStr <= blocked.data_fim
       );
@@ -887,13 +866,16 @@ export function DoctorSchedule({
                     <AlertTriangle className="h-5 w-5 text-orange-600 flex-shrink-0 mt-0.5" />
                     <div className="flex-1">
                       <h4 className="font-semibold text-sm text-orange-900 mb-1">
-                        🚫 Agenda Bloqueada
+                        🚫 {activeBloqueio.hora_inicio ? 'Agenda Parcialmente Bloqueada' : 'Agenda Bloqueada'}
                       </h4>
                       <p className="text-sm text-orange-800 mb-2">
                         <strong>Motivo:</strong> {activeBloqueio.motivo}
                       </p>
                       <p className="text-xs text-orange-700">
                         Período bloqueado: {formatDateForDisplay(activeBloqueio.data_inicio)} até {formatDateForDisplay(activeBloqueio.data_fim)}
+                        {activeBloqueio.hora_inicio && activeBloqueio.hora_fim && (
+                          <> &mdash; das {activeBloqueio.hora_inicio.substring(0, 5)}h às {activeBloqueio.hora_fim.substring(0, 5)}h</>
+                        )}
                       </p>
                       <p className="text-xs text-orange-600 mt-1">
                         Os agendamentos abaixo foram cancelados automaticamente pelo sistema e serão restaurados quando a agenda for reaberta.

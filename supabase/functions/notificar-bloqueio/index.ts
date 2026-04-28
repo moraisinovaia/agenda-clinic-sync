@@ -132,15 +132,21 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
     // Receber dados do bloqueio
-    const { 
-      medico_id, 
-      medico_nome, 
-      data_inicio, 
-      data_fim, 
+    const {
+      medico_id,
+      medico_nome,
+      data_inicio,
+      data_fim,
+      hora_inicio,
+      hora_fim,
       motivo,
       agendamentos_afetados,
-      cliente_id 
+      cliente_id
     } = await req.json();
+
+    const periodoHora = hora_inicio && hora_fim
+      ? ` (${hora_inicio.substring(0, 5)}h às ${hora_fim.substring(0, 5)}h)`
+      : '';
     
     console.log(`📋 Bloqueio criado: ${medico_nome} (${data_inicio} a ${data_fim})`);
     console.log(`👥 Agendamentos afetados: ${agendamentos_afetados}`);
@@ -270,7 +276,7 @@ serve(async (req) => {
             medicoNome: medico_nome,
             dataOriginal: agendamento.data_agendamento,
             horaOriginal: agendamento.hora_agendamento,
-            motivo: motivo,
+            motivo: motivo + periodoHora,
             telefoneClinica,
             nomeClinica
           });
@@ -282,7 +288,7 @@ serve(async (req) => {
             medicoNome: medico_nome,
             dataOriginal: agendamento.data_agendamento,
             horaOriginal: agendamento.hora_agendamento,
-            motivo: motivo,
+            motivo: motivo + periodoHora,
             proximasDatas: disponibilidade.proximas_datas,
             telefoneClinica,
             nomeClinica
