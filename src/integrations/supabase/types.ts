@@ -1431,6 +1431,7 @@ export type Database = {
           id: string
           idade_maxima: number | null
           idade_minima: number | null
+          is_agenda_virtual: boolean
           nome: string
           observacoes: string | null
           rqe: string | null
@@ -1452,6 +1453,7 @@ export type Database = {
           id?: string
           idade_maxima?: number | null
           idade_minima?: number | null
+          is_agenda_virtual?: boolean
           nome: string
           observacoes?: string | null
           rqe?: string | null
@@ -1473,6 +1475,7 @@ export type Database = {
           id?: string
           idade_maxima?: number | null
           idade_minima?: number | null
+          is_agenda_virtual?: boolean
           nome?: string
           observacoes?: string | null
           rqe?: string | null
