@@ -34,6 +34,8 @@ import { FileText, Sun, Sunset, Moon } from 'lucide-react';
 import { DoctorScheduleGenerator } from './DoctorScheduleGenerator';
 import { toast } from 'sonner';
 import { matchesPeriod, PERIOD_LABELS, type PeriodFilter } from '@/utils/periodFilter';
+import { CancelAppointmentModal } from './CancelAppointmentModal';
+import { useAuth } from '@/hooks/useAuth';
 
 interface DoctorScheduleProps {
   doctor: Doctor;
@@ -42,10 +44,11 @@ interface DoctorScheduleProps {
   appointments: AppointmentWithRelations[];
   blockedDates?: any[];
   isDateBlocked?: (doctorId: string, date: Date) => boolean;
-  onCancelAppointment: (appointmentId: string) => Promise<void>;
+  onCancelAppointment: (appointmentId: string, motivo?: string) => Promise<void>;
   onDeleteAppointment?: (appointmentId: string) => Promise<void>;
   onConfirmAppointment?: (appointmentId: string) => Promise<void>;
   onUnconfirmAppointment?: (appointmentId: string) => Promise<void>;
+  onReactivateAppointment?: (appointmentId: string) => Promise<void>;
   onEditAppointment?: (appointment: AppointmentWithRelations) => void;
   onNewAppointment?: (selectedDate?: string) => void;
   onNewAppointmentWithTime?: (date: string, time: string) => void;
@@ -302,10 +305,11 @@ export function DoctorSchedule({
   appointments, 
   blockedDates = [], 
   isDateBlocked, 
-  onCancelAppointment, 
-  onDeleteAppointment, 
-  onConfirmAppointment, 
-  onUnconfirmAppointment, 
+  onCancelAppointment,
+  onDeleteAppointment,
+  onConfirmAppointment,
+  onUnconfirmAppointment,
+  onReactivateAppointment,
   onEditAppointment, 
   onNewAppointment, 
   onNewAppointmentWithTime, 
@@ -356,7 +360,9 @@ export function DoctorSchedule({
   const [scheduleGenOpen, setScheduleGenOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [activeBloqueio, setActiveBloqueio] = useState<{motivo: string, data_inicio: string, data_fim: string} | null>(null);
+  const { profile } = useAuth();
   const [isCancelling, setIsCancelling] = useState(false);
+  const [appointmentToCancel, setAppointmentToCancel] = useState<AppointmentWithRelations | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
   const [isUnconfirming, setIsUnconfirming] = useState(false);
   const [patientSearch, setPatientSearch] = useState('');
@@ -1068,57 +1074,32 @@ export function DoctorSchedule({
                                     </Button>
                                   )}
                                   {appointment.status === 'agendado' && (
-                                    <AlertDialog>
-                                      <AlertDialogTrigger asChild>
-                                        <Button 
-                                          variant="ghost" 
-                                          size="sm"
-                                          className="h-4 w-4 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                          title="Cancelar"
-                                        >
-                                          <Trash2 className="h-2 w-2" />
-                                        </Button>
-                                      </AlertDialogTrigger>
-                                      <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                          <AlertDialogTitle>Cancelar Agendamento</AlertDialogTitle>
-                                          <AlertDialogDescription>
-                                            Tem certeza que deseja cancelar este agendamento para {format(selectedDate, "dd/MM/yyyy")} às {appointment.hora_agendamento}? 
-                                            Esta ação não pode ser desfeita.
-                                          </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                          <AlertDialogCancel>Não cancelar</AlertDialogCancel>
-                                          <AlertDialogAction
-                                            disabled={isCancelling}
-                                            onClick={async () => {
-                                              setIsCancelling(true);
-                                              try {
-                                                await onCancelAppointment(appointment.id);
-                                              } finally {
-                                                setIsCancelling(false);
-                                              }
-                                            }}
-                                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                          >
-                                            {isCancelling ? (
-                                              <>
-                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                Cancelando...
-                                              </>
-                                            ) : (
-                                              'Sim, cancelar'
-                                            )}
-                                          </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                      </AlertDialogContent>
-                                    </AlertDialog>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-4 w-4 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                      title="Cancelar"
+                                      onClick={() => setAppointmentToCancel(appointment)}
+                                    >
+                                      <Trash2 className="h-2 w-2" />
+                                    </Button>
+                                  )}
+                                  {appointment.status === 'cancelado' && onReactivateAppointment && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-4 w-4 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                      title="Desfazer cancelamento"
+                                      onClick={() => onReactivateAppointment(appointment.id)}
+                                    >
+                                      <RotateCcw className="h-2 w-2" />
+                                    </Button>
                                   )}
                                   {appointment.status === 'cancelado' && onDeleteAppointment && (
                                     <AlertDialog>
                                       <AlertDialogTrigger asChild>
-                                        <Button 
-                                          variant="ghost" 
+                                        <Button
+                                          variant="ghost"
                                           size="sm"
                                           className="h-4 w-4 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
                                           title="Excluir"
@@ -1130,7 +1111,7 @@ export function DoctorSchedule({
                                         <AlertDialogHeader>
                                           <AlertDialogTitle>Excluir Agendamento</AlertDialogTitle>
                                           <AlertDialogDescription>
-                                            Tem certeza que deseja excluir permanentemente este agendamento cancelado para {format(selectedDate, "dd/MM/yyyy")} às {appointment.hora_agendamento}? 
+                                            Tem certeza que deseja excluir permanentemente este agendamento cancelado para {format(selectedDate, "dd/MM/yyyy")} às {appointment.hora_agendamento}?
                                             Esta ação não pode ser desfeita.
                                           </AlertDialogDescription>
                                         </AlertDialogHeader>
@@ -1270,6 +1251,29 @@ export function DoctorSchedule({
           onSlotsChanged?.();
         }}
       />
+
+      {appointmentToCancel && (
+        <CancelAppointmentModal
+          open={!!appointmentToCancel}
+          onOpenChange={(open) => { if (!open) setAppointmentToCancel(null); }}
+          patientName={(appointmentToCancel.pacientes?.nome_completo || 'Paciente').toUpperCase()}
+          appointmentDate={format(new Date(appointmentToCancel.data_agendamento + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })}
+          appointmentTime={appointmentToCancel.hora_agendamento}
+          medicoNome={appointmentToCancel.medicos?.nome || doctor.nome}
+          atendimentoNome={appointmentToCancel.atendimentos?.nome || ''}
+          currentUserName={profile?.nome || 'Usuário'}
+          loading={isCancelling}
+          onConfirm={async (motivo) => {
+            setIsCancelling(true);
+            try {
+              await onCancelAppointment(appointmentToCancel.id, motivo || undefined);
+              setAppointmentToCancel(null);
+            } finally {
+              setIsCancelling(false);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
