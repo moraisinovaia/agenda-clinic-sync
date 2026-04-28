@@ -323,32 +323,10 @@ export function DoctorSchedule({
   
   // Estado para data selecionada com validação segura
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
-    try {
-      if (initialDate) {
-        console.log('🎯 Usando initialDate:', initialDate);
-        const parsed = parse(initialDate, 'yyyy-MM-dd', new Date());
-        if (isValid(parsed)) return parsed;
-      }
-      
-      if (appointments && appointments.length > 0) {
-        const doctorAppointments = appointments.filter(apt => apt.medico_id === doctor.id);
-        if (doctorAppointments.length > 0) {
-          const mostRecent = doctorAppointments.sort((a, b) => 
-            new Date(b.data_agendamento).getTime() - new Date(a.data_agendamento).getTime()
-          )[0];
-          
-          const parsed = parse(mostRecent.data_agendamento, 'yyyy-MM-dd', new Date());
-          if (isValid(parsed)) {
-            console.log('🎯 Usando data do agendamento:', mostRecent.data_agendamento);
-            return parsed;
-          }
-        }
-      }
-    } catch (error) {
-      console.error('❌ Erro ao inicializar data:', error);
+    if (initialDate) {
+      const parsed = parse(initialDate, 'yyyy-MM-dd', new Date());
+      if (isValid(parsed)) return parsed;
     }
-    
-    console.log('🎯 Usando data atual');
     return new Date();
   });
   
