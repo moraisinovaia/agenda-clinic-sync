@@ -499,6 +499,12 @@ export { auditRules, mergeDados, computeMissingFields, isServicoTergo, isServico
 // Seleciona a mensagem mais informativa de um resultado de handler.
 // Cobre tanto successResponse (message) quanto businessErrorResponse (mensagem_usuario/whatsapp).
 export function resolveHandlerMessage(hData: any, fallback: string): string {
+  const selected =
+    hData?.message          ? 'message' :
+    hData?.mensagem_whatsapp ? 'mensagem_whatsapp' :
+    hData?.mensagem_usuario  ? 'mensagem_usuario' :
+    'fallback';
+  console.warn('[RESOLVE_HANDLER_MESSAGE]', JSON.stringify({ selected, fallback }));
   return hData?.message ?? hData?.mensagem_whatsapp ?? hData?.mensagem_usuario ?? fallback;
 }
 
@@ -894,8 +900,16 @@ export async function handleChat(
       respostaFinal = audit.override_response!;
       console.log(`[CHAT] Bloqueado por regra: ${audit.reason}`);
     } else {
+      console.warn('[PLAN_INPUT]', JSON.stringify({
+        estadoAtual,
+        mensagem,
+        intent:      extraction.intent,
+        next_action: extraction.next_action,
+        dadosMerged,
+      }));
       const plan = planSchedulingTurn({ estadoAtual, mensagem, extraction, dadosMerged, config });
-      console.log(`[CHAT] plan: action=${plan.action} | reason="${plan.reason}"`);
+      console.warn('[PLAN_OUTPUT]', JSON.stringify(plan));
+      console.warn('[PHASE3_BRANCH]', JSON.stringify({ branch: plan.action }));
 
       if (plan.action === 'ask_missing') {
         // Nunca chama handler — responde com a pergunta determinística
@@ -920,17 +934,22 @@ export async function handleChat(
         } else {
           availBody.data_consulta = dadosMerged.data_consulta;
         }
+        console.warn('[AVAILABILITY_CALL]', JSON.stringify({ action: plan.action, body: availBody }));
         const resp = await callHandler('availability', supabase, availBody, clienteId, config);
         if (resp) {
           handlerResult = await resp.json();
           acaoExecutada = 'availability';
           const hData = handlerResult as any;
-          if (hData?.success === false) {
-            console.warn('[CHAT] availability erro:', {
-              codigo_erro:      hData?.codigo_erro,
-              mensagem_usuario: hData?.mensagem_usuario,
-            });
-          }
+          console.warn('[AVAILABILITY_RESULT]', JSON.stringify({
+            status:            hData?.status,
+            success:           hData?.success,
+            keys:              hData ? Object.keys(hData) : [],
+            message:           hData?.message,
+            mensagem_usuario:  hData?.mensagem_usuario,
+            mensagem_whatsapp: hData?.mensagem_whatsapp,
+            codigo_erro:       hData?.codigo_erro,
+            raw:               hData,
+          }));
           respostaFinal = resolveHandlerMessage(hData, extraction.resposta);
         } else {
           respostaFinal = extraction.resposta;
