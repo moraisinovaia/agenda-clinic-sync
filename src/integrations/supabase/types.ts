@@ -37,8 +37,12 @@ export type Database = {
           id: string
           idempotency_key: string | null
           medico_id: string
+          motivo_cancelamento: string | null
           observacoes: string | null
           paciente_id: string
+          reativado_em: string | null
+          reativado_por: string | null
+          reativado_por_user_id: string | null
           status: string
           updated_at: string
         }
@@ -64,8 +68,12 @@ export type Database = {
           id?: string
           idempotency_key?: string | null
           medico_id: string
+          motivo_cancelamento?: string | null
           observacoes?: string | null
           paciente_id: string
+          reativado_em?: string | null
+          reativado_por?: string | null
+          reativado_por_user_id?: string | null
           status?: string
           updated_at?: string
         }
@@ -91,8 +99,12 @@ export type Database = {
           id?: string
           idempotency_key?: string | null
           medico_id?: string
+          motivo_cancelamento?: string | null
           observacoes?: string | null
           paciente_id?: string
+          reativado_em?: string | null
+          reativado_por?: string | null
+          reativado_por_user_id?: string | null
           status?: string
           updated_at?: string
         }
@@ -2287,6 +2299,15 @@ export type Database = {
             Returns: undefined
           }
         | {
+            Args: {
+              p_agendamento_id: string
+              p_cancelado_por?: string
+              p_cancelado_por_user_id?: string
+              p_motivo?: string
+            }
+            Returns: undefined
+          }
+        | {
             Args: { p_agendamento_id: string; p_motivo?: string }
             Returns: Json
           }
@@ -2351,19 +2372,19 @@ export type Database = {
       criar_agendamento_atomico: {
         Args: {
           p_agendamento_id_edicao?: string
-          p_atendimento_id: string
-          p_celular: string
-          p_convenio: string
+          p_atendimento_id?: string
+          p_celular?: string
+          p_convenio?: string
           p_criado_por?: string
           p_criado_por_user_id?: string
-          p_data_agendamento: string
-          p_data_nascimento: string
+          p_data_agendamento?: string
+          p_data_nascimento?: string
           p_force_conflict?: boolean
-          p_hora_agendamento: string
-          p_medico_id: string
+          p_hora_agendamento?: string
+          p_medico_id?: string
           p_nome_completo: string
           p_observacoes?: string
-          p_telefone: string
+          p_telefone?: string
         }
         Returns: Json
       }
@@ -3112,6 +3133,14 @@ export type Database = {
         }[]
       }
       prepare_production_deploy: { Args: never; Returns: Json }
+      reativar_agendamento: {
+        Args: {
+          p_agendamento_id: string
+          p_reativado_por?: string
+          p_reativado_por_user_id?: string
+        }
+        Returns: Json
+      }
       recuperar_usuario_orfao: {
         Args: {
           p_admin_id?: string
