@@ -88,9 +88,13 @@ export class ScheduleInterpreter {
   private normalizePeriodo(raw: any): PeriodConfig | null {
     if (!raw || typeof raw !== 'object') return null;
 
-    // Aceitar ambas nomenclaturas (inicio/horario_inicio, fim/horario_fim)
-    const inicio: string = raw.inicio ?? raw.horario_inicio ?? '';
-    const fim: string = raw.fim ?? raw.horario_fim ?? '';
+    // Capacidade usa contagem_* (janela formal); inicio/fim são para exibição ao paciente.
+    // contagem_inicio/fim: ex "07:00"/"12:00" — janela real de contagem de slots.
+    // inicio/fim:          ex "07:00"/"10:00" — janela exibida para comparecimento.
+    const inicio: string =
+      raw.contagem_inicio ?? raw.inicio ?? raw.horario_inicio ?? '';
+    const fim: string =
+      raw.contagem_fim ?? raw.fim ?? raw.horario_fim ?? '';
     const limite: number = Number(raw.limite ?? raw.limite_pacientes ?? 0);
 
     if (!inicio || !fim || limite <= 0) return null;
@@ -99,7 +103,7 @@ export class ScheduleInterpreter {
       inicio,
       fim,
       limite,
-      dias_especificos: raw.dias_especificos ?? undefined,
+      dias_especificos:    raw.dias_especificos    ?? undefined,
       distribuicao_fichas: raw.distribuicao_fichas ?? undefined,
     };
   }
