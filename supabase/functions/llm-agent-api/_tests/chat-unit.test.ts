@@ -25,11 +25,33 @@ import {
   resolveHandlerMessage,
   planSchedulingTurn,
   OBRIGATORIOS_AGENDAR,
+  computeRescheduleMissing,
+  formatRescheduleAskMissing,
+  formatRescheduleHandlerResponse,
   type DadosColetados,
 } from '../_handlers/chat.ts';
+import { handleReschedule } from '../_handlers/reschedule.ts';
 
 import { isBuscaProximaDisponibilidade, detectarDiaSemana } from '../_handlers/availability.ts';
 import { calcularVagasDisponiveisComLimites } from '../_lib/limites.ts';
+import { validateConfigOwnership, loadDynamicConfig, CONFIG_CACHE } from '../_lib/config.ts';
+import {
+  isDoctorAllowed as scopeIsDoctorAllowed,
+  filterDoctorsByScope as scopeFilterDoctorsByScope,
+  getRequestScope,
+} from '../_lib/scope.ts';
+import {
+  maskPhone,
+  maskName,
+  maskBirthDate,
+  maskConvenio,
+  maskPIIDeep,
+} from '../_lib/pii.ts';
+import {
+  chatCompletion,
+  OpenAIUnavailableError,
+  OPENAI_FALLBACK_MESSAGE,
+} from '../_lib/openai.ts';
 
 import type { DynamicConfig } from '../_lib/types.ts';
 
@@ -878,4 +900,699 @@ Deno.test('calcularVagasDisponiveisComLimites: sem pool/sublimite mas com cfg.li
   );
 
   assertEquals(resultado, 8, 'cfg.limite=8 deve ser usado quando não há pool nem sublimite');
+});
+
+// ── validateConfigOwnership / loadDynamicConfig (multi-tenant guard) ──────
+
+// Mock minimalista do client Supabase para llm_clinic_config.
+// Aceita apenas a cadeia .from('llm_clinic_config').select().eq().eq().limit().maybeSingle().
+function mockClinicConfigClient(rowOrNull: any, errorMsg: string | null = null) {
+  const builder = {
+    select: () => builder,
+    eq: () => builder,
+    limit: () => builder,
+    maybeSingle: () => Promise.resolve(
+      errorMsg ? { data: null, error: { message: errorMsg } } : { data: rowOrNull, error: null }
+    ),
+  };
+  return {
+    from: (_table: string) => builder,
+    rpc: () => Promise.reject(new Error('RPC não deveria ser chamada quando ownership falha')),
+  };
+}
+
+Deno.test('validateConfigOwnership: aceita quando config_id pertence ao cliente_id', async () => {
+  const supabase = mockClinicConfigClient({ id: 'cfg-1' });
+  const ok = await validateConfigOwnership(supabase, 'cliente-A', 'cfg-1');
+  assertEquals(ok, true);
+});
+
+Deno.test('validateConfigOwnership: rejeita quando config_id é de outro cliente (sem row)', async () => {
+  const supabase = mockClinicConfigClient(null);
+  const ok = await validateConfigOwnership(supabase, 'cliente-A', 'cfg-de-outro-tenant');
+  assertEquals(ok, false);
+});
+
+Deno.test('validateConfigOwnership: fail-closed quando query erra', async () => {
+  const supabase = mockClinicConfigClient(null, 'connection lost');
+  const ok = await validateConfigOwnership(supabase, 'cliente-A', 'cfg-1');
+  assertEquals(ok, false);
+});
+
+Deno.test('loadDynamicConfig: bloqueia carga quando config_id pertence a outro tenant', async () => {
+  // Limpar cache para garantir teste isolado
+  CONFIG_CACHE.clear();
+  const supabase = mockClinicConfigClient(null); // ownership query → 0 rows
+  const result = await loadDynamicConfig(supabase, 'cliente-A', 'cfg-de-outro-tenant');
+  assertEquals(result, null, 'deve retornar null e nunca chegar à RPC quando ownership falha');
+  // Confirma que cache não foi populado
+  assertEquals(CONFIG_CACHE.has('cfg-de-outro-tenant'), false);
+});
+
+// ── LLM_SCOPE_STRICT (fail-closed sob flag) ────────────────────────────────
+
+// Helper que troca a env var, roda o callback e restaura o estado anterior.
+async function withScopeStrict(value: 'true' | 'false' | 'unset', fn: () => void | Promise<void>) {
+  const previous = Deno.env.get('LLM_SCOPE_STRICT');
+  try {
+    if (value === 'unset') {
+      Deno.env.delete('LLM_SCOPE_STRICT');
+    } else {
+      Deno.env.set('LLM_SCOPE_STRICT', value);
+    }
+    await fn();
+  } finally {
+    if (previous === undefined) Deno.env.delete('LLM_SCOPE_STRICT');
+    else Deno.env.set('LLM_SCOPE_STRICT', previous);
+  }
+}
+
+Deno.test('isDoctorAllowed: scope vazio + flag ausente → fail-open (comportamento atual)', async () => {
+  await withScopeStrict('unset', () => {
+    const scope = getRequestScope({}); // sem allowed_doctor_ids
+    assertEquals(scopeIsDoctorAllowed('medico-1', 'Dr. Marcelo', scope), true);
+    assertEquals(scopeIsDoctorAllowed(null, null, scope), true);
+  });
+});
+
+Deno.test('isDoctorAllowed: scope vazio + LLM_SCOPE_STRICT=true → fail-closed (bloqueia)', async () => {
+  await withScopeStrict('true', () => {
+    const scope = getRequestScope({});
+    assertEquals(scopeIsDoctorAllowed('medico-1', 'Dr. Marcelo', scope), false);
+    assertEquals(scopeIsDoctorAllowed(null, null, scope), false);
+  });
+});
+
+Deno.test('isDoctorAllowed: scope com id correspondente passa mesmo com flag on', async () => {
+  await withScopeStrict('true', () => {
+    const scope = getRequestScope({ allowed_doctor_ids: ['medico-1'] });
+    assertEquals(scopeIsDoctorAllowed('medico-1', 'Dr. Marcelo', scope), true);
+    assertEquals(scopeIsDoctorAllowed('medico-2', 'Outro', scope), false);
+  });
+});
+
+Deno.test('isDoctorAllowed: LLM_SCOPE_STRICT=false explicitamente mantém fail-open', async () => {
+  await withScopeStrict('false', () => {
+    const scope = getRequestScope({});
+    assertEquals(scopeIsDoctorAllowed('medico-1', 'Dr. Marcelo', scope), true);
+  });
+});
+
+Deno.test('filterDoctorsByScope: scope vazio + flag ausente → retorna todos', async () => {
+  await withScopeStrict('unset', () => {
+    const medicos = [{ id: 'a', nome: 'Dr A' }, { id: 'b', nome: 'Dr B' }];
+    const scope = getRequestScope({});
+    assertEquals(scopeFilterDoctorsByScope(medicos, scope).length, 2);
+  });
+});
+
+Deno.test('filterDoctorsByScope: scope vazio + LLM_SCOPE_STRICT=true → retorna []', async () => {
+  await withScopeStrict('true', () => {
+    const medicos = [{ id: 'a', nome: 'Dr A' }, { id: 'b', nome: 'Dr B' }];
+    const scope = getRequestScope({});
+    assertEquals(scopeFilterDoctorsByScope(medicos, scope).length, 0);
+  });
+});
+
+Deno.test('filterDoctorsByScope: com escopo definido, flag não muda comportamento', async () => {
+  await withScopeStrict('true', () => {
+    const medicos = [{ id: 'a', nome: 'Dr A' }, { id: 'b', nome: 'Dr B' }];
+    const scope = getRequestScope({ allowed_doctor_ids: ['a'] });
+    const filtrados = scopeFilterDoctorsByScope(medicos, scope);
+    assertEquals(filtrados.length, 1);
+    assertEquals(filtrados[0].id, 'a');
+  });
+});
+
+// ── PII masking (logs) ────────────────────────────────────────────────────
+
+Deno.test('maskPhone: preserva apenas os 4 últimos dígitos', () => {
+  assertEquals(maskPhone('11987654321'), '*******4321');
+  assertEquals(maskPhone('(11) 98765-4321'), '*******4321');
+  assertEquals(maskPhone('1234'), '****');
+  assertEquals(maskPhone('12'), '**');
+  assertEquals(maskPhone(''), '');
+  assertEquals(maskPhone(null), '');
+  assertEquals(maskPhone(undefined), '');
+});
+
+Deno.test('maskName: primeiro nome + inicial do último sobrenome', () => {
+  assertEquals(maskName('João Silva'), 'João S.');
+  assertEquals(maskName('João da Silva Souza'), 'João S.');
+  assertEquals(maskName('Maria das Dores'), 'Maria D.');
+  assertEquals(maskName('Maria'), 'Maria');
+  assertEquals(maskName('  '), '');
+  assertEquals(maskName(null), '');
+});
+
+Deno.test('maskBirthDate: preserva apenas o ano', () => {
+  assertEquals(maskBirthDate('1980-05-12'), '1980-**-**');
+  assertEquals(maskBirthDate('12/05/1980'), '**/**/1980');
+  assertEquals(maskBirthDate('invalido'), '****');
+  assertEquals(maskBirthDate(null), '');
+  assertEquals(maskBirthDate(''), '');
+});
+
+Deno.test('maskConvenio: primeira letra + asteriscos', () => {
+  assertEquals(maskConvenio('Unimed'), 'U****');
+  assertEquals(maskConvenio('bradesco saude'), 'B****');
+  assertEquals(maskConvenio(null), '');
+  assertEquals(maskConvenio(''), '');
+});
+
+Deno.test('maskPIIDeep: mascara chaves sensíveis em qualquer profundidade sem mutar o original', () => {
+  const original = {
+    cliente_id: 'cli-1',
+    nome_paciente: 'João Silva Souza',
+    paciente_nome: 'João Silva Souza',
+    celular: '11987654321',
+    phone_paciente: '11987654321',
+    data_nascimento: '1980-05-12',
+    convenio: 'Unimed Premium',
+    extra: { telefone: '21912345678', nome_completo: 'Maria das Dores' },
+    nested: [{ nome: 'Pedro Pereira', birth_date: '1975-01-01' }],
+  };
+  const snapshot = JSON.stringify(original);
+  const masked = maskPIIDeep(original);
+
+  // Não muta o original
+  assertEquals(JSON.stringify(original), snapshot);
+
+  // Chaves PII mascaradas
+  assertEquals(masked.nome_paciente, 'João S.');
+  assertEquals(masked.paciente_nome, 'João S.');
+  assertEquals(masked.celular, '*******4321');
+  assertEquals(masked.phone_paciente, '*******4321');
+  assertEquals(masked.data_nascimento, '1980-**-**');
+  assertEquals(masked.convenio, 'U****');
+  assertEquals((masked.extra as any).telefone, '*******5678');
+  assertEquals((masked.extra as any).nome_completo, 'Maria D.');
+  assertEquals((masked.nested as any)[0].nome, 'Pedro P.');
+  assertEquals((masked.nested as any)[0].birth_date, '1975-**-**');
+
+  // Chave não-PII preservada
+  assertEquals(masked.cliente_id, 'cli-1');
+});
+
+Deno.test('maskPIIDeep: dados sensíveis NÃO aparecem na string serializada do log', () => {
+  const original = {
+    nome_paciente: 'João Silva Souza',
+    celular: '11987654321',
+    data_nascimento: '1980-05-12',
+    convenio: 'Unimed Premium',
+    nested: { telefone: '21912345678', nome_completo: 'Maria das Dores' },
+  };
+  const serialized = JSON.stringify(maskPIIDeep(original));
+
+  // Sobrenome não pode aparecer
+  assertFalse(serialized.includes('Silva'), `sobrenome vazou: ${serialized}`);
+  assertFalse(serialized.includes('Souza'), `sobrenome vazou: ${serialized}`);
+  assertFalse(serialized.includes('das Dores'), `sobrenome vazou: ${serialized}`);
+
+  // Telefone completo não pode aparecer (mas o sufixo de 4 dígitos é esperado)
+  assertFalse(serialized.includes('11987654321'), `telefone completo vazou: ${serialized}`);
+  assertFalse(serialized.includes('21912345678'), `telefone completo vazou: ${serialized}`);
+  assertFalse(serialized.includes('987654321'), `telefone parcial vazou: ${serialized}`);
+
+  // Mês/dia de nascimento não podem aparecer
+  assertFalse(serialized.includes('05-12'), `dia/mês de nascimento vazou: ${serialized}`);
+
+  // Nome do convênio completo não pode aparecer
+  assertFalse(serialized.includes('Unimed'), `convênio vazou: ${serialized}`);
+  assertFalse(serialized.includes('Premium'), `convênio vazou: ${serialized}`);
+});
+
+Deno.test('maskPIIDeep: lida com referência circular sem estourar', () => {
+  const obj: any = { nome_paciente: 'Ana Costa' };
+  obj.self = obj;
+  const masked = maskPIIDeep(obj);
+  assertEquals(masked.nome_paciente, 'Ana C.');
+  assertEquals((masked as any).self, '[Circular]');
+});
+
+// ── chatCompletion: timeout + retry + fallback ────────────────────────────
+
+type FetchFn = typeof globalThis.fetch;
+
+// Helper que troca globalThis.fetch e Deno.env durante o callback e restaura tudo.
+async function withOpenAIEnv(
+  envOverrides: Record<string, string | null>,
+  mockFetch: FetchFn,
+  fn: () => Promise<void>,
+) {
+  const origFetch = globalThis.fetch;
+  const restores: Array<() => void> = [];
+  for (const [k, v] of Object.entries(envOverrides)) {
+    const previous = Deno.env.get(k);
+    if (v === null) Deno.env.delete(k);
+    else Deno.env.set(k, v);
+    restores.push(() => {
+      if (previous === undefined) Deno.env.delete(k);
+      else Deno.env.set(k, previous);
+    });
+  }
+  globalThis.fetch = mockFetch;
+  try {
+    await fn();
+  } finally {
+    globalThis.fetch = origFetch;
+    for (const r of restores) r();
+  }
+}
+
+function jsonResponse(status: number, body: any): Response {
+  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+}
+
+const minimalRequest = {
+  messages: [{ role: 'user' as const, content: 'oi' }],
+  jsonSchemaName: 'test',
+  jsonSchema: { type: 'object', properties: {} },
+};
+
+const validOpenAIBody = {
+  choices: [{ message: { content: '{"ok":true}' } }],
+  usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+};
+
+Deno.test('chatCompletion: sem OPENAI_API_KEY lança OpenAIUnavailableError', async () => {
+  await withOpenAIEnv(
+    { OPENAI_API_KEY: null },
+    async () => jsonResponse(200, validOpenAIBody),
+    async () => {
+      let caught: any = null;
+      try { await chatCompletion(minimalRequest); }
+      catch (e) { caught = e; }
+      assert(caught instanceof OpenAIUnavailableError, `esperava OpenAIUnavailableError, recebeu ${caught}`);
+    },
+  );
+});
+
+Deno.test('chatCompletion: sucesso na 1ª tentativa não retenta', async () => {
+  let callCount = 0;
+  const mockFetch: FetchFn = async () => {
+    callCount++;
+    return jsonResponse(200, validOpenAIBody);
+  };
+  await withOpenAIEnv(
+    { OPENAI_API_KEY: 'sk-test' },
+    mockFetch,
+    async () => {
+      const result = await chatCompletion(minimalRequest);
+      assertEquals(result.content, '{"ok":true}');
+      assertEquals(callCount, 1);
+    },
+  );
+});
+
+Deno.test('chatCompletion: 503 na 1ª, sucesso na 2ª (retry funciona)', async () => {
+  let callCount = 0;
+  const mockFetch: FetchFn = async () => {
+    callCount++;
+    if (callCount === 1) return jsonResponse(503, { error: 'service unavailable' });
+    return jsonResponse(200, validOpenAIBody);
+  };
+  await withOpenAIEnv(
+    { OPENAI_API_KEY: 'sk-test' },
+    mockFetch,
+    async () => {
+      const result = await chatCompletion(minimalRequest);
+      assertEquals(result.content, '{"ok":true}');
+      assertEquals(callCount, 2, 'deve ter chamado fetch exatamente 2x');
+    },
+  );
+});
+
+Deno.test('chatCompletion: 401 NÃO retenta (não é transitório)', async () => {
+  let callCount = 0;
+  const mockFetch: FetchFn = async () => {
+    callCount++;
+    return jsonResponse(401, { error: 'invalid api key' });
+  };
+  await withOpenAIEnv(
+    { OPENAI_API_KEY: 'sk-test' },
+    mockFetch,
+    async () => {
+      let caught: any = null;
+      try { await chatCompletion(minimalRequest); }
+      catch (e) { caught = e; }
+      assert(caught instanceof OpenAIUnavailableError);
+      assertEquals(callCount, 1, '401 não deve ser retentado');
+    },
+  );
+});
+
+Deno.test('chatCompletion: AbortError na 1ª, sucesso na 2ª (retry de timeout)', async () => {
+  let callCount = 0;
+  const mockFetch: FetchFn = async () => {
+    callCount++;
+    if (callCount === 1) {
+      const e = new Error('aborted');
+      (e as any).name = 'AbortError';
+      throw e;
+    }
+    return jsonResponse(200, validOpenAIBody);
+  };
+  await withOpenAIEnv(
+    { OPENAI_API_KEY: 'sk-test' },
+    mockFetch,
+    async () => {
+      const result = await chatCompletion(minimalRequest);
+      assertEquals(result.content, '{"ok":true}');
+      assertEquals(callCount, 2);
+    },
+  );
+});
+
+Deno.test('chatCompletion: AbortError em ambas tentativas → OpenAIUnavailableError', async () => {
+  let callCount = 0;
+  const mockFetch: FetchFn = async () => {
+    callCount++;
+    const e = new Error('aborted');
+    (e as any).name = 'AbortError';
+    throw e;
+  };
+  await withOpenAIEnv(
+    { OPENAI_API_KEY: 'sk-test' },
+    mockFetch,
+    async () => {
+      let caught: any = null;
+      try { await chatCompletion(minimalRequest); }
+      catch (e) { caught = e; }
+      assert(caught instanceof OpenAIUnavailableError);
+      assertEquals(callCount, 2, 'após 1 retry deve desistir');
+    },
+  );
+});
+
+Deno.test('chatCompletion: 503 em ambas → OpenAIUnavailableError', async () => {
+  let callCount = 0;
+  const mockFetch: FetchFn = async () => {
+    callCount++;
+    return jsonResponse(503, { error: 'still down' });
+  };
+  await withOpenAIEnv(
+    { OPENAI_API_KEY: 'sk-test' },
+    mockFetch,
+    async () => {
+      let caught: any = null;
+      try { await chatCompletion(minimalRequest); }
+      catch (e) { caught = e; }
+      assert(caught instanceof OpenAIUnavailableError);
+      assertEquals(callCount, 2);
+    },
+  );
+});
+
+Deno.test('chatCompletion: conteúdo vazio → OpenAIUnavailableError', async () => {
+  const mockFetch: FetchFn = async () =>
+    jsonResponse(200, { choices: [{ message: { content: '' } }], usage: {} });
+  await withOpenAIEnv(
+    { OPENAI_API_KEY: 'sk-test' },
+    mockFetch,
+    async () => {
+      let caught: any = null;
+      try { await chatCompletion(minimalRequest); }
+      catch (e) { caught = e; }
+      assert(caught instanceof OpenAIUnavailableError);
+    },
+  );
+});
+
+Deno.test('OPENAI_FALLBACK_MESSAGE: humanizado e sem termos técnicos', () => {
+  // Garante que a mensagem mostrada ao paciente não vaza referência ao OpenAI/sistema.
+  assertFalse(OPENAI_FALLBACK_MESSAGE.toLowerCase().includes('openai'));
+  assertFalse(OPENAI_FALLBACK_MESSAGE.toLowerCase().includes('error'));
+  assertFalse(OPENAI_FALLBACK_MESSAGE.toLowerCase().includes('http'));
+  assertStringIncludes(OPENAI_FALLBACK_MESSAGE, 'atendente humano');
+});
+
+// ── Reschedule dispatch (etapa E) ─────────────────────────────────────────
+
+function dadosVaziosE(): DadosColetados {
+  return {
+    servico: null, medico_nome: null, medico_id: null,
+    data_consulta: null, periodo: null, convenio: null,
+    nome_paciente: null, data_nascimento: null, confirmado: null,
+    tem_guia: null, fistula: null, peso: null,
+  };
+}
+
+Deno.test('computeRescheduleMissing: tudo vazio → 3 campos faltando', () => {
+  const missing = computeRescheduleMissing({}, dadosVaziosE());
+  assertEquals(missing, ['agendamento_id', 'nova_data', 'nova_hora']);
+});
+
+Deno.test('computeRescheduleMissing: agendamento_id no body → faltam só nova_data e nova_hora', () => {
+  const missing = computeRescheduleMissing({ agendamento_id: 'ag-1' }, dadosVaziosE());
+  assertEquals(missing, ['nova_data', 'nova_hora']);
+});
+
+Deno.test('computeRescheduleMissing: data_consulta da LLM cobre nova_data', () => {
+  const dados = { ...dadosVaziosE(), data_consulta: '2026-05-10' };
+  const missing = computeRescheduleMissing({ agendamento_id: 'ag-1', nova_hora: '14:00' }, dados);
+  assertEquals(missing, []);
+});
+
+Deno.test('computeRescheduleMissing: hora_consulta no body cobre nova_hora', () => {
+  const dados = { ...dadosVaziosE(), data_consulta: '2026-05-10' };
+  const missing = computeRescheduleMissing({ agendamento_id: 'ag-1', hora_consulta: '14:00' }, dados);
+  assertEquals(missing, []);
+});
+
+Deno.test('formatRescheduleAskMissing: lista campos em pt-BR humanizado', () => {
+  const msg = formatRescheduleAskMissing(['nova_data', 'nova_hora']);
+  assertStringIncludes(msg, 'nova data');
+  assertStringIncludes(msg, 'novo horário');
+  assertStringIncludes(msg, 'remarcar');
+});
+
+Deno.test('dispatchHandler: execute_reschedule sem agendamento_id → handler null', () => {
+  const result = dispatchHandler('execute_reschedule', 'remarcar', dadosVaziosE(), {
+    cliente_id: 'cli-1',
+    nova_data: '2026-05-10',
+    nova_hora: '14:00',
+  });
+  assertEquals(result.handler, null);
+});
+
+Deno.test('dispatchHandler: execute_reschedule sem nova_hora → handler null', () => {
+  const result = dispatchHandler('execute_reschedule', 'remarcar', dadosVaziosE(), {
+    cliente_id: 'cli-1',
+    agendamento_id: 'ag-1',
+    nova_data: '2026-05-10',
+  });
+  assertEquals(result.handler, null);
+});
+
+Deno.test('dispatchHandler: execute_reschedule com tudo → monta body para reschedule', () => {
+  const result = dispatchHandler('execute_reschedule', 'remarcar', dadosVaziosE(), {
+    cliente_id:     'cli-1',
+    agendamento_id: 'ag-1',
+    nova_data:      '2026-05-10',
+    nova_hora:      '14:00',
+    observacoes:    'paciente prefere tarde',
+  });
+  assertEquals(result.handler, 'reschedule');
+  assertEquals((result.body as any)?.agendamento_id, 'ag-1');
+  assertEquals((result.body as any)?.nova_data, '2026-05-10');
+  assertEquals((result.body as any)?.nova_hora, '14:00');
+  assertEquals((result.body as any)?.observacoes, 'paciente prefere tarde');
+});
+
+Deno.test('dispatchHandler: execute_reschedule usa data_consulta se body.nova_data ausente', () => {
+  const dados = { ...dadosVaziosE(), data_consulta: '2026-05-15' };
+  const result = dispatchHandler('execute_reschedule', 'remarcar', dados, {
+    cliente_id:     'cli-1',
+    agendamento_id: 'ag-1',
+    nova_hora:      '14:00',
+  });
+  assertEquals(result.handler, 'reschedule');
+  assertEquals((result.body as any)?.nova_data, '2026-05-15');
+});
+
+Deno.test('formatRescheduleHandlerResponse: success → retorna message', () => {
+  const out = formatRescheduleHandlerResponse(
+    { success: true, message: 'Consulta remarcada com sucesso' },
+    'fallback',
+  );
+  assertEquals(out, 'Consulta remarcada com sucesso');
+});
+
+Deno.test('formatRescheduleHandlerResponse: businessError preserva mensagem_usuario', () => {
+  const out = formatRescheduleHandlerResponse(
+    { success: false, codigo_erro: 'DATA_BLOQUEADA', mensagem_usuario: '❌ Data bloqueada' },
+    'fallback',
+  );
+  assertEquals(out, '❌ Data bloqueada');
+});
+
+Deno.test('formatRescheduleHandlerResponse: ERRO_GENERICO é sanitizado para texto neutro', () => {
+  const out = formatRescheduleHandlerResponse(
+    {
+      success: false,
+      codigo_erro: 'ERRO_GENERICO',
+      error: 'Horário já ocupado para este médico (Maria Silva)',
+      mensagem_whatsapp: 'Horário já ocupado para este médico (Maria Silva)',
+    },
+    'fallback',
+  );
+  // O nome técnico do conflito não pode vazar
+  assertFalse(out.includes('Maria Silva'));
+  assertStringIncludes(out, 'remarcar');
+});
+
+// ── handleReschedule: cenários multi-tenant + conflito + scope strict ─────
+
+// Mock Supabase configurável: cada chamada from(table) consome o próximo
+// item da fila de respostas para aquela tabela.
+function mockSupabaseQueue(queues: Record<string, any[]>) {
+  let lastUpdate: any = null;
+  const builderFor = (table: string) => {
+    const next = () => queues[table]?.shift() ?? { data: [], error: null };
+    const builder: any = new Proxy({}, {
+      get: (_t, prop) => {
+        if (prop === 'then') return (resolve: any) => Promise.resolve(resolve(next()));
+        if (prop === 'single') return () => Promise.resolve(next());
+        if (prop === 'maybeSingle') return () => Promise.resolve(next());
+        if (prop === 'update') return (payload: any) => { lastUpdate = { table, payload }; return builder; };
+        return () => builder;
+      },
+    });
+    return builder;
+  };
+  return {
+    from: (table: string) => builderFor(table),
+    _lastUpdate: () => lastUpdate,
+  };
+}
+
+const AGENDAMENTO_VALIDO = {
+  id:                'ag-1',
+  medico_id:         'medico-1',
+  atendimento_id:    'atend-1',
+  data_agendamento:  '2026-05-01',
+  hora_agendamento:  '10:00',
+  status:            'agendado',
+  convenio:          'Particular',
+  pacientes:         { nome_completo: 'João Silva' },
+  medicos:           { nome: 'Dr. Marcelo' },
+  atendimentos:      { nome: 'Consulta' },
+};
+
+Deno.test('handleReschedule: agendamento_id de outro cliente é bloqueado', async () => {
+  const supabase = mockSupabaseQueue({
+    // SELECT agendamento por id+cliente_id retorna null (não pertence ao cliente)
+    agendamentos: [{ data: null, error: null }],
+  });
+  const resp = await handleReschedule(supabase, {
+    agendamento_id: 'ag-de-outro-cliente',
+    nova_data:      '2026-06-10',
+    nova_hora:      '14:00',
+    allowed_doctor_ids: ['medico-1'],
+  }, 'cliente-A', null);
+
+  const json = await resp.json();
+  assertEquals(json.success, false);
+  // Não vaza dados — apenas "Agendamento não encontrado"
+  assertStringIncludes(json.error ?? json.mensagem_usuario, 'não encontrado');
+});
+
+Deno.test('handleReschedule: caminho feliz — atualiza e retorna sucesso', async () => {
+  const futureDate = '2099-05-10';
+  const supabase = mockSupabaseQueue({
+    agendamentos: [
+      { data: AGENDAMENTO_VALIDO, error: null },  // SELECT inicial
+      { data: [], error: null },                  // SELECT conflito de horário
+      { data: null, error: null },                // UPDATE
+    ],
+    bloqueios_agenda: [
+      { data: [], error: null },                  // SELECT bloqueios
+    ],
+  });
+  const resp = await handleReschedule(supabase, {
+    agendamento_id: 'ag-1',
+    nova_data:      futureDate,
+    nova_hora:      '14:00',
+    allowed_doctor_ids: ['medico-1'],
+  }, 'cliente-A', null);
+
+  const json = await resp.json();
+  assertEquals(json.success, true);
+  assertEquals(json.validado, true);
+  assertEquals(json.nova_data, futureDate);
+  assertEquals(json.nova_hora, '14:00');
+});
+
+Deno.test('handleReschedule: conflito de horário é bloqueado', async () => {
+  const supabase = mockSupabaseQueue({
+    agendamentos: [
+      { data: AGENDAMENTO_VALIDO, error: null },
+      { data: [{ id: 'ag-outro', pacientes: { nome_completo: 'Maria Souza' } }], error: null }, // conflito
+    ],
+    bloqueios_agenda: [
+      { data: [], error: null },
+    ],
+  });
+  const resp = await handleReschedule(supabase, {
+    agendamento_id: 'ag-1',
+    nova_data:      '2099-05-10',
+    nova_hora:      '14:00',
+    allowed_doctor_ids: ['medico-1'],
+  }, 'cliente-A', null);
+
+  const json = await resp.json();
+  assertEquals(json.success, false);
+  assertStringIncludes((json.error ?? json.mensagem_usuario ?? '').toLowerCase(), 'ocupado');
+});
+
+Deno.test('handleReschedule: dados incompletos retorna erro de validação', async () => {
+  const supabase = mockSupabaseQueue({});
+  const resp = await handleReschedule(supabase, {
+    agendamento_id: 'ag-1',
+    // nova_data e nova_hora ausentes
+  }, 'cliente-A', null);
+
+  const json = await resp.json();
+  assertEquals(json.success, false);
+  assertStringIncludes(json.error ?? json.mensagem_usuario, 'obrigatórios');
+});
+
+Deno.test('handleReschedule: scope vazio + LLM_SCOPE_STRICT=true → bloqueia (fora do escopo)', async () => {
+  await withScopeStrict('true', async () => {
+    const supabase = mockSupabaseQueue({
+      agendamentos: [{ data: AGENDAMENTO_VALIDO, error: null }],
+    });
+    const resp = await handleReschedule(supabase, {
+      agendamento_id: 'ag-1',
+      nova_data:      '2099-05-10',
+      nova_hora:      '14:00',
+      // scope vazio: nenhum allowed_doctor_ids
+    }, 'cliente-A', null);
+
+    const json = await resp.json();
+    assertEquals(json.success, false);
+    assertEquals(json.codigo_erro, 'AGENDAMENTO_FORA_DO_ESCOPO');
+  });
+});
+
+Deno.test('handleReschedule: scope vazio + flag ausente → permite (fail-open default)', async () => {
+  await withScopeStrict('unset', async () => {
+    const supabase = mockSupabaseQueue({
+      agendamentos: [
+        { data: AGENDAMENTO_VALIDO, error: null },
+        { data: [], error: null }, // sem conflito
+        { data: null, error: null }, // update
+      ],
+      bloqueios_agenda: [{ data: [], error: null }],
+    });
+    const resp = await handleReschedule(supabase, {
+      agendamento_id: 'ag-1',
+      nova_data:      '2099-05-10',
+      nova_hora:      '14:00',
+    }, 'cliente-A', null);
+
+    const json = await resp.json();
+    assertEquals(json.success, true);
+  });
 });

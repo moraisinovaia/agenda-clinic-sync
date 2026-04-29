@@ -79,6 +79,41 @@ export function isCacheValid(clienteId: string): boolean {
 }
 
 /**
+ * Verifica se um config_id pertence ao cliente_id informado.
+ *
+ * Why: a Edge Function usa service_role e bypassa RLS, então sem essa checagem
+ * um chamador poderia passar cliente_id=A + config_id=B e receber a config de B.
+ *
+ * Retorna true apenas quando há row em llm_clinic_config com (id=configId, cliente_id=clienteId).
+ * Em qualquer falha (erro de query, sem dados) retorna false — fail-closed.
+ */
+export async function validateConfigOwnership(
+  supabase: any,
+  clienteId: string,
+  configId: string
+): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('llm_clinic_config')
+      .select('id')
+      .eq('id', configId)
+      .eq('cliente_id', clienteId)
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.warn(`⚠️ [CONFIG] Erro validando ownership de config_id: ${error.message}`);
+      return false;
+    }
+
+    return !!data;
+  } catch (err: any) {
+    console.warn(`⚠️ [CONFIG] Exceção validando ownership: ${err?.message}`);
+    return false;
+  }
+}
+
+/**
  * Carrega configuração dinâmica do banco de dados via RPC
  * Suporta dois modos:
  * - config_id: Carrega config específica (usado por proxies como Orion)
@@ -93,6 +128,18 @@ export async function loadDynamicConfig(supabase: any, clienteId: string, config
   if (isCacheValid(cacheKey)) {
     console.log('📦 [CACHE] Usando configuração do cache');
     return CONFIG_CACHE.get(cacheKey)!.data;
+  }
+
+  // Quando config_id é fornecido, validar que ele pertence ao cliente_id informado.
+  // Sem essa checagem, um chamador poderia ler config de outro tenant.
+  if (configId) {
+    const owns = await validateConfigOwnership(supabase, clienteId, configId);
+    if (!owns) {
+      console.warn(
+        `🚨 [SECURITY] config_id ${configId} não pertence ao cliente_id ${clienteId} — bloqueando carga`
+      );
+      return null;
+    }
   }
 
   try {

@@ -2,6 +2,19 @@
 
 import type { RequestScope } from './types.ts'
 
+/**
+ * Quando LLM_SCOPE_STRICT=true, requisições sem escopo de médico (doctorIds vazio
+ * e doctorNames vazio) passam a ser bloqueadas em vez de abertas para todos os
+ * médicos do tenant. Default permanece fail-open para não quebrar callers atuais.
+ */
+export function isScopeStrict(): boolean {
+  try {
+    return Deno.env.get('LLM_SCOPE_STRICT') === 'true';
+  } catch {
+    return false;
+  }
+}
+
 export function normalizeScopeEntries(value: any): string[] {
   if (!value) return [];
 
@@ -62,7 +75,10 @@ export function isDoctorAllowed(
   medicoNome: string | null | undefined,
   scope: RequestScope
 ): boolean {
-  if (!hasDoctorScope(scope)) return true;
+  if (!hasDoctorScope(scope)) {
+    // Fail-open por default; fail-closed quando LLM_SCOPE_STRICT=true.
+    return !isScopeStrict();
+  }
 
   if (medicoId && scope.doctorIds.includes(medicoId)) {
     return true;
@@ -100,7 +116,10 @@ export function isServiceAllowed(servicoNome: string | null | undefined, scope: 
 }
 
 export function filterDoctorsByScope<T extends { id?: string | null; nome?: string | null }>(medicos: T[], scope: RequestScope): T[] {
-  if (!hasDoctorScope(scope)) return medicos;
+  if (!hasDoctorScope(scope)) {
+    // Mesma regra de isDoctorAllowed: sem escopo + flag estrita = não vaza nada.
+    return isScopeStrict() ? [] : medicos;
+  }
   return medicos.filter((medico) => isDoctorAllowed(medico.id, medico.nome, scope));
 }
 

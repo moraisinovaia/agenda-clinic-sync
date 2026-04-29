@@ -13,13 +13,15 @@
 
 import type { DynamicConfig } from '../_lib/types.ts';
 import { successResponse, errorResponse } from '../_lib/responses.ts';
-import { chatCompletion } from '../_lib/openai.ts';
+import { chatCompletion, OpenAIUnavailableError, OPENAI_FALLBACK_MESSAGE } from '../_lib/openai.ts';
 import { buildExtractionSystemPrompt } from '../_lib/prompts.ts';
 import { handleAvailability, isBuscaProximaDisponibilidade } from './availability.ts';
 import { handleSchedule } from './schedule.ts';
 import { handleCancel } from './cancel.ts';
+import { handleReschedule } from './reschedule.ts';
 import { handleCheckPatient } from './check-patient.ts';
 import { handleClinicInfo } from './clinic-info.ts';
+import { maskPIIDeep } from '../_lib/pii.ts';
 
 // ── Interfaces ────────────────────────────────────────────────────────────
 
@@ -511,6 +513,32 @@ function dispatchHandler(
     };
   }
 
+  if (nextAction === 'execute_reschedule') {
+    // agendamento_id é responsabilidade do caller (n8n) — vem no body original.
+    // nova_data prefere body; fallback para data_consulta extraída pela LLM.
+    // nova_hora vem do body (EXTRACTION_SCHEMA atual não captura hora; manter
+    // assim para não alterar comportamento dos demais fluxos).
+    const agendamentoId = (baseBody as any)?.agendamento_id;
+    const novaData      = (baseBody as any)?.nova_data ?? dados.data_consulta ?? undefined;
+    const novaHora      = (baseBody as any)?.nova_hora ?? (baseBody as any)?.hora_consulta ?? undefined;
+    const observacoes   = (baseBody as any)?.observacoes ?? undefined;
+
+    if (!agendamentoId || !novaData || !novaHora) {
+      return { handler: null, body: null };
+    }
+
+    return {
+      handler: 'reschedule',
+      body: {
+        ...baseBody,
+        agendamento_id: agendamentoId,
+        nova_data:      novaData,
+        nova_hora:      novaHora,
+        observacoes,
+      },
+    };
+  }
+
   if (intent === 'info_geral' && nextAction === 'answer_info') {
     return { handler: 'clinic-info', body: { ...baseBody } };
   }
@@ -554,10 +582,67 @@ async function callHandler(
     case 'availability':   return handleAvailability(supabase, body, clienteId, config);
     case 'schedule':       return handleSchedule(supabase, body, clienteId, config);
     case 'cancel':         return handleCancel(supabase, body, clienteId, config);
+    case 'reschedule':     return handleReschedule(supabase, body, clienteId, config);
     case 'check-patient':  return handleCheckPatient(supabase, body, clienteId, config);
     case 'clinic-info':    return handleClinicInfo(supabase, body, clienteId, config);
     default: return null;
   }
+}
+
+// ── Helpers para o fluxo de remarcação via /chat ──────────────────────────
+
+/**
+ * Calcula campos faltando para despachar `execute_reschedule`.
+ *
+ * agendamento_id sempre vem do body (n8n conhece a conversa);
+ * nova_data pode ser extraída pela LLM via dadosMerged.data_consulta;
+ * nova_hora hoje precisa vir do body (LLM não captura hora).
+ */
+export function computeRescheduleMissing(
+  body: any,
+  dados: DadosColetados,
+): string[] {
+  const missing: string[] = [];
+  if (!body?.agendamento_id) missing.push('agendamento_id');
+  if (!(body?.nova_data ?? dados?.data_consulta)) missing.push('nova_data');
+  if (!(body?.nova_hora ?? body?.hora_consulta)) missing.push('nova_hora');
+  return missing;
+}
+
+const RESCHEDULE_FIELD_LABELS: Record<string, string> = {
+  agendamento_id: 'a identificação do agendamento atual',
+  nova_data:      'a nova data da consulta',
+  nova_hora:      'o novo horário da consulta',
+};
+
+/** Mensagem humanizada listando o que ainda falta para remarcar. */
+export function formatRescheduleAskMissing(missing: string[]): string {
+  if (missing.length === 0) {
+    return 'Para remarcar sua consulta, preciso de mais alguns dados.';
+  }
+  const partes = missing.map((m) => RESCHEDULE_FIELD_LABELS[m] ?? m);
+  const lista = partes.length === 1
+    ? partes[0]
+    : partes.slice(0, -1).join(', ') + ' e ' + partes[partes.length - 1];
+  return `Para remarcar sua consulta, ainda preciso de ${lista}. Pode me passar?`;
+}
+
+/**
+ * Converte resposta do handler de reschedule em mensagem segura ao paciente.
+ * Erros técnicos (codigo_erro=ERRO_GENERICO) são substituídos por mensagem genérica
+ * para evitar vazar mensagens internas (ex.: nome de outro paciente em conflito).
+ */
+export function formatRescheduleHandlerResponse(hData: any, fallback: string): string {
+  if (!hData) return fallback;
+  if (hData.success === true) {
+    return hData.message ?? hData.mensagem_whatsapp ?? hData.mensagem_usuario ?? fallback;
+  }
+  // success=false: businessErrorResponse traz codigo_erro específico; errorResponse usa ERRO_GENERICO.
+  const codigo = hData.codigo_erro ?? 'ERRO_GENERICO';
+  if (codigo !== 'ERRO_GENERICO' && (hData.mensagem_usuario || hData.mensagem_whatsapp)) {
+    return hData.mensagem_whatsapp ?? hData.mensagem_usuario;
+  }
+  return 'Não consegui remarcar sua consulta agora. Vou encaminhar para nossa equipe continuar.';
 }
 
 // ── Exports para testes unitários ────────────────────────────────────────
@@ -1056,13 +1141,13 @@ export async function handleChat(
       respostaFinal = audit.override_response!;
       console.log(`[CHAT] Bloqueado por regra: ${audit.reason}`);
     } else {
-      console.warn('[PLAN_INPUT]', JSON.stringify({
+      console.warn('[PLAN_INPUT]', JSON.stringify(maskPIIDeep({
         estadoAtual,
         mensagem,
         intent:      extraction.intent,
         next_action: extraction.next_action,
         dadosMerged,
-      }));
+      })));
       const plan = planSchedulingTurn({ estadoAtual, mensagem, extraction, dadosMerged, config });
       console.warn('[PLAN_OUTPUT]', JSON.stringify(plan));
       console.warn('[PHASE3_BRANCH]', JSON.stringify({ branch: plan.action }));
@@ -1090,13 +1175,13 @@ export async function handleChat(
         } else {
           availBody.data_consulta = dadosMerged.data_consulta;
         }
-        console.warn('[AVAILABILITY_CALL]', JSON.stringify({ action: plan.action, body: availBody }));
+        console.warn('[AVAILABILITY_CALL]', JSON.stringify(maskPIIDeep({ action: plan.action, body: availBody })));
         const resp = await callHandler('availability', supabase, availBody, clienteId, config);
         if (resp) {
           handlerResult = await resp.json();
           acaoExecutada = 'availability';
           const hData = handlerResult as any;
-          console.warn('[AVAILABILITY_RESULT]', JSON.stringify({
+          console.warn('[AVAILABILITY_RESULT]', JSON.stringify(maskPIIDeep({
             status:            hData?.status,
             success:           hData?.success,
             keys:              hData ? Object.keys(hData) : [],
@@ -1105,7 +1190,7 @@ export async function handleChat(
             mensagem_whatsapp: hData?.mensagem_whatsapp,
             codigo_erro:       hData?.codigo_erro,
             raw:               hData,
-          }));
+          })));
           respostaFinal =
             formatarDisponibilidadeParaWhatsApp(hData, dadosMerged, config) ??
             resolveHandlerMessage(hData, extraction.resposta);
@@ -1171,6 +1256,21 @@ export async function handleChat(
             phone_paciente:    body.phone_paciente,
             nome_paciente:     body.nome_paciente,
             mensagem_original: mensagem,
+            // Campos de remarcação propagados do body original (n8n).
+            // Inertes para outros handlers (cancel/clinic-info ignoram).
+            agendamento_id:    body.agendamento_id,
+            nova_data:         body.nova_data,
+            nova_hora:         body.nova_hora,
+            hora_consulta:     body.hora_consulta,
+            observacoes:       body.observacoes,
+            // Propagar scope de médico para o handler de reschedule respeitar
+            allowed_doctor_ids:   body.allowed_doctor_ids,
+            doctor_scope:         body.doctor_scope,
+            doctor_scope_ids:     body.doctor_scope_ids,
+            medico_ids_permitidos: body.medico_ids_permitidos,
+            allowed_doctor_names: body.allowed_doctor_names,
+            doctor_scope_names:   body.doctor_scope_names,
+            medico_nomes_permitidos: body.medico_nomes_permitidos,
           },
         );
 
@@ -1188,9 +1288,24 @@ export async function handleChat(
                 mensagem_whatsapp: hData?.mensagem_whatsapp,
               });
             }
-            respostaFinal = resolveHandlerMessage(hData, extraction.resposta);
+            // Reschedule usa formatador próprio para sanitizar erros técnicos.
+            respostaFinal = dispatch.handler === 'reschedule'
+              ? formatRescheduleHandlerResponse(hData, extraction.resposta)
+              : resolveHandlerMessage(hData, extraction.resposta);
           } else {
             respostaFinal = extraction.resposta;
+          }
+        } else if (extraction.next_action === 'execute_reschedule') {
+          // Sem handler porque faltam campos para remarcar — pedir ao paciente.
+          const rescheduleMissing = computeRescheduleMissing(body, dadosMerged);
+          if (rescheduleMissing.length > 0) {
+            respostaFinal = formatRescheduleAskMissing(rescheduleMissing);
+            extraction.next_action = 'ask_missing';
+            missingFields = Array.from(new Set([...missingFields, ...rescheduleMissing]));
+          } else {
+            // Caso raríssimo: campos OK mas dispatch retornou null. Mantém UX segura.
+            respostaFinal = 'Não consegui processar a remarcação agora. Vou encaminhar para nossa equipe.';
+            extraction.next_action = 'escalate_human';
           }
         } else {
           // Sem handler — loop detection para estado verificando_disponibilidade
@@ -1256,6 +1371,34 @@ export async function handleChat(
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[CHAT] Erro:', msg);
+
+    // OpenAI indisponível mesmo após retry → fallback humanizado, sem expor erro técnico.
+    // Mantém o formato esperado pelo n8n (campos do successResponse) e sinaliza
+    // acao_executada='escalate_human' para o fluxo encaminhar a um atendente.
+    if (err instanceof OpenAIUnavailableError || (err instanceof Error && err.name === 'OpenAIUnavailableError')) {
+      const historicoOriginal = Array.isArray(body?.historico_contexto) ? body.historico_contexto : [];
+      const dadosOriginais = body?.dados_coletados ?? {};
+      const mensagemOriginal = typeof body?.mensagem === 'string' ? body.mensagem : '';
+      return successResponse({
+        resposta:           OPENAI_FALLBACK_MESSAGE,
+        novo_estado:        'escalonado_humano',
+        dados_coletados:    dadosOriginais,
+        missing_fields:     [],
+        historico_contexto: [
+          ...historicoOriginal,
+          { role: 'user',      content: mensagemOriginal },
+          { role: 'assistant', content: OPENAI_FALLBACK_MESSAGE },
+        ].slice(-20),
+        acao_executada:     'escalate_human',
+        handler_result:     null,
+        tokens_used:        { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+        _debug: {
+          error_name:    'OpenAIUnavailableError',
+          error_message: msg.slice(0, 200),
+        },
+      });
+    }
+
     return errorResponse(`Erro no handler chat: ${msg}`);
   }
 }

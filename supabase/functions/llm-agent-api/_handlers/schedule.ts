@@ -14,6 +14,7 @@ import { normalizarServicoPeriodos, buscarAgendaDedicada } from '../_lib/config.
 import { mapSchedulingData, sanitizarCampoOpcional, normalizarNome, formatarDataPorExtenso, normalizarConvenioParaComparacao } from '../_lib/normalizacao.ts'
 import { getTipoAgendamentoEfetivo, isOrdemChegada, isEstimativaHorario, getMensagemEstimativa, getDataHoraAtualBrasil, validarDataHoraFutura, calcularIdade, BUSINESS_RULES } from '../_lib/tipo-agendamento.ts'
 import { fuzzyMatchMedicos, formatarConvenioParaBanco } from '../_lib/fuzzy-match.ts'
+import { maskName } from '../_lib/pii.ts'
 
 export async function handleSchedule(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
@@ -1008,7 +1009,7 @@ export async function handleSchedule(supabase: any, body: any, clienteId: string
     }
 
     // Criar agendamento via BookAppointmentUseCase
-    console.log(`📅 Criando agendamento para ${paciente_nome} com médico ${medico.nome} às ${horarioFinal}`);
+    console.log(`📅 Criando agendamento para ${maskName(paciente_nome)} com médico ${medico.nome} às ${horarioFinal}`);
 
     // Chave de idempotência baseada no input original (hora_consulta), não no slot resolvido.
     // Para pedidos de período ("manhã"/"tarde"), horarioFinal muda a cada retry se o slot anterior

@@ -2,6 +2,7 @@ import type { DynamicConfig } from '../_lib/types.ts'
 import { successResponse, errorResponse, businessErrorResponse } from '../_lib/responses.ts'
 import { getRequestScope, isServiceAllowed, filterDoctorsByScope } from '../_lib/scope.ts'
 import { formatarConvenioParaBanco } from '../_lib/fuzzy-match.ts'
+import { maskName } from '../_lib/pii.ts'
 
 // ============= HANDLERS: FILA DE ESPERA INTELIGENTE =============
 
@@ -526,7 +527,7 @@ export async function handleResponderFila(supabase: any, body: any, clienteId: s
 
           // Webhook disparado pelo trigger PG (trigger_notificar_fila_webhook) no INSERT acima
 
-          console.log(`📱 [RESPONDER-FILA] Próximo notificado: ${proximoNotificado.paciente_nome}`);
+          console.log(`📱 [RESPONDER-FILA] Próximo notificado: ${maskName(proximoNotificado.paciente_nome)}`);
         } else {
           console.log('ℹ️ [RESPONDER-FILA] Nenhum próximo candidato na fila');
         }
