@@ -759,12 +759,18 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           const periodoFT = chave ? (rawServico.periodos as any)[chave] : null;
           if (!periodoFT || periodoFT.ativo === false) continue;
 
+          // [F1.4] Bug 1 do fixed_time: a comparação exata `hora_agendamento = '08:00:00'`
+          // ignorava agendamentos lançados em placeholders cronológicos (07:00, 07:01, …).
+          // No banco do Dr. Marcelo: 41 de 42 agendamentos MAPA não casavam com a hora
+          // fixa, gerando "3 vagas livres" mesmo com o dia lotado.
+          // Solução: para fixed_time, contar todos os agendamentos do médico no dia
+          // (medico_id virtual já é exclusivo daquele serviço — "MAPA - Dr. Marcelo"),
+          // sem comparar hora_agendamento.
           const { data: ocupados } = await supabase
             .from('agendamentos')
             .select('id')
             .eq('medico_id', medico.id)
             .eq('data_agendamento', dataCheckStr)
-            .eq('hora_agendamento', periodoFT.hora + ':00')
             .eq('cliente_id', clienteId)
             .is('excluido_em', null)
             .in('status', ['agendado', 'confirmado']);
