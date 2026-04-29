@@ -70,7 +70,11 @@ export function getRequestScope(body: any, config?: any | null): RequestScope {
     const expandedIds = new Set<string>(baseScope.doctorIds);
     for (const principalId of baseScope.doctorIds) {
       const rule = config.business_rules[principalId];
-      const relacionados = rule?.medicos_relacionados;
+      // A RPC `load_llm_config_for_clinic` aninha o JSON do médico em `rule.config`,
+      // então `medicos_relacionados` vive em `rule.config.medicos_relacionados`.
+      // Mantemos fallback para `rule.medicos_relacionados` como defesa caso a
+      // estrutura mude no futuro ou em outros tenants.
+      const relacionados = rule?.config?.medicos_relacionados ?? rule?.medicos_relacionados;
       if (Array.isArray(relacionados)) {
         for (const id of relacionados) {
           if (typeof id === 'string' && id.length > 0) expandedIds.add(id);
