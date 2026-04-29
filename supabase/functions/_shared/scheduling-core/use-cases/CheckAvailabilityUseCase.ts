@@ -102,7 +102,11 @@ export class CheckAvailabilityUseCase {
               minimumDate,
             });
 
-        const available = config.limite - occupied;
+        // 🛡️ Capacidade segura: fallback para 1 se config.limite vier null/undefined/NaN
+        const capacity = Number.isFinite(config.limite as number) && (config.limite as number) > 0
+          ? (config.limite as number)
+          : 1;
+        const available = Math.max(0, capacity - (occupied ?? 0));
         if (available <= 0) continue;
 
         windows.push({
@@ -110,7 +114,7 @@ export class CheckAvailabilityUseCase {
           start: config.inicio,
           end: config.fim,
           available,
-          capacity: config.limite,
+          capacity,
           bookingMode,
         });
       }
