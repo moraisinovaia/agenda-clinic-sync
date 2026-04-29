@@ -688,6 +688,60 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
       const rawServico = servicoKey ? regras?.servicos?.[servicoKey] : null;
       const isFixedTime = rawServico?.tipo === 'fixed_time';
 
+      // ── [F1.2] walk_in_info_only path (ECG): apenas informa dias/horários ──
+      // Why: serviços walk-in NÃO devem retornar contagem de vagas — não há
+      // agendamento individual. Antes, o handler caía no fluxo normal e usava
+      // fallback `(config.limite || 9)` no retry loop, mostrando "9 vagas" fictício.
+      if (rawServico?.tipo === 'walk_in_info_only' && rawServico?.periodos) {
+        console.log(`🚶 [WALK_IN] "${servicoKey}" é walk_in_info_only — retornando informação sem contagem`);
+
+        const DIA_SEMANA_WI = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+        const horariosAtendimento: Array<Record<string, unknown>> = [];
+
+        for (let weekday = 1; weekday <= 5; weekday++) { // seg a sex
+          const diaInfo: Record<string, unknown> = {
+            dia_semana_num: weekday,
+            dia_semana:     DIA_SEMANA_WI[weekday],
+            manha:          null,
+            tarde:          null,
+          };
+
+          for (const [periodKey, cfg] of Object.entries(rawServico.periodos as Record<string, any>)) {
+            if (periodKey !== 'manha' && periodKey !== 'tarde') continue;
+            const c = cfg as any;
+            if (c?.ativo === false) continue;
+            const dias = c?.dias_especificos;
+            if (Array.isArray(dias) && !dias.includes(weekday)) continue;
+
+            diaInfo[periodKey] = {
+              ficha:              c?.distribuicao_fichas ?? (c?.inicio && c?.fim ? `${c.inicio} às ${c.fim}` : null),
+              atendimento_inicio: c?.atendimento_inicio ?? null,
+            };
+          }
+
+          if (diaInfo.manha || diaInfo.tarde) horariosAtendimento.push(diaInfo);
+        }
+
+        return successAvailability({
+          success:               true,
+          tipo_atendimento:      'walk_in_info_only',
+          message:               `${servicoKey} não requer agendamento. Venha por ordem de chegada nos dias e horários abaixo.`,
+          medico:                medico.nome,
+          medico_id:             medico.id,
+          atendimento_nome:      servicoKey,
+          horarios_atendimento:  horariosAtendimento,
+          observacao:            (rawServico as any)?.observacao ?? null,
+          permite_particular_sem_pedido_medico: (rawServico as any)?.permite_particular_sem_pedido_medico
+                                            ?? (rawServico as any)?.ecg_particular_sem_guia
+                                            ?? null,
+          contexto: {
+            medico_id:   medico.id,
+            medico_nome: medico.nome,
+            servico:     servicoKey,
+          },
+        });
+      }
+
       if (isFixedTime && rawServico?.periodos) {
         const DIAS_KEY: Record<number, string> = { 1: 'segunda', 2: 'terca', 3: 'quarta', 4: 'quinta', 5: 'sexta' };
         const DIA_SEMANA_FT = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
