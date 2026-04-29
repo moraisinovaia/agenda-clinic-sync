@@ -673,8 +673,8 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
               return {
                 periodo: PERIODO_LABEL[w.periodKey] ?? w.periodKey,
                 horario_distribuicao: horarioDistribuicao,
-                vagas_disponiveis: w.available,
-                limite_total: w.capacity,
+                vagas_disponiveis: Number.isFinite(w.available as number) ? (w.available as number) : (w.capacity ?? 1),
+                limite_total: Number.isFinite(w.capacity as number) ? (w.capacity as number) : 1,
                 tipo: BOOKING_MODE_LEGADO[w.bookingMode] ?? w.bookingMode,
                 mensagem_ordem_chegada: ordemChegadaConfig?.mensagem ?? null,
                 hora_atendimento_inicio: ordemChegadaConfig?.hora_atendimento_inicio ?? null,
