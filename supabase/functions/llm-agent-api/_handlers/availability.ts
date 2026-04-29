@@ -670,11 +670,12 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
                 ? `${ordemChegadaConfig.hora_chegada_inicio} às ${ordemChegadaConfig.hora_chegada_fim}`
                 : (servico?.periodos?.[w.periodKey]?.distribuicao_fichas ?? `${w.start} às ${w.end}`);
 
+              // 🛡️ STRICT: nunca inventar limite=1. Se UseCase devolveu este window é porque capacity é válido.
               return {
                 periodo: PERIODO_LABEL[w.periodKey] ?? w.periodKey,
                 horario_distribuicao: horarioDistribuicao,
-                vagas_disponiveis: Number.isFinite(w.available as number) ? (w.available as number) : (w.capacity ?? 1),
-                limite_total: Number.isFinite(w.capacity as number) ? (w.capacity as number) : 1,
+                vagas_disponiveis: w.available,
+                limite_total: w.capacity,
                 tipo: BOOKING_MODE_LEGADO[w.bookingMode] ?? w.bookingMode,
                 mensagem_ordem_chegada: ordemChegadaConfig?.mensagem ?? null,
                 hora_atendimento_inicio: ordemChegadaConfig?.hora_atendimento_inicio ?? null,
@@ -1591,6 +1592,13 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         continue;
       }
 
+      // 🛡️ STRICT: limite do período DEVE estar configurado e > 0. Sem fallback fantasma.
+      const limiteCfg = (config as any).limite;
+      if (!Number.isFinite(limiteCfg) || limiteCfg <= 0) {
+        console.warn(`⚠️ [STRICT] Período ${periodo} em ${data_consulta} ignorado: limite inválido (${limiteCfg}) para ${medico.nome}/${servicoKey}`);
+        continue;
+      }
+
       // Classificar cada agendamento no período correto
       let vagasOcupadas = 0;
       if (todosAgendamentosData && todosAgendamentosData.length > 0) {
@@ -1602,18 +1610,18 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           return periodoClassificado === periodo;
         }).length;
         
-        console.log(`📊 ${data_consulta} - Período ${periodo}: ${vagasOcupadas}/${(config as any).limite} vagas ocupadas`);
+        console.log(`📊 ${data_consulta} - Período ${periodo}: ${vagasOcupadas}/${limiteCfg} vagas ocupadas`);
         console.log(`   Horários encontrados:`, todosAgendamentosData.map(a => a.hora_agendamento).join(', '));
       }
 
-      const vagasDisponiveis = (config as any).limite - vagasOcupadas;
+      const vagasDisponiveis = limiteCfg - vagasOcupadas;
 
       periodosDisponiveis.push({
         periodo: periodo === 'manha' ? 'Manhã' : 'Tarde',
         horario_distribuicao: (config as any).distribuicao_fichas || `${(config as any).inicio} às ${(config as any).fim}`,
         vagas_ocupadas: vagasOcupadas,
         vagas_disponiveis: vagasDisponiveis,
-        total_vagas: (config as any).limite,
+        total_vagas: limiteCfg,
         disponivel: vagasDisponiveis > 0,
         hora_inicio: (config as any).inicio,
         hora_fim: (config as any).fim,
