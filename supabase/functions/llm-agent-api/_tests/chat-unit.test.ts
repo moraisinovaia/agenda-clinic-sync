@@ -32,7 +32,7 @@ import {
 } from '../_handlers/chat.ts';
 import { handleReschedule } from '../_handlers/reschedule.ts';
 
-import { isBuscaProximaDisponibilidade, detectarDiaSemana } from '../_handlers/availability.ts';
+import { isBuscaProximaDisponibilidade, detectarDiaSemana, isPeriodoPermitidoNoDia } from '../_handlers/availability.ts';
 import { calcularVagasDisponiveisComLimites } from '../_lib/limites.ts';
 import { validateConfigOwnership, loadDynamicConfig, CONFIG_CACHE } from '../_lib/config.ts';
 import {
@@ -1574,6 +1574,190 @@ Deno.test('handleReschedule: scope vazio + LLM_SCOPE_STRICT=true → bloqueia (f
     assertEquals(json.success, false);
     assertEquals(json.codigo_erro, 'AGENDAMENTO_FORA_DO_ESCOPO');
   });
+});
+
+// ── isPeriodoPermitidoNoDia (etapa F0 — fix oferta de turno proibido) ────
+
+Deno.test('isPeriodoPermitidoNoDia: sem dias_especificos → permite todos (preserva legado)', () => {
+  assertEquals(isPeriodoPermitidoNoDia({}, 4), true);
+  assertEquals(isPeriodoPermitidoNoDia({ dias_especificos: undefined }, 4), true);
+  assertEquals(isPeriodoPermitidoNoDia({ dias_especificos: null }, 4), true);
+  assertEquals(isPeriodoPermitidoNoDia({ dias_especificos: 'invalid' }, 4), true);
+});
+
+Deno.test('isPeriodoPermitidoNoDia: config null/undefined → permite (defensive)', () => {
+  assertEquals(isPeriodoPermitidoNoDia(null, 4), true);
+  assertEquals(isPeriodoPermitidoNoDia(undefined, 4), true);
+});
+
+Deno.test('isPeriodoPermitidoNoDia: dias_especificos respeita lista (caso real Consulta Cardiológica)', () => {
+  // Consulta Cardiológica: manhã = [1,2,4] (seg/ter/qui), tarde = [3] (apenas quarta)
+  const manha = { dias_especificos: [1, 2, 4] };
+  const tarde = { dias_especificos: [3] };
+
+  // Quinta (4) — manhã sim, tarde NÃO
+  assertEquals(isPeriodoPermitidoNoDia(manha, 4), true);
+  assertEquals(isPeriodoPermitidoNoDia(tarde, 4), false, 'tarde de quinta deve ser bloqueada');
+
+  // Terça (2) — manhã sim, tarde NÃO
+  assertEquals(isPeriodoPermitidoNoDia(manha, 2), true);
+  assertEquals(isPeriodoPermitidoNoDia(tarde, 2), false, 'tarde de terça deve ser bloqueada');
+
+  // Quarta (3) — manhã NÃO, tarde sim
+  assertEquals(isPeriodoPermitidoNoDia(manha, 3), false, 'manhã de quarta deve ser bloqueada');
+  assertEquals(isPeriodoPermitidoNoDia(tarde, 3), true);
+});
+
+Deno.test('isPeriodoPermitidoNoDia: array vazio → bloqueia todos (fail-closed)', () => {
+  assertEquals(isPeriodoPermitidoNoDia({ dias_especificos: [] }, 0), false);
+  assertEquals(isPeriodoPermitidoNoDia({ dias_especificos: [] }, 4), false);
+});
+
+// ── calcularVagasDisponiveisComLimites: fallback derivado (Bug 1) ─────────
+
+// Mock do Supabase pra esse teste — replica o shape exato que o handler usa.
+// Cada chamada from(table) consome o próximo item da fila daquela tabela.
+function mockSupabaseQueueWithCount(queues: Record<string, any[]>) {
+  const builderFor = (table: string) => {
+    const next = () => queues[table]?.shift() ?? { data: [], count: 0, error: null };
+    const builder: any = new Proxy({}, {
+      get: (_t, prop) => {
+        if (prop === 'then') return (resolve: any) => Promise.resolve(resolve(next()));
+        if (prop === 'single') return () => Promise.resolve(next());
+        if (prop === 'maybeSingle') return () => Promise.resolve(next());
+        return () => builder;
+      },
+    });
+    return builder;
+  };
+  return { from: (table: string) => builderFor(table) };
+}
+
+Deno.test('calcularVagasDisponiveisComLimites: caso Dr. Marcelo — pool derivado conta corretamente', async () => {
+  // Cenário: Consulta Cardiológica com compartilha_limite_com=Retorno Cardiológico,
+  // sem regras.periodos no root, dia 30/04 (quinta=4) — só manhã permitida [1,2,4].
+  // 22 agendamentos no medico_id na manhã → vaga = 14 - 22 = max(0, -8) = 0
+  const supabase = mockSupabaseQueueWithCount({
+    // verificarLimitesCompartilhados consulta atendimentos antes de tudo:
+    // ele usa periodos=undefined → não chama atendimentos no caminho POOL legado;
+    // no nosso fix, o caminho derivado SIM consulta atendimentos.
+    atendimentos: [{
+      data: [
+        { id: 'consulta-id', nome: 'Consulta Cardiológica' },
+        { id: 'retorno-id-1', nome: 'Retorno Cardiológico' },
+        { id: 'retorno-id-2', nome: 'Retorno Cardiológico' }, // duplicata
+        { id: 'outro-id', nome: 'MAPA 24H' },
+      ],
+      error: null,
+    }],
+    // Manhã (07:00-12:00, dias_especificos=[1,2,4]) em quinta=4 → válido.
+    // count=22 (lotado para limite=14)
+    agendamentos: [
+      { count: 22, error: null },
+    ],
+  });
+
+  const servicoConfig = {
+    compartilha_limite_com: 'Retorno Cardiológico',
+    periodos: {
+      manha: {
+        limite: 14,
+        contagem_inicio: '07:00',
+        contagem_fim: '12:00',
+        dias_especificos: [1, 2, 4],
+      },
+      tarde: {
+        limite: 14,
+        contagem_inicio: '12:00',
+        contagem_fim: '18:00',
+        dias_especificos: [3], // quinta NÃO permitida → não conta
+      },
+    },
+  };
+  const regras = {}; // sem periodos no root — força o caminho derivado
+
+  const vagas = await calcularVagasDisponiveisComLimites(
+    supabase,
+    'cliente-A',
+    'medico-1',
+    '2026-04-30', // quinta
+    'Consulta Cardiológica',
+    servicoConfig,
+    regras,
+  );
+
+  // Manhã: 14-22 = max(0, -8) = 0 vagas. Tarde: pulada por dias_especificos.
+  // Total: 0 (correto — manhã lotada, tarde não atende)
+  assertEquals(vagas, 0, 'Quinta com manhã lotada e tarde não permitida deve retornar 0');
+});
+
+Deno.test('calcularVagasDisponiveisComLimites: pool derivado retorna soma quando turno tem vaga', async () => {
+  // 06/06 sábado=6 — não é permitido em nenhum turno → retorna null → fallback 0.
+  // Mas pra testar caminho positivo, vamos usar 02/06 terça=2 onde manhã está livre.
+  const supabase = mockSupabaseQueueWithCount({
+    atendimentos: [{
+      data: [
+        { id: 'consulta-id', nome: 'Consulta Cardiológica' },
+        { id: 'retorno-id', nome: 'Retorno Cardiológico' },
+      ],
+      error: null,
+    }],
+    agendamentos: [
+      { count: 0, error: null }, // manhã: 0 ocupados → 14 vagas
+    ],
+  });
+
+  const servicoConfig = {
+    compartilha_limite_com: 'Retorno Cardiológico',
+    periodos: {
+      manha: {
+        limite: 14,
+        contagem_inicio: '07:00',
+        contagem_fim: '12:00',
+        dias_especificos: [1, 2, 4],
+      },
+      tarde: {
+        limite: 14,
+        contagem_inicio: '12:00',
+        contagem_fim: '18:00',
+        dias_especificos: [3], // terça=2 não permitida
+      },
+    },
+  };
+
+  const vagas = await calcularVagasDisponiveisComLimites(
+    supabase, 'cliente-A', 'medico-1', '2026-06-02',
+    'Consulta Cardiológica', servicoConfig, {},
+  );
+
+  assertEquals(vagas, 14, 'Terça com manhã livre (0/14) e tarde não permitida deve retornar 14');
+});
+
+Deno.test('calcularVagasDisponiveisComLimites: dia sem nenhum turno permitido cai no fallback conservador', async () => {
+  // Sábado=6 — nem manhã [1,2,4] nem tarde [3] inclui 6.
+  // turnosValidos=0 → derivado retorna null → cai no fallback original.
+  const supabase = mockSupabaseQueueWithCount({
+    atendimentos: [{
+      data: [{ id: 'consulta-id', nome: 'Consulta Cardiológica' }],
+      error: null,
+    }],
+  });
+
+  const servicoConfig = {
+    compartilha_limite_com: 'Retorno Cardiológico',
+    periodos: {
+      manha: { limite: 14, contagem_inicio: '07:00', contagem_fim: '12:00', dias_especificos: [1, 2, 4] },
+      tarde: { limite: 14, contagem_inicio: '12:00', contagem_fim: '18:00', dias_especificos: [3] },
+    },
+  };
+
+  const vagas = await calcularVagasDisponiveisComLimites(
+    supabase, 'cliente-A', 'medico-1', '2026-05-02', // sábado
+    'Consulta Cardiológica', servicoConfig, {},
+  );
+
+  // Fallback: servicoConfig.limite ?? 0 → undefined ?? 0 → 0
+  assertEquals(vagas, 0);
 });
 
 Deno.test('handleReschedule: scope vazio + flag ausente → permite (fail-open default)', async () => {

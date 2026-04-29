@@ -14,6 +14,23 @@ import { sanitizarCampoOpcional, getDiaSemana } from '../_lib/normalizacao.ts'
 import { getTipoAgendamentoEfetivo, isOrdemChegada, isEstimativaHorario, getIntervaloMinutos, getMensagemEstimativa, formatarHorarioParaExibicao, getDataHoraAtualBrasil, filtrarPeriodosPassados, classificarPeriodoAgendamento, buscarProximasDatasDisponiveis, TIPO_ORDEM_CHEGADA, TIPO_ESTIMATIVA_HORARIO } from '../_lib/tipo-agendamento.ts'
 import { fuzzyMatchMedicos } from '../_lib/fuzzy-match.ts'
 
+/**
+ * Verifica se um período (manha/tarde) está permitido em dado dia da semana,
+ * conforme `dias_especificos` da configuração.
+ *
+ * Why: a regra é usada em dois pontos do availability.ts (loop principal e
+ * retry de 100 dias). Centralizar evita drift como o que fez o retry oferecer
+ * turnos onde a clínica não atendia naquele dia da semana.
+ *
+ * Quando `dias_especificos` está ausente ou não é array, retorna true
+ * (sem restrição) — preserva comportamento antigo para configs sem o campo.
+ */
+export function isPeriodoPermitidoNoDia(periodoConfig: any, weekday: number): boolean {
+  const dias = periodoConfig?.dias_especificos;
+  if (!Array.isArray(dias)) return true;
+  return dias.includes(weekday);
+}
+
 // Detecta intenção de busca de próxima disponibilidade geral (sem data específica).
 // "tem vaga pra quando?" / "qual a próxima vaga?" / "quando tem consulta?" → true
 // "quero para dia 20/05" / "tem vaga amanhã?" → false
@@ -717,7 +734,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           for (const [pk, pc] of Object.entries((servico as any)?.periodos ?? {})) {
             if (pk !== 'manha' && pk !== 'tarde') continue;
             const cfg: any = pc;
-            if (Array.isArray(cfg.dias_especificos) && !cfg.dias_especificos.includes(diaSemanaNum)) continue;
+            if (!isPeriodoPermitidoNoDia(cfg, diaSemanaNum)) continue;
             if (periodoPreferido && pk !== periodoPreferido) continue;
             const janela = cfg.distribuicao_fichas
               ?? (cfg.inicio && cfg.fim ? `${cfg.inicio} às ${cfg.fim}` : null)
@@ -831,6 +848,10 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
 
           for (const [periodo, config] of Object.entries(servico?.periodos || {})) {
             if (periodoPreferido && periodo !== periodoPreferido) continue;
+
+            // Respeitar dias_especificos do período. Sem isso o retry oferecia
+            // turnos onde a clínica não atende naquele dia da semana.
+            if (!isPeriodoPermitidoNoDia(config, diaSemanaNum)) continue;
 
             const limite     = (config as any).limite || 9;
             // Usar contagem_* (janela de capacidade formal) sobre inicio/fim (janela de exibição)

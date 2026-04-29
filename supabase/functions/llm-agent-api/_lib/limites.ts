@@ -294,6 +294,23 @@ export async function calcularVagasDisponiveisComLimites(
   // Retornar o menor valor (mais restritivo), nunca Infinity/NaN/null
   const vagasMin = Math.min(vagasPool, vagasSublimite);
   if (!Number.isFinite(vagasMin) || isNaN(vagasMin)) {
+    // Caminho derivado: a config do Dr. Marcelo (e provavelmente outras clínicas
+    // novas) não tem `regras.periodos` no formato POOL legado, mas tem
+    // `servicoConfig.periodos` (manhã/tarde) + `compartilha_limite_com`.
+    // Sem este caminho, a função retornava 0 e o handler caía sempre no retry loop.
+    if (compartilhaLimiteCom && servicoConfig?.periodos) {
+      const derivado = await calcularVagasPoolDerivado(
+        supabase, clienteId, medicoId, dataAgendamento,
+        servicoKey, compartilhaLimiteCom, servicoConfig.periodos, diaSemana,
+      );
+      if (derivado !== null) {
+        console.log(
+          `✅ [POOL_DERIVADO] "${servicoKey}" + "${compartilhaLimiteCom}" em ${dataAgendamento}: ${derivado} vaga(s)`,
+        );
+        return derivado;
+      }
+    }
+
     // Capacidade indeterminada: pode ser config ausente OU bug silencioso.
     // Conservador por padrão — evita overbooking invisível.
     console.warn('[limites] Capacidade inválida detectada — retornando fallback conservador', {
@@ -310,6 +327,92 @@ export async function calcularVagasDisponiveisComLimites(
     return (servicoConfig as any)?.limite ?? 0;
   }
   return Math.max(0, vagasMin);
+}
+
+// Normaliza nome para fuzzy match: lowercase, sem acentos, só alfanuméricos.
+function normalizarNomeAtendimento(s: string): string {
+  return s.toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Calcula vagas disponíveis derivando o pool a partir de
+ * `servicoConfig.periodos` + `compartilha_limite_com`, sem depender de
+ * `regras.periodos` (formato POOL legado raramente preenchido nas configs reais).
+ *
+ * Retorna `null` quando não consegue derivar (atendimentos não batem, nenhum
+ * turno válido para o dia da semana, ou config incompleta) — caller decide o
+ * fallback conservador.
+ */
+async function calcularVagasPoolDerivado(
+  supabase: any,
+  clienteId: string,
+  medicoId: string,
+  dataAgendamento: string,
+  servicoNome: string,
+  compartilhadoCom: string,
+  servicoPeriodos: Record<string, any>,
+  diaSemana: number,
+): Promise<number | null> {
+  const nomesPoolNorm = [
+    normalizarNomeAtendimento(servicoNome),
+    normalizarNomeAtendimento(compartilhadoCom),
+  ];
+
+  // Resolver todos os atendimento_ids cujo nome bata com algum do pool.
+  // Tratamos por nome (não ID) para cobrir o caso de duplicatas no banco.
+  const { data: atendimentos } = await supabase
+    .from('atendimentos')
+    .select('id, nome')
+    .eq('cliente_id', clienteId)
+    .eq('ativo', true);
+
+  if (!atendimentos || atendimentos.length === 0) return null;
+
+  const poolIds: string[] = (atendimentos as Array<{ id: string; nome: string }>)
+    .filter((a) => {
+      const an = normalizarNomeAtendimento(a.nome);
+      return nomesPoolNorm.some((n) => n === an || an.includes(n) || n.includes(an));
+    })
+    .map((a) => a.id);
+
+  if (poolIds.length === 0) return null;
+
+  let vagasTotal = 0;
+  let turnosValidos = 0;
+
+  for (const [pk, cfg] of Object.entries(servicoPeriodos)) {
+    if (pk !== 'manha' && pk !== 'tarde') continue;
+    const cfgAny = cfg as any;
+
+    // Respeitar dias_especificos do período (mesma regra de availability.ts).
+    if (Array.isArray(cfgAny.dias_especificos) && !cfgAny.dias_especificos.includes(diaSemana)) continue;
+
+    const limite = cfgAny.limite;
+    const contInicio = cfgAny.contagem_inicio ?? cfgAny.inicio;
+    const contFim = cfgAny.contagem_fim ?? cfgAny.fim;
+    if (!Number.isFinite(limite) || !contInicio || !contFim) continue;
+
+    const { count } = await supabase
+      .from('agendamentos')
+      .select('*', { count: 'exact', head: true })
+      .eq('medico_id', medicoId)
+      .eq('cliente_id', clienteId)
+      .eq('data_agendamento', dataAgendamento)
+      .in('atendimento_id', poolIds)
+      .gte('hora_agendamento', contInicio)
+      .lt('hora_agendamento', contFim)
+      .is('excluido_em', null)
+      .in('status', ['agendado', 'confirmado']);
+
+    vagasTotal += Math.max(0, limite - (count || 0));
+    turnosValidos++;
+  }
+
+  if (turnosValidos === 0) return null;
+  return vagasTotal;
 }
 
 /**
