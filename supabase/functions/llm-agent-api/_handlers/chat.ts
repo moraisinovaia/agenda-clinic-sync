@@ -496,6 +496,12 @@ async function callHandler(
 // ── Exports para testes unitários ────────────────────────────────────────
 export { auditRules, mergeDados, computeMissingFields, isServicoTergo, isServicoMapa, isConvenioParceiro, dispatchHandler };
 
+// Seleciona a mensagem mais informativa de um resultado de handler.
+// Cobre tanto successResponse (message) quanto businessErrorResponse (mensagem_usuario/whatsapp).
+export function resolveHandlerMessage(hData: any, fallback: string): string {
+  return hData?.message ?? hData?.mensagem_whatsapp ?? hData?.mensagem_usuario ?? fallback;
+}
+
 // ── Camada final de normalização e segurança ──────────────────────────────
 // Executada imediatamente antes do successResponse.
 // Garante invariantes de domínio sem alterar o fluxo principal.
@@ -751,10 +757,11 @@ export async function handleChat(
         extraction.intent,
         dadosMerged,
         {
-          cliente_id:    clienteId,
-          config_id:     body.config_id,
-          phone_paciente: body.phone_paciente,
-          nome_paciente:  body.nome_paciente,
+          cliente_id:        clienteId,
+          config_id:         body.config_id,
+          phone_paciente:    body.phone_paciente,
+          nome_paciente:     body.nome_paciente,
+          mensagem_original: mensagem,
         },
       );
 
@@ -764,8 +771,15 @@ export async function handleChat(
           handlerResult = await resp.json();
           acaoExecutada = dispatch.handler;
           const hData = handlerResult as any;
-          // Handler result substitui a sugestão do LLM para dados precisos do banco
-          respostaFinal = hData?.message ?? extraction.resposta;
+          if (hData?.success === false) {
+            console.warn('[CHAT] handler retornou erro:', {
+              handler:           dispatch.handler,
+              codigo_erro:       hData?.codigo_erro,
+              mensagem_usuario:  hData?.mensagem_usuario,
+              mensagem_whatsapp: hData?.mensagem_whatsapp,
+            });
+          }
+          respostaFinal = resolveHandlerMessage(hData, extraction.resposta);
         } else {
           respostaFinal = extraction.resposta;
         }

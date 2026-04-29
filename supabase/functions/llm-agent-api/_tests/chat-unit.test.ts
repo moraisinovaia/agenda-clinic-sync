@@ -22,8 +22,11 @@ import {
   OBRIGATORIOS_CONSULTA,
   contemIntencaoExplicita,
   dispatchHandler,
+  resolveHandlerMessage,
   type DadosColetados,
 } from '../_handlers/chat.ts';
+
+import { isBuscaProximaDisponibilidade } from '../_handlers/availability.ts';
 
 import type { DynamicConfig } from '../_lib/types.ts';
 
@@ -472,4 +475,88 @@ Deno.test('computeMissingFields: servico e medico_nome auto-preenchidos não apa
   assert(missing.includes('data_consulta'),    'data_consulta ainda está faltando');
   assert(missing.includes('nome_paciente'),    'nome_paciente ainda está faltando');
   assert(missing.includes('convenio'),         'convenio ainda está faltando');
+});
+
+// ── resolveHandlerMessage ─────────────────────────────────────────────────
+
+// A) Quando handler retorna businessErrorResponse (sem message), usa mensagem_usuario
+Deno.test('resolveHandlerMessage: businessErrorResponse usa mensagem_usuario quando não há message', () => {
+  const hData = {
+    success: false,
+    codigo_erro: 'SEM_VAGAS_DISPONIVEIS',
+    mensagem_usuario: '😔 Não encontrei vagas disponíveis para Dr. Marcelo.',
+    mensagem_whatsapp: '😔 Não encontrei vagas disponíveis para Dr. Marcelo.',
+    // sem campo message
+  };
+  const result = resolveHandlerMessage(hData, 'fallback genérico');
+  assertStringIncludes(result, 'Não encontrei vagas', 'deve usar mensagem_usuario, não o fallback');
+  assertFalse(result === 'fallback genérico', 'não deve cair no fallback LLM');
+});
+
+// E) Quando businessErrorResponse tem mensagem_whatsapp mas não mensagem_usuario
+Deno.test('resolveHandlerMessage: prefere message > mensagem_whatsapp > mensagem_usuario > fallback', () => {
+  assertEquals(
+    resolveHandlerMessage({ message: 'A' }, 'fallback'),
+    'A',
+    'message tem prioridade máxima',
+  );
+  assertEquals(
+    resolveHandlerMessage({ mensagem_whatsapp: 'B' }, 'fallback'),
+    'B',
+    'mensagem_whatsapp é segunda opção',
+  );
+  assertEquals(
+    resolveHandlerMessage({ mensagem_usuario: 'C' }, 'fallback'),
+    'C',
+    'mensagem_usuario é terceira opção',
+  );
+  assertEquals(
+    resolveHandlerMessage(null, 'fallback'),
+    'fallback',
+    'sem hData usa fallback',
+  );
+  assertEquals(
+    resolveHandlerMessage({}, 'fallback'),
+    'fallback',
+    'hData vazio usa fallback',
+  );
+});
+
+// ── dispatchHandler envia mensagem_original ───────────────────────────────
+
+// B) mensagem_original chega no body de availability quando presente no baseBody
+Deno.test('dispatchHandler: mensagem_original incluída no body de availability', () => {
+  const dados: DadosColetados = {
+    ...dadosVazios(),
+    servico:     'Consulta Cardiológica',
+    medico_nome: 'Dr. Marcelo',
+  };
+  const dec = dispatchHandler('check_availability', 'disponibilidade', dados, {
+    cliente_id:        'x',
+    mensagem_original: 'tem vaga pra quando?',
+  });
+  assertEquals(dec.handler, 'availability');
+  assertEquals((dec.body as Record<string, unknown>).mensagem_original, 'tem vaga pra quando?');
+});
+
+// ── isBuscaProximaDisponibilidade ─────────────────────────────────────────
+
+// C) Mensagens sem data específica → true (deve acionar busca de próximas datas)
+Deno.test('isBuscaProximaDisponibilidade: detecta intenção de disponibilidade geral', () => {
+  assert(isBuscaProximaDisponibilidade('tem vaga pra quando?'),         '"tem vaga pra quando?" = busca geral');
+  assert(isBuscaProximaDisponibilidade('qual a próxima vaga?'),         '"próxima vaga" = busca geral');
+  assert(isBuscaProximaDisponibilidade('quando tem consulta?'),         '"quando tem consulta" = busca geral');
+  assert(isBuscaProximaDisponibilidade('tem horário disponível?'),      '"tem horário disponível" = busca geral');
+  assert(isBuscaProximaDisponibilidade('tem vaga?'),                    '"tem vaga" = busca geral');
+  assert(isBuscaProximaDisponibilidade('você não consegue ver quando tem vaga pra mim?'), 'frase completa do caso real');
+});
+
+// D) Mensagens com data específica → false (não deve ativar busca de próximas datas)
+Deno.test('isBuscaProximaDisponibilidade: não detecta quando há data específica ou outra intenção', () => {
+  assertFalse(isBuscaProximaDisponibilidade('quero para dia 20 de maio'),       'data específica');
+  assertFalse(isBuscaProximaDisponibilidade('pode ser na quinta-feira'),        'dia da semana específico');
+  assertFalse(isBuscaProximaDisponibilidade('pode agendar?'),                   'confirmação não é disponibilidade geral');
+  assertFalse(isBuscaProximaDisponibilidade(null),                              'null retorna false');
+  assertFalse(isBuscaProximaDisponibilidade(''),                                'vazio retorna false');
+  assertFalse(isBuscaProximaDisponibilidade('ok'),                              '"ok" isolado não é busca geral');
 });

@@ -14,6 +14,23 @@ import { sanitizarCampoOpcional, getDiaSemana } from '../_lib/normalizacao.ts'
 import { getTipoAgendamentoEfetivo, isOrdemChegada, isEstimativaHorario, getIntervaloMinutos, getMensagemEstimativa, formatarHorarioParaExibicao, getDataHoraAtualBrasil, filtrarPeriodosPassados, classificarPeriodoAgendamento, buscarProximasDatasDisponiveis, TIPO_ORDEM_CHEGADA, TIPO_ESTIMATIVA_HORARIO } from '../_lib/tipo-agendamento.ts'
 import { fuzzyMatchMedicos } from '../_lib/fuzzy-match.ts'
 
+// Detecta intenção de busca de próxima disponibilidade geral (sem data específica).
+// "tem vaga pra quando?" / "qual a próxima vaga?" / "quando tem consulta?" → true
+// "quero para dia 20/05" / "tem vaga amanhã?" → false
+export function isBuscaProximaDisponibilidade(mensagem: string | null | undefined): boolean {
+  if (!mensagem) return false;
+  const m = mensagem.toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/\s+/g, ' ').trim();
+  const termos = [
+    'quando tem', 'tem vaga', 'proxima vaga', 'proximo horario',
+    'horario disponivel', 'agenda disponivel',
+    'quando consulta', 'tem horario', 'qual a proxima',
+    'quando posso', 'quando da',
+  ];
+  return termos.some((t) => m.includes(t));
+}
+
 export async function handleAvailability(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
     const scope = getRequestScope(body);
@@ -120,8 +137,12 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
     let mensagemEspecial = null;
     let data_consulta_original = data_consulta;
 
-    if (!data_consulta) {
-      // Se for depois das 18h, começar a busca de AMANHÃ
+    if (!data_consulta && !buscar_proximas && isBuscaProximaDisponibilidade(mensagem_original)) {
+      // Intenção de próxima disponibilidade: não fixar data, ativar busca de range
+      buscar_proximas = true;
+      console.log(`🔍 Próxima disponibilidade detectada ("${mensagem_original}") → buscar_proximas=true`);
+    } else if (!data_consulta) {
+      // Sem data e sem intenção de disponibilidade geral → usar hoje/amanhã como ponto de partida
       if (horaAtual >= 18) {
         const amanha = new Date(dataAtual + 'T00:00:00');
         amanha.setDate(amanha.getDate() + 1);
