@@ -6,7 +6,7 @@ import { BUSINESS_RULES } from '../_lib/tipo-agendamento.ts'
 
 export async function handleConfirm(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
-    const scope = getRequestScope(body);
+    const scope = getRequestScope(body, config);
     const { agendamento_id, observacoes } = body;
 
     // Validação

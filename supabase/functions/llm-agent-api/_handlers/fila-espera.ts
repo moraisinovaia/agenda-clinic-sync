@@ -91,7 +91,7 @@ export async function handleConsultarFila(supabase: any, body: any, clienteId: s
 // Adicionar paciente à fila de espera
 export async function handleAdicionarFila(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
-    const scope = getRequestScope(body);
+    const scope = getRequestScope(body, config);
     // Normalização: aceita snake_case (padrão) e camelCase (retrocompatibilidade)
     const nomeCompleto = body.nome_completo || body.nomeCompleto;
     const dataNascimento = body.data_nascimento || body.dataNascimento;

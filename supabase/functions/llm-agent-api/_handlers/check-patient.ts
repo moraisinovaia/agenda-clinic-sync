@@ -8,7 +8,7 @@ import { maskName } from '../_lib/pii.ts'
 
 export async function handleCheckPatient(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
-    const scope = getRequestScope(body);
+    const scope = getRequestScope(body, config);
     // Sanitizar dados de busca
     const celularRaw = sanitizarCampoOpcional(body.celular);
     const dataNascimentoNormalizada = normalizarDataNascimento(

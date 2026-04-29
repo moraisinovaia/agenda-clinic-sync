@@ -5,7 +5,7 @@ import { getDataAtualBrasil } from '../_lib/tipo-agendamento.ts'
 
 export async function handleListAppointments(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
-    const scope = getRequestScope(body);
+    const scope = getRequestScope(body, config);
     const { medico_nome, data } = body;
 
     if (!medico_nome || !data) {

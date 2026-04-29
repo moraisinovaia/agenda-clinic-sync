@@ -8,7 +8,7 @@ import { normalizarServicoPeriodos } from '../_lib/config.ts'
 
 export async function handleReschedule(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
-    const scope = getRequestScope(body);
+    const scope = getRequestScope(body, config);
     console.log('🔄 Iniciando remarcação de consulta');
     console.log('📥 [RESCHEDULE] Dados recebidos:', {
       keys: Object.keys(body || {}),

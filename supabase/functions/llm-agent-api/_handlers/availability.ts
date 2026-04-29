@@ -84,7 +84,7 @@ export function detectarDiaSemana(mensagem: string | null | undefined): number |
 
 export async function handleAvailability(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
-    const scope = getRequestScope(body);
+    const scope = getRequestScope(body, config);
     console.log('📅 [AVAILABILITY] Dados recebidos:', {
       keys: Object.keys(body || {}),
       doctor_scope_count: scope.doctorIds.length,

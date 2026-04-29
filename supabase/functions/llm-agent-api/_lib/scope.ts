@@ -41,8 +41,8 @@ export function normalizeScopeText(value: string): string {
     .trim();
 }
 
-export function getRequestScope(body: any): RequestScope {
-  return {
+export function getRequestScope(body: any, config?: any | null): RequestScope {
+  const baseScope: RequestScope = {
     doctorIds: normalizeScopeEntries(
       body?.allowed_doctor_ids ??
       body?.doctor_scope_ids ??
@@ -60,6 +60,30 @@ export function getRequestScope(body: any): RequestScope {
       body?.servicos_permitidos
     ),
   };
+
+  // [F1.1] Expandir scope com médicos relacionados (agendas dedicadas/virtuais)
+  // declarados em business_rules.config.medicos_relacionados do médico principal.
+  // Why: serviços como MAPA 24H e Teste Ergométrico vivem em medico_ids virtuais
+  // (ex.: "MAPA - Dr. Marcelo"). Sem expansão, o n8n teria que conhecer cada virtual.
+  // Multi-tenant safe: cada cliente declara seus virtuais na própria config.
+  if (config?.business_rules && baseScope.doctorIds.length > 0) {
+    const expandedIds = new Set<string>(baseScope.doctorIds);
+    for (const principalId of baseScope.doctorIds) {
+      const rule = config.business_rules[principalId];
+      const relacionados = rule?.medicos_relacionados;
+      if (Array.isArray(relacionados)) {
+        for (const id of relacionados) {
+          if (typeof id === 'string' && id.length > 0) expandedIds.add(id);
+        }
+      }
+    }
+    if (expandedIds.size > baseScope.doctorIds.length) {
+      console.log(`🔗 [SCOPE] Expandido com médicos relacionados: ${baseScope.doctorIds.length} → ${expandedIds.size}`);
+      baseScope.doctorIds = Array.from(expandedIds);
+    }
+  }
+
+  return baseScope;
 }
 
 export function hasDoctorScope(scope: RequestScope): boolean {

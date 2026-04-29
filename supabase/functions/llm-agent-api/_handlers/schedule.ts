@@ -18,7 +18,7 @@ import { maskName } from '../_lib/pii.ts'
 
 export async function handleSchedule(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
-    const scope = getRequestScope(body);
+    const scope = getRequestScope(body, config);
     console.log('📥 [SCHEDULE] Dados recebidos:', {
       keys: Object.keys(body || {}),
       doctor_scope_count: scope.doctorIds.length,

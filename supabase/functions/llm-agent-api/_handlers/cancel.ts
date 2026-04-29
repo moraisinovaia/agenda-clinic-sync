@@ -10,7 +10,7 @@ import { getRequestScope, isAppointmentAllowed, getScopeSummary } from '../_lib/
 
 export async function handleCancel(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
-    const scope = getRequestScope(body);
+    const scope = getRequestScope(body, config);
     const { agendamento_id, motivo } = body;
 
     if (!agendamento_id) {
