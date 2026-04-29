@@ -418,8 +418,50 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         .replace(/[_\s-]+/g, '') // Remove underscores, espaços e hífens
         .trim();
     
-    const atendimentoNormalizado = normalizarParaMatch(atendimento_nome);
-    
+    let atendimentoNormalizado = normalizarParaMatch(atendimento_nome);
+
+    // 🎯 [F1.3.1] Resolver "casos de uso" (aliases inteligentes da config).
+    // Permite que termos como "Pré-operatório", "Checkup", "Parecer cardiológico"
+    // sejam mapeados para o serviço real (ex.: "Consulta Cardiológica") + uma
+    // mensagem de orientação clínica que viaja com a resposta.
+    // Multi-tenant: cada clínica define seus casos de uso em business_rules.config.casos_de_uso.
+    const casosDeUso = (regras?.casos_de_uso ?? {}) as Record<string, any>;
+    let casoDeUsoMatch: { nome: string; conf: any } | null = null;
+    for (const [nomeUso, conf] of Object.entries(casosDeUso)) {
+      const aliasesPossiveis = [nomeUso, ...((conf as any)?.aliases ?? [])];
+      if (aliasesPossiveis.some((a: string) => normalizarParaMatch(a) === atendimentoNormalizado)) {
+        casoDeUsoMatch = { nome: nomeUso, conf };
+        break;
+      }
+    }
+    if (casoDeUsoMatch) {
+      const principal = casoDeUsoMatch.conf?.atendimento_principal;
+      if (principal) {
+        console.log(`🎯 [CASO_DE_USO] "${atendimento_nome}" → "${principal}" (caso: "${casoDeUsoMatch.nome}")`);
+        atendimento_nome = principal;
+        atendimentoNormalizado = normalizarParaMatch(principal);
+      }
+    }
+
+    // Helper local: adiciona campo `caso_de_uso` à resposta quando o request
+    // foi resolvido via alias. Mantém compatibilidade — sem caso de uso, é
+    // exatamente igual ao successResponse padrão.
+    const successAvailability = (data: Record<string, unknown>) => {
+      if (casoDeUsoMatch?.conf?.mensagem_orientacao || casoDeUsoMatch?.conf?.atendimento_principal) {
+        return successResponse({
+          ...data,
+          caso_de_uso: {
+            identificado:           casoDeUsoMatch.nome,
+            atendimento_solicitado: (data as any)?.contexto?.servico ?? null,
+            atendimento_principal:  casoDeUsoMatch.conf.atendimento_principal ?? null,
+            atendimentos_inclusos:  casoDeUsoMatch.conf.atendimentos_inclusos ?? [],
+            mensagem_orientacao:    casoDeUsoMatch.conf.mensagem_orientacao ?? null,
+          },
+        });
+      }
+      return successResponse(data);
+    };
+
     // 🔍 MATCHING MELHORADO: Priorizar match exato antes de parcial
     const servicosKeys = Object.keys(regras?.servicos || {});
     
@@ -695,7 +737,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         console.log(`📊 [FIXED_TIME] ${proximasDatas.length} datas encontradas`);
 
         if (proximasDatas.length === 0) {
-          return successResponse({
+          return successAvailability({
             success: false,
             sem_vagas: true,
             message: `Não há vagas disponíveis para ${atendimento_nome} nos próximos ${quantidade_dias} dias. Entre em contato com a clínica.`,
@@ -703,7 +745,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           });
         }
 
-        return successResponse({
+        return successAvailability({
           success: true,
           proximas_datas: proximasDatas,
           medico: medico.nome,
@@ -938,7 +980,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         
         console.log(`❌ Nenhuma data disponível mesmo após buscar ${quantidade_dias} dias`);
         
-        return successResponse({
+        return successAvailability({
           message: mensagemSemVagas,
           medico: medico.nome,
           medico_id: medico.id,
@@ -955,7 +997,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         });
       }
       
-      return successResponse({
+      return successAvailability({
         message: mensagemEspecial || `${proximasDatas.length} datas disponíveis encontradas`,
         medico: medico.nome,
         medico_id: medico.id,
@@ -1113,7 +1155,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
       
       console.log(`📝 Mensagem servico_nao_agendavel: ${mensagemDinamica ? 'dinâmica do banco' : servico.mensagem ? 'do business_rules' : 'genérica'}`);
       
-      return successResponse({
+      return successAvailability({
         permite_online: false,
         medico: medico.nome,
         servico: servicoKey,
@@ -1496,7 +1538,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
       // 🆕 FLAG DE BAIXA DISPONIBILIDADE
       const baixaDisponibilidade = proximasDatas.length <= 2;
       
-      return successResponse({
+      return successAvailability({
         disponivel: true,
         tipo_agendamento: tipoAtendimento,
         medico: medico.nome,
@@ -1570,7 +1612,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         mensagem += `Por favor, entre em contato com a clínica.`;
       }
       
-      return successResponse({
+      return successAvailability({
         disponivel: false,
         bloqueada: true,
         medico: medico.nome,
@@ -1828,7 +1870,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
       }
       
       // ✅ Retornar resposta estruturada (status 200)
-      return successResponse({
+      return successAvailability({
         disponivel: false,
         motivo: 'periodo_data_nao_disponivel',
         medico: medico.nome,
@@ -1886,7 +1928,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           mensagem += `Por favor, entre em contato com a clínica.`;
         }
         
-        return successResponse({
+        return successAvailability({
           disponivel: false,
           tipo_agendamento: TIPO_ORDEM_CHEGADA,
           medico: medico.nome,
@@ -1907,7 +1949,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         ).join('\n\n') +
         '\n\n⚠️ ORDEM DE CHEGADA: Não há horário marcado. Paciente deve chegar no período para pegar ficha.';
       
-      return successResponse({
+      return successAvailability({
         disponivel: true,
         tipo_agendamento: TIPO_ORDEM_CHEGADA,
         medico: medico.nome,
@@ -2005,7 +2047,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           mensagem += `Por favor, entre em contato com a clínica.`;
         }
         
-        return successResponse({
+        return successAvailability({
           disponivel: false,
           tipo_agendamento: TIPO_ESTIMATIVA_HORARIO,
           medico: medico.nome,
@@ -2027,7 +2069,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         (horariosEstimados.length > 10 ? `\n... e mais ${horariosEstimados.length - 10} horário(s)` : '') +
         `\n\n⏰ ${mensagemEstimativa}`;
       
-      return successResponse({
+      return successAvailability({
         disponivel: horariosEstimados.length > 0,
         tipo_agendamento: TIPO_ESTIMATIVA_HORARIO,
         medico: medico.nome,
@@ -2122,7 +2164,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           mensagem += `Por favor, entre em contato com a clínica.`;
         }
         
-        return successResponse({
+        return successAvailability({
           disponivel: false,
           tipo_agendamento: 'hora_marcada',
           medico: medico.nome,
@@ -2141,7 +2183,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         `${horariosDisponiveis.length} horários disponíveis:\n` +
         horariosDisponiveis.map(h => `• ${h.hora}`).join('\n');
       
-      return successResponse({
+      return successAvailability({
         disponivel: horariosDisponiveis.length > 0,
         tipo_agendamento: 'hora_marcada',
         medico: medico.nome,
