@@ -20,6 +20,8 @@ import {
   isConvenioParceiro,
   finalizeResponse,
   OBRIGATORIOS_CONSULTA,
+  contemIntencaoExplicita,
+  dispatchHandler,
   type DadosColetados,
 } from '../_handlers/chat.ts';
 
@@ -395,4 +397,79 @@ Deno.test('OBRIGATORIOS_CONSULTA: contém exatamente nome_paciente, data_consult
   assert(OBRIGATORIOS_CONSULTA.includes('convenio'));
   assertFalse((OBRIGATORIOS_CONSULTA as string[]).includes('medico_nome'), 'medico_nome não é campo do paciente');
   assertFalse((OBRIGATORIOS_CONSULTA as string[]).includes('data_nascimento'), 'data_nascimento não é obrigatório');
+});
+
+// ── contemIntencaoExplicita ───────────────────────────────────────────────
+
+// Caso: "Oi, quero marcar consulta" não vira saudação genérica
+Deno.test('contemIntencaoExplicita: saudação pura retorna false — override de saudação é aplicado', () => {
+  assertFalse(contemIntencaoExplicita('Oi'),         '"Oi" é saudação pura');
+  assertFalse(contemIntencaoExplicita('Olá'),        '"Olá" é saudação pura');
+  assertFalse(contemIntencaoExplicita('Bom dia'),    '"Bom dia" é saudação pura');
+  assertFalse(contemIntencaoExplicita('Boa tarde!'), '"Boa tarde!" é saudação pura');
+  assertFalse(contemIntencaoExplicita('Oi tudo bem?'), '"Oi tudo bem?" sem intenção de scheduling');
+});
+
+Deno.test('contemIntencaoExplicita: saudação + intenção retorna true — override NÃO aplicado', () => {
+  assert(contemIntencaoExplicita('Oi, quero marcar consulta'),            'marcar consulta = intenção explícita');
+  assert(contemIntencaoExplicita('Olá, gostaria de agendar'),             'agendar = intenção explícita');
+  assert(contemIntencaoExplicita('Bom dia, preciso cancelar meu retorno'),'cancelar = intenção explícita');
+  assert(contemIntencaoExplicita('oi quero ver horario disponivel'),      'horario = intenção explícita');
+  assert(contemIntencaoExplicita('Boa tarde, tem vaga para consulta?'),   'vaga + consulta = intenção explícita');
+});
+
+// ── dispatchHandler — auto-fill de médico e serviço ──────────────────────
+
+// Caso: "quero agendar consulta" não pergunta médico nem serviço
+Deno.test('dispatchHandler: check_availability com servico + medico auto-preenchidos → handler=availability', () => {
+  const dados: DadosColetados = {
+    ...dadosVazios(),
+    servico:     'Consulta Cardiológica',  // auto-fill
+    medico_nome: 'Dr. Marcelo',            // auto-fill
+    medico_id:   'uuid-marcelo',
+  };
+  const dec = dispatchHandler('check_availability', 'disponibilidade', dados, { cliente_id: 'x' });
+  assertEquals(dec.handler, 'availability', 'deve despachar para availability');
+  assertNotEquals(dec.body, null);
+  assertEquals((dec.body as Record<string, unknown>).atendimento_nome, 'Consulta Cardiológica');
+  assertEquals((dec.body as Record<string, unknown>).medico_nome, 'Dr. Marcelo');
+});
+
+Deno.test('dispatchHandler: check_availability sem servico → handler=null (nunca deve ocorrer após auto-fill)', () => {
+  const dados: DadosColetados = {
+    ...dadosVazios(),
+    medico_nome: 'Dr. Marcelo',  // medico ok, servico=null
+  };
+  const dec = dispatchHandler('check_availability', 'disponibilidade', dados, { cliente_id: 'x' });
+  assertEquals(dec.handler, null, 'sem servico o dispatch falha — auto-fill deve ter prevenido isso');
+});
+
+// Caso: "dia 29/04" em verificando_disponibilidade não escala — dispatch funciona com servico auto-fill
+Deno.test('dispatchHandler: com servico auto-fill e data_consulta nova, dispatch funciona normalmente', () => {
+  const dados: DadosColetados = {
+    ...dadosVazios(),
+    servico:       'Consulta Cardiológica',  // auto-fill
+    medico_nome:   'Dr. Marcelo',            // auto-fill
+    medico_id:     'uuid-marcelo',
+    data_consulta: '2026-04-29',             // "dia 29/04" extraído pelo LLM
+  };
+  const dec = dispatchHandler('check_availability', 'disponibilidade', dados, { cliente_id: 'x' });
+  assertEquals(dec.handler, 'availability', 'com servico e data disponibiliza handler — loop detection não atingida');
+  assertEquals((dec.body as Record<string, unknown>).data_consulta, '2026-04-29');
+});
+
+// missing_fields não inclui servico nem medico quando auto-preenchidos
+Deno.test('computeMissingFields: servico e medico_nome auto-preenchidos não aparecem em missing', () => {
+  const dados: DadosColetados = {
+    ...dadosVazios(),
+    servico:     'Consulta Cardiológica',
+    medico_nome: 'Dr. Marcelo',
+    // faltam: data_consulta, nome_paciente, data_nascimento, convenio
+  };
+  const missing = computeMissingFields('agendar', dados);
+  assertFalse(missing.includes('servico'),     'servico auto-fill não deve estar em missing');
+  assertFalse(missing.includes('medico_nome'), 'medico_nome auto-fill não deve estar em missing');
+  assert(missing.includes('data_consulta'),    'data_consulta ainda está faltando');
+  assert(missing.includes('nome_paciente'),    'nome_paciente ainda está faltando');
+  assert(missing.includes('convenio'),         'convenio ainda está faltando');
 });

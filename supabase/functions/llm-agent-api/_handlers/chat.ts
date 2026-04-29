@@ -213,6 +213,19 @@ function normStr(s: string): string {
     .replace(/[\s-]/g, '');       // remove espaços e hífens
 }
 
+// Palavras-chave de intenção de scheduling — usadas para distinguir
+// "Oi" (saudação pura) de "Oi, quero marcar consulta" (saudação + intenção).
+const INTENCAO_SCHEDULING_NORM = [
+  'agendar', 'agendamento', 'marcar', 'marcacao', 'consulta',
+  'remarcar', 'remarcacao', 'cancelar', 'cancelamento',
+  'disponibilidade', 'disponivel', 'horario', 'vaga',
+];
+
+export function contemIntencaoExplicita(mensagem: string): boolean {
+  const n = normStr(mensagem);
+  return INTENCAO_SCHEDULING_NORM.some((p) => n.includes(p));
+}
+
 const PARCEIROS_NORM = [
   'medprev', 'medclin', 'sedilab', 'clinicavida', 'clincenter', 'sertaosaude',
 ];
@@ -481,7 +494,7 @@ async function callHandler(
 }
 
 // ── Exports para testes unitários ────────────────────────────────────────
-export { auditRules, mergeDados, computeMissingFields, isServicoTergo, isServicoMapa, isConvenioParceiro };
+export { auditRules, mergeDados, computeMissingFields, isServicoTergo, isServicoMapa, isConvenioParceiro, dispatchHandler };
 
 // ── Camada final de normalização e segurança ──────────────────────────────
 // Executada imediatamente antes do successResponse.
@@ -601,6 +614,21 @@ export async function handleChat(
         console.log(`[CHAT] medico auto-fill: ${medicoEntries[0].medico_nome}`);
       }
     }
+    // Auto-fill serviço único: verificado independentemente do médico já estar preenchido,
+    // para garantir fill em todos os turnos da conversa.
+    if (!dadosComPrefill.servico && config?.business_rules) {
+      const medicoEntries = Object.values(config.business_rules);
+      if (medicoEntries.length === 1) {
+        const cfgServicos = medicoEntries[0].config?.servicos;
+        if (cfgServicos) {
+          const nomeServicos = Object.keys(cfgServicos);
+          if (nomeServicos.length === 1) {
+            dadosComPrefill.servico = nomeServicos[0];
+            console.log(`[CHAT] servico auto-fill: ${nomeServicos[0]}`);
+          }
+        }
+      }
+    }
 
     // ── Phase 1: Extração semântica via OpenAI ────────────────────────────
     const systemPrompt = buildExtractionSystemPrompt(config, estadoAtual, dadosComPrefill);
@@ -679,8 +707,13 @@ export async function handleChat(
     const audit        = auditRules(dadosMerged, extraction.intent, extraction.next_action);
 
     // ── Saudação: forçar início do fluxo de coleta ───────────────────────
-    // O LLM às vezes retorna next_action=close para "Oi". Backend corrige.
-    if (extraction.intent === 'saudacao') {
+    // Aplica somente quando é saudação pura: sem campos extraídos e sem intenção
+    // explícita na mensagem. "Oi, quero marcar consulta" → segue como agendar.
+    if (
+      extraction.intent === 'saudacao' &&
+      extraction.provided_fields.length === 0 &&
+      !contemIntencaoExplicita(mensagem)
+    ) {
       extraction.next_action = 'ask_missing';
       const nomeclinica = config?.clinic_info?.nome_clinica ?? 'nossa clínica';
       extraction.resposta =
@@ -742,11 +775,18 @@ export async function handleChat(
           estadoAtual === 'verificando_disponibilidade' &&
           extraction.next_action === 'check_availability'
         ) {
-          // Loop detectado: já estava verificando e continua sem avançar
-          respostaFinal =
-            'Vou encaminhar sua solicitação para nossa equipe verificar os horários disponíveis e retornar com as opções em breve.';
-          extraction.next_action = 'escalate_human';
-          console.log('[CHAT] override: loop verificando_disponibilidade → escalate_human');
+          if (extraction.provided_fields.length > 0) {
+            // Paciente forneceu dados novos neste turno — não é loop real.
+            // Manter o fluxo; o próximo turno terá os dados para despachar.
+            respostaFinal = extraction.resposta;
+            console.log('[CHAT] verificando_disponibilidade com dados novos — sem escalada');
+          } else {
+            // Nenhum dado novo e handler continua falhando — loop real.
+            respostaFinal =
+              'Vou encaminhar sua solicitação para nossa equipe verificar os horários disponíveis e retornar com as opções em breve.';
+            extraction.next_action = 'escalate_human';
+            console.log('[CHAT] override: loop verificando_disponibilidade → escalate_human');
+          }
         } else {
           respostaFinal = extraction.resposta;
         }
