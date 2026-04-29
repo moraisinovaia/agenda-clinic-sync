@@ -22,10 +22,18 @@ function buildBusinessRulesText(config: DynamicConfig | null): string {
     if (Array.isArray(cfg.convenios_aceitos) && cfg.convenios_aceitos.length) {
       sections.push(`Convênios aceitos: ${cfg.convenios_aceitos.join(', ')}`);
     }
-    if (Array.isArray(cfg.convenios_parceiros) && cfg.convenios_parceiros.length) {
-      sections.push(
-        `Convênios PARCEIROS (não atendemos diretamente): ${cfg.convenios_parceiros.join(', ')}`,
-      );
+    // convenios_parceiros pode ser array simples (legado) ou { lista: [], mensagem: '' } (atual)
+    {
+      const raw = cfg.convenios_parceiros;
+      const lista: string[] | null = Array.isArray(raw)
+        ? raw
+        : Array.isArray(raw?.lista)
+          ? raw.lista
+          : null;
+      if (lista && lista.length) {
+        const msg = raw?.mensagem ?? 'não atendemos diretamente';
+        sections.push(`Convênios PARCEIROS (${msg}): ${lista.join(', ')}`);
+      }
     }
     if (cfg.nota_fiscal_prazo) {
       sections.push(`Nota fiscal: ${cfg.nota_fiscal_prazo}`);
@@ -105,6 +113,19 @@ export function buildExtractionSystemPrompt(
     ? coletadosEntries.map(([k, v]) => `  ${k}: ${JSON.stringify(v)}`).join('\n')
     : '  (nenhum dado coletado ainda)';
 
+  // Instrução de médico único (quando config tem exatamente 1 médico)
+  let medicoUnicoSection = '';
+  if (config?.business_rules) {
+    const medicoEntries = Object.values(config.business_rules);
+    if (medicoEntries.length === 1) {
+      medicoUnicoSection =
+        `\n## MÉDICO CONFIGURADO NESTE CANAL\n` +
+        `Este canal atende EXCLUSIVAMENTE ${medicoEntries[0].medico_nome}.\n` +
+        `O campo medico_nome já está pré-preenchido. NUNCA pergunte "qual médico?" — não há outra opção.\n` +
+        `Quando o paciente disser "ele", "o médico", "o doutor" ou similar, refere-se sempre a ${medicoEntries[0].medico_nome}.\n`;
+    }
+  }
+
   return `Você é o extrator semântico da assistente virtual da ${nomeclinica}.
 Sua função é EXTRAIR informações da mensagem do paciente e classificar a intenção.
 Responda SEMPRE em português brasileiro, tom educado e natural.
@@ -121,7 +142,7 @@ Quando não souber, informe o telefone da clínica.
 Estado: ${estadoAtual}
 ## DADOS JÁ COLETADOS (NÃO pedir novamente estes campos)
 ${dadosColetadosText}
-
+${medicoUnicoSection}
 ${regras}
 
 ${mensagens}
@@ -154,6 +175,14 @@ Para intent=saudacao: SEMPRE next_action=ask_missing (NUNCA close).
 Resposta: cumprimentar o paciente e perguntar como pode ajudar ou qual serviço deseja.
 Exemplo: "Olá! Seja bem-vindo(a) à [Clínica]. Como posso ajudá-lo(a) hoje?"
 
+### MENSAGENS CURTAS — INTERPRETAR PELO CONTEXTO ATUAL
+"sim", "ok", "pode", "pode ser", "confirmo", "certo", "bora" = confirmar o que foi perguntado no turno anterior.
+"não" isolado = negar o que foi perguntado no turno anterior.
+"cadê", "onde está", "quanto tempo", "estou esperando", "demorou" = paciente cobrando resposta → intent=humano, next_action=escalate_human.
+NUNCA reiniciar o fluxo ou perguntar dados já coletados por causa de uma mensagem curta de confirmação.
+Se estado atual for "confirmando_dados" e mensagem for "sim/ok/confirmo": intent=agendar, next_action=execute_schedule, confirmado=true.
+Se estado atual for "verificando_disponibilidade" e nenhuma disponibilidade foi retornada: NÃO repetir "um momento" — usar next_action=escalate_human.
+
 ### IMAGENS
 Se a mensagem for descrição de imagem: intent=outro, next_action=answer_info.
 Resposta: "Recebi uma imagem, mas nossa equipe precisará verificar. Pode descrever sua dúvida por texto ou aguarde nosso retorno."
@@ -181,9 +210,9 @@ Exemplos: ["servico", "medico_nome"] ou ["convenio"] ou [].
 ### missing_fields
 Liste os campos ainda necessários para completar a intenção atual.
 NÃO inclua campos que já aparecem em "DADOS JÁ COLETADOS".
-Para agendar: servico, medico_nome, data_consulta, nome_paciente, convenio.
+Para agendar: servico, data_consulta, nome_paciente, convenio (medico_nome está pré-preenchido).
 Para cancelar: nome_paciente, data_nascimento.
-Para disponibilidade: servico, medico_nome.
+Para disponibilidade: servico (medico_nome está pré-preenchido).
 Nota: o backend recalcula este valor deterministicamente após o merge.
 
 ### dados_extraidos

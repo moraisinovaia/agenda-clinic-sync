@@ -170,6 +170,8 @@ const CAMPO_LABELS: Record<string, string> = {
   convenio:         'convênio (ou "particular")',
   tem_guia:         'guia médica para o MAPA',
   periodo:          'período (manhã ou tarde)',
+  peso:             'seu peso em kg',
+  fistula:          'se possui fístula no braço',
 };
 
 function computeMissingFields(intent: string, dados: DadosColetados): string[] {
@@ -192,6 +194,13 @@ function computeMissingFields(intent: string, dados: DadosColetados): string[] {
     if (!missing.includes('tem_guia')) missing.push('tem_guia');
   }
 
+  // Ergométrico: coletar peso e fístula ANTES de verificar disponibilidade ou agendar
+  // Sem esses dados o agente não consegue validar as restrições clínicas
+  if (isServicoTergo(dados.servico) && (intent === 'disponibilidade' || intent === 'agendar')) {
+    if (dados.peso === null && !missing.includes('peso')) missing.push('peso');
+    if (dados.fistula === null && !missing.includes('fistula')) missing.push('fistula');
+  }
+
   return missing;
 }
 
@@ -202,6 +211,19 @@ function normStr(s: string): string {
     .normalize('NFD')
     .replace(/\p{Mn}/gu, '')     // remove diacríticos
     .replace(/[\s-]/g, '');       // remove espaços e hífens
+}
+
+// Palavras-chave de intenção de scheduling — usadas para distinguir
+// "Oi" (saudação pura) de "Oi, quero marcar consulta" (saudação + intenção).
+const INTENCAO_SCHEDULING_NORM = [
+  'agendar', 'agendamento', 'marcar', 'marcacao', 'consulta',
+  'remarcar', 'remarcacao', 'cancelar', 'cancelamento',
+  'disponibilidade', 'disponivel', 'horario', 'vaga',
+];
+
+export function contemIntencaoExplicita(mensagem: string): boolean {
+  const n = normStr(mensagem);
+  return INTENCAO_SCHEDULING_NORM.some((p) => n.includes(p));
 }
 
 const PARCEIROS_NORM = [
@@ -471,6 +493,90 @@ async function callHandler(
   }
 }
 
+// ── Exports para testes unitários ────────────────────────────────────────
+export { auditRules, mergeDados, computeMissingFields, isServicoTergo, isServicoMapa, isConvenioParceiro, dispatchHandler };
+
+// Seleciona a mensagem mais informativa de um resultado de handler.
+// Cobre tanto successResponse (message) quanto businessErrorResponse (mensagem_usuario/whatsapp).
+export function resolveHandlerMessage(hData: any, fallback: string): string {
+  return hData?.message ?? hData?.mensagem_whatsapp ?? hData?.mensagem_usuario ?? fallback;
+}
+
+// ── Camada final de normalização e segurança ──────────────────────────────
+// Executada imediatamente antes do successResponse.
+// Garante invariantes de domínio sem alterar o fluxo principal.
+
+const FALLBACK_HUMANO =
+  'Desculpe, tive uma instabilidade ao processar sua solicitação. ' +
+  'Vou encaminhar para a equipe continuar o atendimento.';
+
+export const OBRIGATORIOS_CONSULTA: (keyof DadosColetados)[] = [
+  'nome_paciente', 'data_consulta', 'convenio',
+];
+
+export function finalizeResponse(params: {
+  respostaFinal: string;
+  dadosMerged: DadosColetados;
+  missingFields: string[];
+  novoEstado: string;
+  config: DynamicConfig | null;
+  intent: string;
+}): { respostaFinal: string; missingFields: string[]; novoEstado: string } {
+  let { respostaFinal, missingFields, novoEstado } = params;
+  const { dadosMerged, config, intent } = params;
+
+  // Regra 4: médico único — segundo nível de segurança após auto-fill principal
+  if (!dadosMerged.medico_nome && config?.business_rules) {
+    const entries = Object.values(config.business_rules);
+    if (entries.length === 1 && entries[0].medico_nome) {
+      console.warn('[CHAT] finalizeResponse: medico_nome null com médico único — corrigindo');
+      dadosMerged.medico_nome = entries[0].medico_nome as string;
+      if (entries[0].medico_id) {
+        dadosMerged.medico_id = entries[0].medico_id as string;
+      }
+      // Paciente nunca deve ser perguntado sobre médico em canal de médico único
+      missingFields = missingFields.filter((f) => f !== 'medico_nome');
+    }
+  }
+
+  // Regras 5 + 6: missing_fields com campos reais do domínio (consulta)
+  if (intent === 'agendar') {
+    const realMissing = OBRIGATORIOS_CONSULTA.filter((f) => !dadosMerged[f]);
+    const uncovered = realMissing.filter((f) => !missingFields.includes(f));
+
+    if (uncovered.length > 0) {
+      const wasEmpty = missingFields.length === 0;
+      console.warn(
+        `[CHAT] finalizeResponse: campos obrigatórios null fora de missing_fields: ${uncovered.join(', ')}`,
+      );
+      missingFields = [...new Set([...missingFields, ...uncovered])];
+
+      if (wasEmpty) {
+        // Regra 6: missing_fields estava [] mas há campos nulos — ajustar estado e perguntar
+        const ESTADOS_COLETA = ['coletando_dados', 'identificando_servico', 'confirmando_dados'];
+        if (!ESTADOS_COLETA.includes(novoEstado) && novoEstado !== 'escalonado_humano') {
+          novoEstado = 'coletando_dados';
+        }
+        const label = CAMPO_LABELS[uncovered[0]] ?? uncovered[0];
+        respostaFinal = `Para continuar com o agendamento, preciso saber: qual é o seu ${label}?`;
+      }
+    }
+  }
+
+  // Regras 3 + 7: resposta nunca vazia — último recurso
+  if (!respostaFinal?.trim()) {
+    console.warn(
+      `[CHAT] finalizeResponse: resposta vazia detectada (intent=${intent}, estado=${novoEstado})`,
+    );
+    respostaFinal = FALLBACK_HUMANO;
+    if (novoEstado !== 'escalonado_humano') {
+      novoEstado = 'escalonado_humano';
+    }
+  }
+
+  return { respostaFinal, missingFields, novoEstado };
+}
+
 // ── Handler principal ──────────────────────────────────────────────────────
 
 export async function handleChat(
@@ -503,8 +609,35 @@ export async function handleChat(
     const historicoContexto: Array<{ role: string; content: string }> =
       body.historico_contexto ?? [];
 
+    // Auto-fill médico único: config com 1 médico nunca pergunta "qual médico?"
+    // Feito ANTES do prompt para que DADOS JÁ COLETADOS já mostre o médico ao LLM.
+    const dadosComPrefill: Record<string, unknown> = { ...dadosAnteriores };
+    if (!dadosComPrefill.medico_nome && config?.business_rules) {
+      const medicoEntries = Object.values(config.business_rules);
+      if (medicoEntries.length === 1) {
+        dadosComPrefill.medico_nome = medicoEntries[0].medico_nome;
+        dadosComPrefill.medico_id   = medicoEntries[0].medico_id;
+        console.log(`[CHAT] medico auto-fill: ${medicoEntries[0].medico_nome}`);
+      }
+    }
+    // Auto-fill serviço único: verificado independentemente do médico já estar preenchido,
+    // para garantir fill em todos os turnos da conversa.
+    if (!dadosComPrefill.servico && config?.business_rules) {
+      const medicoEntries = Object.values(config.business_rules);
+      if (medicoEntries.length === 1) {
+        const cfgServicos = medicoEntries[0].config?.servicos;
+        if (cfgServicos) {
+          const nomeServicos = Object.keys(cfgServicos);
+          if (nomeServicos.length === 1) {
+            dadosComPrefill.servico = nomeServicos[0];
+            console.log(`[CHAT] servico auto-fill: ${nomeServicos[0]}`);
+          }
+        }
+      }
+    }
+
     // ── Phase 1: Extração semântica via OpenAI ────────────────────────────
-    const systemPrompt = buildExtractionSystemPrompt(config, estadoAtual, dadosAnteriores);
+    const systemPrompt = buildExtractionSystemPrompt(config, estadoAtual, dadosComPrefill);
 
     const messages = [
       { role: 'system' as const, content: systemPrompt },
@@ -532,7 +665,7 @@ export async function handleChat(
     console.log(`[CHAT] intent=${extraction.intent} next_action=${extraction.next_action} confidence=${extraction.confidence}`);
 
     // ── Phase 2: Merge + normalização + auditoria de regras de negócio ──────
-    const dadosMerged  = mergeDados(dadosAnteriores, extraction.dados_extraidos);
+    const dadosMerged  = mergeDados(dadosComPrefill, extraction.dados_extraidos);
 
     // Normalizar data_consulta se o LLM não converteu formato curto (DD/MM)
     if (!dadosMerged.data_consulta) {
@@ -554,11 +687,39 @@ export async function handleChat(
       }
     }
 
+    // ── Overrides contextuais determinísticos ────────────────────────────
+    // Backend interpreta mensagens curtas pelo estado atual — sem depender do LLM.
+    {
+      const msgLower = mensagem.toLowerCase().trim().replace(/[!?.]/g, '');
+      const isConfirmacao = /^(sim|ok|pode|pode ser|confirmo|confirmado|isso|exato|claro|s|certo|perfeito|vai|vamos|bora)$/.test(msgLower);
+      const isCobrandoEspera = /cad[eê]|onde est|quanto tem|estou esperand|demor(ou|ando)|aguardando|esperand/.test(mensagem.toLowerCase());
+
+      if (estadoAtual === 'confirmando_dados' && isConfirmacao) {
+        extraction.intent      = 'agendar';
+        extraction.next_action = 'execute_schedule';
+        dadosMerged.confirmado  = true;
+        console.log('[CHAT] override: confirmação contextual em confirmando_dados');
+      }
+
+      if (isCobrandoEspera) {
+        extraction.intent      = 'humano';
+        extraction.next_action = 'escalate_human';
+        extraction.resposta    =
+          'Peço desculpas pela demora! Vou encaminhar seu atendimento para nossa equipe, que entrará em contato em breve.';
+        console.log('[CHAT] override: cobrança de espera → escalate_human');
+      }
+    }
+
     const audit        = auditRules(dadosMerged, extraction.intent, extraction.next_action);
 
     // ── Saudação: forçar início do fluxo de coleta ───────────────────────
-    // O LLM às vezes retorna next_action=close para "Oi". Backend corrige.
-    if (extraction.intent === 'saudacao') {
+    // Aplica somente quando é saudação pura: sem campos extraídos e sem intenção
+    // explícita na mensagem. "Oi, quero marcar consulta" → segue como agendar.
+    if (
+      extraction.intent === 'saudacao' &&
+      extraction.provided_fields.length === 0 &&
+      !contemIntencaoExplicita(mensagem)
+    ) {
       extraction.next_action = 'ask_missing';
       const nomeclinica = config?.clinic_info?.nome_clinica ?? 'nossa clínica';
       extraction.resposta =
@@ -568,7 +729,7 @@ export async function handleChat(
 
     // ── Recalcular missing_fields deterministicamente ────────────────────
     // Backend conhece os dados reais após merge; não confiar no LLM.
-    const missingFields = computeMissingFields(extraction.intent, dadosMerged);
+    let missingFields = computeMissingFields(extraction.intent, dadosMerged);
 
     // Se todos os campos obrigatórios estão preenchidos e a intent é agendar,
     // forçar confirm_schedule independentemente do que o LLM sugeriu.
@@ -596,10 +757,11 @@ export async function handleChat(
         extraction.intent,
         dadosMerged,
         {
-          cliente_id:    clienteId,
-          config_id:     body.config_id,
-          phone_paciente: body.phone_paciente,
-          nome_paciente:  body.nome_paciente,
+          cliente_id:        clienteId,
+          config_id:         body.config_id,
+          phone_paciente:    body.phone_paciente,
+          nome_paciente:     body.nome_paciente,
+          mensagem_original: mensagem,
         },
       );
 
@@ -609,21 +771,55 @@ export async function handleChat(
           handlerResult = await resp.json();
           acaoExecutada = dispatch.handler;
           const hData = handlerResult as any;
-          // Handler result substitui a sugestão do LLM para dados precisos do banco
-          respostaFinal = hData?.message ?? extraction.resposta;
+          if (hData?.success === false) {
+            console.warn('[CHAT] handler retornou erro:', {
+              handler:           dispatch.handler,
+              codigo_erro:       hData?.codigo_erro,
+              mensagem_usuario:  hData?.mensagem_usuario,
+              mensagem_whatsapp: hData?.mensagem_whatsapp,
+            });
+          }
+          respostaFinal = resolveHandlerMessage(hData, extraction.resposta);
         } else {
           respostaFinal = extraction.resposta;
         }
       } else {
-        // Sem handler: usar resposta humanizada do LLM diretamente
-        respostaFinal = extraction.resposta;
+        // Sem handler disponível
+        if (
+          estadoAtual === 'verificando_disponibilidade' &&
+          extraction.next_action === 'check_availability'
+        ) {
+          if (extraction.provided_fields.length > 0) {
+            // Paciente forneceu dados novos neste turno — não é loop real.
+            // Manter o fluxo; o próximo turno terá os dados para despachar.
+            respostaFinal = extraction.resposta;
+            console.log('[CHAT] verificando_disponibilidade com dados novos — sem escalada');
+          } else {
+            // Nenhum dado novo e handler continua falhando — loop real.
+            respostaFinal =
+              'Vou encaminhar sua solicitação para nossa equipe verificar os horários disponíveis e retornar com as opções em breve.';
+            extraction.next_action = 'escalate_human';
+            console.log('[CHAT] override: loop verificando_disponibilidade → escalate_human');
+          }
+        } else {
+          respostaFinal = extraction.resposta;
+        }
       }
     }
 
     // ── Phase 4: Estado + histórico ──────────────────────────────────────
-    const novoEstado = audit.blocked
+    let novoEstado = audit.blocked
       ? estadoAtual   // bloqueio por regra não avança o estado
       : deriveEstado(extraction.next_action, extraction.intent, estadoAtual);
+
+    ({ respostaFinal, missingFields, novoEstado } = finalizeResponse({
+      respostaFinal,
+      dadosMerged,
+      missingFields,
+      novoEstado,
+      config,
+      intent: extraction.intent,
+    }));
 
     const historicoAtualizado = [
       ...historicoContexto,

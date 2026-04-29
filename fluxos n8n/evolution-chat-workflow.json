@@ -1,0 +1,559 @@
+{
+  "name": "Evolution → IPADO /chat → Evolution",
+  "nodes": [
+    {
+      "id": "wh-001",
+      "name": "Webhook Evolution",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "evolution-chat-inbound",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "evolution-chat",
+        "responseMode": "onReceived",
+        "responseCode": 200,
+        "options": {}
+      }
+    },
+    {
+      "id": "set-000",
+      "name": "Set: Configuração",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [460, 80],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "cfg01", "name": "SUPABASE_KEY", "value": "COLE_AQUI_O_SERVICE_ROLE_KEY_DO_SXNRUD", "type": "string" },
+            { "id": "cfg02", "name": "LLM_KEY",      "value": "COLE_AQUI_O_LLM_AGENT_API_KEY",          "type": "string" }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "set-002",
+      "name": "Set: Extrair payload",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [460, 300],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "f01", "name": "instance_name",      "value": "={{ $('Webhook Evolution').item.json.instance }}",                                                                                                                                          "type": "string"  },
+            { "id": "f02", "name": "event_type",          "value": "={{ $('Webhook Evolution').item.json.event }}",                                                                                                                                            "type": "string"  },
+            { "id": "f03", "name": "from_me",             "value": "={{ $('Webhook Evolution').item.json.data.key.fromMe }}",                                                                                                                                  "type": "boolean" },
+            { "id": "f04", "name": "whatsapp_message_id", "value": "={{ $('Webhook Evolution').item.json.data.key.id }}",                                                                                                                                      "type": "string"  },
+            { "id": "f05", "name": "phone_paciente",      "value": "={{ '+' + $('Webhook Evolution').item.json.data.key.remoteJid.replace(/@.*$/, '') }}",                                                                                                     "type": "string"  },
+            { "id": "f06", "name": "nome_paciente",       "value": "={{ $('Webhook Evolution').item.json.data.pushName || '' }}",                                                                                                                              "type": "string"  },
+            { "id": "f07", "name": "message_type",        "value": "={{ $('Webhook Evolution').item.json.data.messageType }}",                                                                                                                                 "type": "string"  },
+            { "id": "f08", "name": "mensagem_texto",      "value": "={{ $('Webhook Evolution').item.json.data.message?.conversation || $('Webhook Evolution').item.json.data.message?.extendedTextMessage?.text || '' }}",                                     "type": "string"  },
+            { "id": "f09", "name": "raw_payload",         "value": "={{ $('Webhook Evolution').item.json }}",                                                                                                                                                  "type": "object"  }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "if-003",
+      "name": "IF: Inbound text?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [700, 300],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "c01",
+              "leftValue": "={{ $json.event_type === 'messages.upsert' && $json.from_me === false && ['conversation','extendedTextMessage'].includes($json.message_type) && $json.mensagem_texto !== '' }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "noop-004",
+      "name": "NoOp: Ignorado",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [920, 480],
+      "parameters": {}
+    },
+    {
+      "id": "http-005",
+      "name": "HTTP: Buscar canal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [920, 120],
+      "parameters": {
+        "method": "GET",
+        "url": "https://sxnrudxsidqggapxyvpn.supabase.co/rest/v1/canais_whatsapp",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",        "value": "={{ $('Set: Configuração').first().json.SUPABASE_KEY }}" },
+            { "name": "Authorization", "value": "={{ 'Bearer ' + $('Set: Configuração').first().json.SUPABASE_KEY }}" }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "provider",          "value": "eq.evolution" },
+            { "name": "provider_phone_id", "value": "={{ 'eq.' + $('Set: Extrair payload').item.json.instance_name }}" },
+            { "name": "ativo",             "value": "eq.true" },
+            { "name": "select",            "value": "id,cliente_id,config_id,provider_phone_id,access_token_secret_id" },
+            { "name": "limit",             "value": "1" }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "if-006",
+      "name": "IF: Canal existe?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1140, 120],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "c02",
+              "leftValue": "={{ Array.isArray($json) && $json.length > 0 }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "noop-007",
+      "name": "NoOp: Canal não configurado",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1360, 340],
+      "parameters": {}
+    },
+    {
+      "id": "http-008",
+      "name": "HTTP: Registrar webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1360, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "https://sxnrudxsidqggapxyvpn.supabase.co/rest/v1/webhooks_log",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",        "value": "={{ $('Set: Configuração').first().json.SUPABASE_KEY }}" },
+            { "name": "Authorization", "value": "={{ 'Bearer ' + $('Set: Configuração').first().json.SUPABASE_KEY }}" },
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Prefer",        "value": "return=representation,resolution=ignore-duplicates" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ canal_id: $('HTTP: Buscar canal').item.json[0].id, event_type: 'message', whatsapp_id: $('Set: Extrair payload').item.json.whatsapp_message_id, payload: $('Set: Extrair payload').item.json.raw_payload }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "if-009",
+      "name": "IF: Evento novo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1580, 0],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "c03",
+              "leftValue": "={{ Array.isArray($json) && $json.length > 0 }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "noop-010",
+      "name": "NoOp: Duplicata ignorada",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1800, 220],
+      "parameters": {}
+    },
+    {
+      "id": "http-011",
+      "name": "HTTP: Upsert conversa",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1800, -140],
+      "parameters": {
+        "method": "POST",
+        "url": "https://sxnrudxsidqggapxyvpn.supabase.co/rest/v1/rpc/upsert_conversa",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",        "value": "={{ $('Set: Configuração').first().json.SUPABASE_KEY }}" },
+            { "name": "Authorization", "value": "={{ 'Bearer ' + $('Set: Configuração').first().json.SUPABASE_KEY }}" },
+            { "name": "Content-Type",  "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_canal_id: $('HTTP: Buscar canal').item.json[0].id, p_cliente_id: $('HTTP: Buscar canal').item.json[0].cliente_id, p_phone: $('Set: Extrair payload').item.json.phone_paciente, p_nome_paciente: $('Set: Extrair payload').item.json.nome_paciente }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "http-012",
+      "name": "HTTP: Mensagem entrada",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2020, -140],
+      "parameters": {
+        "method": "POST",
+        "url": "https://sxnrudxsidqggapxyvpn.supabase.co/rest/v1/mensagens",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",        "value": "={{ $('Set: Configuração').first().json.SUPABASE_KEY }}" },
+            { "name": "Authorization", "value": "={{ 'Bearer ' + $('Set: Configuração').first().json.SUPABASE_KEY }}" },
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Prefer",        "value": "return=minimal" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ conversa_id: $('HTTP: Upsert conversa').item.json[0].id, cliente_id: $('HTTP: Buscar canal').item.json[0].cliente_id, direcao: 'entrada', tipo: 'text', conteudo: { text: $('Set: Extrair payload').item.json.mensagem_texto }, whatsapp_message_id: $('Set: Extrair payload').item.json.whatsapp_message_id, status: 'recebido' }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "http-013",
+      "name": "HTTP: POST /chat",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2240, -140],
+      "parameters": {
+        "method": "POST",
+        "url": "https://qxlvzbvzajibdtlzngdy.supabase.co/functions/v1/llm-agent-api/chat",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key",    "value": "={{ $('Set: Configuração').first().json.LLM_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ cliente_id: $('HTTP: Buscar canal').item.json[0].cliente_id, config_id: $('HTTP: Buscar canal').item.json[0].config_id, phone_paciente: $('Set: Extrair payload').item.json.phone_paciente, nome_paciente: $('HTTP: Upsert conversa').item.json[0].nome_paciente || $('Set: Extrair payload').item.json.nome_paciente, mensagem: $('Set: Extrair payload').item.json.mensagem_texto, estado_atual: $('HTTP: Upsert conversa').item.json[0].estado, dados_coletados: $('HTTP: Upsert conversa').item.json[0].dados_coletados, historico_contexto: $('HTTP: Upsert conversa').item.json[0].historico_contexto }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "if-020",
+      "name": "IF: /chat ok?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2460, -140],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "c04",
+              "leftValue": "={{ !!$json.resposta }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "http-021",
+      "name": "HTTP: PATCH webhook erro",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2680, 100],
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://sxnrudxsidqggapxyvpn.supabase.co/rest/v1/webhooks_log",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",        "value": "={{ $('Set: Configuração').first().json.SUPABASE_KEY }}" },
+            { "name": "Authorization", "value": "={{ 'Bearer ' + $('Set: Configuração').first().json.SUPABASE_KEY }}" },
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Prefer",        "value": "return=minimal" }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "id", "value": "={{ 'eq.' + $('HTTP: Registrar webhook').item.json[0].id }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ processado: true, processado_em: new Date().toISOString(), erro_processamento: 'chat_error: ' + (JSON.stringify($('HTTP: POST /chat').item.json?.error) || 'resposta vazia') }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "http-014",
+      "name": "HTTP: PATCH conversa",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2680, -140],
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://sxnrudxsidqggapxyvpn.supabase.co/rest/v1/conversas",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",        "value": "={{ $('Set: Configuração').first().json.SUPABASE_KEY }}" },
+            { "name": "Authorization", "value": "={{ 'Bearer ' + $('Set: Configuração').first().json.SUPABASE_KEY }}" },
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Prefer",        "value": "return=minimal" }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "id", "value": "={{ 'eq.' + $('HTTP: Upsert conversa').item.json[0].id }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ estado: $('HTTP: POST /chat').item.json.novo_estado, dados_coletados: $('HTTP: POST /chat').item.json.dados_coletados, historico_contexto: $('HTTP: POST /chat').item.json.historico_contexto, nome_paciente: $('HTTP: POST /chat').item.json.dados_coletados?.nome_paciente || $('HTTP: Upsert conversa').item.json[0].nome_paciente, expires_at: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString() }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "http-015",
+      "name": "HTTP: Mensagem saída",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2900, -140],
+      "parameters": {
+        "method": "POST",
+        "url": "https://sxnrudxsidqggapxyvpn.supabase.co/rest/v1/mensagens",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",        "value": "={{ $('Set: Configuração').first().json.SUPABASE_KEY }}" },
+            { "name": "Authorization", "value": "={{ 'Bearer ' + $('Set: Configuração').first().json.SUPABASE_KEY }}" },
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Prefer",        "value": "return=representation" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ conversa_id: $('HTTP: Upsert conversa').item.json[0].id, cliente_id: $('HTTP: Buscar canal').item.json[0].cliente_id, direcao: 'saida', tipo: 'text', conteudo: { text: $('HTTP: POST /chat').item.json.resposta }, status: 'pendente' }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "http-016",
+      "name": "HTTP: GET API key",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [3120, -140],
+      "parameters": {
+        "method": "POST",
+        "url": "https://sxnrudxsidqggapxyvpn.supabase.co/rest/v1/rpc/get_canal_api_key",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",        "value": "={{ $('Set: Configuração').first().json.SUPABASE_KEY }}" },
+            { "name": "Authorization", "value": "={{ 'Bearer ' + $('Set: Configuração').first().json.SUPABASE_KEY }}" },
+            { "name": "Content-Type",  "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_canal_id: $('HTTP: Buscar canal').item.json[0].id }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "http-017",
+      "name": "HTTP: Evolution sendText",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [3340, -140],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://evo-w0c0g0swcgk04cocgo4o0gww.148.230.74.128.sslip.io/message/sendText/' + $('HTTP: Buscar canal').item.json[0].provider_phone_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",        "value": "={{ $('HTTP: GET API key').item.json.api_key }}" },
+            { "name": "Content-Type",  "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $('Set: Extrair payload').item.json.phone_paciente.replace('+', ''), text: $('HTTP: POST /chat').item.json.resposta }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "http-018",
+      "name": "HTTP: PATCH mensagem enviada",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [3560, -140],
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://sxnrudxsidqggapxyvpn.supabase.co/rest/v1/mensagens",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",        "value": "={{ $('Set: Configuração').first().json.SUPABASE_KEY }}" },
+            { "name": "Authorization", "value": "={{ 'Bearer ' + $('Set: Configuração').first().json.SUPABASE_KEY }}" },
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Prefer",        "value": "return=minimal" }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "id", "value": "={{ 'eq.' + $('HTTP: Mensagem saída').item.json[0].id }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'enviado' }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "http-019",
+      "name": "HTTP: PATCH webhook processado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [3780, -140],
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://sxnrudxsidqggapxyvpn.supabase.co/rest/v1/webhooks_log",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",        "value": "={{ $('Set: Configuração').first().json.SUPABASE_KEY }}" },
+            { "name": "Authorization", "value": "={{ 'Bearer ' + $('Set: Configuração').first().json.SUPABASE_KEY }}" },
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Prefer",        "value": "return=minimal" }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "id", "value": "={{ 'eq.' + $('HTTP: Registrar webhook').item.json[0].id }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ processado: true, processado_em: new Date().toISOString() }) }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Evolution": {
+      "main": [[{ "node": "Set: Configuração",   "type": "main", "index": 0 }]]
+    },
+    "Set: Configuração": {
+      "main": [[{ "node": "Set: Extrair payload", "type": "main", "index": 0 }]]
+    },
+    "Set: Extrair payload": {
+      "main": [[{ "node": "IF: Inbound text?",    "type": "main", "index": 0 }]]
+    },
+    "IF: Inbound text?": {
+      "main": [
+        [{ "node": "HTTP: Buscar canal",               "type": "main", "index": 0 }],
+        [{ "node": "NoOp: Ignorado",                   "type": "main", "index": 0 }]
+      ]
+    },
+    "HTTP: Buscar canal": {
+      "main": [[{ "node": "IF: Canal existe?",         "type": "main", "index": 0 }]]
+    },
+    "IF: Canal existe?": {
+      "main": [
+        [{ "node": "HTTP: Registrar webhook",          "type": "main", "index": 0 }],
+        [{ "node": "NoOp: Canal não configurado",      "type": "main", "index": 0 }]
+      ]
+    },
+    "HTTP: Registrar webhook": {
+      "main": [[{ "node": "IF: Evento novo?",          "type": "main", "index": 0 }]]
+    },
+    "IF: Evento novo?": {
+      "main": [
+        [{ "node": "HTTP: Upsert conversa",            "type": "main", "index": 0 }],
+        [{ "node": "NoOp: Duplicata ignorada",         "type": "main", "index": 0 }]
+      ]
+    },
+    "HTTP: Upsert conversa": {
+      "main": [[{ "node": "HTTP: Mensagem entrada",    "type": "main", "index": 0 }]]
+    },
+    "HTTP: Mensagem entrada": {
+      "main": [[{ "node": "HTTP: POST /chat",          "type": "main", "index": 0 }]]
+    },
+    "HTTP: POST /chat": {
+      "main": [[{ "node": "IF: /chat ok?",             "type": "main", "index": 0 }]]
+    },
+    "IF: /chat ok?": {
+      "main": [
+        [{ "node": "HTTP: PATCH conversa",             "type": "main", "index": 0 }],
+        [{ "node": "HTTP: PATCH webhook erro",         "type": "main", "index": 0 }]
+      ]
+    },
+    "HTTP: PATCH conversa": {
+      "main": [[{ "node": "HTTP: Mensagem saída",      "type": "main", "index": 0 }]]
+    },
+    "HTTP: Mensagem saída": {
+      "main": [[{ "node": "HTTP: GET API key",         "type": "main", "index": 0 }]]
+    },
+    "HTTP: GET API key": {
+      "main": [[{ "node": "HTTP: Evolution sendText",  "type": "main", "index": 0 }]]
+    },
+    "HTTP: Evolution sendText": {
+      "main": [[{ "node": "HTTP: PATCH mensagem enviada", "type": "main", "index": 0 }]]
+    },
+    "HTTP: PATCH mensagem enviada": {
+      "main": [[{ "node": "HTTP: PATCH webhook processado", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "",
+    "notes": "Escopo: IPADO — Dr. Marcelo. Este canal atende exclusivamente o Dr. Marcelo D'Carli. provider_phone_id = instance name técnico da Evolution (INOVAIA). Vault secret: evolution_ipado_dr_marcelo.\n\nApós importar: editar APENAS o node 'Set: Configuração' e substituir os dois placeholders pelas chaves reais.\n\nP3 pendente: criar Error Workflow separado para falha no HTTP: Evolution sendText (nó 017). Quando sendText falhar, mensagens.status fica 'pendente' como indicador correto, mas webhooks_log.processado fica false sem erro_processamento registrado. Error Workflow deve: PATCH webhooks_log com erro_processamento='evolution_error: <msg>'"
+  },
+  "versionId": "evolution-chat-v3",
+  "meta": {
+    "instanceId": ""
+  }
+}
