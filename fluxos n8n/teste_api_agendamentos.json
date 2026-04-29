@@ -1,0 +1,511 @@
+{
+  "name": "teste_api_agendamentos",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "telefone"
+            },
+            {
+              "name": "clinica_id"
+            },
+            {
+              "name": "mensagem_final"
+            },
+            {
+              "name": "resumo_contexto"
+            },
+            {
+              "name": "intencao"
+            },
+            {
+              "name": "prompt_agendamentos"
+            },
+            {
+              "name": "config_id"
+            },
+            {
+              "name": "nome"
+            },
+            {
+              "name": "dados_coletados",
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "id": "a2c05ddf-1bb6-4e18-9c68-53d935644f13",
+      "typeVersion": 1.1,
+      "name": "receberDadosMotorIA",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [
+        1360,
+        1328
+      ],
+      "notes": "Execute Workflow Trigger — recebe dados do Motor de Atendimento IA.\nInput: {mensagem_final, telefone, clinica_id, config_id, prompt_agendamentos, ...}"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput || $json.mensagem_final }}",
+        "options": {
+          "systemMessage": "=# IDENTIDADE\n\nVocê é **Noah**, assistente virtual de agendamento da [NOME DA CLÍNICA] via WhatsApp.\nSua missão é ajudar pacientes a agendar, remarcar, cancelar e confirmar consultas de forma rápida, gentil e precisa.\n\n---\n\n# REGRA ABSOLUTA — NUNCA MOSTRAR JSON\n\n**NUNCA** exiba para o paciente: chaves `{}`, colchetes `[]`, aspas de código, nomes de campos técnicos (`data_solicitada`, `proximas_datas`, `horario_distribuicao`, `vagas_disponiveis`, `limite_total`, `tipo`, `medico_id`, etc.).\nSempre interprete o resultado das tools e responda em linguagem natural.\n\n---\n\n# TOM E ESTILO\n\n- Fale em **português do Brasil**, de forma calorosa, clara e objetiva.\n- Use **emojis com moderação** (✅ 📅 😊 🚨 👨‍⚕️ 📋) — no máximo 1-2 por mensagem.\n- Mensagens **curtas** (máx. 4-5 linhas). WhatsApp não é e-mail.\n- Trate o paciente pelo **primeiro nome** quando souber.\n- **NUNCA** invente informações: se não souber, use uma tool ou peça ao paciente.\n- **NUNCA** invente horários, médicos, valores ou disponibilidade.\n\n---\n\n# REGRAS CRÍTICAS\n\n1. **SEMPRE** use as tools disponíveis para qualquer informação operacional (horários, médicos, agendamentos). Não responda de memória.\n2. **NUNCA** confirme um agendamento sem antes verificar disponibilidade via `availability`.\n3. **NUNCA** peça dados que já foram informados na conversa. Releia o histórico.\n4. **SEMPRE** confirme os dados com o paciente ANTES de criar/alterar agendamento.\n5. Datas devem estar no formato **YYYY-MM-DD**. Converta \"amanhã\", \"segunda\", \"dia 15\" para essa forma.\n6. Horários no formato **HH:MM** (24h).\n7. Se a tool retornar `success: false`, **explique o erro de forma humana** ao paciente — nunca mostre JSON ou códigos técnicos.\n8. Se o paciente pedir algo fora do escopo (financeiro, clínico, prescrições), responda:\n   > \"Esse assunto precisa ser tratado direto com a clínica. Deseja que eu transfira para um atendente?\"\n\n---\n\n# TOOLS DISPONÍVEIS E QUANDO USAR\n\n| Tool | Use quando o paciente... |\n| ------ | -------------------------- |\n| `availability` | Perguntar horários disponíveis em uma data |\n| `check_patient` | Quiser saber se já tem consulta marcada |\n| `schedule` | Confirmar que quer agendar (após ver disponibilidade) |\n| `reschedule` | Quiser mudar data/hora de uma consulta existente |\n| `cancel` | Quiser desmarcar uma consulta |\n| `confirm` | Confirmar presença em consulta marcada |\n| `fila_espera` | Não houver vaga na data desejada |\n\n---\n\n# COMO INTERPRETAR E EXIBIR DISPONIBILIDADE\n\nQuando `availability` retornar, ela vem com `proximas_datas` — uma lista de datas disponíveis. Cada data tem `periodos` com os turnos disponíveis.\n\nCampos importantes de cada período:\n- `periodo`: \"Manhã\" ou \"Tarde\"\n- `horario_distribuicao`: janela para chegar e pegar ficha (ex: \"07:00 às 10:00 para fazer a ficha\")\n- `tipo`: \"ordem_chegada\" = sem hora marcada, é por ordem de chegada\n- Se vier `hora` no período: é hora marcada fixa (ex: MAPA 24H)\n\n**Formato para ordem de chegada** (tipo = ordem_chegada):\n```\n📅 Próximas vagas — Dr. Marcelo:\n\n📌 Quarta, 06/05 — Tarde\n   Compareça das 13:00 às 15:00 para pegar sua ficha\n\n📌 Quarta, 13/05 — Tarde\n   Compareça das 13:00 às 15:00 para pegar sua ficha\n\nQual data você prefere?\n```\n\n**Formato para hora marcada** (quando vier campo `hora`):\n```\n📅 Próximas vagas — MAPA 24H:\n\n📌 Segunda, 05/05 — às 08:00 (chegue 10 min antes)\n📌 Terça, 06/05 — às 09:00 (chegue 10 min antes)\n\nQual você prefere?\n```\n\nSe não houver datas: \"Não encontrei vagas nos próximos dias. Quer entrar na fila de espera?\"\n\n---\n\n# FLUXOS PRINCIPAIS\n\n## 📅 AGENDAMENTO NOVO\n\n1. Pergunte qual **médico** ou **especialidade/exame**.\n2. Chame `availability` imediatamente — não peça data antes.\n3. Apresente as datas disponíveis no formato acima.\n4. Quando o paciente escolher, pergunte **convênio**.\n5. Colete: nome completo, data de nascimento, celular (se não tiver).\n6. Repita todos os dados para confirmar:\n   > Confirma? 👤 [nome] | 👨‍⚕️ [médico] | 📅 [data/período] | 💳 [convênio]\n7. Só após o \"sim\", chame `schedule`.\n8. Confirme: \"✅ Agendado! Até lá 😊\"\n\n## 🔍 CONSULTAR AGENDAMENTOS\n\n1. Peça **nome completo + data de nascimento** (ou celular).\n2. Chame `check_patient`.\n3. Mostre as consultas em lista legível.\n\n## 🔄 REMARCAR\n\n1. Use `check_patient` para listar consultas.\n2. Pergunte qual remarcar e nova data preferida.\n3. Chame `availability` para nova data.\n4. Confirme e chame `reschedule`.\n\n## ❌ CANCELAR\n\n1. Use `check_patient` para listar.\n2. Confirme duas vezes antes de chamar `cancel`.\n\n## ⏳ FILA DE ESPERA\n\nQuando não houver vaga: \"Posso te colocar na fila de espera e aviso quando abrir. Tudo bem?\"\nApós confirmação, chame `fila_espera`.\n\n---\n\n# TRATAMENTO DE ERROS DAS TOOLS\n\n| Erro retornado | O que dizer ao paciente |\n|----------------|-------------------------|\n| `medico_nome` não encontrado | \"Não encontrei esse médico. Pode confirmar o nome?\" |\n| Sem disponibilidade | \"Não há vagas nesse dia. Quer outra data ou fila de espera?\" |\n| Conflito de horário | \"Esse horário acabou de ser preenchido. Posso mostrar outros?\" |\n| Paciente já tem consulta | \"Você já tem consulta para [data]. Quer remarcar ou agendar nova?\" |\n| Erro 500 / inesperado | \"Tive um problema técnico. Pode tentar de novo? 😅\" |\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1984,
+        1360
+      ],
+      "id": "69ce9178-0cac-45b2-9310-03e5c4cf189b",
+      "name": "agenteAgendamento",
+      "notes": "AI Agent com tools HTTP para gestão de consultas.\nAceita input do chat trigger E do execute workflow trigger."
+    },
+    {
+      "parameters": {
+        "toolDescription": "=Use apenas quando o paciente confirmar que deseja agendar em uma data/período específico e você já tiver coletado: Nome, Nascimento, Celular e Convênio.",
+        "method": "POST",
+        "url": "=https://qxlvzbvzajibdtlzngdy.supabase.co/functions/v1/llm-agent-api/schedule",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"cliente_id\": \"{{ $('receberDadosMotorIA').first().json.clinica_id }}\",\n  \"nome_completo\": \"{{$fromAI('paciente_nome', 'Nome completo do paciente')}}\",\n  \"data_nascimento\": \"{{$fromAI('data_nascimento', 'Data de nascimento em YYYY-MM-DD')}}\",\n  \"convenio\": \"{{$fromAI('convenio', 'Nome do convênio. Se for Unimed, deve incluir o tipo: Regional, Nacional, etc.')}}\",\n  \"celular\": \"{{$fromAI('celular', 'Celular com DDD. Se não informado, use o número do Trigger')}}\",\n  \"medico_nome\": \"{{$fromAI('medico_nome', 'Nome do médico')}}\",\n  \"data_agendamento\": \"{{$fromAI('data_consulta', 'Data escolhida em YYYY-MM-DD')}}\",\n  \"hora_agendamento\": \"{{$fromAI('hora_consulta', 'Use 08:00 para Manhã e 13:00 para Tarde')}}\",\n  \"atendimento_nome\": \"{{$fromAI('atendimento_nome', 'Tipo de serviço, ex: Consulta')}}\",\n  \"observacoes\": \"Agendado via InovaIA Medical\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        2192,
+        1536
+      ],
+      "id": "856b0a5c-0ef4-40bc-80ea-d9d98a0bd747",
+      "name": "toolAgendarConsulta",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Aw5GMvladZmzGcAq",
+          "name": "sistema agendamento"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Use SEMPRE esta ferramenta para verificar disponibilidade de um médico. Chame mesmo se o paciente NÃO informou uma data específica — nesse caso, passe a data de hoje e a API buscará automaticamente a partir da data mais próxima disponível. NÃO peça data ao paciente antes de chamar esta ferramenta. A ferramenta retorna horários livres ou sugere próximas datas.",
+        "method": "POST",
+        "url": "=https://qxlvzbvzajibdtlzngdy.supabase.co/functions/v1/llm-agent-api/availability",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"cliente_id\": \"{{ $('receberDadosMotorIA').first().json.clinica_id }}\",\n  \"config_id\": \"{{ $('receberDadosMotorIA').first().json.config_id }}\",\n  \"medico_nome\": {{ JSON.stringify($fromAI('medico_nome', 'Nome do médico solicitado')) }},\n  \"atendimento_nome\": {{ JSON.stringify($fromAI('atendimento_nome', 'Tipo de serviço. Se não informado, use Consulta')) }},\n  \"data_consulta\": {{ JSON.stringify($fromAI('data_consulta', 'Data no formato YYYY-MM-DD. Se não informou, use hoje: ' + $now.setZone('America/Sao_Paulo').toFormat('yyyy-MM-dd'))) }},\n  \"periodo\": {{ JSON.stringify($fromAI('periodo', 'manha, tarde ou ambos. Padrão: ambos', 'string')) }},\n  \"mensagem_original\": {{ JSON.stringify($json.chatInput || $('receberDadosMotorIA').first().json.mensagem_final || '') }},\n  \"buscar_proximas\": true\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        2096,
+        1648
+      ],
+      "id": "e8d68005-dd16-4560-af5b-279ec5011faa",
+      "name": "toolVerificarDisponibilidade",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Aw5GMvladZmzGcAq",
+          "name": "sistema agendamento"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Use esta ferramenta sempre que o paciente quiser VERIFICAR, CANCELAR ou REMARCAR uma consulta existente. Ela retorna os dados do agendamento e o agendamento_id necessário para as outras ações.",
+        "method": "POST",
+        "url": "https://qxlvzbvzajibdtlzngdy.supabase.co/functions/v1/llm-agent-api/check-patient",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"cliente_id\": \"{{ $('receberDadosMotorIA').first().json.clinica_id }}\",\n  \"paciente_nome\": \"{{$fromAI('paciente_nome', 'Nome completo do paciente para busca')}}\",\n  \"data_nascimento\": \"{{$fromAI('data_nascimento', 'Data de nascimento em YYYY-MM-DD para validar a busca')}}\",\n  \"celular\": \"{{$fromAI('celular', 'Número de celular para busca')}}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        2352,
+        1536
+      ],
+      "id": "16b8b2d9-2c27-4d10-af87-56669f20090b",
+      "name": "toolVerificarPaciente",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Aw5GMvladZmzGcAq",
+          "name": "sistema agendamento"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Use apenas após o paciente confirmar explicitamente que deseja cancelar a consulta e você já tiver obtido o agendamento_id.",
+        "method": "POST",
+        "url": "https://qxlvzbvzajibdtlzngdy.supabase.co/functions/v1/llm-agent-api/cancel",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"cliente_id\": \"{{ $('receberDadosMotorIA').first().json.clinica_id }}\",\n  \"agendamento_id\": \"{{$fromAI('agendamento_id', 'ID único do agendamento obtido na ferramenta Verificar_Paciente')}}\",\n  \"motivo\": \"Cancelado a pedido do paciente via WhatsApp\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        2512,
+        1536
+      ],
+      "id": "8c72ff0f-7bd3-4027-a257-3cfaa26f23c8",
+      "name": "toolCancelarConsulta",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Aw5GMvladZmzGcAq",
+          "name": "sistema agendamento"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Use apenas para alterar a data de uma consulta já localizada. Requer o agendamento_id e a nova data/período confirmados pelo paciente.",
+        "method": "POST",
+        "url": "https://qxlvzbvzajibdtlzngdy.supabase.co/functions/v1/llm-agent-api/reschedule",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"cliente_id\": \"{{ $('receberDadosMotorIA').first().json.clinica_id }}\",\n  \"agendamento_id\": \"{{$fromAI('agendamento_id', 'ID do agendamento original obtido via Verificar_Paciente')}}\",\n  \"nova_data\": \"{{$fromAI('nova_data', 'Nova data escolhida em YYYY-MM-DD')}}\",\n  \"nova_hora\": \"{{$fromAI('nova_hora', 'Use 08:00 para Manhã e 13:00 para Tarde')}}\",\n  \"observacoes\": \"Remarcado via WhatsApp\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        2656,
+        1536
+      ],
+      "id": "5afaea4d-b467-4c98-837d-8af2fb936059",
+      "name": "toolRemarcarConsulta",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Aw5GMvladZmzGcAq",
+          "name": "sistema agendamento"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Use para confirmar presença do paciente em uma consulta já agendada. Requer o agendamento_id obtido via Verificar_Paciente. Use quando o paciente disser que confirma, que vai comparecer, ou responder afirmativamente a uma mensagem de confirmação.",
+        "method": "POST",
+        "url": "=https://qxlvzbvzajibdtlzngdy.supabase.co/functions/v1/llm-agent-api/confirm",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"cliente_id\": \"{{ $('receberDadosMotorIA').first().json.clinica_id }}\",\n  \"agendamento_id\": \"{{$fromAI('agendamento_id', 'ID único do agendamento')}}\",\n  \"observacoes\": \"Confirmado via Agente Transacional\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        2256,
+        1664
+      ],
+      "id": "e3152f46-ee6c-44e2-b854-582faec3382b",
+      "name": "toolConfirmarConsulta",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Aw5GMvladZmzGcAq",
+          "name": "sistema agendamento"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "236529ab-b7a7-4bf0-9d22-45fb357202f3",
+              "name": "texto_final",
+              "value": "={{ $json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2352,
+        1360
+      ],
+      "id": "0646bd27-0d51-44b7-a598-ec0ba775cba7",
+      "name": "formatarRespostaAgendamento",
+      "notes": "Extrai output do AI Agent como texto_final.\nOutput: {texto_final: string} — retornado ao Motor de Atendimento IA."
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-4o-mini",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1776,
+        1536
+      ],
+      "id": "77074b1c-694d-4bd4-b130-9f09ef5ba935",
+      "name": "modeloOpenRouterGemini",
+      "credentials": {
+        "openRouterApi": {
+          "id": "y8YYne5KhXcrEFU3",
+          "name": "Fluxo_agendamento"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Use quando não houver vagas disponíveis nos próximos dias, quando o paciente pedir encaixe ou urgência, ou quando recusar todas as datas oferecidas. Adiciona o paciente na lista de espera para ser avisado quando surgir vaga.",
+        "method": "POST",
+        "url": "https://qxlvzbvzajibdtlzngdy.supabase.co/functions/v1/llm-agent-api/adicionar-fila",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"cliente_id\": \"{{ $('receberDadosMotorIA').first().json.clinica_id }}\",\n  \"nome_completo\": \"{{$fromAI('paciente_nome', 'Nome completo do paciente')}}\",\n  \"celular\": \"{{$fromAI('celular', 'Celular com DDD')}}\",\n  \"convenio\": \"{{$fromAI('convenio', 'Convênio do paciente')}}\",\n  \"medico_nome\": \"{{$fromAI('medico_nome', 'Nome do médico desejado')}}\",\n  \"atendimento_nome\": \"{{$fromAI('atendimento_nome', 'Tipo de serviço, ex: Consulta')}}\",\n  \"data_preferida\": \"{{$fromAI('data_preferida', 'Data a partir da qual o paciente aceita vaga, formato YYYY-MM-DD')}}\",\n  \"periodo_preferido\": \"{{$fromAI('periodo_preferido', 'manha, tarde ou qualquer')}}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        2384,
+        1760
+      ],
+      "id": "b475ea90-5a47-45c7-a2b4-ec4a617ca585",
+      "name": "toolAdicionarFilaEspera",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Aw5GMvladZmzGcAq",
+          "name": "sistema agendamento"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        1760,
+        1344
+      ],
+      "id": "befd998c-2585-4a98-b3ac-17dc053ef3e6",
+      "name": "When chat message received",
+      "webhookId": "36223242-abfc-48b5-a196-34f9b339cbb5"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('receberDadosMotorIA').first().json.telefone + '_' + $('receberDadosMotorIA').first().json.clinica_id }}",
+        "tableName": "chat_memory_agendamento",
+        "contextWindowLength": 12
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        1984,
+        1600
+      ],
+      "id": "cdf4a92f-c569-4c41-afe9-794c524e20fc",
+      "name": "memoriaConversaAgendamento",
+      "credentials": {
+        "postgres": {
+          "id": "gVTpX9SzhjWG5mod",
+          "name": "supabase-gerais"
+        }
+      },
+      "disabled": true
+    }
+  ],
+  "pinData": {
+    "receberDadosMotorIA": [
+      {
+        "json": {
+          "telefone": "558791311991",
+          "clinica_id": "2bfb98b5-ae41-4f96-8ba7-acc797c22054",
+          "config_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+          "mensagem_final": "quero agendar uma consulta",
+          "resumo_contexto": "",
+          "intencao": "agendar",
+          "prompt_agendamentos": "",
+          "nome": "Gabriela Morais",
+          "dados_coletados": {
+            "paciente_nome": "Gabriela Morais",
+            "data_nascimento": null,
+            "celular": null,
+            "convenio": null,
+            "medico_nome": "Dr. Marcelo",
+            "atendimento_nome": "Consulta",
+            "data_consulta": null,
+            "periodo_preferido": null
+          }
+        }
+      }
+    ]
+  },
+  "connections": {
+    "receberDadosMotorIA": {
+      "main": [
+        [
+          {
+            "node": "agenteAgendamento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "agenteAgendamento": {
+      "main": [
+        [
+          {
+            "node": "formatarRespostaAgendamento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "toolAgendarConsulta": {
+      "ai_tool": [
+        [
+          {
+            "node": "agenteAgendamento",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "toolVerificarDisponibilidade": {
+      "ai_tool": [
+        [
+          {
+            "node": "agenteAgendamento",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "toolVerificarPaciente": {
+      "ai_tool": [
+        [
+          {
+            "node": "agenteAgendamento",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "toolCancelarConsulta": {
+      "ai_tool": [
+        [
+          {
+            "node": "agenteAgendamento",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "toolRemarcarConsulta": {
+      "ai_tool": [
+        [
+          {
+            "node": "agenteAgendamento",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "toolConfirmarConsulta": {
+      "ai_tool": [
+        [
+          {
+            "node": "agenteAgendamento",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "modeloOpenRouterGemini": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "agenteAgendamento",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "toolAdicionarFilaEspera": {
+      "ai_tool": [
+        [
+          {
+            "node": "agenteAgendamento",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "agenteAgendamento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "memoriaConversaAgendamento": {
+      "ai_memory": [
+        [
+          {
+            "node": "agenteAgendamento",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "9678874c-714e-435d-8cca-9e12a43cfc87",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "29904fb7452e8c571d1daed834613de10cd7bd3fb8c86085e9fca2451931424c"
+  },
+  "id": "JoyC_y1w86RELpKHPDcBb",
+  "tags": []
+}
