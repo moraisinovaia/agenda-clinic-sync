@@ -102,10 +102,13 @@ export class CheckAvailabilityUseCase {
               minimumDate,
             });
 
-        // 🛡️ Capacidade segura: fallback para 1 se config.limite vier null/undefined/NaN
-        const capacity = Number.isFinite(config.limite as number) && (config.limite as number) > 0
-          ? (config.limite as number)
-          : 1;
+        // 🛡️ STRICT: capacidade DEVE vir definida e > 0. Sem fallback fantasma.
+        // Se a config não tem limite, este período NÃO é ofertado (em vez de inventar 1 vaga).
+        if (!Number.isFinite(config.limite as number) || (config.limite as number) <= 0) {
+          console.warn(`[CheckAvailability] Período ${periodKey} em ${dateStr} ignorado: limite inválido (${config.limite}) para medico=${medicoId}`);
+          continue;
+        }
+        const capacity = config.limite as number;
         const available = Math.max(0, capacity - (occupied ?? 0));
         if (available <= 0) continue;
 
