@@ -6,6 +6,9 @@
 import {
   assertEquals,
   assertFalse,
+  assert,
+  assertNotEquals,
+  assertStringIncludes,
 } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 
 import {
@@ -15,8 +18,12 @@ import {
   isServicoTergo,
   isServicoMapa,
   isConvenioParceiro,
+  finalizeResponse,
+  OBRIGATORIOS_CONSULTA,
   type DadosColetados,
 } from '../_handlers/chat.ts';
+
+import type { DynamicConfig } from '../_lib/types.ts';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -228,4 +235,164 @@ Deno.test('computeMissingFields: cancelar exige apenas nome e nascimento', () =>
   assertEquals(missing.includes('data_nascimento'), true);
   assertFalse(missing.includes('servico'));
   assertFalse(missing.includes('convenio'));
+});
+
+// ── Helpers para finalizeResponse ────────────────────────────────────────
+
+function captureWarns(): { warns: string[]; restore: () => void } {
+  const warns: string[] = [];
+  const orig = console.warn;
+  console.warn = (...a: unknown[]) => warns.push(String(a[0]));
+  return { warns, restore: () => { console.warn = orig; } };
+}
+
+function configUmMedico(nome = 'Dr. Marcelo', id = 'uuid-marcelo'): DynamicConfig {
+  return {
+    clinic_info: null,
+    business_rules: { doc1: { medico_id: id, medico_nome: nome, config: null } },
+    mensagens: {},
+    loadedAt: 0,
+  };
+}
+
+// ── finalizeResponse ──────────────────────────────────────────────────────
+
+// Caso 1: respostaFinal="" → fallback humano + escalonado_humano + console.warn
+Deno.test('finalizeResponse: resposta vazia → fallback humano, escalonado_humano e warn', () => {
+  const { warns, restore } = captureWarns();
+
+  const result = finalizeResponse({
+    respostaFinal: '',
+    dadosMerged: dadosVazios(),
+    missingFields: [],
+    novoEstado: 'identificando_servico',
+    config: null,
+    intent: 'outro',
+  });
+
+  restore();
+
+  assertNotEquals(result.respostaFinal, '');
+  assert(result.respostaFinal.trim().length > 0, 'resposta não pode ser vazia');
+  assertEquals(result.novoEstado, 'escalonado_humano');
+  assert(
+    warns.some((w) => w.includes('resposta vazia')),
+    'console.warn "resposta vazia" esperado',
+  );
+});
+
+// Caso 2: intent=agendar, missing_fields=[], data_consulta=null → corrigir
+Deno.test('finalizeResponse: agendar + missing_fields=[] + data_consulta null → corrige estado e pergunta', () => {
+  const dados: DadosColetados = {
+    ...dadosVazios(),
+    medico_nome: 'Dr. Marcelo',
+    nome_paciente: 'Ana Lima',
+    convenio: 'UNIMED 20%',
+    // data_consulta permanece null
+  };
+  const { warns, restore } = captureWarns();
+
+  const result = finalizeResponse({
+    respostaFinal: 'Confirmando seu agendamento...',
+    dadosMerged: dados,
+    missingFields: [],          // computeMissingFields retornou [] incorretamente
+    novoEstado: 'agendado',     // estado errado — seria mudado para coletando_dados
+    config: null,
+    intent: 'agendar',
+  });
+
+  restore();
+
+  assert(result.missingFields.includes('data_consulta'), 'data_consulta deve entrar em missing_fields');
+  assertEquals(result.novoEstado, 'coletando_dados', 'estado deve recuar para coletando_dados');
+  assertStringIncludes(
+    result.respostaFinal.toLowerCase(),
+    'data',
+    'resposta deve perguntar pela data',
+  );
+  assert(
+    warns.some((w) => w.includes('missing_fields')),
+    'console.warn sobre missing_fields esperado',
+  );
+});
+
+// Caso 3: médico único em config, medico_nome=null → auto-fill + remove de missing_fields
+Deno.test('finalizeResponse: médico único → preenche medico_nome/id e remove de missing_fields', () => {
+  const dados = dadosVazios();   // medico_nome = null
+  const { warns, restore } = captureWarns();
+
+  const result = finalizeResponse({
+    respostaFinal: 'Como posso ajudar?',
+    dadosMerged: dados,
+    missingFields: ['medico_nome', 'data_consulta'],
+    novoEstado: 'identificando_servico',
+    config: configUmMedico(),
+    intent: 'agendar',
+  });
+
+  restore();
+
+  assertEquals(dados.medico_nome, 'Dr. Marcelo',     'medico_nome deve ser preenchido no objeto');
+  assertEquals(dados.medico_id,   'uuid-marcelo',    'medico_id deve ser preenchido no objeto');
+  assertFalse(
+    result.missingFields.includes('medico_nome'),
+    'medico_nome não deve aparecer em missing_fields após auto-fill',
+  );
+  assert(result.missingFields.includes('data_consulta'), 'data_consulta deve permanecer em missing_fields');
+  assert(
+    warns.some((w) => w.includes('médico único')),
+    'console.warn de médico único esperado',
+  );
+});
+
+// Caso 4: novo_estado=escalonado_humano + respostaFinal="" → mantém estado, aplica fallback
+Deno.test('finalizeResponse: escalonado_humano + resposta vazia → mantém estado e fallback', () => {
+  const result = finalizeResponse({
+    respostaFinal: '',
+    dadosMerged: dadosVazios(),
+    missingFields: [],
+    novoEstado: 'escalonado_humano',
+    config: null,
+    intent: 'humano',
+  });
+
+  assertEquals(result.novoEstado, 'escalonado_humano', 'estado escalonado_humano deve ser preservado');
+  assertNotEquals(result.respostaFinal, '');
+  assert(result.respostaFinal.trim().length > 0, 'fallback deve ser aplicado');
+});
+
+// Caso 5: histórico recebe a resposta final normalizada, não a vazia original
+Deno.test('finalizeResponse: resposta retornada é a que vai para o histórico — não a original vazia', () => {
+  const result = finalizeResponse({
+    respostaFinal: '',           // vazia — deve ser substituída
+    dadosMerged: dadosVazios(),
+    missingFields: [],
+    novoEstado: 'inicio',
+    config: null,
+    intent: 'outro',
+  });
+
+  // Simula exatamente como handleChat constrói historicoAtualizado após finalizeResponse:
+  //   const historicoAtualizado = [...historico, { role:'assistant', content: respostaFinal }]
+  // respostaFinal aqui é o valor RETORNADO por finalizeResponse, não o original.
+  const historicoAtualizado = [
+    { role: 'user',      content: 'olá' },
+    { role: 'assistant', content: result.respostaFinal },
+  ];
+
+  assertNotEquals(historicoAtualizado[1].content, '',  'histórico não deve gravar resposta vazia');
+  assert(
+    historicoAtualizado[1].content.trim().length > 0,
+    'histórico deve conter a resposta fallback, não string vazia',
+  );
+});
+
+// Caso extra: OBRIGATORIOS_CONSULTA exportado contém exatamente os 3 campos do domínio
+Deno.test('OBRIGATORIOS_CONSULTA: contém exatamente nome_paciente, data_consulta e convenio', () => {
+  assertEquals(OBRIGATORIOS_CONSULTA.length, 3);
+  assert(OBRIGATORIOS_CONSULTA.includes('nome_paciente'));
+  assert(OBRIGATORIOS_CONSULTA.includes('data_consulta'));
+  assert(OBRIGATORIOS_CONSULTA.includes('convenio'));
+  assertFalse((OBRIGATORIOS_CONSULTA as string[]).includes('medico_nome'), 'medico_nome não é campo do paciente');
+  assertFalse((OBRIGATORIOS_CONSULTA as string[]).includes('data_nascimento'), 'data_nascimento não é obrigatório');
 });

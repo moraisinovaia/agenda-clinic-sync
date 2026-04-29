@@ -483,6 +483,81 @@ async function callHandler(
 // ── Exports para testes unitários ────────────────────────────────────────
 export { auditRules, mergeDados, computeMissingFields, isServicoTergo, isServicoMapa, isConvenioParceiro };
 
+// ── Camada final de normalização e segurança ──────────────────────────────
+// Executada imediatamente antes do successResponse.
+// Garante invariantes de domínio sem alterar o fluxo principal.
+
+const FALLBACK_HUMANO =
+  'Desculpe, tive uma instabilidade ao processar sua solicitação. ' +
+  'Vou encaminhar para a equipe continuar o atendimento.';
+
+export const OBRIGATORIOS_CONSULTA: (keyof DadosColetados)[] = [
+  'nome_paciente', 'data_consulta', 'convenio',
+];
+
+export function finalizeResponse(params: {
+  respostaFinal: string;
+  dadosMerged: DadosColetados;
+  missingFields: string[];
+  novoEstado: string;
+  config: DynamicConfig | null;
+  intent: string;
+}): { respostaFinal: string; missingFields: string[]; novoEstado: string } {
+  let { respostaFinal, missingFields, novoEstado } = params;
+  const { dadosMerged, config, intent } = params;
+
+  // Regra 4: médico único — segundo nível de segurança após auto-fill principal
+  if (!dadosMerged.medico_nome && config?.business_rules) {
+    const entries = Object.values(config.business_rules);
+    if (entries.length === 1 && entries[0].medico_nome) {
+      console.warn('[CHAT] finalizeResponse: medico_nome null com médico único — corrigindo');
+      dadosMerged.medico_nome = entries[0].medico_nome as string;
+      if (entries[0].medico_id) {
+        dadosMerged.medico_id = entries[0].medico_id as string;
+      }
+      // Paciente nunca deve ser perguntado sobre médico em canal de médico único
+      missingFields = missingFields.filter((f) => f !== 'medico_nome');
+    }
+  }
+
+  // Regras 5 + 6: missing_fields com campos reais do domínio (consulta)
+  if (intent === 'agendar') {
+    const realMissing = OBRIGATORIOS_CONSULTA.filter((f) => !dadosMerged[f]);
+    const uncovered = realMissing.filter((f) => !missingFields.includes(f));
+
+    if (uncovered.length > 0) {
+      const wasEmpty = missingFields.length === 0;
+      console.warn(
+        `[CHAT] finalizeResponse: campos obrigatórios null fora de missing_fields: ${uncovered.join(', ')}`,
+      );
+      missingFields = [...new Set([...missingFields, ...uncovered])];
+
+      if (wasEmpty) {
+        // Regra 6: missing_fields estava [] mas há campos nulos — ajustar estado e perguntar
+        const ESTADOS_COLETA = ['coletando_dados', 'identificando_servico', 'confirmando_dados'];
+        if (!ESTADOS_COLETA.includes(novoEstado) && novoEstado !== 'escalonado_humano') {
+          novoEstado = 'coletando_dados';
+        }
+        const label = CAMPO_LABELS[uncovered[0]] ?? uncovered[0];
+        respostaFinal = `Para continuar com o agendamento, preciso saber: qual é o seu ${label}?`;
+      }
+    }
+  }
+
+  // Regras 3 + 7: resposta nunca vazia — último recurso
+  if (!respostaFinal?.trim()) {
+    console.warn(
+      `[CHAT] finalizeResponse: resposta vazia detectada (intent=${intent}, estado=${novoEstado})`,
+    );
+    respostaFinal = FALLBACK_HUMANO;
+    if (novoEstado !== 'escalonado_humano') {
+      novoEstado = 'escalonado_humano';
+    }
+  }
+
+  return { respostaFinal, missingFields, novoEstado };
+}
+
 // ── Handler principal ──────────────────────────────────────────────────────
 
 export async function handleChat(
@@ -615,7 +690,7 @@ export async function handleChat(
 
     // ── Recalcular missing_fields deterministicamente ────────────────────
     // Backend conhece os dados reais após merge; não confiar no LLM.
-    const missingFields = computeMissingFields(extraction.intent, dadosMerged);
+    let missingFields = computeMissingFields(extraction.intent, dadosMerged);
 
     // Se todos os campos obrigatórios estão preenchidos e a intent é agendar,
     // forçar confirm_schedule independentemente do que o LLM sugeriu.
@@ -679,9 +754,18 @@ export async function handleChat(
     }
 
     // ── Phase 4: Estado + histórico ──────────────────────────────────────
-    const novoEstado = audit.blocked
+    let novoEstado = audit.blocked
       ? estadoAtual   // bloqueio por regra não avança o estado
       : deriveEstado(extraction.next_action, extraction.intent, estadoAtual);
+
+    ({ respostaFinal, missingFields, novoEstado } = finalizeResponse({
+      respostaFinal,
+      dadosMerged,
+      missingFields,
+      novoEstado,
+      config,
+      intent: extraction.intent,
+    }));
 
     const historicoAtualizado = [
       ...historicoContexto,
