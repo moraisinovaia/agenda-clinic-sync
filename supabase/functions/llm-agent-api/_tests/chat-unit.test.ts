@@ -23,6 +23,8 @@ import {
   contemIntencaoExplicita,
   dispatchHandler,
   resolveHandlerMessage,
+  planSchedulingTurn,
+  OBRIGATORIOS_AGENDAR,
   type DadosColetados,
 } from '../_handlers/chat.ts';
 
@@ -559,4 +561,185 @@ Deno.test('isBuscaProximaDisponibilidade: não detecta quando há data específi
   assertFalse(isBuscaProximaDisponibilidade(null),                              'null retorna false');
   assertFalse(isBuscaProximaDisponibilidade(''),                                'vazio retorna false');
   assertFalse(isBuscaProximaDisponibilidade('ok'),                              '"ok" isolado não é busca geral');
+});
+
+// ── planSchedulingTurn ────────────────────────────────────────────────────
+
+function mkExtraction(
+  intent: string,
+  resposta = '',
+): { intent: string; provided_fields: string[]; resposta: string; next_action: string } {
+  return { intent, provided_fields: [], resposta, next_action: 'ask_missing' };
+}
+
+function configComServico(nomeServico = 'Consulta Cardiológica'): DynamicConfig {
+  return {
+    clinic_info: null,
+    business_rules: {
+      doc1: {
+        medico_id:   'uuid-marcelo',
+        medico_nome: 'Dr. Marcelo',
+        config: { servicos: { [nomeServico]: {} } } as any,
+      },
+    },
+    mensagens: {},
+    loadedAt: 0,
+  };
+}
+
+// 1. intent não-scheduling → defer sem tocar dados
+Deno.test('planSchedulingTurn: intent=humano → action=defer, preserva resposta do LLM', () => {
+  const plan = planSchedulingTurn({
+    estadoAtual: 'inicio',
+    mensagem:    'quero falar com uma pessoa',
+    extraction:  mkExtraction('humano', 'Vou transferir para atendente.'),
+    dadosMerged: dadosVazios(),
+    config:      null,
+  });
+  assertEquals(plan.action, 'defer');
+  assertEquals(plan.resposta, 'Vou transferir para atendente.');
+  assertEquals(plan.missing_fields.length, 0);
+});
+
+// 2. disponibilidade sem servico (e sem config para auto-fill) → ask_missing(servico)
+Deno.test('planSchedulingTurn: disponibilidade sem servico → ask_missing, missing=[servico]', () => {
+  const dados = { ...dadosVazios(), medico_nome: 'Dr. Marcelo' };
+  const plan = planSchedulingTurn({
+    estadoAtual: 'inicio',
+    mensagem:    'tem horário disponível?',
+    extraction:  mkExtraction('disponibilidade'),
+    dadosMerged: dados,
+    config:      null,
+  });
+  assertEquals(plan.action, 'ask_missing');
+  assert(plan.missing_fields.includes('servico'), 'servico deve estar em missing_fields');
+});
+
+// 3. disponibilidade + "tem vaga pra quando?" → check_next_availability
+Deno.test('planSchedulingTurn: disponibilidade + busca geral → check_next_availability', () => {
+  const dados = { ...dadosVazios(), servico: 'Consulta Cardiológica', medico_nome: 'Dr. Marcelo' };
+  const plan = planSchedulingTurn({
+    estadoAtual: 'identificando_servico',
+    mensagem:    'tem vaga pra quando?',
+    extraction:  mkExtraction('disponibilidade'),
+    dadosMerged: dados,
+    config:      null,
+  });
+  assertEquals(plan.action, 'check_next_availability');
+});
+
+// 4. disponibilidade com data_consulta preenchida → check_availability_by_date
+Deno.test('planSchedulingTurn: disponibilidade + data_consulta → check_availability_by_date', () => {
+  const dados: DadosColetados = {
+    ...dadosVazios(),
+    servico:       'Consulta Cardiológica',
+    medico_nome:   'Dr. Marcelo',
+    data_consulta: '2026-05-10',
+  };
+  const plan = planSchedulingTurn({
+    estadoAtual: 'identificando_servico',
+    mensagem:    'quero para dia 10 de maio',
+    extraction:  mkExtraction('disponibilidade'),
+    dadosMerged: dados,
+    config:      null,
+  });
+  assertEquals(plan.action, 'check_availability_by_date');
+  assertEquals(plan.dados.data_consulta, '2026-05-10');
+});
+
+// 5. disponibilidade sem data e mensagem genérica → check_next_availability (padrão)
+Deno.test('planSchedulingTurn: disponibilidade sem data e mensagem genérica → check_next_availability padrão', () => {
+  const dados = { ...dadosVazios(), servico: 'Consulta Cardiológica', medico_nome: 'Dr. Marcelo' };
+  const plan = planSchedulingTurn({
+    estadoAtual: 'identificando_servico',
+    mensagem:    'quero verificar disponibilidade',
+    extraction:  mkExtraction('disponibilidade'),
+    dadosMerged: dados,
+    config:      null,
+  });
+  assertEquals(plan.action, 'check_next_availability');
+});
+
+// 6. agendar sem nenhum obrigatório → convenio pedido primeiro (OBRIGATORIOS_AGENDAR order)
+Deno.test('planSchedulingTurn: agendar sem nenhum obrigatório → convenio é o primeiro campo pedido', () => {
+  const dados: DadosColetados = {
+    ...dadosVazios(),
+    servico:     'Consulta Cardiológica',
+    medico_nome: 'Dr. Marcelo',
+  };
+  const plan = planSchedulingTurn({
+    estadoAtual: 'inicio',
+    mensagem:    'quero marcar consulta',
+    extraction:  mkExtraction('agendar'),
+    dadosMerged: dados,
+    config:      null,
+  });
+  assertEquals(plan.action, 'ask_missing');
+  assertEquals(plan.missing_fields[0], 'convenio', 'OBRIGATORIOS_AGENDAR: convenio deve ser pedido primeiro');
+  assertEquals(plan.missing_fields.length, 3, 'todos os 3 obrigatórios devem estar em missing_fields');
+});
+
+// 7. agendar com todos os obrigatórios mas sem confirmação → confirm_schedule
+Deno.test('planSchedulingTurn: agendar com todos obrigatórios + confirmado=null → confirm_schedule', () => {
+  const dados: DadosColetados = {
+    ...dadosVazios(),
+    servico:       'Consulta Cardiológica',
+    medico_nome:   'Dr. Marcelo',
+    convenio:      'UNIMED 20%',
+    data_consulta: '2026-05-10',
+    nome_paciente: 'João Silva',
+  };
+  const plan = planSchedulingTurn({
+    estadoAtual: 'coletando_dados',
+    mensagem:    'quero marcar',
+    extraction:  mkExtraction('agendar', 'Vou confirmar: Consulta dia 10/05 com UNIMED 20%...'),
+    dadosMerged: dados,
+    config:      null,
+  });
+  assertEquals(plan.action, 'confirm_schedule');
+  assertEquals(plan.missing_fields.length, 0);
+});
+
+// 8. agendar com todos os obrigatórios + confirmado=true → schedule
+Deno.test('planSchedulingTurn: agendar com todos obrigatórios + confirmado=true → schedule', () => {
+  const dados: DadosColetados = {
+    ...dadosVazios(),
+    servico:       'Consulta Cardiológica',
+    medico_nome:   'Dr. Marcelo',
+    convenio:      'UNIMED 20%',
+    data_consulta: '2026-05-10',
+    nome_paciente: 'João Silva',
+    confirmado:    true,
+  };
+  const plan = planSchedulingTurn({
+    estadoAtual: 'confirmando_dados',
+    mensagem:    'sim confirmo',
+    extraction:  mkExtraction('agendar'),
+    dadosMerged: dados,
+    config:      null,
+  });
+  assertEquals(plan.action, 'schedule');
+  assertEquals(plan.missing_fields.length, 0);
+});
+
+// 9. auto-fill de servico: config com 1 médico + 1 serviço → servico preenchido → não ask_missing
+Deno.test('planSchedulingTurn: disponibilidade + config 1 médico 1 serviço → auto-fill servico → check_next', () => {
+  const dados = { ...dadosVazios(), medico_nome: 'Dr. Marcelo' };
+  const plan = planSchedulingTurn({
+    estadoAtual: 'identificando_servico',
+    mensagem:    'tem vaga pra quando?',
+    extraction:  mkExtraction('disponibilidade'),
+    dadosMerged: dados,
+    config:      configComServico('Consulta Cardiológica'),
+  });
+  assertEquals(plan.action, 'check_next_availability', 'auto-fill de servico deve evitar ask_missing');
+  assertEquals(dados.servico, 'Consulta Cardiológica', 'autoFillServicoPlan deve preencher dados.servico');
+});
+
+// OBRIGATORIOS_AGENDAR exportado tem ordem correta (convenio primeiro)
+Deno.test('OBRIGATORIOS_AGENDAR: convenio é o primeiro campo, contém os 3 obrigatórios', () => {
+  assertEquals(OBRIGATORIOS_AGENDAR.length, 3);
+  assertEquals(OBRIGATORIOS_AGENDAR[0], 'convenio',      'primeiro campo deve ser convenio');
+  assertEquals(OBRIGATORIOS_AGENDAR[1], 'data_consulta', 'segundo campo deve ser data_consulta');
+  assertEquals(OBRIGATORIOS_AGENDAR[2], 'nome_paciente', 'terceiro campo deve ser nome_paciente');
 });

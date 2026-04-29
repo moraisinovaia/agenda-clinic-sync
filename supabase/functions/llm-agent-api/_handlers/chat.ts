@@ -15,7 +15,7 @@ import type { DynamicConfig } from '../_lib/types.ts';
 import { successResponse, errorResponse } from '../_lib/responses.ts';
 import { chatCompletion } from '../_lib/openai.ts';
 import { buildExtractionSystemPrompt } from '../_lib/prompts.ts';
-import { handleAvailability } from './availability.ts';
+import { handleAvailability, isBuscaProximaDisponibilidade } from './availability.ts';
 import { handleSchedule } from './schedule.ts';
 import { handleCancel } from './cancel.ts';
 import { handleCheckPatient } from './check-patient.ts';
@@ -577,6 +577,149 @@ export function finalizeResponse(params: {
   return { respostaFinal, missingFields, novoEstado };
 }
 
+// ── Orquestrador determinístico de scheduling ─────────────────────────────
+// Ativado somente para intent=agendar e intent=disponibilidade.
+// Para outros intents retorna action='defer' e o dispatchHandler existente assume.
+
+type PlanAction =
+  | 'ask_missing'
+  | 'check_next_availability'
+  | 'check_availability_by_date'
+  | 'confirm_schedule'
+  | 'schedule'
+  | 'handoff_human'
+  | 'defer';
+
+export interface SchedulingPlan {
+  action:         PlanAction;
+  resposta:       string;
+  missing_fields: string[];
+  dados:          DadosColetados;
+  reason:         string;
+}
+
+export interface PlanInput {
+  estadoAtual: string;
+  mensagem:    string;
+  extraction:  { intent: string; provided_fields: string[]; resposta: string; next_action: string };
+  dadosMerged: DadosColetados;
+  config:      DynamicConfig | null;
+}
+
+// Ordem fixa dos campos obrigatórios para agendamento.
+export const OBRIGATORIOS_AGENDAR: (keyof DadosColetados)[] = ['convenio', 'data_consulta', 'nome_paciente'];
+
+const ASK_LABELS: Record<string, string> = {
+  convenio:      'Você possui convênio? Se sim, qual? Se preferir, pode responder "particular".',
+  data_consulta: 'Qual dia você prefere para a consulta?',
+  nome_paciente: 'Qual é o nome completo do paciente?',
+};
+
+// Tenta preencher servico quando ausente: serviço único ou primeiro contendo "consulta".
+function autoFillServicoPlan(dados: DadosColetados, config: DynamicConfig | null): void {
+  if (dados.servico) return;
+  if (!config?.business_rules) return;
+  const entries = Object.values(config.business_rules);
+  if (entries.length !== 1) return;
+  const cfgServicos = entries[0].config?.servicos as Record<string, unknown> | undefined;
+  if (!cfgServicos) return;
+  const keys = Object.keys(cfgServicos);
+  if (keys.length === 1) {
+    dados.servico = keys[0];
+    return;
+  }
+  const padrao = keys.find((k) => k.toLowerCase().includes('consulta'));
+  if (padrao) dados.servico = padrao;
+}
+
+export function planSchedulingTurn({ estadoAtual: _estado, mensagem, extraction, dadosMerged, config }: PlanInput): SchedulingPlan {
+  const { intent } = extraction;
+
+  if (intent !== 'agendar' && intent !== 'disponibilidade') {
+    return {
+      action:         'defer',
+      resposta:       extraction.resposta,
+      missing_fields: [],
+      dados:          dadosMerged,
+      reason:         `intent=${intent} não é scheduling → dispatchHandler`,
+    };
+  }
+
+  // Auto-fill servico para ambos os intents
+  autoFillServicoPlan(dadosMerged, config);
+
+  // ── intent = disponibilidade ─────────────────────────────────────────
+  if (intent === 'disponibilidade') {
+    if (!dadosMerged.servico || !dadosMerged.medico_nome) {
+      const faltando = !dadosMerged.servico ? 'servico' : 'medico_nome';
+      return {
+        action:         'ask_missing',
+        resposta:       faltando === 'servico' ? 'Qual serviço você deseja?' : 'Qual médico você deseja consultar?',
+        missing_fields: [faltando],
+        dados:          dadosMerged,
+        reason:         `disponibilidade sem ${faltando} após auto-fill`,
+      };
+    }
+    if (isBuscaProximaDisponibilidade(mensagem)) {
+      return {
+        action:         'check_next_availability',
+        resposta:       '',
+        missing_fields: [],
+        dados:          dadosMerged,
+        reason:         'intenção de próxima disponibilidade detectada na mensagem',
+      };
+    }
+    if (dadosMerged.data_consulta) {
+      return {
+        action:         'check_availability_by_date',
+        resposta:       '',
+        missing_fields: [],
+        dados:          dadosMerged,
+        reason:         `disponibilidade para data específica: ${dadosMerged.data_consulta}`,
+      };
+    }
+    return {
+      action:         'check_next_availability',
+      resposta:       '',
+      missing_fields: [],
+      dados:          dadosMerged,
+      reason:         'disponibilidade sem data específica → check_next_availability por padrão',
+    };
+  }
+
+  // ── intent = agendar ────────────────────────────────────────────────
+  const missing = OBRIGATORIOS_AGENDAR.filter((f) => !dadosMerged[f]) as string[];
+
+  if (missing.length > 0) {
+    const first = missing[0];
+    return {
+      action:         'ask_missing',
+      resposta:       ASK_LABELS[first] ?? `Por favor, informe ${first}.`,
+      missing_fields: missing,
+      dados:          dadosMerged,
+      reason:         `campos obrigatórios faltando: ${missing.join(', ')}`,
+    };
+  }
+
+  if (dadosMerged.confirmado === true) {
+    return {
+      action:         'schedule',
+      resposta:       '',
+      missing_fields: [],
+      dados:          dadosMerged,
+      reason:         'todos os obrigatórios + confirmado=true → executar agendamento',
+    };
+  }
+
+  return {
+    action:         'confirm_schedule',
+    resposta:       extraction.resposta,
+    missing_fields: [],
+    dados:          dadosMerged,
+    reason:         'todos os obrigatórios presentes, aguardando confirmação explícita',
+  };
+}
+
 // ── Handler principal ──────────────────────────────────────────────────────
 
 export async function handleChat(
@@ -742,67 +885,150 @@ export async function handleChat(
       extraction.next_action = 'confirm_schedule';
     }
 
-    // ── Phase 3: Dispatch de handler (somente se não bloqueado) ──────────
+    // ── Phase 3: Orquestrador determinístico + dispatch ──────────────────
     let handlerResult: unknown = null;
     let acaoExecutada: string | null = null;
     let respostaFinal: string;
 
     if (audit.blocked) {
-      // Regra crítica acionada: resposta determinística, sem handler
       respostaFinal = audit.override_response!;
       console.log(`[CHAT] Bloqueado por regra: ${audit.reason}`);
     } else {
-      const dispatch = dispatchHandler(
-        extraction.next_action,
-        extraction.intent,
-        dadosMerged,
-        {
-          cliente_id:        clienteId,
-          config_id:         body.config_id,
-          phone_paciente:    body.phone_paciente,
-          nome_paciente:     body.nome_paciente,
-          mensagem_original: mensagem,
-        },
-      );
+      const plan = planSchedulingTurn({ estadoAtual, mensagem, extraction, dadosMerged, config });
+      console.log(`[CHAT] plan: action=${plan.action} | reason="${plan.reason}"`);
 
-      if (dispatch.handler && dispatch.body) {
-        const resp = await callHandler(dispatch.handler, supabase, dispatch.body, clienteId, config);
+      if (plan.action === 'ask_missing') {
+        // Nunca chama handler — responde com a pergunta determinística
+        respostaFinal = plan.resposta;
+        extraction.next_action = 'ask_missing';
+
+      } else if (plan.action === 'check_next_availability' || plan.action === 'check_availability_by_date') {
+        const availBody: Record<string, unknown> = {
+          cliente_id:       clienteId,
+          config_id:        body.config_id,
+          phone_paciente:   body.phone_paciente,
+          nome_paciente:    body.nome_paciente,
+          mensagem_original: mensagem,
+          medico_nome:      dadosMerged.medico_nome,
+          medico_id:        dadosMerged.medico_id   ?? undefined,
+          atendimento_nome: dadosMerged.servico,
+          servico:          dadosMerged.servico,
+          periodo:          dadosMerged.periodo      ?? undefined,
+        };
+        if (plan.action === 'check_next_availability') {
+          availBody.buscar_proximas = true;
+        } else {
+          availBody.data_consulta = dadosMerged.data_consulta;
+        }
+        const resp = await callHandler('availability', supabase, availBody, clienteId, config);
         if (resp) {
           handlerResult = await resp.json();
-          acaoExecutada = dispatch.handler;
+          acaoExecutada = 'availability';
           const hData = handlerResult as any;
           if (hData?.success === false) {
-            console.warn('[CHAT] handler retornou erro:', {
-              handler:           dispatch.handler,
-              codigo_erro:       hData?.codigo_erro,
-              mensagem_usuario:  hData?.mensagem_usuario,
-              mensagem_whatsapp: hData?.mensagem_whatsapp,
+            console.warn('[CHAT] availability erro:', {
+              codigo_erro:      hData?.codigo_erro,
+              mensagem_usuario: hData?.mensagem_usuario,
             });
           }
           respostaFinal = resolveHandlerMessage(hData, extraction.resposta);
         } else {
           respostaFinal = extraction.resposta;
         }
-      } else {
-        // Sem handler disponível
-        if (
-          estadoAtual === 'verificando_disponibilidade' &&
-          extraction.next_action === 'check_availability'
-        ) {
-          if (extraction.provided_fields.length > 0) {
-            // Paciente forneceu dados novos neste turno — não é loop real.
-            // Manter o fluxo; o próximo turno terá os dados para despachar.
-            respostaFinal = extraction.resposta;
-            console.log('[CHAT] verificando_disponibilidade com dados novos — sem escalada');
-          } else {
-            // Nenhum dado novo e handler continua falhando — loop real.
-            respostaFinal =
-              'Vou encaminhar sua solicitação para nossa equipe verificar os horários disponíveis e retornar com as opções em breve.';
-            extraction.next_action = 'escalate_human';
-            console.log('[CHAT] override: loop verificando_disponibilidade → escalate_human');
+        extraction.next_action = 'check_availability';
+
+      } else if (plan.action === 'confirm_schedule') {
+        extraction.next_action = 'confirm_schedule';
+        respostaFinal = plan.resposta;  // LLM gerou o resumo dos dados
+
+      } else if (plan.action === 'schedule') {
+        const scheduleBody: Record<string, unknown> = {
+          cliente_id:       clienteId,
+          config_id:        body.config_id,
+          phone_paciente:   body.phone_paciente,
+          mensagem_original: mensagem,
+          medico_nome:      dadosMerged.medico_nome,
+          medico_id:        dadosMerged.medico_id    ?? undefined,
+          atendimento_nome: dadosMerged.servico,
+          servico:          dadosMerged.servico,
+          data_consulta:    dadosMerged.data_consulta,
+          periodo:          dadosMerged.periodo       ?? undefined,
+          paciente_nome:    dadosMerged.nome_paciente,
+          data_nascimento:  dadosMerged.data_nascimento ?? undefined,
+          convenio:         dadosMerged.convenio,
+        };
+        const resp = await callHandler('schedule', supabase, scheduleBody, clienteId, config);
+        if (resp) {
+          handlerResult = await resp.json();
+          acaoExecutada = 'schedule';
+          const hData = handlerResult as any;
+          if (hData?.success === false) {
+            console.warn('[CHAT] schedule erro:', {
+              codigo_erro:      hData?.codigo_erro,
+              mensagem_usuario: hData?.mensagem_usuario,
+            });
           }
+          respostaFinal = resolveHandlerMessage(hData, extraction.resposta);
         } else {
           respostaFinal = extraction.resposta;
+        }
+        extraction.next_action = 'execute_schedule';
+
+      } else if (plan.action === 'handoff_human') {
+        respostaFinal = 'Vou encaminhar sua solicitação para nossa equipe, que retornará em breve.';
+        extraction.next_action = 'escalate_human';
+
+      } else {
+        // plan.action === 'defer': cancel, reschedule, clinic-info, info_geral, humano, etc.
+        const dispatch = dispatchHandler(
+          extraction.next_action,
+          extraction.intent,
+          dadosMerged,
+          {
+            cliente_id:        clienteId,
+            config_id:         body.config_id,
+            phone_paciente:    body.phone_paciente,
+            nome_paciente:     body.nome_paciente,
+            mensagem_original: mensagem,
+          },
+        );
+
+        if (dispatch.handler && dispatch.body) {
+          const resp = await callHandler(dispatch.handler, supabase, dispatch.body, clienteId, config);
+          if (resp) {
+            handlerResult = await resp.json();
+            acaoExecutada = dispatch.handler;
+            const hData = handlerResult as any;
+            if (hData?.success === false) {
+              console.warn('[CHAT] handler retornou erro:', {
+                handler:           dispatch.handler,
+                codigo_erro:       hData?.codigo_erro,
+                mensagem_usuario:  hData?.mensagem_usuario,
+                mensagem_whatsapp: hData?.mensagem_whatsapp,
+              });
+            }
+            respostaFinal = resolveHandlerMessage(hData, extraction.resposta);
+          } else {
+            respostaFinal = extraction.resposta;
+          }
+        } else {
+          // Sem handler — loop detection para estado verificando_disponibilidade
+          if (
+            estadoAtual === 'verificando_disponibilidade' &&
+            extraction.next_action === 'check_availability'
+          ) {
+            if (extraction.provided_fields.length > 0) {
+              respostaFinal = extraction.resposta;
+              console.log('[CHAT] verificando_disponibilidade com dados novos — sem escalada');
+            } else {
+              respostaFinal =
+                'Vou encaminhar sua solicitação para nossa equipe verificar os horários disponíveis e retornar com as opções em breve.';
+              extraction.next_action = 'escalate_human';
+              console.log('[CHAT] override: loop verificando_disponibilidade → escalate_human');
+            }
+          } else {
+            respostaFinal = extraction.resposta;
+          }
         }
       }
     }
