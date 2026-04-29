@@ -458,19 +458,37 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
       }
     }
     let servico = servicoKey ? normalizarServicoPeriodos(regras.servicos[servicoKey]) : null;
-    
-    // 🔄 FALLBACK: Se serviço não encontrado e médico é ordem_chegada, usar períodos de qualquer serviço configurado
-    if (!servico && regras?.tipo_agendamento === 'ordem_chegada' && regras?.servicos) {
+
+    // 🚫 [F1.3] Erro acionável quando atendimento_nome foi explicitamente fornecido
+    //          mas não casou com nenhum serviço configurado.
+    // Why: o fallback antigo escolhia "primeiro serviço com períodos", o que
+    // fazia 'Pré-operatório' virar MRPA silenciosamente — paciente recebia
+    // datas de outro serviço sem perceber. Erro estruturado com lista de
+    // serviços permite ao caller (LLM/n8n) reagir corretamente.
+    if (!servico && atendimento_nome) {
+      console.warn(`⚠️ [F1.3] Serviço "${atendimento_nome}" não encontrado para ${medico.nome}. Disponíveis: ${servicosKeys.join(', ')}`);
+      return businessErrorResponse({
+        codigo_erro:      'SERVICO_NAO_ENCONTRADO',
+        mensagem_usuario: `Não encontrei o serviço "${atendimento_nome}" para ${medico.nome}. Os serviços disponíveis são: ${servicosKeys.join(', ')}.`,
+        detalhes: {
+          atendimento_solicitado: atendimento_nome,
+          medico:                 medico.nome,
+          medico_id:              medico.id,
+          servicos_disponiveis:   servicosKeys,
+        },
+      });
+    }
+
+    // 🔄 Fallback legado: apenas quando atendimento_nome ausente (chamada genérica)
+    if (!servico && !atendimento_nome && regras?.tipo_agendamento === 'ordem_chegada' && regras?.servicos) {
       const primeiroServicoComPeriodos = Object.values(regras.servicos)
         .find((s: any) => s?.periodos && Object.keys(s.periodos).length > 0);
-      
+
       if (primeiroServicoComPeriodos) {
         servico = normalizarServicoPeriodos(primeiroServicoComPeriodos as any);
-        console.log(`🔄 [FALLBACK] Serviço "${atendimento_nome}" não encontrado. Usando períodos de outro serviço configurado para ordem de chegada.`);
+        console.log(`🔄 [FALLBACK_SEM_NOME] atendimento_nome ausente. Usando primeiro serviço configurado.`);
       }
     }
-    
-    // Não retornar erro ainda - busca melhorada será feita depois se necessário
     
     const tipoAtendimento = servico?.tipo || regras?.tipo_agendamento || 'ordem_chegada';
     console.log(`📋 [${medico.nome}] Tipo: ${tipoAtendimento} | Serviço: ${servicoKey || 'não encontrado ainda'} (busca: "${atendimento_nome}")`);
