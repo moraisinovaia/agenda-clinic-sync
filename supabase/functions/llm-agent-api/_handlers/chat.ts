@@ -189,8 +189,13 @@ function computeMissingFields(intent: string, dados: DadosColetados): string[] {
 
   const missing: string[] = required.filter((f) => !dados[f]);
 
-  // MAPA: exige guia médica antes de verificar disponibilidade ou agendar
-  if (isServicoMapa(dados.servico) && dados.tem_guia !== true) {
+  // MAPA 24H: sempre exige guia
+  if (isServicoMapa24h(dados.servico) && dados.tem_guia !== true) {
+    if (!missing.includes('tem_guia')) missing.push('tem_guia');
+  }
+
+  // MRPA: exige guia apenas quando não é convênio particular
+  if (isServicoMrpa(dados.servico) && !isConvenioParticular(dados.convenio) && dados.tem_guia !== true) {
     if (!missing.includes('tem_guia')) missing.push('tem_guia');
   }
 
@@ -242,6 +247,30 @@ function isServicoTergo(servico: string | null): boolean {
 
 function isServicoMapa(servico: string | null): boolean {
   return !!servico && normStr(servico).includes('mapa');
+}
+
+function isServicoMapa24h(servico: string | null): boolean {
+  if (!servico) return false;
+  const n = normStr(servico);
+  return n.includes('mapa') && n.includes('24');
+}
+
+function isServicoMrpa(servico: string | null): boolean {
+  if (!servico) return false;
+  const n = normStr(servico);
+  return n === 'mrpa' || n.includes('mrpa');
+}
+
+function isServicoMapaAmbiguo(servico: string | null): boolean {
+  if (!servico) return false;
+  return normStr(servico).includes('mapa') && !isServicoMapa24h(servico) && !isServicoMrpa(servico);
+}
+
+function isConvenioParticular(convenio: string | null): boolean {
+  if (!convenio) return false;
+  const n = normStr(convenio);
+  return n.includes('particular') || n.includes('privado') ||
+         n.includes('semconvenio') || n.includes('pagamentoparticular');
 }
 
 // ── Normalização de convênio ──────────────────────────────────────────────
@@ -332,6 +361,7 @@ function auditRules(
   dados: DadosColetados,
   intent: string,
   nextAction: string,
+  mensagemOriginal?: string,
 ): AuditOutcome {
   // Convênio parceiro: nunca agendar diretamente
   if (isConvenioParceiro(dados.convenio)) {
@@ -363,19 +393,56 @@ function auditRules(
     };
   }
 
-  // MAPA — guia médica obrigatória antes de mostrar disponibilidade ou agendar
-  const precisaGuiaMapa =
-    isServicoMapa(dados.servico) &&
-    (intent === 'disponibilidade' || intent === 'agendar' ||
-      nextAction === 'check_availability' || nextAction === 'execute_schedule') &&
-    dados.tem_guia !== true;
+  const ehIntentScheduling =
+    intent === 'disponibilidade' || intent === 'agendar' ||
+    nextAction === 'check_availability' || nextAction === 'execute_schedule';
 
-  if (precisaGuiaMapa) {
+  // Verificar se a mensagem original menciona "mapa" sem especificar "24" ou "mrpa"
+  // (o LLM pode resolver "mapa" → "MAPA 24H", mas queremos a intenção do usuário)
+  const msgN = mensagemOriginal ? normStr(mensagemOriginal) : null;
+  const msgMapaAmbiguo = msgN
+    ? msgN.includes('mapa') && !msgN.includes('24') && !msgN.includes('mrpa')
+    : false;
+
+  // MAPA ambíguo ("mapa" sem especificar 24H ou MRPA): pede tipo + guia em mensagem única
+  if ((isServicoMapaAmbiguo(dados.servico) || msgMapaAmbiguo) && ehIntentScheduling) {
     return {
       blocked: true,
       override_response:
-        'Para o MAPA 24H, é necessário ter a guia médica em mãos. Você já possui a guia?',
+        'Você precisa fazer *MAPA 24H* ou *MRPA (MAPA de 4 dias)*? ' +
+        'A guia médica normalmente informa isso. ' +
+        'Pode enviar a foto da guia para eu verificar? ' +
+        'Se for HGU, envie também a autorização.',
+      reason: 'MAPA_AMBIGUO',
+    };
+  }
+
+  // MAPA 24H sem guia
+  if (isServicoMapa24h(dados.servico) && ehIntentScheduling && dados.tem_guia !== true) {
+    return {
+      blocked: true,
+      override_response:
+        'Para o *MAPA 24H*, é necessário ter a guia médica. ' +
+        'Pode enviar a foto da guia para eu verificar? ' +
+        'Se for HGU, envie também a autorização.',
       reason: 'MAPA_SEM_GUIA',
+    };
+  }
+
+  // MRPA sem guia (apenas convênio — particular não precisa)
+  if (
+    isServicoMrpa(dados.servico) &&
+    ehIntentScheduling &&
+    !isConvenioParticular(dados.convenio) &&
+    dados.tem_guia !== true
+  ) {
+    return {
+      blocked: true,
+      override_response:
+        'Para o *MRPA*, é necessário ter a guia médica. ' +
+        'Pode enviar a foto da guia para eu verificar? ' +
+        'Se for HGU, envie também a autorização.',
+      reason: 'MRPA_SEM_GUIA',
     };
   }
 
@@ -494,7 +561,7 @@ async function callHandler(
 }
 
 // ── Exports para testes unitários ────────────────────────────────────────
-export { auditRules, mergeDados, computeMissingFields, isServicoTergo, isServicoMapa, isConvenioParceiro, dispatchHandler };
+export { auditRules, mergeDados, computeMissingFields, isServicoTergo, isServicoMapa, isServicoMapa24h, isServicoMrpa, isServicoMapaAmbiguo, isConvenioParticular, isConvenioParceiro, dispatchHandler };
 
 // Seleciona a mensagem mais informativa de um resultado de handler.
 // Cobre tanto successResponse (message) quanto businessErrorResponse (mensagem_usuario/whatsapp).
@@ -594,6 +661,7 @@ type PlanAction =
   | 'confirm_schedule'
   | 'schedule'
   | 'handoff_human'
+  | 'walk_in_info'
   | 'defer';
 
 export interface SchedulingPlan {
@@ -620,6 +688,23 @@ const ASK_LABELS: Record<string, string> = {
   data_consulta: 'Qual dia você prefere para a consulta?',
   nome_paciente: 'Qual é o nome completo do paciente?',
 };
+
+// Retorna o campo 'tipo' do servico no config (ex: 'walk_in_info_only', 'fixed_time').
+function getServicoTipoFromConfig(servico: string | null | undefined, config: DynamicConfig | null): string | null {
+  if (!servico || !config?.business_rules) return null;
+  const normalizar = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+  const nomeNorm = normalizar(servico);
+  for (const medicoConfig of Object.values(config.business_rules)) {
+    const servicos: Record<string, any> = (medicoConfig as any)?.config?.servicos ?? {};
+    for (const [key, cfg] of Object.entries(servicos)) {
+      const keyNorm = normalizar(key);
+      if (keyNorm === nomeNorm || keyNorm.includes(nomeNorm) || nomeNorm.includes(keyNorm)) {
+        return (cfg as any)?.tipo ?? null;
+      }
+    }
+  }
+  return null;
+}
 
 // Tenta preencher servico quando ausente: serviço único ou primeiro contendo "consulta".
 function autoFillServicoPlan(dados: DadosColetados, config: DynamicConfig | null): void {
@@ -653,6 +738,17 @@ export function planSchedulingTurn({ estadoAtual: _estado, mensagem, extraction,
 
   // Auto-fill servico para ambos os intents
   autoFillServicoPlan(dadosMerged, config);
+
+  // ── Early: walk_in_info_only — orientar sem coletar campos de agendamento ─
+  if (getServicoTipoFromConfig(dadosMerged.servico, config) === 'walk_in_info_only') {
+    return {
+      action:         'walk_in_info',
+      resposta:       `O ${dadosMerged.servico} não precisa de agendamento prévio. O atendimento é por *ordem de chegada* — compareça diretamente nos dias disponíveis (manhã: Seg/Ter/Qui, tarde: Qua). Posso ajudar com mais alguma coisa?`,
+      missing_fields: [],
+      dados:          dadosMerged,
+      reason:         `${dadosMerged.servico} é walk_in_info_only`,
+    };
+  }
 
   // ── intent = disponibilidade ─────────────────────────────────────────
   if (intent === 'disponibilidade') {
@@ -724,6 +820,66 @@ export function planSchedulingTurn({ estadoAtual: _estado, mensagem, extraction,
     dados:          dadosMerged,
     reason:         'todos os obrigatórios presentes, aguardando confirmação explícita',
   };
+}
+
+// ── Formata proximas_datas em mensagem WhatsApp para hybrid_capacity ─────────
+// Garante que paciente veja: ordem de chegada, janela de comparecimento, data.
+// Nunca expõe hora_agendamento interna como "às HH:MM".
+
+function formatarDisponibilidadeParaWhatsApp(
+  hData:       any,
+  dadosMerged: DadosColetados,
+  config:      DynamicConfig | null,
+): string | null {
+  if (hData?.sem_vagas) {
+    return hData.message ?? 'Não encontrei vagas disponíveis. Entre em contato com a clínica.';
+  }
+
+  const datas: any[] | undefined = hData?.proximas_datas;
+  if (!datas || datas.length === 0) return null;
+
+  const nomeMedico =
+    dadosMerged.medico_nome ??
+    (config?.business_rules
+      ? (Object.values(config.business_rules)[0] as any)?.medico_nome
+      : null) ??
+    'O médico';
+
+  const DIA_CURTO: Record<string, string> = {
+    'Segunda-feira': 'Segunda', 'Terça-feira': 'Terça',
+    'Quarta-feira':  'Quarta',  'Quinta-feira': 'Quinta',
+    'Sexta-feira':   'Sexta',   'Sábado':       'Sábado',
+  };
+
+  const isFixedTime = datas.some((dia: any) => dia.periodos?.some((p: any) => p.hora));
+
+  const linhas: string[] = isFixedTime
+    ? [`*MAPA 24H tem hora marcada* — compareça no horário indicado.\n`, `📅 *Vagas disponíveis:*`]
+    : [`${nomeMedico} atende por *ordem de chegada* — sem hora marcada.\n`, `📅 *Vagas disponíveis:*`];
+
+  for (const dia of datas) {
+    const [, mes, d] = dia.data.split('-');
+    const diaNome = DIA_CURTO[dia.dia_semana] ?? dia.dia_semana;
+    for (const p of dia.periodos ?? []) {
+      const vagas = p.vagas_disponiveis;
+      if ((p as any).hora) {
+        linhas.push(
+          `• *${diaNome} (${d}/${mes})* — *às ${(p as any).hora}*` +
+          ((p as any).chegar ? ` (chegue ${(p as any).chegar})` : '') +
+          (typeof vagas === 'number' ? ` — ${vagas} vaga${vagas !== 1 ? 's' : ''}` : ''),
+        );
+      } else {
+        const janela = p.horario_distribuicao ?? '';
+        linhas.push(
+          `• *${diaNome} (${d}/${mes})* — ${p.periodo}: compareça das ${janela}` +
+          (typeof vagas === 'number' ? ` (${vagas} vaga${vagas !== 1 ? 's' : ''})` : ''),
+        );
+      }
+    }
+  }
+
+  linhas.push('\nQual data prefere? Confirme e posso registrar seu atendimento.');
+  return linhas.join('\n');
 }
 
 // ── Handler principal ──────────────────────────────────────────────────────
@@ -859,7 +1015,7 @@ export async function handleChat(
       }
     }
 
-    const audit        = auditRules(dadosMerged, extraction.intent, extraction.next_action);
+    const audit        = auditRules(dadosMerged, extraction.intent, extraction.next_action, mensagem);
 
     // ── Saudação: forçar início do fluxo de coleta ───────────────────────
     // Aplica somente quando é saudação pura: sem campos extraídos e sem intenção
@@ -950,7 +1106,9 @@ export async function handleChat(
             codigo_erro:       hData?.codigo_erro,
             raw:               hData,
           }));
-          respostaFinal = resolveHandlerMessage(hData, extraction.resposta);
+          respostaFinal =
+            formatarDisponibilidadeParaWhatsApp(hData, dadosMerged, config) ??
+            resolveHandlerMessage(hData, extraction.resposta);
         } else {
           respostaFinal = extraction.resposta;
         }
@@ -992,6 +1150,10 @@ export async function handleChat(
           respostaFinal = extraction.resposta;
         }
         extraction.next_action = 'execute_schedule';
+
+      } else if (plan.action === 'walk_in_info') {
+        respostaFinal = plan.resposta;
+        extraction.next_action = 'walk_in_info';
 
       } else if (plan.action === 'handoff_human') {
         respostaFinal = 'Vou encaminhar sua solicitação para nossa equipe, que retornará em breve.';

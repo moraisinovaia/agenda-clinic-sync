@@ -28,7 +28,8 @@ import {
   type DadosColetados,
 } from '../_handlers/chat.ts';
 
-import { isBuscaProximaDisponibilidade } from '../_handlers/availability.ts';
+import { isBuscaProximaDisponibilidade, detectarDiaSemana } from '../_handlers/availability.ts';
+import { calcularVagasDisponiveisComLimites } from '../_lib/limites.ts';
 
 import type { DynamicConfig } from '../_lib/types.ts';
 
@@ -742,4 +743,139 @@ Deno.test('OBRIGATORIOS_AGENDAR: convenio é o primeiro campo, contém os 3 obri
   assertEquals(OBRIGATORIOS_AGENDAR[0], 'convenio',      'primeiro campo deve ser convenio');
   assertEquals(OBRIGATORIOS_AGENDAR[1], 'data_consulta', 'segundo campo deve ser data_consulta');
   assertEquals(OBRIGATORIOS_AGENDAR[2], 'nome_paciente', 'terceiro campo deve ser nome_paciente');
+});
+
+// ── detectarDiaSemana — Bug 1: sem falsos positivos por substrings ─────────
+
+Deno.test('detectarDiaSemana: "quando tem horário?" NÃO deve inferir quarta (qua ⊂ quando)', () => {
+  assertEquals(detectarDiaSemana('quando tem horário?'), null);
+});
+
+Deno.test('detectarDiaSemana: "qualquer dia" NÃO deve inferir quarta (qua ⊂ qualquer)', () => {
+  assertEquals(detectarDiaSemana('qualquer dia'), null);
+});
+
+Deno.test('detectarDiaSemana: "temos horário?" NÃO deve inferir terça (ter ⊂ temos)', () => {
+  assertEquals(detectarDiaSemana('temos horário?'), null);
+});
+
+Deno.test('detectarDiaSemana: "seguinte semana" NÃO deve inferir segunda (seg ⊂ seguinte)', () => {
+  assertEquals(detectarDiaSemana('seguinte semana'), null);
+});
+
+Deno.test('detectarDiaSemana: "quinto andar" NÃO deve inferir quinta (qui ⊂ quinto)', () => {
+  assertEquals(detectarDiaSemana('quinto andar'), null);
+});
+
+Deno.test('detectarDiaSemana: "sexo masculino" NÃO deve inferir sexta (sex ⊂ sexo)', () => {
+  assertEquals(detectarDiaSemana('sexo masculino'), null);
+});
+
+Deno.test('detectarDiaSemana: detecta "quarta-feira" corretamente (dia 3)', () => {
+  assertEquals(detectarDiaSemana('tem vaga na quarta-feira?'), 3);
+  assertEquals(detectarDiaSemana('quarta'), 3);
+  assertEquals(detectarDiaSemana('na quarta'), 3);
+});
+
+Deno.test('detectarDiaSemana: detecta "segunda" e variantes (dia 1)', () => {
+  assertEquals(detectarDiaSemana('pode ser segunda?'), 1);
+  assertEquals(detectarDiaSemana('segunda-feira'), 1);
+  assertEquals(detectarDiaSemana('na segunda feira'), 1);
+});
+
+Deno.test('detectarDiaSemana: detecta "terça" e variantes sem falso positivo (dia 2)', () => {
+  assertEquals(detectarDiaSemana('tem vaga na terça?'), 2);
+  assertEquals(detectarDiaSemana('terça-feira'), 2);
+  // palavras com "ter" internas não devem ser detectadas
+  assertEquals(detectarDiaSemana('terceiro andar'), null);
+  assertEquals(detectarDiaSemana('internet ok'), null);
+});
+
+Deno.test('detectarDiaSemana: detecta "quinta" e variantes (dia 4)', () => {
+  assertEquals(detectarDiaSemana('pode ser quinta?'), 4);
+  assertEquals(detectarDiaSemana('quinta-feira'), 4);
+});
+
+Deno.test('detectarDiaSemana: detecta "sexta" e variantes (dia 5)', () => {
+  assertEquals(detectarDiaSemana('prefiro sexta'), 5);
+  assertEquals(detectarDiaSemana('sexta-feira'), 5);
+});
+
+Deno.test('detectarDiaSemana: null e string vazia retornam null', () => {
+  assertEquals(detectarDiaSemana(null), null);
+  assertEquals(detectarDiaSemana(''), null);
+  assertEquals(detectarDiaSemana(undefined), null);
+});
+
+// ── calcularVagasDisponiveisComLimites — Bug 2: nunca retorna Infinity ─────
+
+// Mock de supabase que retorna count=0 (sem agendamentos)
+function mockSupabase(count = 0) {
+  const chain: Record<string, unknown> = {};
+  const methods = ['select','eq','in','is','ilike','gte','lt','neq','not','maybeSingle'];
+  for (const m of methods) {
+    chain[m] = () => chain;
+  }
+  // Torna a chain thenable (await-able) retornando { data: [], count, error: null }
+  chain['then'] = (resolve: (v: unknown) => unknown) =>
+    Promise.resolve(resolve({ data: [], count, error: null }));
+  return { from: () => chain };
+}
+
+Deno.test('calcularVagasDisponiveisComLimites: serviço com compartilha_limite_com mas sem periodos retorna número finito', async () => {
+  const supabase = mockSupabase(0);
+  const servicoConfig = { compartilha_limite_com: 'consulta' }; // sem limite próprio, sem periodos
+  const regras = {}; // sem periodos no nível raiz
+
+  const resultado = await calcularVagasDisponiveisComLimites(
+    supabase, 'cliente-x', 'medico-x', '2026-05-07',
+    'retorno', servicoConfig, regras,
+  );
+
+  assert(Number.isFinite(resultado),  'resultado deve ser finito, não Infinity');
+  assert(!isNaN(resultado),           'resultado não deve ser NaN');
+  assert(resultado >= 0,              'resultado deve ser >= 0');
+});
+
+Deno.test('calcularVagasDisponiveisComLimites: serviço com limite direto usa-o como vagasPool quando pool não encontrado', async () => {
+  const supabase = mockSupabase(0); // 0 agendamentos existentes
+  const servicoConfig = {
+    compartilha_limite_com: 'consulta',
+    limite: 5, // limite direto do serviço
+  };
+  const regras = { periodos: {} }; // periodos vazio → pool não encontrado
+
+  const resultado = await calcularVagasDisponiveisComLimites(
+    supabase, 'cliente-x', 'medico-x', '2026-05-07',
+    'retorno', servicoConfig, regras,
+  );
+
+  assertEquals(resultado, 5, 'deve usar cfg.limite=5 quando pool não encontrado');
+});
+
+Deno.test('calcularVagasDisponiveisComLimites: sem limites e sem cfg.limite → fallback conservador 0 (evita overbooking)', async () => {
+  const supabase = mockSupabase(0);
+  const servicoConfig = {}; // sem compartilha_limite_com, sem limite_proprio, sem limite
+  const regras = {};
+
+  const resultado = await calcularVagasDisponiveisComLimites(
+    supabase, 'cliente-x', 'medico-x', '2026-05-07',
+    'retorno', servicoConfig, regras,
+  );
+
+  assert(Number.isFinite(resultado), 'sem limites configurados deve retornar finito, não Infinity');
+  assertEquals(resultado, 0, 'sem cfg.limite o fallback deve ser 0 (conservador, evita overbooking invisível)');
+});
+
+Deno.test('calcularVagasDisponiveisComLimites: sem pool/sublimite mas com cfg.limite → usa cfg.limite como capacidade', async () => {
+  const supabase = mockSupabase(0);
+  const servicoConfig = { limite: 8 }; // só cfg.limite, sem compartilha/sublimite
+  const regras = {};
+
+  const resultado = await calcularVagasDisponiveisComLimites(
+    supabase, 'cliente-x', 'medico-x', '2026-05-07',
+    'retorno', servicoConfig, regras,
+  );
+
+  assertEquals(resultado, 8, 'cfg.limite=8 deve ser usado quando não há pool nem sublimite');
 });

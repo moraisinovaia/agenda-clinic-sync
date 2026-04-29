@@ -265,6 +265,13 @@ export async function calcularVagasDisponiveisComLimites(
 
         vagasPool = limitePool - (count || 0);
       }
+    } else {
+      // Pool compartilhado não encontrado para este dia — usar limite direto do serviço como fallback
+      const limiteDireto = (servicoConfig as any)?.limite;
+      if (typeof limiteDireto === 'number' && limiteDireto > 0) {
+        vagasPool = limiteDireto;
+        console.log(`⚠️ [POOL] Pool "${compartilhaLimiteCom}" não encontrado para dia ${diaSemana}. Usando limite direto: ${limiteDireto}`);
+      }
     }
   }
 
@@ -284,8 +291,25 @@ export async function calcularVagasDisponiveisComLimites(
     vagasSublimite = limiteProprio - (count || 0);
   }
 
-  // Retornar o menor valor (mais restritivo)
-  return Math.min(vagasPool, vagasSublimite);
+  // Retornar o menor valor (mais restritivo), nunca Infinity/NaN/null
+  const vagasMin = Math.min(vagasPool, vagasSublimite);
+  if (!Number.isFinite(vagasMin) || isNaN(vagasMin)) {
+    // Capacidade indeterminada: pode ser config ausente OU bug silencioso.
+    // Conservador por padrão — evita overbooking invisível.
+    console.warn('[limites] Capacidade inválida detectada — retornando fallback conservador', {
+      servico: servicoKey,
+      servico_nome: (servicoConfig as any)?.nome ?? null,
+      data: dataAgendamento,
+      medico_id: medicoId,
+      vagasPool,
+      vagasSublimite,
+      compartilha_limite_com: compartilhaLimiteCom ?? null,
+      limite_proprio: limiteProprio ?? null,
+      tem_periodos_root: !!periodos,
+    });
+    return (servicoConfig as any)?.limite ?? 0;
+  }
+  return Math.max(0, vagasMin);
 }
 
 /**

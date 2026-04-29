@@ -31,6 +31,40 @@ export function isBuscaProximaDisponibilidade(mensagem: string | null | undefine
   return termos.some((t) => m.includes(t));
 }
 
+/**
+ * Detecta menção explícita de dia da semana usando regex com fronteiras de palavra.
+ * Não usa abreviações ambíguas (seg/ter/qua/qui/sex) que geram falsos positivos
+ * em palavras como "quando", "qualquer", "temos", "seguinte", "sexo" etc.
+ * @returns 1=seg, 2=ter, 3=qua, 4=qui, 5=sex, null se não detectado
+ */
+export function detectarDiaSemana(mensagem: string | null | undefined): number | null {
+  if (!mensagem) return null;
+  const m = mensagem.toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/\s+/g, ' ');
+
+  const padroes: Array<[RegExp, number, string]> = [
+    [/\bsegunda(?:-?feira)?\b/, 1, 'segunda'],
+    [/\bsegundafeira\b/, 1, 'segundafeira'],
+    [/\bterca(?:-?feira)?\b/, 2, 'terca'],
+    [/\btercafeira\b/, 2, 'tercafeira'],
+    [/\bquarta(?:-?feira)?\b/, 3, 'quarta'],
+    [/\bquartafeira\b/, 3, 'quartafeira'],
+    [/\bquinta(?:-?feira)?\b/, 4, 'quinta'],
+    [/\bquintafeira\b/, 4, 'quintafeira'],
+    [/\bsexta(?:-?feira)?\b/, 5, 'sexta'],
+    [/\bsextafeira\b/, 5, 'sextafeira'],
+  ];
+
+  for (const [regex, dia, nome] of padroes) {
+    if (regex.test(m)) {
+      console.log(`📅 Dia da semana específico detectado: ${nome} (${dia})`);
+      return dia;
+    }
+  }
+  return null;
+}
+
 export async function handleAvailability(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
     const scope = getRequestScope(body);
@@ -470,23 +504,8 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         console.log('☀️ Paciente solicitou especificamente período da MANHÃ');
       }
       
-      // 🆕 DETECTAR DIA DA SEMANA PREFERIDO
-      const diasMap: Record<string, number> = {
-        'segunda': 1, 'seg': 1, 'segunda-feira': 1, 'segundafeira': 1,
-        'terça': 2, 'terca': 2, 'ter': 2, 'terça-feira': 2, 'tercafeira': 2,
-        'quarta': 3, 'qua': 3, 'quarta-feira': 3, 'quartafeira': 3,
-        'quinta': 4, 'qui': 4, 'quinta-feira': 4, 'quintafeira': 4,
-        'sexta': 5, 'sex': 5, 'sexta-feira': 5, 'sextafeira': 5
-      };
-
-      for (const [nome, numero] of Object.entries(diasMap)) {
-        if (mensagemLower.includes(nome)) {
-          diaPreferido = numero;
-          console.log(`📅 Dia da semana específico detectado: ${nome} (${numero})`);
-          break;
-        }
-      }
-
+      // 🆕 DETECTAR DIA DA SEMANA PREFERIDO (regex com fronteira de palavra — sem abreviações ambíguas)
+      diaPreferido = detectarDiaSemana(mensagem_original);
       if (diaPreferido) {
         console.log(`🗓️ Dia preferido: ${diaPreferido}. Filtrando apenas esse dia da semana.`);
       }
@@ -567,6 +586,8 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           vagas_disponiveis: number;
           limite_total: number;
           tipo: string;
+          hora?: string;
+          chegar?: string;
         }>;
       }> = [];
       
@@ -585,6 +606,75 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
       
       // 🎫 LÓGICA PARA ORDEM DE CHEGADA (todos os médicos)
       console.log('🎫 Buscando períodos disponíveis (ordem de chegada)...');
+
+      // ── fixed_time path (MAPA 24H): slots horários fixos por dia da semana ─
+      const rawServico = servicoKey ? regras?.servicos?.[servicoKey] : null;
+      const isFixedTime = rawServico?.tipo === 'fixed_time';
+
+      if (isFixedTime && rawServico?.periodos) {
+        const DIAS_KEY: Record<number, string> = { 1: 'segunda', 2: 'terca', 3: 'quarta', 4: 'quinta', 5: 'sexta' };
+        const DIA_SEMANA_FT = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+        const datasNecessarias = 5;
+
+        for (let d = 0; d <= quantidade_dias && proximasDatas.length < datasNecessarias; d++) {
+          const dataCheck = new Date(dataInicial + 'T00:00:00');
+          dataCheck.setDate(dataCheck.getDate() + d);
+          const dataCheckStr = dataCheck.toISOString().split('T')[0];
+          const diaSemanaNum = dataCheck.getDay();
+
+          if (diaPreferido && diaSemanaNum !== diaPreferido) continue;
+
+          const chave = DIAS_KEY[diaSemanaNum];
+          const periodoFT = chave ? (rawServico.periodos as any)[chave] : null;
+          if (!periodoFT || periodoFT.ativo === false) continue;
+
+          const { data: ocupados } = await supabase
+            .from('agendamentos')
+            .select('id')
+            .eq('medico_id', medico.id)
+            .eq('data_agendamento', dataCheckStr)
+            .eq('hora_agendamento', periodoFT.hora + ':00')
+            .eq('cliente_id', clienteId)
+            .is('excluido_em', null)
+            .in('status', ['agendado', 'confirmado']);
+
+          const limite = periodoFT.limite ?? 3;
+          const vagas = limite - (ocupados?.length ?? 0);
+          if (vagas <= 0) continue;
+
+          proximasDatas.push({
+            data: dataCheckStr,
+            dia_semana: DIA_SEMANA_FT[diaSemanaNum],
+            periodos: [{
+              periodo: atendimento_nome || 'MAPA 24H',
+              horario_distribuicao: `às ${periodoFT.hora}`,
+              vagas_disponiveis: vagas,
+              limite_total: limite,
+              tipo: 'fixed_time',
+              hora: periodoFT.hora,
+              chegar: periodoFT.chegar,
+            }],
+          });
+        }
+
+        console.log(`📊 [FIXED_TIME] ${proximasDatas.length} datas encontradas`);
+
+        if (proximasDatas.length === 0) {
+          return successResponse({
+            success: false,
+            sem_vagas: true,
+            message: `Não há vagas disponíveis para ${atendimento_nome} nos próximos ${quantidade_dias} dias. Entre em contato com a clínica.`,
+            medico: medico.nome,
+          });
+        }
+
+        return successResponse({
+          success: true,
+          proximas_datas: proximasDatas,
+          medico: medico.nome,
+          message: `Vagas disponíveis para ${atendimento_nome}`,
+        });
+      }
 
       const hasSharedLimits = !!(servicoKey && servico && (servico.compartilha_limite_com || servico.limite_proprio));
 
@@ -621,17 +711,32 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
             continue;
           }
 
+          // Determina periodos aplicáveis para este dia da semana
+          const PERIODO_LABEL_SH: Record<string, string> = { manha: 'Manhã', tarde: 'Tarde' };
+          const periodosParaData: Array<{ periodo: string; horario_distribuicao: string; vagas_disponiveis: number; limite_total: number; tipo: string }> = [];
+          for (const [pk, pc] of Object.entries((servico as any)?.periodos ?? {})) {
+            if (pk !== 'manha' && pk !== 'tarde') continue;
+            const cfg: any = pc;
+            if (Array.isArray(cfg.dias_especificos) && !cfg.dias_especificos.includes(diaSemanaNum)) continue;
+            if (periodoPreferido && pk !== periodoPreferido) continue;
+            const janela = cfg.distribuicao_fichas
+              ?? (cfg.inicio && cfg.fim ? `${cfg.inicio} às ${cfg.fim}` : null)
+              ?? '07:00 às 12:00';
+            periodosParaData.push({
+              periodo: PERIODO_LABEL_SH[pk] ?? pk,
+              horario_distribuicao: janela,
+              vagas_disponiveis: vagasComLimites,
+              limite_total: cfg.limite ?? (servico as any).limite_proprio ?? 14,
+              tipo: (servico as any).tipo_agendamento || 'ordem_chegada',
+            });
+          }
+          if (periodosParaData.length === 0) continue;
+
           const diasSemana = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
           proximasDatas.push({
             data: dataCheckStr,
             dia_semana: diasSemana[diaSemanaNum],
-            periodos: [{
-              periodo: 'Manhã',
-              horario_distribuicao: '07:00 às 12:00',
-              vagas_disponiveis: vagasComLimites,
-              limite_total: servico.limite_proprio || 1,
-              tipo: servico.tipo_agendamento || 'hora_marcada'
-            }]
+            periodos: periodosParaData,
           });
 
           const datasNecessarias = periodoPreferido ? 5 : 3;
@@ -722,40 +827,37 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
             continue;
           }
           
-          // Contar agendamentos para este dia
-          const { count: totalAgendamentos } = await supabase
-            .from('agendamentos')
-            .select('*', { count: 'exact', head: true })
-            .eq('medico_id', medico.id)
-            .eq('data_agendamento', dataCheckStr)
-            .neq('status', 'cancelado')
-            .eq('cliente_id', clienteId);
-          
           const periodosDisponiveis = [];
-          
+
           for (const [periodo, config] of Object.entries(servico?.periodos || {})) {
             if (periodoPreferido && periodo !== periodoPreferido) continue;
-            
-            const limite = (config as any).limite || 9;
-            const { count: agendadosPeriodo } = await supabase
+
+            const limite     = (config as any).limite || 9;
+            // Usar contagem_* (janela de capacidade formal) sobre inicio/fim (janela de exibição)
+            const contInicio = (config as any).contagem_inicio ?? (config as any).inicio;
+            const contFim    = (config as any).contagem_fim    ?? (config as any).fim;
+
+            const { data: slotsOcupados } = await supabase
               .from('agendamentos')
-              .select('*', { count: 'exact', head: true })
+              .select('id')
               .eq('medico_id', medico.id)
+              .eq('cliente_id', clienteId)
               .eq('data_agendamento', dataCheckStr)
-              .gte('hora_agendamento', (config as any).inicio)
-              .lt('hora_agendamento', (config as any).fim)
-              .neq('status', 'cancelado')
-              .eq('cliente_id', clienteId);
-            
-            const vagasDisponiveis = limite - (agendadosPeriodo || 0);
-            
+              .gte('hora_agendamento', contInicio)
+              .lt('hora_agendamento', contFim)
+              .is('excluido_em', null)
+              .in('status', ['agendado', 'confirmado']);
+
+            const agendadosPeriodo = slotsOcupados?.length ?? 0;
+            const vagasDisponiveis = limite - agendadosPeriodo;
+
             if (vagasDisponiveis > 0) {
               periodosDisponiveis.push({
-                periodo: periodo.charAt(0).toUpperCase() + periodo.slice(1),
-                horario_distribuicao: (config as any).distribuicao_fichas || `${(config as any).inicio} às ${(config as any).fim}`,
-                vagas_disponiveis: vagasDisponiveis,
-                limite_total: limite,
-                tipo: tipoAtendimento
+                periodo:              periodo.charAt(0).toUpperCase() + periodo.slice(1),
+                horario_distribuicao: (config as any).distribuicao_fichas ?? `${contInicio} às ${contFim}`,
+                vagas_disponiveis:    vagasDisponiveis,
+                limite_total:         limite,
+                tipo:                 tipoAtendimento,
               });
             }
           }
