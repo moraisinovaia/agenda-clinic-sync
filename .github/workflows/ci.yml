@@ -27,3 +27,9 @@ jobs:
       - name: Unit tests — scheduling-core
         working-directory: supabase/functions/_shared/scheduling-core
         run: deno task test
+
+      - name: Unit tests — llm-agent-api (handlers + helpers)
+        run: deno test --allow-all --no-check supabase/functions/llm-agent-api/_tests/chat-unit.test.ts
+
+      - name: Smoke script — syntax check
+        run: bash -n supabase/functions/llm-agent-api/_tests/smoke-prod.sh
