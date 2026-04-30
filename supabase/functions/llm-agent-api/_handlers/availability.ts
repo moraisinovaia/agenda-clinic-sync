@@ -763,8 +763,10 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           d.setDate(d.getDate() + limiteDiasFT);
           return d.toISOString().split('T')[0];
         })();
+        // [F2.2] Passa scope.doctorIds (família real+virtuais expandida pela F1.1).
+        // Bloqueio em qualquer medico_id da família bloqueia TODOS os atendimentos.
         const datasBloqueadasFT = await carregarDatasBloqueadas(
-          supabase, clienteId, medico.id, dataInicialFT, dataFimFT
+          supabase, clienteId, scope.doctorIds.length > 0 ? scope.doctorIds : medico.id, dataInicialFT, dataFimFT
         );
 
         for (let d = 0; d <= limiteDiasFT && proximasDatas.length < datasNecessarias; d++) {
@@ -849,8 +851,9 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           d.setDate(d.getDate() + quantidade_dias);
           return d.toISOString().split('T')[0];
         })();
+        // [F2.2] Bloqueios em QUALQUER medico_id relacionado bloqueiam o atendimento
         const datasBloqueadasSL = await carregarDatasBloqueadas(
-          supabase, clienteId, medico.id, dataInicial, dataFimSL
+          supabase, clienteId, scope.doctorIds.length > 0 ? scope.doctorIds : medico.id, dataInicial, dataFimSL
         );
 
         for (let diasAdiantados = 0; diasAdiantados <= quantidade_dias; diasAdiantados++) {
@@ -947,8 +950,9 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           d.setDate(d.getDate() + quantidade_dias);
           return d.toISOString().split('T')[0];
         })();
+        // [F2.2] Mesma regra: bloqueio em qualquer medico_id relacionado bloqueia
         const datasBloqueadasUC = await carregarDatasBloqueadas(
-          supabase, clienteId, medico.id, dataInicial, dataFimUC
+          supabase, clienteId, scope.doctorIds.length > 0 ? scope.doctorIds : medico.id, dataInicial, dataFimUC
         );
         const diasDisponiveis = diasUseCase.filter((day: any) => {
           if (datasBloqueadasUC.has(day.date)) {

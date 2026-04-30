@@ -7,36 +7,44 @@
 // O range é fechado em ambos os lados (inclusivo).
 
 /**
- * Carrega TODAS as datas bloqueadas para um médico/cliente dentro do range.
- * Retorna Set<YYYY-MM-DD> com cada dia bloqueado já expandido (bloqueio de
- * 22/12 a 02/01 vira 12 entradas individuais), permitindo lookup O(1).
+ * Carrega TODAS as datas bloqueadas para uma família de médicos (real + virtuais)
+ * dentro do range. Retorna Set<YYYY-MM-DD> com cada dia bloqueado já expandido.
  *
- * Why: chamar isDataBloqueada(...) por dia faria N queries num loop. Esta
- * função faz 1 query e devolve um Set para uso eficiente no loop.
+ * Aceita um único medico_id OU uma lista (preferido). Quando recebe lista, agrega
+ * bloqueios de TODOS os medico_ids — regra: se o médico (em qualquer um dos seus
+ * medico_ids relacionados) está bloqueado num dia, nenhum atendimento dele deve
+ * ser oferecido naquele dia.
+ *
+ * Why: chamar isDataBloqueada(...) por dia faria N queries num loop. Esta função
+ * faz 1 query e devolve um Set para uso eficiente no loop.
  */
 export async function carregarDatasBloqueadas(
   supabase: any,
   clienteId: string,
-  medicoId: string,
-  dataInicio: string,   // YYYY-MM-DD
-  dataFim: string,      // YYYY-MM-DD
+  medicoIds: string | string[],   // aceita escalar (compat) ou lista (novo, preferido)
+  dataInicio: string,             // YYYY-MM-DD
+  dataFim: string,                // YYYY-MM-DD
 ): Promise<Set<string>> {
   const blocked = new Set<string>();
 
-  if (!medicoId) return blocked;
+  const ids = Array.isArray(medicoIds)
+    ? Array.from(new Set(medicoIds.filter((x) => typeof x === 'string' && x.length > 0)))
+    : (medicoIds ? [medicoIds] : []);
+
+  if (ids.length === 0) return blocked;
 
   const { data, error } = await supabase
     .from('bloqueios_agenda')
-    .select('data_inicio, data_fim, motivo')
+    .select('data_inicio, data_fim, motivo, medico_id')
     .eq('cliente_id', clienteId)
-    .eq('medico_id', medicoId)
+    .in('medico_id', ids)
     .eq('status', 'ativo')
     // bloqueio se sobrepõe ao range pedido: começa antes do fim E termina depois do início
     .lte('data_inicio', dataFim)
     .gte('data_fim', dataInicio);
 
   if (error) {
-    console.warn(`⚠️ [BLOQUEIOS] Erro ao carregar bloqueios para medico=${medicoId}: ${error.message}`);
+    console.warn(`⚠️ [BLOQUEIOS] Erro ao carregar bloqueios para medicos=[${ids.join(',')}]: ${error.message}`);
     return blocked;
   }
   if (!data || data.length === 0) return blocked;
@@ -52,7 +60,7 @@ export async function carregarDatasBloqueadas(
   }
 
   if (blocked.size > 0) {
-    console.log(`🔒 [BLOQUEIOS] ${blocked.size} dia(s) bloqueado(s) para medico=${medicoId} entre ${dataInicio} e ${dataFim}`);
+    console.log(`🔒 [BLOQUEIOS] ${blocked.size} dia(s) bloqueado(s) (família com ${ids.length} medico_id(s)) entre ${dataInicio} e ${dataFim}`);
   }
   return blocked;
 }
@@ -61,9 +69,9 @@ export async function carregarDatasBloqueadas(
 export async function isDataBloqueada(
   supabase: any,
   clienteId: string,
-  medicoId: string,
+  medicoIds: string | string[],
   data: string,
 ): Promise<boolean> {
-  const set = await carregarDatasBloqueadas(supabase, clienteId, medicoId, data, data);
+  const set = await carregarDatasBloqueadas(supabase, clienteId, medicoIds, data, data);
   return set.has(data);
 }
