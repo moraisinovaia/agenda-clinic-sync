@@ -939,7 +939,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
             periodos: periodosParaData,
           });
 
-          const datasNecessarias = periodoPreferido ? 5 : 3;
+          const datasNecessarias = 5;
           if (proximasDatas.length >= datasNecessarias) break;
         }
       } else {
@@ -958,7 +958,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           diaPreferido,
           servicoKey: servicoKey ?? undefined,
           minimumDate: getMinimumBookingDate(config),
-          datasNecessarias: periodoPreferido ? 5 : 3,
+          datasNecessarias: 5,
         });
 
         // [F2] Filtrar datas bloqueadas (CheckAvailabilityUseCase não consulta
@@ -1093,7 +1093,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
               periodos: periodosDisponiveis
             });
             
-            const datasNecessarias = periodoPreferido ? 5 : 3;
+            const datasNecessarias = 5;
             if (proximasDatas.length >= datasNecessarias) break;
           }
         }
