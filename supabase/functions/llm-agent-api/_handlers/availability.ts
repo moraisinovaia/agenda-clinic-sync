@@ -861,6 +861,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
             .eq('medico_id', medico.id)
             .eq('data_agendamento', dataCheckStr)
             .eq('cliente_id', clienteId)
+            .is('cancelado_em', null)
             .is('excluido_em', null)
             .in('status', ['agendado', 'confirmado']);
 
@@ -1111,7 +1112,8 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
               .eq('data_agendamento', dataCheckStr)
               .gte('hora_agendamento', contInicio)
               .lt('hora_agendamento', contFim)
-              .is('excluido_em', null)
+              .is('cancelado_em', null)
+            .is('excluido_em', null)
               .in('status', ['agendado', 'confirmado']);
 
             const agendadosPeriodo = slotsOcupados?.length ?? 0;
@@ -1495,7 +1497,8 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
                   .eq('medico_id', medico.id)
                   .eq('data_agendamento', dataFormatada)
                   .eq('cliente_id', clienteId)
-                  .is('excluido_em', null)
+                  .is('cancelado_em', null)
+            .is('excluido_em', null)
                   .in('status', ['agendado', 'confirmado']);
                 
                 const horariosOcupados = new Set(agendamentosExistentes?.map(a => a.hora_agendamento) || []);
@@ -1582,6 +1585,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
             .eq('medico_id', medico.id)
             .eq('data_agendamento', dataFormatada)
             .eq('cliente_id', clienteId)
+            .is('cancelado_em', null)
             .is('excluido_em', null)
             .in('status', ['agendado', 'confirmado']);
 
@@ -1873,7 +1877,8 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
               .eq('medico_id', medico.id)
               .eq('data_agendamento', data_consulta)
               .eq('cliente_id', clienteId)
-              .is('excluido_em', null)
+              .is('cancelado_em', null)
+            .is('excluido_em', null)
               .in('status', ['agendado', 'confirmado']);
             
             const horariosOcupadosFluxo3 = new Set(agendamentosFluxo3?.map(a => a.hora_agendamento) || []);
@@ -1952,7 +1957,8 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         .eq('medico_id', medico.id)
         .eq('data_agendamento', data_consulta)
         .eq('cliente_id', clienteId)
-        .is('excluido_em', null)
+        .is('cancelado_em', null)
+            .is('excluido_em', null)
         .in('status', ['agendado', 'confirmado']);
 
       if (countError) {
@@ -2188,6 +2194,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
             .eq('data_agendamento', data_consulta)
             .eq('hora_agendamento', horarioFormatado)
             .eq('cliente_id', clienteId)
+            .is('cancelado_em', null)
             .is('excluido_em', null)
             .in('status', ['agendado', 'confirmado']);
           
@@ -2307,6 +2314,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
             .eq('data_agendamento', data_consulta)
             .eq('hora_agendamento', horarioFormatado)
             .eq('cliente_id', clienteId)
+            .is('cancelado_em', null)
             .is('excluido_em', null)
             .in('status', ['agendado', 'confirmado']);
           

@@ -25,6 +25,7 @@ export class SupabaseAppointmentRepository implements AppointmentRepository {
       .eq('data_agendamento', params.date)
       .gte('hora_agendamento', params.start)
       .lte('hora_agendamento', params.end)
+      .is('cancelado_em', null)
       .is('excluido_em', null)
       .in('status', ['agendado', 'confirmado']);
 
@@ -46,6 +47,7 @@ export class SupabaseAppointmentRepository implements AppointmentRepository {
       .eq('data_agendamento', params.date)
       .gte('hora_agendamento', params.poolStart)
       .lte('hora_agendamento', params.poolEnd)
+      .is('cancelado_em', null)
       .is('excluido_em', null)
       .in('status', ['agendado', 'confirmado']);
 
@@ -66,6 +68,7 @@ export class SupabaseAppointmentRepository implements AppointmentRepository {
       .eq('cliente_id', params.clienteId)
       .eq('data_agendamento', params.date)
       .eq('hora_agendamento', params.time)
+      .is('cancelado_em', null)
       .is('excluido_em', null)
       .in('status', ['agendado', 'confirmado'])
       .limit(1);
@@ -79,6 +82,7 @@ export class SupabaseAppointmentRepository implements AppointmentRepository {
       .select('id, paciente_id')
       .eq('cliente_id', params.clienteId)
       .eq('idempotency_key', params.idempotencyKey)
+      .is('cancelado_em', null)
       .is('excluido_em', null)
       .in('status', ['agendado', 'confirmado'])
       .limit(1);
@@ -143,6 +147,7 @@ export class SupabaseAppointmentRepository implements AppointmentRepository {
       .select('id, cliente_id, medico_id, atendimento_id, paciente_id, data_agendamento, hora_agendamento, status, observacoes')
       .eq('id', params.id)
       .eq('cliente_id', params.clienteId)
+      .is('cancelado_em', null)
       .is('excluido_em', null)
       .single();
 
