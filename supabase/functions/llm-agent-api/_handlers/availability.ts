@@ -189,6 +189,17 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
     let mensagemEspecial = null;
     let data_consulta_original = data_consulta;
 
+    // [F3] Quando o caller envia data_consulta sem buscar_proximas, ativamos
+    // o modo de busca múltipla automaticamente. A data passada vira ponto de
+    // partida (`dataInicial`), mas o handler retornará proximas_datas[] com
+    // até 5 alternativas em formato uniforme — em vez do formato de "verifica
+    // dia único" que retornava só `disponivel + periodos`.
+    // Why: paciente que diz "tem vaga dia X?" se beneficia de ver alternativas
+    // se aquela data estiver lotada, sem nova chamada.
+    if (data_consulta && !buscar_proximas) {
+      console.log(`🔄 [F3] data_consulta=${data_consulta} fornecida sem buscar_proximas — ativando busca de alternativas a partir desta data`);
+      buscar_proximas = true;
+    }
     if (!data_consulta && !buscar_proximas && isBuscaProximaDisponibilidade(mensagem_original)) {
       // Intenção de próxima disponibilidade: não fixar data, ativar busca de range
       buscar_proximas = true;
