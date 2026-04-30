@@ -199,6 +199,13 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
     if (data_consulta && !buscar_proximas) {
       console.log(`🔄 [F3] data_consulta=${data_consulta} fornecida sem buscar_proximas — ativando busca de alternativas a partir desta data`);
       buscar_proximas = true;
+      // Ampliar janela: data específica costuma vir com clínica em overbooking,
+      // 7 dias acaba achando só 1 alternativa. 30 dias dá folga sem custo
+      // (early-stop em datasNecessarias mantém perf).
+      if (quantidade_dias < 30) {
+        quantidade_dias = 30;
+        console.log(`🔄 [F3] Ampliando quantidade_dias para 30 (data específica precisa de janela maior para alternativas)`);
+      }
     }
     if (!data_consulta && !buscar_proximas && isBuscaProximaDisponibilidade(mensagem_original)) {
       // Intenção de próxima disponibilidade: não fixar data, ativar busca de range
