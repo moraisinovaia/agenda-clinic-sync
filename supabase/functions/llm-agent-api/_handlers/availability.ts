@@ -465,21 +465,64 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
     // Helper local: adiciona campo `caso_de_uso` à resposta quando o request
     // foi resolvido via alias. Mantém compatibilidade — sem caso de uso, é
     // exatamente igual ao successResponse padrão.
+    // [F3.2] Também injeta `data_solicitada_bloqueada` quando o paciente
+    // pediu uma data que está em bloqueios_agenda — para que a IA possa
+    // explicar o motivo e oferecer alternativas no mesmo payload.
+    let dataSolicitadaBloqueada: { data: string; motivo: string } | null = null;
+
     const successAvailability = (data: Record<string, unknown>) => {
+      const extras: Record<string, unknown> = {};
       if (casoDeUsoMatch?.conf?.mensagem_orientacao || casoDeUsoMatch?.conf?.atendimento_principal) {
-        return successResponse({
-          ...data,
-          caso_de_uso: {
-            identificado:           casoDeUsoMatch.nome,
-            atendimento_solicitado: (data as any)?.contexto?.servico ?? null,
-            atendimento_principal:  casoDeUsoMatch.conf.atendimento_principal ?? null,
-            atendimentos_inclusos:  casoDeUsoMatch.conf.atendimentos_inclusos ?? [],
-            mensagem_orientacao:    casoDeUsoMatch.conf.mensagem_orientacao ?? null,
-          },
-        });
+        extras.caso_de_uso = {
+          identificado:           casoDeUsoMatch.nome,
+          atendimento_solicitado: (data as any)?.contexto?.servico ?? null,
+          atendimento_principal:  casoDeUsoMatch.conf.atendimento_principal ?? null,
+          atendimentos_inclusos:  casoDeUsoMatch.conf.atendimentos_inclusos ?? [],
+          mensagem_orientacao:    casoDeUsoMatch.conf.mensagem_orientacao ?? null,
+        };
       }
-      return successResponse(data);
+      if (dataSolicitadaBloqueada) {
+        extras.data_solicitada_bloqueada = {
+          data:     dataSolicitadaBloqueada.data,
+          motivo:   dataSolicitadaBloqueada.motivo,
+          mensagem: `A agenda do(a) ${medico?.nome ?? 'médico'} está bloqueada em ${dataSolicitadaBloqueada.data}: ${dataSolicitadaBloqueada.motivo}. Veja as próximas datas disponíveis abaixo.`,
+        };
+      }
+      return successResponse({ ...data, ...extras });
     };
+
+    // [F3.2] Capturar bloqueio da DATA SOLICITADA (se paciente forneceu uma).
+    // Verificação cross-atendimento (família real+virtuais via scope.doctorIds).
+    // Esta info será incluída na resposta junto com proximas_datas[] —
+    // permite que o caller (LLM/n8n) explique o motivo e ofereça alternativas
+    // numa única chamada.
+    const dataSolicitadaOriginal = body?.data_consulta && /^\d{4}-\d{2}-\d{2}$/.test(body.data_consulta)
+      ? body.data_consulta
+      : (data_consulta && /^\d{4}-\d{2}-\d{2}$/.test(data_consulta) ? data_consulta : null);
+
+    if (dataSolicitadaOriginal) {
+      const idsParaCheck = scope.doctorIds.length > 0 ? scope.doctorIds : (medico?.id ? [medico.id] : []);
+      if (idsParaCheck.length > 0) {
+        const { data: bRow } = await supabase
+          .from('bloqueios_agenda')
+          .select('motivo, data_inicio, data_fim')
+          .eq('cliente_id', clienteId)
+          .in('medico_id', idsParaCheck)
+          .eq('status', 'ativo')
+          .lte('data_inicio', dataSolicitadaOriginal)
+          .gte('data_fim', dataSolicitadaOriginal)
+          .order('data_inicio', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (bRow?.motivo) {
+          dataSolicitadaBloqueada = {
+            data:   dataSolicitadaOriginal,
+            motivo: bRow.motivo as string,
+          };
+          console.log(`⛔ [F3.2] Data solicitada ${dataSolicitadaOriginal} está bloqueada: "${dataSolicitadaBloqueada.motivo}" — alternativas serão oferecidas`);
+        }
+      }
+    }
 
     // 🔍 MATCHING MELHORADO: Priorizar match exato antes de parcial
     const servicosKeys = Object.keys(regras?.servicos || {});
