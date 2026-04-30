@@ -747,7 +747,13 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         const DIA_SEMANA_FT = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
         const datasNecessarias = 5;
 
-        for (let d = 0; d <= quantidade_dias && proximasDatas.length < datasNecessarias; d++) {
+        // [F1.4] Para fixed_time (ex.: MAPA com 3 slots/dia útil), 7 dias é
+        // janela curta — frequentemente todas as vagas próximas estão lotadas.
+        // Ampliamos para 100 dias mantendo o early-stop em datasNecessarias,
+        // então não há custo extra quando o serviço tem disponibilidade próxima.
+        const limiteDiasFT = Math.max(quantidade_dias, 100);
+
+        for (let d = 0; d <= limiteDiasFT && proximasDatas.length < datasNecessarias; d++) {
           const dataCheck = new Date(dataInicial + 'T00:00:00');
           dataCheck.setDate(dataCheck.getDate() + d);
           const dataCheckStr = dataCheck.toISOString().split('T')[0];
