@@ -13,6 +13,7 @@ import { normalizarServicoPeriodos, buscarAgendaDedicada } from '../_lib/config.
 import { sanitizarCampoOpcional, getDiaSemana } from '../_lib/normalizacao.ts'
 import { getTipoAgendamentoEfetivo, isOrdemChegada, isEstimativaHorario, getIntervaloMinutos, getMensagemEstimativa, formatarHorarioParaExibicao, getDataHoraAtualBrasil, filtrarPeriodosPassados, classificarPeriodoAgendamento, buscarProximasDatasDisponiveis, TIPO_ORDEM_CHEGADA, TIPO_ESTIMATIVA_HORARIO } from '../_lib/tipo-agendamento.ts'
 import { fuzzyMatchMedicos } from '../_lib/fuzzy-match.ts'
+import { carregarDatasBloqueadas } from '../_lib/bloqueios.ts'
 
 /**
  * Verifica se um período (manha/tarde) está permitido em dado dia da semana,
@@ -753,6 +754,19 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         // então não há custo extra quando o serviço tem disponibilidade próxima.
         const limiteDiasFT = Math.max(quantidade_dias, 100);
 
+        // [F2] Carregar datas bloqueadas no range UMA vez (1 query) e usar Set
+        // para lookup O(1) no loop. Antes desta verificação, fixed_time não
+        // respeitava bloqueios_agenda — ofereci datas em feriados (ex.: 30/04).
+        const dataInicialFT = dataInicial;
+        const dataFimFT     = (() => {
+          const d = new Date(dataInicialFT + 'T00:00:00');
+          d.setDate(d.getDate() + limiteDiasFT);
+          return d.toISOString().split('T')[0];
+        })();
+        const datasBloqueadasFT = await carregarDatasBloqueadas(
+          supabase, clienteId, medico.id, dataInicialFT, dataFimFT
+        );
+
         for (let d = 0; d <= limiteDiasFT && proximasDatas.length < datasNecessarias; d++) {
           const dataCheck = new Date(dataInicial + 'T00:00:00');
           dataCheck.setDate(dataCheck.getDate() + d);
@@ -760,6 +774,12 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           const diaSemanaNum = dataCheck.getDay();
 
           if (diaPreferido && diaSemanaNum !== diaPreferido) continue;
+
+          // [F2] Pular datas bloqueadas (feriados, férias, etc.)
+          if (datasBloqueadasFT.has(dataCheckStr)) {
+            console.log(`⏭️ [FIXED_TIME] Pulando ${dataCheckStr} (bloqueada em bloqueios_agenda)`);
+            continue;
+          }
 
           const chave = DIAS_KEY[diaSemanaNum];
           const periodoFT = chave ? (rawServico.periodos as any)[chave] : null;
@@ -823,6 +843,16 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
 
       if (hasSharedLimits) {
         // 🔒 Rota especial: serviços com limites compartilhados/sublimites (bypass use case)
+        // [F2] Carregar bloqueios uma vez antes do loop (lookup O(1) via Set)
+        const dataFimSL = (() => {
+          const d = new Date(dataInicial + 'T00:00:00');
+          d.setDate(d.getDate() + quantidade_dias);
+          return d.toISOString().split('T')[0];
+        })();
+        const datasBloqueadasSL = await carregarDatasBloqueadas(
+          supabase, clienteId, medico.id, dataInicial, dataFimSL
+        );
+
         for (let diasAdiantados = 0; diasAdiantados <= quantidade_dias; diasAdiantados++) {
           const dataCheck = new Date(dataInicial + 'T00:00:00');
           dataCheck.setDate(dataCheck.getDate() + diasAdiantados);
@@ -837,6 +867,12 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
 
           // Verificar se dia permitido pelo serviço
           if (servico?.dias_semana && !servico.dias_semana.includes(diaSemanaNum)) continue;
+
+          // [F2] Pular datas bloqueadas (feriados, férias, etc.)
+          if (datasBloqueadasSL.has(dataCheckStr)) {
+            console.log(`⏭️ [SHARED_LIMITS] Pulando ${dataCheckStr} (bloqueada em bloqueios_agenda)`);
+            continue;
+          }
 
           // Calcular vagas com limites compartilhados/sublimites
           const vagasComLimites = await calcularVagasDisponiveisComLimites(
@@ -887,7 +923,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         }
       } else {
         // 🆕 Rota normal: usar CheckAvailabilityUseCase via ScheduleRepository
-        const { diasDisponiveis } = await new CheckAvailabilityUseCase(
+        const { diasDisponiveis: diasUseCase } = await new CheckAvailabilityUseCase(
           new SupabaseAppointmentRepository(supabase),
           new SupabaseScheduleRepository(
             new DynamicConfigBusinessRulesRepository(config)
@@ -902,6 +938,24 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           servicoKey: servicoKey ?? undefined,
           minimumDate: getMinimumBookingDate(config),
           datasNecessarias: periodoPreferido ? 5 : 3,
+        });
+
+        // [F2] Filtrar datas bloqueadas (CheckAvailabilityUseCase não consulta
+        // bloqueios_agenda — verificação fica neste adapter).
+        const dataFimUC = (() => {
+          const d = new Date(dataInicial + 'T00:00:00');
+          d.setDate(d.getDate() + quantidade_dias);
+          return d.toISOString().split('T')[0];
+        })();
+        const datasBloqueadasUC = await carregarDatasBloqueadas(
+          supabase, clienteId, medico.id, dataInicial, dataFimUC
+        );
+        const diasDisponiveis = diasUseCase.filter((day: any) => {
+          if (datasBloqueadasUC.has(day.date)) {
+            console.log(`⏭️ [USE_CASE] Pulando ${day.date} (bloqueada em bloqueios_agenda)`);
+            return false;
+          }
+          return true;
         });
 
         // Adapter mapeia domínio → formato de apresentação do canal
