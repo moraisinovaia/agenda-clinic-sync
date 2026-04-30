@@ -496,9 +496,14 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
     // Esta info será incluída na resposta junto com proximas_datas[] —
     // permite que o caller (LLM/n8n) explique o motivo e ofereça alternativas
     // numa única chamada.
-    const dataSolicitadaOriginal = body?.data_consulta && /^\d{4}-\d{2}-\d{2}$/.test(body.data_consulta)
+    // [F3.3] Verificar APENAS data explicitamente enviada pelo paciente no body.
+    // Antes o fallback para `data_consulta` (var interna, ajustada para hoje/amanhã
+    // quando o paciente não enviou) gerava falso positivo: se hoje estivesse
+    // bloqueado em algum medico_id da família, F3.2 dizia "data solicitada bloqueada"
+    // mesmo o paciente não tendo pedido data alguma.
+    const dataSolicitadaOriginal = (typeof body?.data_consulta === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.data_consulta))
       ? body.data_consulta
-      : (data_consulta && /^\d{4}-\d{2}-\d{2}$/.test(data_consulta) ? data_consulta : null);
+      : null;
 
     if (dataSolicitadaOriginal) {
       const idsParaCheck = scope.doctorIds.length > 0 ? scope.doctorIds : (medico?.id ? [medico.id] : []);
