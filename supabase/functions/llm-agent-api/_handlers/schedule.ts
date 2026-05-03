@@ -923,17 +923,18 @@ export async function handleSchedule(supabase: any, body: any, clienteId: string
                   .eq('hora_agendamento', horarioTeste)
                   .eq('cliente_id', clienteId)
                   .is('excluido_em', null)
+                  .is('cancelado_em', null)
                   .in('status', ['agendado', 'confirmado']);
-                
+
                 if (count === 0) {
                   console.log(`✅ Primeiro horário disponível encontrado: ${horarioTeste}`);
                   horarioFinal = horarioTeste;
                   break;
                 }
-                
+
                 horaAtual += intervaloMinutos;
               }
-              
+
               if (horarioFinal === hora_consulta) {
                 // Não encontrou nenhum horário livre
                 return errorResponse(
@@ -944,20 +945,20 @@ export async function handleSchedule(supabase: any, body: any, clienteId: string
             } else {
               // ORDEM DE CHEGADA: buscar primeiro horário LIVRE (não fixo!)
               console.log(`📋 Ordem de chegada: buscando primeiro horário livre no período ${periodoNormalizado}`);
-              
+
               const intervaloMinutos = 1; // Incremento de 1min para ordem de chegada
               const [horaInicio, minInicio] = configPeriodo.inicio.split(':').map(Number);
               const [horaFim, minFim] = configPeriodo.fim.split(':').map(Number);
-              
+
               let horaAtual = horaInicio * 60 + minInicio;
               const horaLimite = horaFim * 60 + minFim;
-              
+
               // Buscar primeiro minuto livre
               while (horaAtual < horaLimite) {
                 const h = Math.floor(horaAtual / 60);
                 const m = horaAtual % 60;
                 const horarioTeste = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:00`;
-                
+
                 // Verificar se este horário está disponível
                 const { count } = await supabase
                   .from('agendamentos')
@@ -967,6 +968,7 @@ export async function handleSchedule(supabase: any, body: any, clienteId: string
                   .eq('hora_agendamento', horarioTeste)
                   .eq('cliente_id', clienteId)
                   .is('excluido_em', null)
+                  .is('cancelado_em', null)
                   .in('status', ['agendado', 'confirmado']);
                 
                 if (count === 0) {
@@ -1101,13 +1103,18 @@ export async function handleSchedule(supabase: any, body: any, clienteId: string
           const minutoFim = hFim * 60 + minFim;
           
           console.log(`🔍 Iniciando busca de ${periodoConfig.inicio} até ${periodoConfig.fim} (${minutoFim - minutoInicio} minutos)`);
-          
+
+          // [F-4] Cap de 60 tentativas. Antes era ilimitado (até 540 min): em
+          // médico saturado, o loop fazia 420+ INSERTs minute-by-minute,
+          // estourando o timeout 30s da Edge Function antes de desistir, e
+          // o n8n retentava → custos OpenAI explodiam. 60 tentativas bate
+          // praticamente todas as agendas reais antes do paciente percebido.
+          const MAX_TENTATIVAS = 60;
           let tentativas = 0;
           let horarioAlocado = null;
           let resultadoFinal = null;
-          
-          // Loop minuto a minuto
-          for (let minutoAtual = minutoInicio; minutoAtual < minutoFim; minutoAtual++) {
+
+          for (let minutoAtual = minutoInicio; minutoAtual < minutoFim && tentativas < MAX_TENTATIVAS; minutoAtual++) {
             tentativas++;
             const hora = Math.floor(minutoAtual / 60);
             const min = minutoAtual % 60;
@@ -1157,6 +1164,19 @@ export async function handleSchedule(supabase: any, body: any, clienteId: string
             }
           }
           
+          // [F-4] Sair limpo se atingiu cap de tentativas
+          if (!horarioAlocado && tentativas >= MAX_TENTATIVAS) {
+            console.warn(`⚠️ [F-4] Cap de ${MAX_TENTATIVAS} tentativas atingido sem encontrar slot livre`);
+            return businessErrorResponse({
+              codigo_erro: 'SLOT_ESGOTADO',
+              mensagem_usuario:
+                `❌ Não consegui encontrar um horário livre no período da ${nomePeriodo} ` +
+                `em ${data_consulta} após ${MAX_TENTATIVAS} tentativas. A agenda parece estar saturada. ` +
+                `\n\n📞 Por favor, escolha outro dia/período ou entre em contato com a clínica.`,
+              detalhes: { tentativas, periodo: nomePeriodo, data: data_consulta },
+            });
+          }
+
           // Verificar se conseguiu alocar
           if (horarioAlocado && resultadoFinal) {
             // 🆕 Usar mesma lógica detalhada de mensagem (prefixo + período + orientações)
@@ -1297,6 +1317,8 @@ export async function handleSchedule(supabase: any, body: any, clienteId: string
             .eq('medico_id', medico.id)
             .eq('data_agendamento', data_consulta)
             .eq('cliente_id', clienteId)
+            .is('excluido_em', null)
+            .is('cancelado_em', null)
             .in('status', ['agendado', 'confirmado']);
           
           const agendamentosNoPeriodo = agendamentosDoPeriodo?.filter(a => {

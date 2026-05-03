@@ -33,6 +33,10 @@ export class SupabaseAppointmentRepository implements AppointmentRepository {
       query = query.gte('data_agendamento', params.minimumDate);
     }
 
+    if (params.atendimentoIds && params.atendimentoIds.length > 0) {
+      query = query.in('atendimento_id', params.atendimentoIds);
+    }
+
     const { data, error } = await query;
     if (error) throw error;
     return (data ?? []).length;
@@ -53,6 +57,10 @@ export class SupabaseAppointmentRepository implements AppointmentRepository {
 
     if (params.minimumDate) {
       query = query.gte('data_agendamento', params.minimumDate);
+    }
+
+    if (params.atendimentoIds && params.atendimentoIds.length > 0) {
+      query = query.in('atendimento_id', params.atendimentoIds);
     }
 
     const { data, error } = await query;

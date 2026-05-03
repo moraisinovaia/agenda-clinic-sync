@@ -1446,7 +1446,7 @@ Deno.test('formatRescheduleHandlerResponse: ERRO_GENERICO é sanitizado para tex
 
 // Mock Supabase configurável: cada chamada from(table) consome o próximo
 // item da fila de respostas para aquela tabela.
-function mockSupabaseQueue(queues: Record<string, any[]>) {
+function mockSupabaseQueue(queues: Record<string, any[]>, rpcResults: Record<string, any[]> = {}) {
   let lastUpdate: any = null;
   const builderFor = (table: string) => {
     const next = () => queues[table]?.shift() ?? { data: [], error: null };
@@ -1463,6 +1463,11 @@ function mockSupabaseQueue(queues: Record<string, any[]>) {
   };
   return {
     from: (table: string) => builderFor(table),
+    rpc: (name: string, _args: any) => {
+      const queue = rpcResults[name] ?? [];
+      const result = queue.shift() ?? { data: { success: true }, error: null };
+      return Promise.resolve(result);
+    },
     _lastUpdate: () => lastUpdate,
   };
 }
@@ -1503,11 +1508,14 @@ Deno.test('handleReschedule: caminho feliz — atualiza e retorna sucesso', asyn
   const supabase = mockSupabaseQueue({
     agendamentos: [
       { data: AGENDAMENTO_VALIDO, error: null },  // SELECT inicial
-      { data: [], error: null },                  // SELECT conflito de horário
-      { data: null, error: null },                // UPDATE
     ],
     bloqueios_agenda: [
       { data: [], error: null },                  // SELECT bloqueios
+    ],
+  }, {
+    // [F4.2] RPC atômica retorna success
+    remarcar_agendamento_atomico_externo: [
+      { data: { success: true, agendamento_id: 'ag-1', message: 'Agendamento remarcado com sucesso' }, error: null },
     ],
   });
   const resp = await handleReschedule(supabase, {
@@ -1528,10 +1536,16 @@ Deno.test('handleReschedule: conflito de horário é bloqueado', async () => {
   const supabase = mockSupabaseQueue({
     agendamentos: [
       { data: AGENDAMENTO_VALIDO, error: null },
-      { data: [{ id: 'ag-outro', pacientes: { nome_completo: 'Maria Souza' } }], error: null }, // conflito
+      // SELECT pra info do paciente conflitante (após CONFLICT da RPC)
+      { data: { pacientes: { nome_completo: 'Maria Souza' } }, error: null },
     ],
     bloqueios_agenda: [
       { data: [], error: null },
+    ],
+  }, {
+    // [F4.2] RPC retorna CONFLICT — handler busca info do ocupante
+    remarcar_agendamento_atomico_externo: [
+      { data: { success: false, error: 'CONFLICT', message: 'Horário já está ocupado' }, error: null },
     ],
   });
   const resp = await handleReschedule(supabase, {
@@ -1650,10 +1664,10 @@ Deno.test('calcularVagasDisponiveisComLimites: caso Dr. Marcelo — pool derivad
       ],
       error: null,
     }],
-    // Manhã (07:00-12:00, dias_especificos=[1,2,4]) em quinta=4 → válido.
-    // count=22 (lotado para limite=14)
+    // [M2] Após batch SQL: 1 query única retorna rows com hora_agendamento;
+    // contagem é feita em memória pelo código. Mock devolve 22 rows na manhã.
     agendamentos: [
-      { count: 22, error: null },
+      { data: Array.from({ length: 22 }, (_, i) => ({ hora_agendamento: `07:${String(i % 60).padStart(2, '0')}:00` })), error: null },
     ],
   });
 
@@ -1703,7 +1717,8 @@ Deno.test('calcularVagasDisponiveisComLimites: pool derivado retorna soma quando
       error: null,
     }],
     agendamentos: [
-      { count: 0, error: null }, // manhã: 0 ocupados → 14 vagas
+      // [M2] data:[] = 0 ocupados → 14 vagas
+      { data: [], error: null },
     ],
   });
 
@@ -1765,10 +1780,12 @@ Deno.test('handleReschedule: scope vazio + flag ausente → permite (fail-open d
     const supabase = mockSupabaseQueue({
       agendamentos: [
         { data: AGENDAMENTO_VALIDO, error: null },
-        { data: [], error: null }, // sem conflito
-        { data: null, error: null }, // update
       ],
       bloqueios_agenda: [{ data: [], error: null }],
+    }, {
+      remarcar_agendamento_atomico_externo: [
+        { data: { success: true, agendamento_id: 'ag-1' }, error: null },
+      ],
     });
     const resp = await handleReschedule(supabase, {
       agendamento_id: 'ag-1',

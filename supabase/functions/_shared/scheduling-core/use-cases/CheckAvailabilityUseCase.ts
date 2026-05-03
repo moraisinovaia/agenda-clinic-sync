@@ -17,6 +17,13 @@ export interface CheckAvailabilityInput {
   minimumDate?: string;
   /** Quantas datas com vaga são suficientes. Default: 3 (ou 5 se periodoPreferido) */
   datasNecessarias?: number;
+  /**
+   * Restringe a contagem de ocupação aos atendimento_ids deste serviço/pool.
+   * Sem isso, capacity_window vê todas as bookings do médico no intervalo de hora —
+   * Consulta-tarde lota a janela MRPA-tarde mesmo sendo serviços distintos.
+   * Vazio/undefined = sem restrição (compat).
+   */
+  atendimentoIds?: string[];
 }
 
 export interface CheckAvailabilityOutput {
@@ -35,6 +42,7 @@ export class CheckAvailabilityUseCase {
     const {
       medicoId, clienteId, dataInicio, quantidadeDias,
       periodoPreferido, diaPreferido, servicoKey, minimumDate,
+      atendimentoIds,
     } = input;
 
     const datasNecessarias = input.datasNecessarias ?? (periodoPreferido ? 5 : 3);
@@ -93,6 +101,7 @@ export class CheckAvailabilityUseCase {
               start: config.inicio,
               end: config.fim,
               minimumDate,
+              atendimentoIds,
             })
           : await this.repo.countByPool({
               medicoId, clienteId,
@@ -100,6 +109,7 @@ export class CheckAvailabilityUseCase {
               poolStart: config.inicio,
               poolEnd: config.fim,
               minimumDate,
+              atendimentoIds,
             });
 
         // 🛡️ STRICT: capacidade DEVE vir definida e > 0. Sem fallback fantasma.

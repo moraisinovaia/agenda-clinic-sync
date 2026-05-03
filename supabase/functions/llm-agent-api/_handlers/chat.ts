@@ -14,6 +14,8 @@
 import type { DynamicConfig } from '../_lib/types.ts';
 import { successResponse, errorResponse } from '../_lib/responses.ts';
 import { chatCompletion, OpenAIUnavailableError, OPENAI_FALLBACK_MESSAGE } from '../_lib/openai.ts';
+import { checkAndIncrementQuota } from '../_lib/quota.ts';
+import { checkRateLimitPersistent } from '../_lib/rate-limit.ts';
 import { buildExtractionSystemPrompt } from '../_lib/prompts.ts';
 import { handleAvailability, isBuscaProximaDisponibilidade } from './availability.ts';
 import { handleSchedule } from './schedule.ts';
@@ -589,6 +591,24 @@ async function callHandler(
   }
 }
 
+/**
+ * [F-6] Parse defensivo da Response do handler interno. Se body não for JSON
+ * válido (caso raro mas real — bug em algum handler), retorna shape de erro
+ * estruturado em vez de propagar exception ao chat externo.
+ */
+async function safeHandlerJson(resp: Response): Promise<any> {
+  try {
+    return await resp.json();
+  } catch (e) {
+    console.error('[CHAT] Handler retornou body não-JSON:', (e as Error).message);
+    return {
+      success:         false,
+      codigo_erro:     'HANDLER_RESPONSE_INVALID',
+      mensagem_usuario: 'Tive um problema técnico ao processar essa ação. Vou transferir você para um atendente humano.',
+    };
+  }
+}
+
 // ── Helpers para o fluxo de remarcação via /chat ──────────────────────────
 
 /**
@@ -1038,18 +1058,63 @@ export async function handleChat(
       { role: 'user' as const, content: mensagem },
     ];
 
+    // [H3] Rate limit autoritativo via Postgres antes do OpenAI. Atravessa
+    // cold-starts e multi-instance. In-memory rate-limit do router fica
+    // como 1ª linha de defesa pra todos os endpoints.
+    const persistent = await checkRateLimitPersistent(supabase, clienteId);
+    if (!persistent.allowed) {
+      console.warn(`[CHAT] rate-limit persistente: ${clienteId} excedeu`);
+      return successResponse({
+        success:        true,
+        action:         'response_only',
+        resposta:       OPENAI_FALLBACK_MESSAGE,
+        escalate_human: true,
+        metadata:       { fallback_reason: 'rate_limit_persistent' },
+      });
+    }
+
+    // [Daily cost guard] Cap atômico de calls OpenAI por tenant antes de
+    // gastar tokens. Bug em integração (n8n loop) é hard-stopped aqui.
+    const quota = await checkAndIncrementQuota(supabase, clienteId, 'openai');
+    if (!quota.allowed) {
+      console.warn(`[CHAT] quota OpenAI excedida pra ${clienteId}: ${quota.openai_calls}/${quota.limits?.openai}`);
+      return successResponse({
+        success:        true,
+        action:         'response_only',
+        resposta:       OPENAI_FALLBACK_MESSAGE,
+        escalate_human: true,
+        metadata:       {
+          fallback_reason: 'daily_quota_exceeded',
+          openai_calls:    quota.openai_calls,
+          limit:           quota.limits?.openai,
+        },
+      });
+    }
+
     const aiResult = await chatCompletion({
       messages,
       jsonSchemaName: 'chat_extraction',
       jsonSchema: EXTRACTION_SCHEMA,
+      // [H2] Isolar falhas de OpenAI por tenant — não derrubar todos
+      tenantKey: clienteId,
     });
 
     let extraction: ExtractionResult;
     try {
       extraction = JSON.parse(aiResult.content) as ExtractionResult;
     } catch {
-      console.error('[CHAT] Parse error:', aiResult.content?.slice(0, 200));
-      return errorResponse('Resposta do modelo inválida. Tente novamente.');
+      // [F-13] OpenAI ocasionalmente retorna JSON malformado (truncamento de
+      // token, edge case do schema strict). Antes: errorResponse técnico que
+      // o paciente WhatsApp via como "Resposta do modelo inválida..." e
+      // abandonava. Agora: fallback humanizado consistente com OpenAIUnavailableError.
+      console.error('[CHAT] Parse error (raw):', aiResult.content?.slice(0, 200));
+      return successResponse({
+        success:        true,
+        action:         'response_only',
+        resposta:       OPENAI_FALLBACK_MESSAGE,
+        escalate_human: true,
+        metadata:       { fallback_reason: 'openai_json_invalid' },
+      });
     }
 
     console.log(`[CHAT] intent=${extraction.intent} next_action=${extraction.next_action} confidence=${extraction.confidence}`);
@@ -1178,7 +1243,7 @@ export async function handleChat(
         console.warn('[AVAILABILITY_CALL]', JSON.stringify(maskPIIDeep({ action: plan.action, body: availBody })));
         const resp = await callHandler('availability', supabase, availBody, clienteId, config);
         if (resp) {
-          handlerResult = await resp.json();
+          handlerResult = await safeHandlerJson(resp);
           acaoExecutada = 'availability';
           const hData = handlerResult as any;
           console.warn('[AVAILABILITY_RESULT]', JSON.stringify(maskPIIDeep({
@@ -1221,7 +1286,7 @@ export async function handleChat(
         };
         const resp = await callHandler('schedule', supabase, scheduleBody, clienteId, config);
         if (resp) {
-          handlerResult = await resp.json();
+          handlerResult = await safeHandlerJson(resp);
           acaoExecutada = 'schedule';
           const hData = handlerResult as any;
           if (hData?.success === false) {
@@ -1277,7 +1342,7 @@ export async function handleChat(
         if (dispatch.handler && dispatch.body) {
           const resp = await callHandler(dispatch.handler, supabase, dispatch.body, clienteId, config);
           if (resp) {
-            handlerResult = await resp.json();
+            handlerResult = await safeHandlerJson(resp);
             acaoExecutada = dispatch.handler;
             const hData = handlerResult as any;
             if (hData?.success === false) {

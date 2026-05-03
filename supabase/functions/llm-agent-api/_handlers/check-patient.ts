@@ -4,7 +4,7 @@ import { getRequestScope, isAppointmentAllowed } from '../_lib/scope.ts'
 import { getClinicPhone } from '../_lib/limites.ts'
 import { sanitizarCampoOpcional, normalizarDataNascimento, normalizarTelefone, normalizarNome } from '../_lib/normalizacao.ts'
 import { formatarConsultaComContexto } from '../_lib/tipo-agendamento.ts'
-import { maskName } from '../_lib/pii.ts'
+import { maskName, maskBirthDate } from '../_lib/pii.ts'
 
 export async function handleCheckPatient(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
@@ -22,11 +22,11 @@ export async function handleCheckPatient(supabase: any, body: any, clienteId: st
     const isCelularMascarado = celularRaw ? celularRaw.includes('*') : false;
     const celularNormalizado = isCelularMascarado ? null : normalizarTelefone(celularRaw);
 
-    // Log de busca
+    // Log de busca — PII mascarada
     console.log('🔍 Buscando paciente:', {
-      nome: pacienteNomeNormalizado,
-      nascimento: dataNascimentoNormalizada,
-      celular: isCelularMascarado ? `${celularRaw} (MASCARADO - IGNORADO)` : (celularNormalizado ? `${celularNormalizado.substring(0, 4)}****` : null)
+      nome:       maskName(pacienteNomeNormalizado),
+      nascimento: maskBirthDate(dataNascimentoNormalizada),
+      celular:    isCelularMascarado ? `${celularRaw} (MASCARADO - IGNORADO)` : (celularNormalizado ? `${celularNormalizado.substring(0, 4)}****` : null),
     });
 
     if (!pacienteNomeNormalizado && !dataNascimentoNormalizada && !celularNormalizado) {

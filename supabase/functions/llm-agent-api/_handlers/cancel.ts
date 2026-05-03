@@ -7,6 +7,7 @@ import {
 import type { DynamicConfig } from '../_lib/types.ts'
 import { successResponse, errorResponse, businessErrorResponse } from '../_lib/responses.ts'
 import { getRequestScope, isAppointmentAllowed, getScopeSummary } from '../_lib/scope.ts'
+import { maskName } from '../_lib/pii.ts'
 
 export async function handleCancel(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
@@ -109,7 +110,7 @@ export async function handleCancel(supabase: any, body: any, clienteId: string, 
         console.error('⚠️ [FILA-ESPERA] Erro ao consultar resultado do trigger (ignorado):', notifError.message);
       } else if (notifCriada?.fila_espera) {
         const fe = notifCriada.fila_espera as any;
-        console.log(`✅ [FILA-ESPERA] Trigger PG notificou: ${fe.pacientes?.nome_completo} (fila_id: ${notifCriada.fila_id})`);
+        console.log(`✅ [FILA-ESPERA] Trigger PG notificou: ${maskName(fe.pacientes?.nome_completo)} (fila_id: ${notifCriada.fila_id})`);
 
         filaEsperaNotificado = {
           fila_id: notifCriada.fila_id,
