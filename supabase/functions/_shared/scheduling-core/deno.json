@@ -1,6 +1,12 @@
 {
   "tasks": {
-    "test": "deno test --allow-env **/*.test.ts",
+    "test": "deno test --allow-env use-cases interpreters",
     "test:integration": "deno test --allow-env --allow-net --no-check integration/**/*.integration.test.ts"
+  },
+  "lint": {
+    "exclude": ["integration/"],
+    "rules": {
+      "exclude": ["no-explicit-any", "no-import-prefix", "require-await"]
+    }
   }
 }

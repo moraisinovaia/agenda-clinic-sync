@@ -49,6 +49,15 @@ Cada item tem: **o que é**, **por que ficou pra depois**, **quando reativar** (
 - **Quando reativar**: se algum dia tiver frontend público chamando direto a API (sem proxy).
 - **Esforço**: ~30 min (atualizar `responses.ts` com headers padrão).
 
+### F-CI — Tech debt aceito no lint do scheduling-core
+- **O que**: `supabase/functions/_shared/scheduling-core/deno.json` exclui 3 regras de lint:
+  - `no-explicit-any` (12 ocorrências) — construtores recebem `SupabaseClient` tipado como `any`. Fix correto: importar `SupabaseClient` type do `@supabase/supabase-js`.
+  - `no-import-prefix` (7 ocorrências) — testes usam URLs `https://deno.land/std@.../assert/mod.ts`. Estilo antigo; novo é via `imports` em `deno.json`.
+  - `require-await` (1 ocorrência) — função async sem await.
+- **Por que adiado**: fix das 20 ocorrências dispersas leva ~2h. Excluir as regras é tech debt aceito explicitamente pra desbloquear o CI.
+- **Quando reativar**: ao refatorar repositories ou ao migrar pra deno.json `imports` map. Pode-se fixar 1 categoria por vez e remover do `exclude`.
+- **Esforço**: ~2h (todas as categorias) ou 30 min cada categoria.
+
 ### F-11 — Rollback procedure documentada
 - **O que**: procedimento escrito de "Edge Function deployada quebrou produção, como reverter em <2 min". Hoje só tenho conhecimento tribal (`supabase functions deploy` da versão git anterior).
 - **Por que adiado**: nunca precisei reverter; deploy atual é reversível em ~2 min mesmo sem doc.
