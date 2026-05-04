@@ -2,6 +2,19 @@
 
 import type { RequestScope } from './types.ts'
 
+/**
+ * Quando LLM_SCOPE_STRICT=true, requisições sem escopo de médico (doctorIds vazio
+ * e doctorNames vazio) passam a ser bloqueadas em vez de abertas para todos os
+ * médicos do tenant. Default permanece fail-open para não quebrar callers atuais.
+ */
+export function isScopeStrict(): boolean {
+  try {
+    return Deno.env.get('LLM_SCOPE_STRICT') === 'true';
+  } catch {
+    return false;
+  }
+}
+
 export function normalizeScopeEntries(value: any): string[] {
   if (!value) return [];
 
@@ -28,8 +41,8 @@ export function normalizeScopeText(value: string): string {
     .trim();
 }
 
-export function getRequestScope(body: any): RequestScope {
-  return {
+export function getRequestScope(body: any, config?: any | null): RequestScope {
+  const baseScope: RequestScope = {
     doctorIds: normalizeScopeEntries(
       body?.allowed_doctor_ids ??
       body?.doctor_scope_ids ??
@@ -47,6 +60,34 @@ export function getRequestScope(body: any): RequestScope {
       body?.servicos_permitidos
     ),
   };
+
+  // [F1.1] Expandir scope com médicos relacionados (agendas dedicadas/virtuais)
+  // declarados em business_rules.config.medicos_relacionados do médico principal.
+  // Why: serviços como MAPA 24H e Teste Ergométrico vivem em medico_ids virtuais
+  // (ex.: "MAPA - Dr. Marcelo"). Sem expansão, o n8n teria que conhecer cada virtual.
+  // Multi-tenant safe: cada cliente declara seus virtuais na própria config.
+  if (config?.business_rules && baseScope.doctorIds.length > 0) {
+    const expandedIds = new Set<string>(baseScope.doctorIds);
+    for (const principalId of baseScope.doctorIds) {
+      const rule = config.business_rules[principalId];
+      // A RPC `load_llm_config_for_clinic` aninha o JSON do médico em `rule.config`,
+      // então `medicos_relacionados` vive em `rule.config.medicos_relacionados`.
+      // Mantemos fallback para `rule.medicos_relacionados` como defesa caso a
+      // estrutura mude no futuro ou em outros tenants.
+      const relacionados = rule?.config?.medicos_relacionados ?? rule?.medicos_relacionados;
+      if (Array.isArray(relacionados)) {
+        for (const id of relacionados) {
+          if (typeof id === 'string' && id.length > 0) expandedIds.add(id);
+        }
+      }
+    }
+    if (expandedIds.size > baseScope.doctorIds.length) {
+      console.log(`🔗 [SCOPE] Expandido com médicos relacionados: ${baseScope.doctorIds.length} → ${expandedIds.size}`);
+      baseScope.doctorIds = Array.from(expandedIds);
+    }
+  }
+
+  return baseScope;
 }
 
 export function hasDoctorScope(scope: RequestScope): boolean {
@@ -62,7 +103,10 @@ export function isDoctorAllowed(
   medicoNome: string | null | undefined,
   scope: RequestScope
 ): boolean {
-  if (!hasDoctorScope(scope)) return true;
+  if (!hasDoctorScope(scope)) {
+    // Fail-open por default; fail-closed quando LLM_SCOPE_STRICT=true.
+    return !isScopeStrict();
+  }
 
   if (medicoId && scope.doctorIds.includes(medicoId)) {
     return true;
@@ -100,7 +144,10 @@ export function isServiceAllowed(servicoNome: string | null | undefined, scope: 
 }
 
 export function filterDoctorsByScope<T extends { id?: string | null; nome?: string | null }>(medicos: T[], scope: RequestScope): T[] {
-  if (!hasDoctorScope(scope)) return medicos;
+  if (!hasDoctorScope(scope)) {
+    // Mesma regra de isDoctorAllowed: sem escopo + flag estrita = não vaza nada.
+    return isScopeStrict() ? [] : medicos;
+  }
   return medicos.filter((medico) => isDoctorAllowed(medico.id, medico.nome, scope));
 }
 

@@ -8,7 +8,7 @@ import { normalizarServicoPeriodos } from '../_lib/config.ts'
 
 export async function handleReschedule(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
-    const scope = getRequestScope(body);
+    const scope = getRequestScope(body, config);
     console.log('🔄 Iniciando remarcação de consulta');
     console.log('📥 [RESCHEDULE] Dados recebidos:', {
       keys: Object.keys(body || {}),
@@ -53,6 +53,10 @@ export async function handleReschedule(supabase: any, body: any, clienteId: stri
 
     // Verificar se agendamento existe COM filtro de cliente
     console.log(`🔍 Buscando agendamento ${agendamento_id}...`);
+    // [F4.3] Filtrar soft-deletes consistentemente: agendamentos cancelados/
+    // excluídos não podem ser remarcados. Antes faltavam estes filtros e
+    // dependíamos só do `status` no fluxo, mas existe drift em produção
+    // (cancelado_em set mas status='agendado' — vimos 338 desses no Dr. Marcelo).
     const { data: agendamento, error: checkError } = await supabase
       .from('agendamentos')
       .select(`
@@ -69,7 +73,10 @@ export async function handleReschedule(supabase: any, body: any, clienteId: stri
       `)
       .eq('id', agendamento_id)
       .eq('cliente_id', clienteId)
-      .single();
+      .is('cancelado_em', null)
+      .is('excluido_em', null)
+      .in('status', ['agendado', 'confirmado'])
+      .maybeSingle();
 
     if (checkError) {
       console.error('❌ Erro ao buscar agendamento:', checkError);
@@ -290,51 +297,55 @@ export async function handleReschedule(supabase: any, body: any, clienteId: stri
       }
     }
 
-    // Verificar disponibilidade do novo horário COM filtro de cliente
-    console.log(`🔍 Verificando disponibilidade em ${nova_data} às ${nova_hora}...`);
-    const { data: conflitos, error: conflitosError } = await supabase
-      .from('agendamentos')
-      .select('id, pacientes(nome_completo)')
-      .eq('medico_id', agendamento.medico_id)
-      .eq('data_agendamento', nova_data)
-      .eq('hora_agendamento', nova_hora)
-      .eq('cliente_id', clienteId)
-      .in('status', ['agendado', 'confirmado'])
-      .neq('id', agendamento_id);
+    // [F4.2] Remarcação atômica via RPC. Antes era SELECT-conflitos →
+    // UPDATE em duas chamadas, vulnerável a race entre 2 workers
+    // remarcando pacientes diferentes pro mesmo slot livre. Agora a RPC
+    // faz tudo numa transação com guard NOT EXISTS + handler de
+    // unique_violation (idx_agendamentos_unique_slot_ativo).
+    console.log(`🔍 Remarcando atomicamente para ${nova_data} às ${nova_hora}...`);
+    const { data: rpcResult, error: rpcError } = await supabase.rpc(
+      'remarcar_agendamento_atomico_externo',
+      {
+        p_cliente_id:     clienteId,
+        p_agendamento_id: agendamento_id,
+        p_nova_data:      nova_data,
+        p_nova_hora:      nova_hora,
+        p_observacoes:    observacoes ?? null,
+        p_remarcado_por:  'LLM Agent WhatsApp',
+      },
+    );
 
-    if (conflitosError) {
-      console.error('❌ Erro ao verificar conflitos:', conflitosError);
+    if (rpcError) {
+      console.error('❌ Erro RPC remarcação:', rpcError);
+      return errorResponse(`Erro ao remarcar: ${rpcError.message}`);
     }
 
-    if (conflitos && conflitos.length > 0) {
-      console.error('❌ Horário já ocupado:', conflitos[0]);
-      return errorResponse(`Horário já ocupado para este médico (${conflitos[0].pacientes?.nome_completo})`);
-    }
-
-    console.log('✅ Horário disponível');
-
-    // Atualizar agendamento
-    const updateData: any = {
-      data_agendamento: nova_data,
-      hora_agendamento: nova_hora,
-      updated_at: new Date().toISOString()
-    };
-
-    if (observacoes) {
-      updateData.observacoes = observacoes;
-    }
-
-    console.log('💾 Atualizando agendamento:', updateData);
-
-    const { error: updateError } = await supabase
-      .from('agendamentos')
-      .update(updateData)
-      .eq('id', agendamento_id)
-      .eq('cliente_id', clienteId);
-
-    if (updateError) {
-      console.error('❌ Erro ao atualizar:', updateError);
-      return errorResponse(`Erro ao remarcar: ${updateError.message}`);
+    if (!rpcResult?.success) {
+      const code = rpcResult?.error;
+      if (code === 'CONFLICT') {
+        // Buscar info do paciente que está no slot conflitante (apenas para mensagem)
+        const { data: conflito } = await supabase
+          .from('agendamentos')
+          .select('pacientes(nome_completo)')
+          .eq('medico_id', agendamento.medico_id)
+          .eq('data_agendamento', nova_data)
+          .eq('hora_agendamento', nova_hora)
+          .eq('cliente_id', clienteId)
+          .in('status', ['agendado', 'confirmado'])
+          .is('cancelado_em', null)
+          .is('excluido_em', null)
+          .neq('id', agendamento_id)
+          .limit(1)
+          .maybeSingle();
+        const ocupanteNome = (conflito as any)?.pacientes?.nome_completo;
+        return errorResponse(
+          ocupanteNome
+            ? `Horário já ocupado para este médico (${ocupanteNome})`
+            : 'Horário já ocupado por outro paciente',
+        );
+      }
+      console.error('❌ RPC remarcação retornou erro:', rpcResult);
+      return errorResponse(rpcResult?.message ?? `Erro ao remarcar: ${code ?? 'desconhecido'}`);
     }
 
     console.log('✅ Agendamento remarcado com sucesso!');

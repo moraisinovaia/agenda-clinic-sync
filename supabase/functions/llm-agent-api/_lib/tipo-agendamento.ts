@@ -122,18 +122,39 @@ export function formatarHorarioParaExibicao(
   return `às ${horaFormatada}`;
 }
 
-// 🌎 Função para obter data E HORA atual no fuso horário de São Paulo
-export function getDataHoraAtualBrasil() {
+// 🌎 [F6.1] Timezone agora é configurável via clinic_info.timezone (default
+// America/Sao_Paulo). Tenants em outras timezones (ex.: AC/RR/AM com -04:00)
+// podem definir no painel admin sem mudança de código.
+//
+// Compat: a função antiga sem args continua respondendo São Paulo. Caller que
+// passar `timezone` (string IANA) usa ele.
+export function getDataHoraAtualBrasil(timezone?: string) {
+  const tz = timezone && timezone.trim().length > 0 ? timezone : 'America/Sao_Paulo';
   const agora = new Date();
-  const brasilTime = agora.toLocaleString('pt-BR', {
-    timeZone: 'America/Sao_Paulo',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false
-  });
+  let brasilTime: string;
+  try {
+    brasilTime = agora.toLocaleString('pt-BR', {
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+  } catch (e) {
+    // Timezone inválido (ex.: typo no admin) — log + fallback
+    console.warn(`[timezone] inválido "${tz}", usando America/Sao_Paulo: ${(e as Error).message}`);
+    brasilTime = agora.toLocaleString('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+  }
 
   const [data, hora] = brasilTime.split(', ');
   const [dia, mes, ano] = data.split('/');
@@ -145,6 +166,12 @@ export function getDataHoraAtualBrasil() {
     minuto: minutoNum,
     horarioEmMinutos: horaNum * 60 + minutoNum
   };
+}
+
+/** Lê o timezone do clinic_info (config dinâmica). Default: America/Sao_Paulo. */
+export function getClinicTimezone(config: any): string {
+  const tz = config?.clinic_info?.timezone;
+  return typeof tz === 'string' && tz.trim().length > 0 ? tz : 'America/Sao_Paulo';
 }
 
 /**

@@ -5,6 +5,13 @@ export interface CountByPeriodParams {
   start: string;       // "07:00"
   end: string;         // "12:00"
   minimumDate?: string;
+  /**
+   * Restringe a contagem aos atendimento_ids deste pool de serviço.
+   * Sem isso, capacity_window agrega bookings de outros serviços que compartilham
+   * a janela de hora (ex: Consulta-tarde-Wed bloqueando MRPA-tarde-Wed).
+   * Vazio/undefined = sem restrição (compat).
+   */
+  atendimentoIds?: string[];
 }
 
 /**
@@ -19,6 +26,8 @@ export interface CountByPoolParams {
   poolStart: string;   // início da janela do pool
   poolEnd: string;     // fim da janela do pool
   minimumDate?: string;
+  /** Mesma semântica de CountByPeriodParams.atendimentoIds. */
+  atendimentoIds?: string[];
 }
 
 // ─── BookAppointmentUseCase params ───────────────────────────────────────────

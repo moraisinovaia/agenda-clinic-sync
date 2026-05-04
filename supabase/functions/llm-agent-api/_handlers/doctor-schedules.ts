@@ -11,7 +11,7 @@ import { normalizarPeriodo } from '../_lib/config.ts'
  */
 export async function handleDoctorSchedules(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
-    const scope = getRequestScope(body);
+    const scope = getRequestScope(body, config);
     console.log('📥 [DOCTOR-SCHEDULES] Buscando horários para cliente:', clienteId);
     
     const { medico_nome, servico_nome } = body;

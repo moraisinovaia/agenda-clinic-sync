@@ -72,10 +72,89 @@ export async function buscarAgendaDedicada(
 export const CONFIG_CACHE: Map<string, ConfigCache> = new Map();
 export const CACHE_TTL_MS = 1 * 60 * 1000; // 1 minuto - alterações aplicam em no máximo 60 segundos
 
-export function isCacheValid(clienteId: string): boolean {
-  const cached = CONFIG_CACHE.get(clienteId);
+/**
+ * [F-1] Build da chave de cache canônica. Padronizar entre load e invalidate
+ * pra garantir bate. Antes: load usava `configId || clienteId`, invalidate
+ * usava `${clienteId}:${configId}` — chaves nunca colidiam pra tenants com
+ * config_id e o /invalidate-config era no-op silente.
+ */
+export function buildCacheKey(clienteId: string, configId?: string | null): string {
+  return configId ? `${clienteId}:${configId}` : clienteId;
+}
+
+export function isCacheValid(cacheKey: string): boolean {
+  const cached = CONFIG_CACHE.get(cacheKey);
   if (!cached) return false;
   return Date.now() - cached.data.loadedAt < CACHE_TTL_MS;
+}
+
+/**
+ * [F10.2] Invalida o cache local de uma clínica. Usado pelo endpoint
+ * /admin/invalidate-config quando o painel admin sabe que mudou config
+ * e quer aplicar imediatamente (em vez de esperar 60s).
+ *
+ * Limitação conhecida: invalida APENAS a instance que recebeu a chamada.
+ * Outras instances quentes da Edge Function continuam com cache antigo
+ * até o TTL natural. Pra invalidação cross-instance real, precisaria de
+ * pub/sub (Redis Streams ou Postgres LISTEN/NOTIFY).
+ *
+ * Multi-tenant: passa cliente_id explicitamente; a entrada de cache é
+ * keyed por cliente_id (config_id também é considerado).
+ */
+export function invalidateCache(clienteId: string, configId?: string): boolean {
+  // [F-1] Usar mesmo builder de chave que loadDynamicConfig pra garantir match
+  const key = buildCacheKey(clienteId, configId);
+  const removed = CONFIG_CACHE.delete(key);
+  if (removed) {
+    console.log(`🗑️ [CONFIG] Cache invalidado: ${key}`);
+  }
+  return removed;
+}
+
+/**
+ * Limpa cache inteiro (admin ou em testes). Não usar em produção sem
+ * confirmar — pode causar burst de queries quando muitas requests
+ * concorrentes recarregarem.
+ */
+export function invalidateCacheAll(): number {
+  const n = CONFIG_CACHE.size;
+  CONFIG_CACHE.clear();
+  return n;
+}
+
+/**
+ * Verifica se um config_id pertence ao cliente_id informado.
+ *
+ * Why: a Edge Function usa service_role e bypassa RLS, então sem essa checagem
+ * um chamador poderia passar cliente_id=A + config_id=B e receber a config de B.
+ *
+ * Retorna true apenas quando há row em llm_clinic_config com (id=configId, cliente_id=clienteId).
+ * Em qualquer falha (erro de query, sem dados) retorna false — fail-closed.
+ */
+export async function validateConfigOwnership(
+  supabase: any,
+  clienteId: string,
+  configId: string
+): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('llm_clinic_config')
+      .select('id')
+      .eq('id', configId)
+      .eq('cliente_id', clienteId)
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.warn(`⚠️ [CONFIG] Erro validando ownership de config_id: ${error.message}`);
+      return false;
+    }
+
+    return !!data;
+  } catch (err: any) {
+    console.warn(`⚠️ [CONFIG] Exceção validando ownership: ${err?.message}`);
+    return false;
+  }
 }
 
 /**
@@ -86,13 +165,25 @@ export function isCacheValid(clienteId: string): boolean {
  * Retorna null se falhar (fallback para valores hardcoded)
  */
 export async function loadDynamicConfig(supabase: any, clienteId: string, configId?: string): Promise<DynamicConfig | null> {
-  // Usar config_id como chave de cache se fornecido, senão cliente_id
-  const cacheKey = configId || clienteId;
+  // [F-1] Mesma cache key que invalidateCache (cliente_id:config_id ou cliente_id)
+  const cacheKey = buildCacheKey(clienteId, configId);
 
   // Verificar cache primeiro
   if (isCacheValid(cacheKey)) {
     console.log('📦 [CACHE] Usando configuração do cache');
     return CONFIG_CACHE.get(cacheKey)!.data;
+  }
+
+  // Quando config_id é fornecido, validar que ele pertence ao cliente_id informado.
+  // Sem essa checagem, um chamador poderia ler config de outro tenant.
+  if (configId) {
+    const owns = await validateConfigOwnership(supabase, clienteId, configId);
+    if (!owns) {
+      console.warn(
+        `🚨 [SECURITY] config_id ${configId} não pertence ao cliente_id ${clienteId} — bloqueando carga`
+      );
+      return null;
+    }
   }
 
   try {

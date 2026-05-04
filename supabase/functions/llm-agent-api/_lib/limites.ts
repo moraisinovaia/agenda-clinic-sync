@@ -265,6 +265,13 @@ export async function calcularVagasDisponiveisComLimites(
 
         vagasPool = limitePool - (count || 0);
       }
+    } else {
+      // Pool compartilhado não encontrado para este dia — usar limite direto do serviço como fallback
+      const limiteDireto = (servicoConfig as any)?.limite;
+      if (typeof limiteDireto === 'number' && limiteDireto > 0) {
+        vagasPool = limiteDireto;
+        console.log(`⚠️ [POOL] Pool "${compartilhaLimiteCom}" não encontrado para dia ${diaSemana}. Usando limite direto: ${limiteDireto}`);
+      }
     }
   }
 
@@ -284,8 +291,198 @@ export async function calcularVagasDisponiveisComLimites(
     vagasSublimite = limiteProprio - (count || 0);
   }
 
-  // Retornar o menor valor (mais restritivo)
-  return Math.min(vagasPool, vagasSublimite);
+  // Retornar o menor valor (mais restritivo), nunca Infinity/NaN/null
+  const vagasMin = Math.min(vagasPool, vagasSublimite);
+  if (!Number.isFinite(vagasMin) || isNaN(vagasMin)) {
+    // Caminho derivado: a config do Dr. Marcelo (e provavelmente outras clínicas
+    // novas) não tem `regras.periodos` no formato POOL legado, mas tem
+    // `servicoConfig.periodos` (manhã/tarde) + `compartilha_limite_com`.
+    // Sem este caminho, a função retornava 0 e o handler caía sempre no retry loop.
+    if (compartilhaLimiteCom && servicoConfig?.periodos) {
+      const derivado = await calcularVagasPoolDerivado(
+        supabase, clienteId, medicoId, dataAgendamento,
+        servicoKey, compartilhaLimiteCom, servicoConfig.periodos, diaSemana,
+      );
+      if (derivado !== null) {
+        console.log(
+          `✅ [POOL_DERIVADO] "${servicoKey}" + "${compartilhaLimiteCom}" em ${dataAgendamento}: ${derivado} vaga(s)`,
+        );
+        return derivado;
+      }
+    }
+
+    // Capacidade indeterminada: pode ser config ausente OU bug silencioso.
+    // Conservador por padrão — evita overbooking invisível.
+    console.warn('[limites] Capacidade inválida detectada — retornando fallback conservador', {
+      servico: servicoKey,
+      servico_nome: (servicoConfig as any)?.nome ?? null,
+      data: dataAgendamento,
+      medico_id: medicoId,
+      vagasPool,
+      vagasSublimite,
+      compartilha_limite_com: compartilhaLimiteCom ?? null,
+      limite_proprio: limiteProprio ?? null,
+      tem_periodos_root: !!periodos,
+    });
+    return (servicoConfig as any)?.limite ?? 0;
+  }
+  return Math.max(0, vagasMin);
+}
+
+// Normaliza nome para fuzzy match: lowercase, sem acentos, só alfanuméricos.
+function normalizarNomeAtendimento(s: string): string {
+  return s.toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Resolve os `atendimento_ids` que compõem o pool de um serviço.
+ * Usado para que `countByPool/countByPeriod` (rota default do UseCase) filtre
+ * a contagem de ocupação aos atendimentos do próprio serviço — sem isso,
+ * Consulta-tarde-Wed lota a janela MRPA-tarde-Wed mesmo sendo serviços
+ * distintos com limites independentes.
+ *
+ * Retorna [] quando não acha atendimentos (caller deve omitir o filtro nesse
+ * caso, mantendo comportamento legado).
+ */
+export async function resolverAtendimentoIdsParaServico(
+  supabase: any,
+  clienteId: string,
+  servicoKey: string,
+  servicoConfig: any,
+): Promise<string[]> {
+  const compartilhadoCom: string | undefined = servicoConfig?.compartilha_limite_com;
+  const nomeServico: string = servicoConfig?.nome || servicoKey;
+
+  const nomesPoolNorm = [
+    normalizarNomeAtendimento(servicoKey),
+    normalizarNomeAtendimento(nomeServico),
+    ...(compartilhadoCom ? [normalizarNomeAtendimento(compartilhadoCom)] : []),
+  ].filter((s) => s.length > 0);
+
+  if (nomesPoolNorm.length === 0) return [];
+
+  const { data: atendimentos } = await supabase
+    .from('atendimentos')
+    .select('id, nome')
+    .eq('cliente_id', clienteId)
+    .eq('ativo', true);
+
+  if (!atendimentos || atendimentos.length === 0) return [];
+
+  const ids = (atendimentos as Array<{ id: string; nome: string }>)
+    .filter((a) => {
+      const an = normalizarNomeAtendimento(a.nome);
+      return nomesPoolNorm.some((n) => n === an || an.includes(n) || n.includes(an));
+    })
+    .map((a) => a.id);
+
+  return Array.from(new Set(ids));
+}
+
+/**
+ * Calcula vagas disponíveis derivando o pool a partir de
+ * `servicoConfig.periodos` + `compartilha_limite_com`, sem depender de
+ * `regras.periodos` (formato POOL legado raramente preenchido nas configs reais).
+ *
+ * Retorna `null` quando não consegue derivar (atendimentos não batem, nenhum
+ * turno válido para o dia da semana, ou config incompleta) — caller decide o
+ * fallback conservador.
+ */
+async function calcularVagasPoolDerivado(
+  supabase: any,
+  clienteId: string,
+  medicoId: string,
+  dataAgendamento: string,
+  servicoNome: string,
+  compartilhadoCom: string,
+  servicoPeriodos: Record<string, any>,
+  diaSemana: number,
+): Promise<number | null> {
+  const nomesPoolNorm = [
+    normalizarNomeAtendimento(servicoNome),
+    normalizarNomeAtendimento(compartilhadoCom),
+  ];
+
+  // [M3] Tentar cache do tenant primeiro pra economizar 1 SELECT
+  let atendimentos: Array<{ id: string; nome: string }> | null = null;
+  try {
+    const { getTenantAtendimentos } = await import('./tenant-cache.ts');
+    const cached = await getTenantAtendimentos(supabase, clienteId);
+    if (cached.length > 0) atendimentos = cached;
+  } catch (_) { /* cache opcional */ }
+
+  // Fallback: SELECT direto se cache vazio
+  if (!atendimentos) {
+    const { data } = await supabase
+      .from('atendimentos')
+      .select('id, nome')
+      .eq('cliente_id', clienteId)
+      .eq('ativo', true);
+    atendimentos = (data ?? []) as Array<{ id: string; nome: string }>;
+  }
+
+  if (!atendimentos || atendimentos.length === 0) return null;
+
+  const poolIds: string[] = atendimentos
+    .filter((a) => {
+      const an = normalizarNomeAtendimento(a.nome);
+      return nomesPoolNorm.some((n) => n === an || an.includes(n) || n.includes(an));
+    })
+    .map((a) => a.id);
+
+  if (poolIds.length === 0) return null;
+
+  // [M2] Batch: coletar todas as janelas de período válidas de uma vez
+  // e fazer 1 SELECT agregado em vez de 1 SELECT por turno.
+  // Antes: N+1 queries (1 atendimentos + N períodos × 1 agendamentos).
+  // Agora: 1 atendimentos (cacheado) + 1 agendamentos com filtro composto.
+  type Janela = { pk: string; limite: number; contInicio: string; contFim: string };
+  const janelas: Janela[] = [];
+  for (const [pk, cfg] of Object.entries(servicoPeriodos)) {
+    if (pk !== 'manha' && pk !== 'tarde') continue;
+    const cfgAny = cfg as any;
+    if (Array.isArray(cfgAny.dias_especificos) && !cfgAny.dias_especificos.includes(diaSemana)) continue;
+    const limite = cfgAny.limite;
+    const contInicio = cfgAny.contagem_inicio ?? cfgAny.inicio;
+    const contFim = cfgAny.contagem_fim ?? cfgAny.fim;
+    if (!Number.isFinite(limite) || !contInicio || !contFim) continue;
+    janelas.push({ pk, limite, contInicio, contFim });
+  }
+
+  if (janelas.length === 0) return null;
+
+  // 1 query única retornando hora_agendamento; conta em memória por janela
+  const minInicio = janelas.map((j) => j.contInicio).sort()[0];
+  const maxFim    = janelas.map((j) => j.contFim).sort().reverse()[0];
+
+  const { data: rows } = await supabase
+    .from('agendamentos')
+    .select('hora_agendamento')
+    .eq('medico_id', medicoId)
+    .eq('cliente_id', clienteId)
+    .eq('data_agendamento', dataAgendamento)
+    .in('atendimento_id', poolIds)
+    .gte('hora_agendamento', minInicio)
+    .lt('hora_agendamento', maxFim)
+    .is('excluido_em', null)
+    .is('cancelado_em', null)
+    .in('status', ['agendado', 'confirmado']);
+
+  const horas: string[] = (rows ?? []).map((r: any) => r.hora_agendamento);
+
+  let vagasTotal = 0;
+  let turnosValidos = 0;
+  for (const j of janelas) {
+    const ocup = horas.filter((h) => h >= j.contInicio && h < j.contFim).length;
+    vagasTotal += Math.max(0, j.limite - ocup);
+    turnosValidos++;
+  }
+
+  if (turnosValidos === 0) return null;
+  return vagasTotal;
 }
 
 /**

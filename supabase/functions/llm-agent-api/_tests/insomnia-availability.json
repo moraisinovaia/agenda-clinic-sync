@@ -1,0 +1,427 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_date": "2026-04-30T00:00:00.000Z",
+  "__export_source": "manual:availability-test-matrix",
+  "resources": [
+    {
+      "_id": "wrk_avail",
+      "_type": "workspace",
+      "name": "llm-agent-api — availability tests",
+      "description": "Matriz de testes para POST /availability. Multi-cliente. Veja availability-test-matrix.md.",
+      "scope": "collection"
+    },
+    {
+      "_id": "env_base",
+      "_type": "environment",
+      "parentId": "wrk_avail",
+      "name": "Base — Dr. Marcelo (prod)",
+      "data": {
+        "endpoint": "https://qxlvzbvzajibdtlzngdy.supabase.co/functions/v1/llm-agent-api",
+        "api_key": "TROCAR_APOS_ROTACAO",
+        "cliente_id": "2bfb98b5-ae41-4f96-8ba7-acc797c22054",
+        "config_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        "medico_id": "1e110923-50df-46ff-a57a-29d88e372900",
+        "medico_nome": "Dr. Marcelo"
+      },
+      "metaSortKey": -1,
+      "isPrivate": false
+    },
+    { "_id": "fld_a", "_type": "request_group", "parentId": "wrk_avail", "name": "A. Felizes — 1 por serviço", "metaSortKey": -100 },
+    { "_id": "fld_b", "_type": "request_group", "parentId": "wrk_avail", "name": "B. Casos de uso (aliases)", "metaSortKey": -90 },
+    { "_id": "fld_c", "_type": "request_group", "parentId": "wrk_avail", "name": "C. Filtros", "metaSortKey": -80 },
+    { "_id": "fld_d", "_type": "request_group", "parentId": "wrk_avail", "name": "D. Edge cases", "metaSortKey": -70 },
+    { "_id": "fld_e", "_type": "request_group", "parentId": "wrk_avail", "name": "E. Erros estruturais", "metaSortKey": -60 },
+    { "_id": "fld_f", "_type": "request_group", "parentId": "wrk_avail", "name": "F. Multi-tenant + virtuais", "metaSortKey": -50 },
+
+    {
+      "_id": "req_a1", "_type": "request", "parentId": "fld_a",
+      "name": "A1 — Consulta Cardiológica (pool com Retorno)",
+      "method": "POST",
+      "url": "{{ _.endpoint }}/availability",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "x-api-key", "value": "{{ _.api_key }}" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"cliente_id\":         \"{{ _.cliente_id }}\",\n  \"config_id\":          \"{{ _.config_id }}\",\n  \"medico_nome\":        \"{{ _.medico_nome }}\",\n  \"atendimento_nome\":   \"Consulta Cardiológica\",\n  \"buscar_proximas\":    true,\n  \"allowed_doctor_ids\": [\"{{ _.medico_id }}\"]\n}"
+      },
+      "metaSortKey": -1
+    },
+    {
+      "_id": "req_a2", "_type": "request", "parentId": "fld_a",
+      "name": "A2 — MAPA 24H (fixed_time + virtual)",
+      "method": "POST",
+      "url": "{{ _.endpoint }}/availability",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "x-api-key", "value": "{{ _.api_key }}" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"cliente_id\":         \"{{ _.cliente_id }}\",\n  \"config_id\":          \"{{ _.config_id }}\",\n  \"medico_nome\":        \"{{ _.medico_nome }}\",\n  \"atendimento_nome\":   \"MAPA 24H\",\n  \"buscar_proximas\":    true,\n  \"allowed_doctor_ids\": [\"{{ _.medico_id }}\"]\n}"
+      },
+      "metaSortKey": -2
+    },
+    {
+      "_id": "req_a3", "_type": "request", "parentId": "fld_a",
+      "name": "A3 — Teste Ergométrico (default)",
+      "method": "POST",
+      "url": "{{ _.endpoint }}/availability",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "x-api-key", "value": "{{ _.api_key }}" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"cliente_id\":         \"{{ _.cliente_id }}\",\n  \"config_id\":          \"{{ _.config_id }}\",\n  \"medico_nome\":        \"{{ _.medico_nome }}\",\n  \"atendimento_nome\":   \"Teste Ergométrico\",\n  \"buscar_proximas\":    true,\n  \"allowed_doctor_ids\": [\"{{ _.medico_id }}\"]\n}"
+      },
+      "metaSortKey": -3
+    },
+    {
+      "_id": "req_a4", "_type": "request", "parentId": "fld_a",
+      "name": "A4 — ECG (walk_in_info_only)",
+      "method": "POST",
+      "url": "{{ _.endpoint }}/availability",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "x-api-key", "value": "{{ _.api_key }}" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"cliente_id\":         \"{{ _.cliente_id }}\",\n  \"config_id\":          \"{{ _.config_id }}\",\n  \"medico_nome\":        \"{{ _.medico_nome }}\",\n  \"atendimento_nome\":   \"ECG\",\n  \"buscar_proximas\":    true,\n  \"allowed_doctor_ids\": [\"{{ _.medico_id }}\"]\n}"
+      },
+      "metaSortKey": -4
+    },
+    {
+      "_id": "req_a5", "_type": "request", "parentId": "fld_a",
+      "name": "A5 — MRPA (default)",
+      "method": "POST",
+      "url": "{{ _.endpoint }}/availability",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "x-api-key", "value": "{{ _.api_key }}" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"cliente_id\":         \"{{ _.cliente_id }}\",\n  \"config_id\":          \"{{ _.config_id }}\",\n  \"medico_nome\":        \"{{ _.medico_nome }}\",\n  \"atendimento_nome\":   \"MRPA\",\n  \"buscar_proximas\":    true,\n  \"allowed_doctor_ids\": [\"{{ _.medico_id }}\"]\n}"
+      },
+      "metaSortKey": -5
+    },
+    {
+      "_id": "req_a6", "_type": "request", "parentId": "fld_a",
+      "name": "A6 — Retorno Cardiológico (pool com Consulta)",
+      "method": "POST",
+      "url": "{{ _.endpoint }}/availability",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "x-api-key", "value": "{{ _.api_key }}" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"cliente_id\":         \"{{ _.cliente_id }}\",\n  \"config_id\":          \"{{ _.config_id }}\",\n  \"medico_nome\":        \"{{ _.medico_nome }}\",\n  \"atendimento_nome\":   \"Retorno Cardiológico\",\n  \"buscar_proximas\":    true,\n  \"allowed_doctor_ids\": [\"{{ _.medico_id }}\"]\n}"
+      },
+      "metaSortKey": -6
+    },
+
+    {
+      "_id": "req_b1", "_type": "request", "parentId": "fld_b",
+      "name": "B1 — \"Pré-operatório\" → resolve para Consulta",
+      "method": "POST",
+      "url": "{{ _.endpoint }}/availability",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "x-api-key", "value": "{{ _.api_key }}" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"cliente_id\":         \"{{ _.cliente_id }}\",\n  \"config_id\":          \"{{ _.config_id }}\",\n  \"medico_nome\":        \"{{ _.medico_nome }}\",\n  \"atendimento_nome\":   \"Pré-operatório\",\n  \"buscar_proximas\":    true,\n  \"allowed_doctor_ids\": [\"{{ _.medico_id }}\"]\n}"
+      }
+    },
+    {
+      "_id": "req_b2", "_type": "request", "parentId": "fld_b",
+      "name": "B2 — \"Pré-op\" alias",
+      "method": "POST",
+      "url": "{{ _.endpoint }}/availability",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "x-api-key", "value": "{{ _.api_key }}" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"cliente_id\":         \"{{ _.cliente_id }}\",\n  \"config_id\":          \"{{ _.config_id }}\",\n  \"medico_nome\":        \"{{ _.medico_nome }}\",\n  \"atendimento_nome\":   \"Pré-op\",\n  \"buscar_proximas\":    true,\n  \"allowed_doctor_ids\": [\"{{ _.medico_id }}\"]\n}"
+      }
+    },
+    {
+      "_id": "req_b3", "_type": "request", "parentId": "fld_b",
+      "name": "B3 — \"Parecer cardiológico\" alias",
+      "method": "POST",
+      "url": "{{ _.endpoint }}/availability",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "x-api-key", "value": "{{ _.api_key }}" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"cliente_id\":         \"{{ _.cliente_id }}\",\n  \"config_id\":          \"{{ _.config_id }}\",\n  \"medico_nome\":        \"{{ _.medico_nome }}\",\n  \"atendimento_nome\":   \"Parecer cardiológico\",\n  \"buscar_proximas\":    true,\n  \"allowed_doctor_ids\": [\"{{ _.medico_id }}\"]\n}"
+      }
+    },
+    {
+      "_id": "req_b4", "_type": "request", "parentId": "fld_b",
+      "name": "B4 — \"Cirurgia\" alias",
+      "method": "POST",
+      "url": "{{ _.endpoint }}/availability",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "x-api-key", "value": "{{ _.api_key }}" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"cliente_id\":         \"{{ _.cliente_id }}\",\n  \"config_id\":          \"{{ _.config_id }}\",\n  \"medico_nome\":        \"{{ _.medico_nome }}\",\n  \"atendimento_nome\":   \"Cirurgia\",\n  \"buscar_proximas\":    true,\n  \"allowed_doctor_ids\": [\"{{ _.medico_id }}\"]\n}"
+      }
+    },
+    {
+      "_id": "req_b5", "_type": "request", "parentId": "fld_b",
+      "name": "B5 — \"Checkup\" caso distinto",
+      "method": "POST",
+      "url": "{{ _.endpoint }}/availability",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "x-api-key", "value": "{{ _.api_key }}" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"cliente_id\":         \"{{ _.cliente_id }}\",\n  \"config_id\":          \"{{ _.config_id }}\",\n  \"medico_nome\":        \"{{ _.medico_nome }}\",\n  \"atendimento_nome\":   \"Checkup\",\n  \"buscar_proximas\":    true,\n  \"allowed_doctor_ids\": [\"{{ _.medico_id }}\"]\n}"
+      }
+    },
+    {
+      "_id": "req_b6", "_type": "request", "parentId": "fld_b",
+      "name": "B6 — \"Tatuagem cardíaca\" → SERVICO_NAO_ENCONTRADO",
+      "method": "POST",
+      "url": "{{ _.endpoint }}/availability",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "x-api-key", "value": "{{ _.api_key }}" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"cliente_id\":         \"{{ _.cliente_id }}\",\n  \"config_id\":          \"{{ _.config_id }}\",\n  \"medico_nome\":        \"{{ _.medico_nome }}\",\n  \"atendimento_nome\":   \"Tatuagem cardíaca\",\n  \"buscar_proximas\":    true,\n  \"allowed_doctor_ids\": [\"{{ _.medico_id }}\"]\n}"
+      }
+    },
+
+    {
+      "_id": "req_c1", "_type": "request", "parentId": "fld_c",
+      "name": "C1 — Consulta com data específica futura",
+      "method": "POST",
+      "url": "{{ _.endpoint }}/availability",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "x-api-key", "value": "{{ _.api_key }}" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"cliente_id\":         \"{{ _.cliente_id }}\",\n  \"config_id\":          \"{{ _.config_id }}\",\n  \"medico_nome\":        \"{{ _.medico_nome }}\",\n  \"atendimento_nome\":   \"Consulta Cardiológica\",\n  \"data_consulta\":      \"2026-06-02\",\n  \"allowed_doctor_ids\": [\"{{ _.medico_id }}\"]\n}"
+      }
+    },
+    {
+      "_id": "req_c2", "_type": "request", "parentId": "fld_c",
+      "name": "C2 — Consulta período manhã",
+      "method": "POST",
+      "url": "{{ _.endpoint }}/availability",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "x-api-key", "value": "{{ _.api_key }}" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"cliente_id\":         \"{{ _.cliente_id }}\",\n  \"config_id\":          \"{{ _.config_id }}\",\n  \"medico_nome\":        \"{{ _.medico_nome }}\",\n  \"atendimento_nome\":   \"Consulta Cardiológica\",\n  \"buscar_proximas\":    true,\n  \"periodo\":            \"manha\",\n  \"allowed_doctor_ids\": [\"{{ _.medico_id }}\"]\n}"
+      }
+    },
+    {
+      "_id": "req_c3", "_type": "request", "parentId": "fld_c",
+      "name": "C3 — Consulta período tarde",
+      "method": "POST",
+      "url": "{{ _.endpoint }}/availability",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "x-api-key", "value": "{{ _.api_key }}" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"cliente_id\":         \"{{ _.cliente_id }}\",\n  \"config_id\":          \"{{ _.config_id }}\",\n  \"medico_nome\":        \"{{ _.medico_nome }}\",\n  \"atendimento_nome\":   \"Consulta Cardiológica\",\n  \"buscar_proximas\":    true,\n  \"periodo\":            \"tarde\",\n  \"allowed_doctor_ids\": [\"{{ _.medico_id }}\"]\n}"
+      }
+    },
+    {
+      "_id": "req_c4", "_type": "request", "parentId": "fld_c",
+      "name": "C4 — \"próxima quarta\" via mensagem_original",
+      "method": "POST",
+      "url": "{{ _.endpoint }}/availability",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "x-api-key", "value": "{{ _.api_key }}" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"cliente_id\":         \"{{ _.cliente_id }}\",\n  \"config_id\":          \"{{ _.config_id }}\",\n  \"medico_nome\":        \"{{ _.medico_nome }}\",\n  \"atendimento_nome\":   \"Consulta Cardiológica\",\n  \"mensagem_original\":  \"tem vaga para consulta na próxima quarta?\",\n  \"buscar_proximas\":    true,\n  \"allowed_doctor_ids\": [\"{{ _.medico_id }}\"]\n}"
+      }
+    },
+    {
+      "_id": "req_c5", "_type": "request", "parentId": "fld_c",
+      "name": "C5 — TE em sexta (manhã permitida)",
+      "method": "POST",
+      "url": "{{ _.endpoint }}/availability",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "x-api-key", "value": "{{ _.api_key }}" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"cliente_id\":         \"{{ _.cliente_id }}\",\n  \"config_id\":          \"{{ _.config_id }}\",\n  \"medico_nome\":        \"{{ _.medico_nome }}\",\n  \"atendimento_nome\":   \"Teste Ergométrico\",\n  \"data_consulta\":      \"2026-05-29\",\n  \"allowed_doctor_ids\": [\"{{ _.medico_id }}\"]\n}"
+      }
+    },
+
+    {
+      "_id": "req_d1", "_type": "request", "parentId": "fld_d",
+      "name": "D1 — data passada → ajusta",
+      "method": "POST",
+      "url": "{{ _.endpoint }}/availability",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "x-api-key", "value": "{{ _.api_key }}" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"cliente_id\":         \"{{ _.cliente_id }}\",\n  \"config_id\":          \"{{ _.config_id }}\",\n  \"medico_nome\":        \"{{ _.medico_nome }}\",\n  \"atendimento_nome\":   \"Consulta Cardiológica\",\n  \"data_consulta\":      \"2020-01-15\",\n  \"buscar_proximas\":    true,\n  \"allowed_doctor_ids\": [\"{{ _.medico_id }}\"]\n}"
+      }
+    },
+    {
+      "_id": "req_d2", "_type": "request", "parentId": "fld_d",
+      "name": "D2 — sábado para Consulta → redireciona",
+      "method": "POST",
+      "url": "{{ _.endpoint }}/availability",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "x-api-key", "value": "{{ _.api_key }}" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"cliente_id\":         \"{{ _.cliente_id }}\",\n  \"config_id\":          \"{{ _.config_id }}\",\n  \"medico_nome\":        \"{{ _.medico_nome }}\",\n  \"atendimento_nome\":   \"Consulta Cardiológica\",\n  \"data_consulta\":      \"2026-05-02\",\n  \"buscar_proximas\":    true,\n  \"allowed_doctor_ids\": [\"{{ _.medico_id }}\"]\n}"
+      }
+    },
+    {
+      "_id": "req_d3", "_type": "request", "parentId": "fld_d",
+      "name": "D3 — sexta (não atende Consulta) → busca próximas",
+      "method": "POST",
+      "url": "{{ _.endpoint }}/availability",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "x-api-key", "value": "{{ _.api_key }}" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"cliente_id\":         \"{{ _.cliente_id }}\",\n  \"config_id\":          \"{{ _.config_id }}\",\n  \"medico_nome\":        \"{{ _.medico_nome }}\",\n  \"atendimento_nome\":   \"Consulta Cardiológica\",\n  \"data_consulta\":      \"2026-05-08\",\n  \"buscar_proximas\":    true,\n  \"allowed_doctor_ids\": [\"{{ _.medico_id }}\"]\n}"
+      }
+    },
+    {
+      "_id": "req_d4", "_type": "request", "parentId": "fld_d",
+      "name": "D4 — DD/MM/YYYY (BR) → MAPA segunda",
+      "method": "POST",
+      "url": "{{ _.endpoint }}/availability",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "x-api-key", "value": "{{ _.api_key }}" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"cliente_id\":         \"{{ _.cliente_id }}\",\n  \"config_id\":          \"{{ _.config_id }}\",\n  \"medico_nome\":        \"{{ _.medico_nome }}\",\n  \"atendimento_nome\":   \"MAPA 24H\",\n  \"data_consulta\":      \"04/05/2026\",\n  \"allowed_doctor_ids\": [\"{{ _.medico_id }}\"]\n}"
+      }
+    },
+
+    {
+      "_id": "req_e1", "_type": "request", "parentId": "fld_e",
+      "name": "E1 — sem cliente_id (HTTP 400)",
+      "method": "POST",
+      "url": "{{ _.endpoint }}/availability",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "x-api-key", "value": "{{ _.api_key }}" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"medico_nome\":        \"{{ _.medico_nome }}\",\n  \"atendimento_nome\":   \"Consulta Cardiológica\"\n}"
+      }
+    },
+    {
+      "_id": "req_e2", "_type": "request", "parentId": "fld_e",
+      "name": "E2 — médico desconhecido → MEDICO_NAO_ENCONTRADO",
+      "method": "POST",
+      "url": "{{ _.endpoint }}/availability",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "x-api-key", "value": "{{ _.api_key }}" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"cliente_id\":         \"{{ _.cliente_id }}\",\n  \"config_id\":          \"{{ _.config_id }}\",\n  \"medico_nome\":        \"Dr. Inexistente Silva\",\n  \"atendimento_nome\":   \"Consulta Cardiológica\",\n  \"buscar_proximas\":    true,\n  \"allowed_doctor_ids\": [\"{{ _.medico_id }}\"]\n}"
+      }
+    },
+    {
+      "_id": "req_e3", "_type": "request", "parentId": "fld_e",
+      "name": "E3 — config_id cross-tenant (etapa B)",
+      "method": "POST",
+      "url": "{{ _.endpoint }}/availability",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "x-api-key", "value": "{{ _.api_key }}" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"cliente_id\":         \"{{ _.cliente_id }}\",\n  \"config_id\":          \"00000000-0000-0000-0000-000000000000\",\n  \"medico_nome\":        \"{{ _.medico_nome }}\",\n  \"atendimento_nome\":   \"Consulta Cardiológica\",\n  \"buscar_proximas\":    true,\n  \"allowed_doctor_ids\": [\"{{ _.medico_id }}\"]\n}"
+      }
+    },
+    {
+      "_id": "req_e4", "_type": "request", "parentId": "fld_e",
+      "name": "E4 — scope sem o médico (MEDICO_FORA_DO_ESCOPO)",
+      "method": "POST",
+      "url": "{{ _.endpoint }}/availability",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "x-api-key", "value": "{{ _.api_key }}" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"cliente_id\":         \"{{ _.cliente_id }}\",\n  \"config_id\":          \"{{ _.config_id }}\",\n  \"medico_nome\":        \"{{ _.medico_nome }}\",\n  \"atendimento_nome\":   \"Consulta Cardiológica\",\n  \"buscar_proximas\":    true,\n  \"allowed_doctor_ids\": [\"00000000-0000-0000-0000-000000000000\"]\n}"
+      }
+    },
+
+    {
+      "_id": "req_f1", "_type": "request", "parentId": "fld_f",
+      "name": "F1 — MAPA destrava com scope só do principal",
+      "method": "POST",
+      "url": "{{ _.endpoint }}/availability",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "x-api-key", "value": "{{ _.api_key }}" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"cliente_id\":         \"{{ _.cliente_id }}\",\n  \"config_id\":          \"{{ _.config_id }}\",\n  \"medico_nome\":        \"{{ _.medico_nome }}\",\n  \"atendimento_nome\":   \"MAPA 24H\",\n  \"buscar_proximas\":    true,\n  \"allowed_doctor_ids\": [\"{{ _.medico_id }}\"]\n}"
+      }
+    },
+    {
+      "_id": "req_f2", "_type": "request", "parentId": "fld_f",
+      "name": "F2 — TE destrava com scope só do principal",
+      "method": "POST",
+      "url": "{{ _.endpoint }}/availability",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "x-api-key", "value": "{{ _.api_key }}" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"cliente_id\":         \"{{ _.cliente_id }}\",\n  \"config_id\":          \"{{ _.config_id }}\",\n  \"medico_nome\":        \"{{ _.medico_nome }}\",\n  \"atendimento_nome\":   \"Teste Ergométrico\",\n  \"buscar_proximas\":    true,\n  \"allowed_doctor_ids\": [\"{{ _.medico_id }}\"]\n}"
+      }
+    }
+  ]
+}

@@ -2,6 +2,7 @@ import type { DynamicConfig } from '../_lib/types.ts'
 import { successResponse, errorResponse, businessErrorResponse } from '../_lib/responses.ts'
 import { getRequestScope, isServiceAllowed, filterDoctorsByScope } from '../_lib/scope.ts'
 import { formatarConvenioParaBanco } from '../_lib/fuzzy-match.ts'
+import { maskName } from '../_lib/pii.ts'
 
 // ============= HANDLERS: FILA DE ESPERA INTELIGENTE =============
 
@@ -90,7 +91,7 @@ export async function handleConsultarFila(supabase: any, body: any, clienteId: s
 // Adicionar paciente à fila de espera
 export async function handleAdicionarFila(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
-    const scope = getRequestScope(body);
+    const scope = getRequestScope(body, config);
     // Normalização: aceita snake_case (padrão) e camelCase (retrocompatibilidade)
     const nomeCompleto = body.nome_completo || body.nomeCompleto;
     const dataNascimento = body.data_nascimento || body.dataNascimento;
@@ -187,7 +188,7 @@ export async function handleAdicionarFila(supabase: any, body: any, clienteId: s
       console.log(`✅ [ADICIONAR-FILA] Atendimento resolvido: "${atendimentoNome}" → "${atendimentoNomeResolvido}" (${atendimentoId})`);
     }
 
-    console.log(`📥 [ADICIONAR-FILA] Paciente: ${nomeCompleto}, Médico: ${medicoId}, Atendimento: ${atendimentoId}`);
+    console.log(`📥 [ADICIONAR-FILA] Paciente: ${maskName(nomeCompleto)}, Médico: ${medicoId}, Atendimento: ${atendimentoId}`);
 
     // ============= RESOLVER PACIENTE_ID =============
     // Mesmo padrão do handleSchedule: buscar por nome + data_nascimento + celular
@@ -216,8 +217,13 @@ export async function handleAdicionarFila(supabase: any, body: any, clienteId: s
       pacienteId = pacientesExistentes[0].id;
       console.log(`✅ [ADICIONAR-FILA] Paciente existente: ${pacienteId}`);
     } else {
-      // Criar novo paciente
-      console.log(`🆕 [ADICIONAR-FILA] Criando novo paciente: ${nomeNormalizado}`);
+      // [F5.1 + H4] Patient creation race-safe.
+      // O UNIQUE INDEX idx_pacientes_unique_por_cliente_v2 cobre tanto
+      // data_nascimento NOT NULL quanto NULL (via COALESCE com '1900-01-01').
+      // INSERT vs INSERT concorrente: PG bloqueia o segundo via 23505
+      // (unique_violation). Tratamos o erro fazendo SELECT e retornando
+      // o paciente já criado pelo primeiro worker.
+      console.log(`🆕 [ADICIONAR-FILA] INSERT paciente: ${maskName(nomeNormalizado)}`);
       const { data: novoPaciente, error: createError } = await supabase
         .from('pacientes')
         .insert({
@@ -231,10 +237,29 @@ export async function handleAdicionarFila(supabase: any, body: any, clienteId: s
         .single();
 
       if (createError) {
-        return errorResponse(`Erro ao criar paciente: ${createError.message}`);
+        // [H4] Race detectada via 23505 — outro worker já criou. SELECT pra pegar.
+        const isUniqueViolation = (createError as any)?.code === '23505';
+        if (isUniqueViolation) {
+          let q = supabase
+            .from('pacientes')
+            .select('id')
+            .eq('cliente_id', clienteId)
+            .eq('nome_completo', nomeNormalizado);
+          q = dataNascimento ? q.eq('data_nascimento', dataNascimento) : q.is('data_nascimento', null);
+          const { data: existente } = await q.limit(1).maybeSingle();
+          if (existente?.id) {
+            pacienteId = existente.id;
+            console.log(`✅ [ADICIONAR-FILA] Paciente recuperado pós-race (idempotente): ${pacienteId}`);
+          } else {
+            return errorResponse(`Erro ao criar paciente: 23505 mas SELECT não encontrou.`);
+          }
+        } else {
+          return errorResponse(`Erro ao criar paciente: ${createError.message}`);
+        }
+      } else {
+        pacienteId = novoPaciente.id;
+        console.log(`✅ [ADICIONAR-FILA] Novo paciente criado: ${pacienteId}`);
       }
-      pacienteId = novoPaciente.id;
-      console.log(`✅ [ADICIONAR-FILA] Novo paciente criado: ${pacienteId}`);
     }
 
     // Verificar se já está na fila para o mesmo médico/atendimento
@@ -476,7 +501,7 @@ export async function handleResponderFila(supabase: any, body: any, clienteId: s
         if (proxError) {
           console.error('⚠️ [RESPONDER-FILA] Erro ao buscar próximo (ignorado):', proxError.message);
         } else if (proximoCandidato && data_agendamento && hora_agendamento) {
-          console.log(`🔄 [RESPONDER-FILA] Próximo candidato: ${proximoCandidato.pacientes?.nome_completo}`);
+          console.log(`🔄 [RESPONDER-FILA] Próximo candidato: ${maskName(proximoCandidato.pacientes?.nome_completo)}`);
 
           // Atualizar próximo para 'notificado'
           await supabase
@@ -526,7 +551,7 @@ export async function handleResponderFila(supabase: any, body: any, clienteId: s
 
           // Webhook disparado pelo trigger PG (trigger_notificar_fila_webhook) no INSERT acima
 
-          console.log(`📱 [RESPONDER-FILA] Próximo notificado: ${proximoNotificado.paciente_nome}`);
+          console.log(`📱 [RESPONDER-FILA] Próximo notificado: ${maskName(proximoNotificado.paciente_nome)}`);
         } else {
           console.log('ℹ️ [RESPONDER-FILA] Nenhum próximo candidato na fila');
         }

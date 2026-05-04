@@ -7,12 +7,30 @@ import {
 import type { DynamicConfig } from '../_lib/types.ts'
 import { successResponse, businessErrorResponse } from '../_lib/responses.ts'
 import { getRequestScope, isDoctorAllowed, isServiceAllowed, filterDoctorsByScope, getDoctorScopeSummary, hasDoctorScope } from '../_lib/scope.ts'
-import { getMedicoRules, getMensagemPersonalizada, getClinicPhone, getMinimumBookingDate, calcularVagasDisponiveisComLimites } from '../_lib/limites.ts'
+import { getMedicoRules, getMensagemPersonalizada, getClinicPhone, getMinimumBookingDate, calcularVagasDisponiveisComLimites, resolverAtendimentoIdsParaServico } from '../_lib/limites.ts'
 import { BUSINESS_RULES } from '../_lib/tipo-agendamento.ts'
 import { normalizarServicoPeriodos, buscarAgendaDedicada } from '../_lib/config.ts'
 import { sanitizarCampoOpcional, getDiaSemana } from '../_lib/normalizacao.ts'
 import { getTipoAgendamentoEfetivo, isOrdemChegada, isEstimativaHorario, getIntervaloMinutos, getMensagemEstimativa, formatarHorarioParaExibicao, getDataHoraAtualBrasil, filtrarPeriodosPassados, classificarPeriodoAgendamento, buscarProximasDatasDisponiveis, TIPO_ORDEM_CHEGADA, TIPO_ESTIMATIVA_HORARIO } from '../_lib/tipo-agendamento.ts'
 import { fuzzyMatchMedicos } from '../_lib/fuzzy-match.ts'
+import { carregarDatasBloqueadas } from '../_lib/bloqueios.ts'
+
+/**
+ * Verifica se um período (manha/tarde) está permitido em dado dia da semana,
+ * conforme `dias_especificos` da configuração.
+ *
+ * Why: a regra é usada em dois pontos do availability.ts (loop principal e
+ * retry de 100 dias). Centralizar evita drift como o que fez o retry oferecer
+ * turnos onde a clínica não atendia naquele dia da semana.
+ *
+ * Quando `dias_especificos` está ausente ou não é array, retorna true
+ * (sem restrição) — preserva comportamento antigo para configs sem o campo.
+ */
+export function isPeriodoPermitidoNoDia(periodoConfig: any, weekday: number): boolean {
+  const dias = periodoConfig?.dias_especificos;
+  if (!Array.isArray(dias)) return true;
+  return dias.includes(weekday);
+}
 
 // Detecta intenção de busca de próxima disponibilidade geral (sem data específica).
 // "tem vaga pra quando?" / "qual a próxima vaga?" / "quando tem consulta?" → true
@@ -31,9 +49,43 @@ export function isBuscaProximaDisponibilidade(mensagem: string | null | undefine
   return termos.some((t) => m.includes(t));
 }
 
+/**
+ * Detecta menção explícita de dia da semana usando regex com fronteiras de palavra.
+ * Não usa abreviações ambíguas (seg/ter/qua/qui/sex) que geram falsos positivos
+ * em palavras como "quando", "qualquer", "temos", "seguinte", "sexo" etc.
+ * @returns 1=seg, 2=ter, 3=qua, 4=qui, 5=sex, null se não detectado
+ */
+export function detectarDiaSemana(mensagem: string | null | undefined): number | null {
+  if (!mensagem) return null;
+  const m = mensagem.toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/\s+/g, ' ');
+
+  const padroes: Array<[RegExp, number, string]> = [
+    [/\bsegunda(?:-?feira)?\b/, 1, 'segunda'],
+    [/\bsegundafeira\b/, 1, 'segundafeira'],
+    [/\bterca(?:-?feira)?\b/, 2, 'terca'],
+    [/\btercafeira\b/, 2, 'tercafeira'],
+    [/\bquarta(?:-?feira)?\b/, 3, 'quarta'],
+    [/\bquartafeira\b/, 3, 'quartafeira'],
+    [/\bquinta(?:-?feira)?\b/, 4, 'quinta'],
+    [/\bquintafeira\b/, 4, 'quintafeira'],
+    [/\bsexta(?:-?feira)?\b/, 5, 'sexta'],
+    [/\bsextafeira\b/, 5, 'sextafeira'],
+  ];
+
+  for (const [regex, dia, nome] of padroes) {
+    if (regex.test(m)) {
+      console.log(`📅 Dia da semana específico detectado: ${nome} (${dia})`);
+      return dia;
+    }
+  }
+  return null;
+}
+
 export async function handleAvailability(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
-    const scope = getRequestScope(body);
+    const scope = getRequestScope(body, config);
     console.log('📅 [AVAILABILITY] Dados recebidos:', {
       keys: Object.keys(body || {}),
       doctor_scope_count: scope.doctorIds.length,
@@ -137,6 +189,24 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
     let mensagemEspecial = null;
     let data_consulta_original = data_consulta;
 
+    // [F3] Quando o caller envia data_consulta sem buscar_proximas, ativamos
+    // o modo de busca múltipla automaticamente. A data passada vira ponto de
+    // partida (`dataInicial`), mas o handler retornará proximas_datas[] com
+    // até 5 alternativas em formato uniforme — em vez do formato de "verifica
+    // dia único" que retornava só `disponivel + periodos`.
+    // Why: paciente que diz "tem vaga dia X?" se beneficia de ver alternativas
+    // se aquela data estiver lotada, sem nova chamada.
+    if (data_consulta && !buscar_proximas) {
+      console.log(`🔄 [F3] data_consulta=${data_consulta} fornecida sem buscar_proximas — ativando busca de alternativas a partir desta data`);
+      buscar_proximas = true;
+      // Ampliar janela: data específica costuma vir com clínica em overbooking,
+      // 7 dias acaba achando só 1 alternativa. 30 dias dá folga sem custo
+      // (early-stop em datasNecessarias mantém perf).
+      if (quantidade_dias < 30) {
+        quantidade_dias = 30;
+        console.log(`🔄 [F3] Ampliando quantidade_dias para 30 (data específica precisa de janela maior para alternativas)`);
+      }
+    }
     if (!data_consulta && !buscar_proximas && isBuscaProximaDisponibilidade(mensagem_original)) {
       // Intenção de próxima disponibilidade: não fixar data, ativar busca de range
       buscar_proximas = true;
@@ -285,6 +355,27 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
       const medicosDentroDoEscopo = filterDoctorsByScope(todosMedicos, scope);
 
       if (hasDoctorScope(scope) && medicosDentroDoEscopo.length === 0) {
+        // [E4] Diferenciar: scope.doctorIds aponta pra UUIDs que NÃO EXISTEM
+        // no banco (config errada do canal) vs. canal genuinamente sem permissão.
+        // Quando IDs existem mas estão inativos/de outro tenant: ainda é "escopo".
+        // Quando IDs nem existem: é erro de configuração — mensagem mais útil.
+        const idsScopeRecebidos = scope.doctorIds || [];
+        const todosIds = (todosMedicos as Array<{ id: string }>).map((m) => m.id);
+        const idsInexistentes = idsScopeRecebidos.filter((id) => !todosIds.includes(id));
+        const escopoTotalmenteInvalido = idsInexistentes.length === idsScopeRecebidos.length && idsScopeRecebidos.length > 0;
+
+        if (escopoTotalmenteInvalido) {
+          return businessErrorResponse({
+            codigo_erro: 'MEDICO_NAO_ENCONTRADO_NO_ESCOPO',
+            mensagem_usuario: `❌ Os médicos autorizados para este canal não foram encontrados no sistema.\n\n📞 Por favor, entre em contato com a clínica para revisar a configuração.`,
+            detalhes: {
+              doctor_scope_ids:        idsScopeRecebidos,
+              doctor_scope_ids_invalidos: idsInexistentes,
+              hint:                    'O canal foi configurado com allowed_doctor_ids que não correspondem a nenhum médico cadastrado neste cliente.',
+            },
+          });
+        }
+
         return businessErrorResponse({
           codigo_erro: 'ESCOPO_SEM_MEDICOS',
           mensagem_usuario: `❌ Este canal não possui médicos autorizados para consulta de disponibilidade.\n\nEscopo atual: ${getDoctorScopeSummary(scope)}.`,
@@ -367,10 +458,144 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         .replace(/[_\s-]+/g, '') // Remove underscores, espaços e hífens
         .trim();
     
-    const atendimentoNormalizado = normalizarParaMatch(atendimento_nome);
-    
+    let atendimentoNormalizado = normalizarParaMatch(atendimento_nome);
+
+    // 🎯 [F1.3.1] Resolver "casos de uso" (aliases inteligentes da config).
+    // Permite que termos como "Pré-operatório", "Checkup", "Parecer cardiológico"
+    // sejam mapeados para o serviço real (ex.: "Consulta Cardiológica") + uma
+    // mensagem de orientação clínica que viaja com a resposta.
+    // Multi-tenant: cada clínica define seus casos de uso em business_rules.config.casos_de_uso.
+    const casosDeUso = (regras?.casos_de_uso ?? {}) as Record<string, any>;
+    let casoDeUsoMatch: { nome: string; conf: any } | null = null;
+    for (const [nomeUso, conf] of Object.entries(casosDeUso)) {
+      const aliasesPossiveis = [nomeUso, ...((conf as any)?.aliases ?? [])];
+      if (aliasesPossiveis.some((a: string) => normalizarParaMatch(a) === atendimentoNormalizado)) {
+        casoDeUsoMatch = { nome: nomeUso, conf };
+        break;
+      }
+    }
+    if (casoDeUsoMatch) {
+      const principal = casoDeUsoMatch.conf?.atendimento_principal;
+      if (principal) {
+        console.log(`🎯 [CASO_DE_USO] "${atendimento_nome}" → "${principal}" (caso: "${casoDeUsoMatch.nome}")`);
+        atendimento_nome = principal;
+        atendimentoNormalizado = normalizarParaMatch(principal);
+      }
+    }
+
+    // Helper local: adiciona campo `caso_de_uso` à resposta quando o request
+    // foi resolvido via alias. Mantém compatibilidade — sem caso de uso, é
+    // exatamente igual ao successResponse padrão.
+    // [F3.2] Também injeta `data_solicitada_bloqueada` quando o paciente
+    // pediu uma data que está em bloqueios_agenda — para que a IA possa
+    // explicar o motivo e oferecer alternativas no mesmo payload.
+    let dataSolicitadaBloqueada: { data: string; motivo: string } | null = null;
+
+    // [F3.4] / [F3.4.4] Quando a data pedida cai num dia da semana que o serviço
+    // NÃO atende (ex.: paciente pede Consulta numa sexta — dias_especificos
+    // só [1,2,4]), API explicava silenciosamente "sem vagas". Agora injeta
+    // contexto pra LLM responder com motivo claro e oferecer alternativas.
+    // F3.4.4: também dispara quando a mensagem cita dia da semana sem
+    // `data_consulta` (paciente diz "tem na sexta?" — diaPreferido=5).
+    let dataSolicitadaInvalida: {
+      data: string | null;  // null quando inferido só de mensagem (sem data específica)
+      dia_semana: string;
+      periodo?: string;
+      dias_atendidos: string[];
+      motivo: string;
+      observacao?: string;  // opcional: do servico.observacao_dia_invalido (config-driven)
+    } | null = null;
+
+    const successAvailability = (data: Record<string, unknown>) => {
+      const extras: Record<string, unknown> = {};
+      if (casoDeUsoMatch?.conf?.mensagem_orientacao || casoDeUsoMatch?.conf?.atendimento_principal) {
+        extras.caso_de_uso = {
+          identificado:           casoDeUsoMatch.nome,
+          atendimento_solicitado: (data as any)?.contexto?.servico ?? null,
+          atendimento_principal:  casoDeUsoMatch.conf.atendimento_principal ?? null,
+          atendimentos_inclusos:  casoDeUsoMatch.conf.atendimentos_inclusos ?? [],
+          mensagem_orientacao:    casoDeUsoMatch.conf.mensagem_orientacao ?? null,
+        };
+      }
+      if (dataSolicitadaBloqueada) {
+        extras.data_solicitada_bloqueada = {
+          data:     dataSolicitadaBloqueada.data,
+          motivo:   dataSolicitadaBloqueada.motivo,
+          mensagem: `A agenda do(a) ${medico?.nome ?? 'médico'} está bloqueada em ${dataSolicitadaBloqueada.data}: ${dataSolicitadaBloqueada.motivo}. Veja as próximas datas disponíveis abaixo.`,
+        };
+      }
+      if (dataSolicitadaInvalida) {
+        // [F3.4 + observacao] Anexa observacao_dia_invalido (config-driven)
+        // ao texto final pra LLM/n8n incluir contexto extra (ex.: "atende
+        // sexta-tarde só particular"). Multi-tenant safe: cada clínica define
+        // o próprio texto na config do serviço.
+        const baseMsg = `${dataSolicitadaInvalida.motivo} Veja as próximas datas disponíveis abaixo.`;
+        const mensagemFinal = dataSolicitadaInvalida.observacao
+          ? `${dataSolicitadaInvalida.motivo} ${dataSolicitadaInvalida.observacao} Veja as próximas datas disponíveis abaixo.`
+          : baseMsg;
+
+        extras.data_solicitada_invalida = {
+          data:           dataSolicitadaInvalida.data,           // null quando vem só de mensagem
+          dia_semana:     dataSolicitadaInvalida.dia_semana,
+          periodo:        dataSolicitadaInvalida.periodo ?? null,
+          dias_atendidos: dataSolicitadaInvalida.dias_atendidos,
+          motivo:         dataSolicitadaInvalida.motivo,
+          observacao:     dataSolicitadaInvalida.observacao ?? null,
+          mensagem:       mensagemFinal,
+        };
+      }
+      return successResponse({ ...data, ...extras });
+    };
+
+    // [F3.2] Capturar bloqueio da DATA SOLICITADA (se paciente forneceu uma).
+    // Verificação cross-atendimento (família real+virtuais via scope.doctorIds).
+    // Esta info será incluída na resposta junto com proximas_datas[] —
+    // permite que o caller (LLM/n8n) explique o motivo e ofereça alternativas
+    // numa única chamada.
+    // [F3.3] Verificar APENAS data explicitamente enviada pelo paciente no body.
+    // Antes o fallback para `data_consulta` (var interna, ajustada para hoje/amanhã
+    // quando o paciente não enviou) gerava falso positivo: se hoje estivesse
+    // bloqueado em algum medico_id da família, F3.2 dizia "data solicitada bloqueada"
+    // mesmo o paciente não tendo pedido data alguma.
+    const dataSolicitadaOriginal = (typeof body?.data_consulta === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.data_consulta))
+      ? body.data_consulta
+      : null;
+
+    if (dataSolicitadaOriginal) {
+      const idsParaCheck = scope.doctorIds.length > 0 ? scope.doctorIds : (medico?.id ? [medico.id] : []);
+      if (idsParaCheck.length > 0) {
+        const { data: bRow } = await supabase
+          .from('bloqueios_agenda')
+          .select('motivo, data_inicio, data_fim')
+          .eq('cliente_id', clienteId)
+          .in('medico_id', idsParaCheck)
+          .eq('status', 'ativo')
+          .lte('data_inicio', dataSolicitadaOriginal)
+          .gte('data_fim', dataSolicitadaOriginal)
+          .order('data_inicio', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (bRow?.motivo) {
+          dataSolicitadaBloqueada = {
+            data:   dataSolicitadaOriginal,
+            motivo: bRow.motivo as string,
+          };
+          console.log(`⛔ [F3.2] Data solicitada ${dataSolicitadaOriginal} está bloqueada: "${dataSolicitadaBloqueada.motivo}" — alternativas serão oferecidas`);
+        }
+      }
+    }
+
     // 🔍 MATCHING MELHORADO: Priorizar match exato antes de parcial
     const servicosKeys = Object.keys(regras?.servicos || {});
+
+    // [E3] Lista pública de serviços (filtrando os marcados como `oculto: true`).
+    // Usada nas mensagens de erro quando paciente pede serviço inexistente —
+    // não devemos expor agendas internas (ex.: "Agenda Particular Sexta Tarde"
+    // que não é solicitada por nome pelo paciente, é roteamento interno).
+    const servicosPublicos = servicosKeys.filter((k) => {
+      const s = regras?.servicos?.[k];
+      return !(s?.oculto === true);
+    });
     
     // 1. Primeiro tentar match exato
     let servicoKey = servicosKeys.find(s => {
@@ -407,19 +632,37 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
       }
     }
     let servico = servicoKey ? normalizarServicoPeriodos(regras.servicos[servicoKey]) : null;
-    
-    // 🔄 FALLBACK: Se serviço não encontrado e médico é ordem_chegada, usar períodos de qualquer serviço configurado
-    if (!servico && regras?.tipo_agendamento === 'ordem_chegada' && regras?.servicos) {
+
+    // 🚫 [F1.3] Erro acionável quando atendimento_nome foi explicitamente fornecido
+    //          mas não casou com nenhum serviço configurado.
+    // Why: o fallback antigo escolhia "primeiro serviço com períodos", o que
+    // fazia 'Pré-operatório' virar MRPA silenciosamente — paciente recebia
+    // datas de outro serviço sem perceber. Erro estruturado com lista de
+    // serviços permite ao caller (LLM/n8n) reagir corretamente.
+    if (!servico && atendimento_nome) {
+      console.warn(`⚠️ [F1.3] Serviço "${atendimento_nome}" não encontrado para ${medico.nome}. Disponíveis: ${servicosPublicos.join(', ')}`);
+      return businessErrorResponse({
+        codigo_erro:      'SERVICO_NAO_ENCONTRADO',
+        mensagem_usuario: `Não encontrei o serviço "${atendimento_nome}" para ${medico.nome}. Os serviços disponíveis são: ${servicosPublicos.join(', ')}.`,
+        detalhes: {
+          atendimento_solicitado: atendimento_nome,
+          medico:                 medico.nome,
+          medico_id:              medico.id,
+          servicos_disponiveis:   servicosPublicos,
+        },
+      });
+    }
+
+    // 🔄 Fallback legado: apenas quando atendimento_nome ausente (chamada genérica)
+    if (!servico && !atendimento_nome && regras?.tipo_agendamento === 'ordem_chegada' && regras?.servicos) {
       const primeiroServicoComPeriodos = Object.values(regras.servicos)
         .find((s: any) => s?.periodos && Object.keys(s.periodos).length > 0);
-      
+
       if (primeiroServicoComPeriodos) {
         servico = normalizarServicoPeriodos(primeiroServicoComPeriodos as any);
-        console.log(`🔄 [FALLBACK] Serviço "${atendimento_nome}" não encontrado. Usando períodos de outro serviço configurado para ordem de chegada.`);
+        console.log(`🔄 [FALLBACK_SEM_NOME] atendimento_nome ausente. Usando primeiro serviço configurado.`);
       }
     }
-    
-    // Não retornar erro ainda - busca melhorada será feita depois se necessário
     
     const tipoAtendimento = servico?.tipo || regras?.tipo_agendamento || 'ordem_chegada';
     console.log(`📋 [${medico.nome}] Tipo: ${tipoAtendimento} | Serviço: ${servicoKey || 'não encontrado ainda'} (busca: "${atendimento_nome}")`);
@@ -429,7 +672,17 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
     
     // 🧠 ANÁLISE DE CONTEXTO: Usar mensagem original para inferir intenção
     let isPerguntaAberta = false;
-    let periodoPreferido: 'manha' | 'tarde' | null = null;
+    // [F7] Honrar `body.periodo` quando enviado explicitamente pelo caller
+    // (n8n manda esse campo direto). Antes, periodoPreferido só vinha da
+    // mensagem_original — pedidos com `periodo: "manha"` sem menção textual
+    // ao período eram ignorados, retornando turnos de tarde também.
+    const periodoBody = (() => {
+      const p = (body?.periodo ?? '').toString().trim().toLowerCase();
+      if (p === 'manha' || p === 'manhã') return 'manha';
+      if (p === 'tarde') return 'tarde';
+      return null;
+    })();
+    let periodoPreferido: 'manha' | 'tarde' | null = periodoBody;
     let diaPreferido: number | null = null; // 1=seg, 2=ter, 3=qua, 4=qui, 5=sex
     
     // 🆕 CONTEXTO PARA DATA INVÁLIDA (usado quando dia da semana não é permitido)
@@ -470,23 +723,8 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         console.log('☀️ Paciente solicitou especificamente período da MANHÃ');
       }
       
-      // 🆕 DETECTAR DIA DA SEMANA PREFERIDO
-      const diasMap: Record<string, number> = {
-        'segunda': 1, 'seg': 1, 'segunda-feira': 1, 'segundafeira': 1,
-        'terça': 2, 'terca': 2, 'ter': 2, 'terça-feira': 2, 'tercafeira': 2,
-        'quarta': 3, 'qua': 3, 'quarta-feira': 3, 'quartafeira': 3,
-        'quinta': 4, 'qui': 4, 'quinta-feira': 4, 'quintafeira': 4,
-        'sexta': 5, 'sex': 5, 'sexta-feira': 5, 'sextafeira': 5
-      };
-
-      for (const [nome, numero] of Object.entries(diasMap)) {
-        if (mensagemLower.includes(nome)) {
-          diaPreferido = numero;
-          console.log(`📅 Dia da semana específico detectado: ${nome} (${numero})`);
-          break;
-        }
-      }
-
+      // 🆕 DETECTAR DIA DA SEMANA PREFERIDO (regex com fronteira de palavra — sem abreviações ambíguas)
+      diaPreferido = detectarDiaSemana(mensagem_original);
       if (diaPreferido) {
         console.log(`🗓️ Dia preferido: ${diaPreferido}. Filtrando apenas esse dia da semana.`);
       }
@@ -512,14 +750,27 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         if (mensagemLower.includes(nome)) {
           mesEspecifico = numero;
           console.log(`📆 Mês específico detectado na mensagem: ${nome} (${numero})`);
-          
-          // Se data_consulta não foi fornecida mas mês foi mencionado, construir primeira data do mês
-          if (!data_consulta) {
+
+          // [B-M fix] Se o paciente NÃO enviou data_consulta no body mas
+          // mencionou mês na mensagem, construir primeira data do mês.
+          // Antes: o check era `!data_consulta` (variável local), que JÁ
+          // tinha sido setada pra hoje no fallback da linha ~222 — então
+          // a construção nunca acontecia e "agosto" virava "01/05" silente.
+          // Agora checa o body original — fonte de verdade do que o paciente enviou.
+          if (!body?.data_consulta) {
             const anoAtual = new Date().getFullYear();
             const mesAtual = new Date().getMonth() + 1;
             const anoAlvo = parseInt(numero) < mesAtual ? anoAtual + 1 : anoAtual;
             data_consulta = `${anoAlvo}-${numero}-01`;
             console.log(`🗓️ Construída data inicial do mês: ${data_consulta}`);
+            // [B-M.1] Ampliar janela: detecção de mês acontece DEPOIS do F3
+            // (que ampliaria pra 30) — replicamos a lógica aqui pra que
+            // "em junho" sem data específica retorne 5 datas em vez de 1.
+            buscar_proximas = true;
+            if (quantidade_dias < 30) {
+              quantidade_dias = 30;
+              console.log(`🗓️ [B-M.1] Mês mencionado → ampliando quantidade_dias para 30`);
+            }
           }
           break;
         }
@@ -546,12 +797,110 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
       console.log(`🔍 Ampliando busca para ${quantidade_dias} dias devido ao período específico: ${periodoPreferido}`);
     }
     
-    // 🆕 AMPLIAR também quando houver dia específico
-    if (diaPreferido && quantidade_dias < 21) {
-      quantidade_dias = 21; // 3 semanas para garantir 3 ocorrências do dia
-      console.log(`🔍 Ampliando busca para ${quantidade_dias} dias devido ao dia específico`);
+    // 🆕 [F8] AMPLIAR janela quando houver dia específico
+    // 21 dias = 3 ocorrências do dia. Em clínica popular com 2/3 lotadas
+    // sobra 1 — paciente vê opção única e desiste. 90 dias = ~13 ocorrências,
+    // dá folga pra encontrar 5 com vaga sem matar perf (early-stop em 5 datas).
+    if (diaPreferido && quantidade_dias < 90) {
+      quantidade_dias = 90;
+      console.log(`🔍 [F8] Ampliando busca para ${quantidade_dias} dias devido ao dia específico (${diaPreferido})`);
     }
-    
+
+    // [F3.4] Validar dia da semana da data solicitada vs config do serviço.
+    // Dispara em dois cenários:
+    //   - F3.4 (data): paciente envia `data_consulta` que cai em dia inválido.
+    //   - F3.4.4 (mensagem): paciente cita dia da semana ("tem na sexta?")
+    //     e esse dia não é atendido pelo serviço — sem `data_consulta`.
+    // Em ambos, capturamos motivo + dias atendidos, soltamos `diaPreferido`
+    // (pra busca não filtrar só o dia inválido) e ampliamos janela.
+    //
+    // [F3.4.1] Não dispara se a data foi ajustada (passado → hoje), pois isso
+    // gera falso positivo (D8: 2024-01-15 → 2026-05-01 sexta).
+    {
+      const diasNomesLong = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
+      const userProvidedData = typeof body?.data_consulta === 'string' && body.data_consulta.trim().length > 0;
+      const dataAjustada = userProvidedData && data_consulta_original !== data_consulta;
+      const dataSolicitadaIsoF34 = (
+        userProvidedData
+        && !dataAjustada
+        && typeof data_consulta === 'string'
+        && /^\d{4}-\d{2}-\d{2}$/.test(data_consulta)
+      ) ? data_consulta : null;
+
+      // Resolver weekday a validar: 1) data_consulta válida; 2) diaPreferido (mensagem)
+      let weekdaySolicitada: number | null = null;
+      let dataIsoF34: string | null = null;
+      let sourceF34: 'data_consulta' | 'dia_preferido' | null = null;
+
+      if (dataSolicitadaIsoF34) {
+        weekdaySolicitada = new Date(dataSolicitadaIsoF34 + 'T00:00:00').getDay();
+        dataIsoF34 = dataSolicitadaIsoF34;
+        sourceF34 = 'data_consulta';
+      } else if (typeof diaPreferido === 'number' && diaPreferido >= 0 && diaPreferido <= 6) {
+        // [F3.4.4] mensagem cita "sexta" / "segunda" sem data. Validar mesmo assim.
+        weekdaySolicitada = diaPreferido;
+        sourceF34 = 'dia_preferido';
+      }
+
+      if (weekdaySolicitada !== null && servico) {
+        const diasManha: number[] | undefined = servico?.periodos?.manha?.dias_especificos;
+        const diasTarde: number[] | undefined = servico?.periodos?.tarde?.dias_especificos;
+        const diasSemanaTop: number[] | undefined = (servico as any)?.dias_semana;
+
+        let invalido: { dias: number[]; periodoLabel?: string } | null = null;
+
+        if (Array.isArray(diasSemanaTop) && diasSemanaTop.length > 0 && !diasSemanaTop.includes(weekdaySolicitada)) {
+          invalido = { dias: diasSemanaTop };
+        } else if (periodoPreferido === 'manha' && Array.isArray(diasManha) && !diasManha.includes(weekdaySolicitada)) {
+          invalido = { dias: diasManha, periodoLabel: 'manhã' };
+        } else if (periodoPreferido === 'tarde' && Array.isArray(diasTarde) && !diasTarde.includes(weekdaySolicitada)) {
+          invalido = { dias: diasTarde, periodoLabel: 'tarde' };
+        } else if (!periodoPreferido) {
+          const todos = [
+            ...(Array.isArray(diasManha) ? diasManha : []),
+            ...(Array.isArray(diasTarde) ? diasTarde : []),
+          ];
+          if (todos.length > 0 && !todos.includes(weekdaySolicitada)) {
+            invalido = { dias: Array.from(new Set(todos)) };
+          }
+        }
+
+        if (invalido) {
+          const diasOrdenados = Array.from(new Set(invalido.dias)).sort((a, b) => a - b);
+          const diasAtendidosNomes = diasOrdenados.map((d) => diasNomesLong[d]);
+          const diaSolicitadoNome = diasNomesLong[weekdaySolicitada];
+          const motivo = `${atendimento_nome ?? servicoKey}${invalido.periodoLabel ? ` (${invalido.periodoLabel})` : ''} não atende ${diaSolicitadoNome}. Dias atendidos: ${diasAtendidosNomes.join(', ')}.`;
+          // [F3.4 + observacao] Lê texto opcional config-driven que clínica define
+          // pra explicar alternativas no dia inválido (ex.: agenda particular).
+          const observacaoConfig = typeof (servico as any)?.observacao_dia_invalido === 'string'
+            && (servico as any).observacao_dia_invalido.trim().length > 0
+            ? (servico as any).observacao_dia_invalido.trim()
+            : undefined;
+
+          dataSolicitadaInvalida = {
+            data:           dataIsoF34,    // null quando source=dia_preferido
+            dia_semana:     diaSolicitadoNome,
+            periodo:        invalido.periodoLabel,
+            dias_atendidos: diasAtendidosNomes,
+            motivo,
+            observacao:     observacaoConfig,
+          };
+          console.log(`⛔ [F3.4${sourceF34 === 'dia_preferido' ? '.4' : ''}] ${motivo}${observacaoConfig ? ` | obs: ${observacaoConfig}` : ''}`);
+
+          // Soltar filtro de diaPreferido (apontava pra dia inválido — manter
+          // retornaria 0 datas)
+          if (diaPreferido === weekdaySolicitada) {
+            console.log(`   ↪ removendo diaPreferido=${diaPreferido} pra permitir busca em dias válidos`);
+            diaPreferido = null;
+          }
+          // Janela ampla (100 dias) — serviços costumam atender 2-3 dias da
+          // semana e período pedido pode estar lotado próximo. 30 dias
+          // frequentemente devolveria poucas alternativas.
+          if (quantidade_dias < 100) quantidade_dias = 100;
+        }
+      }
+    }
+
     // 🆕 BUSCAR PRÓXIMAS DATAS DISPONÍVEIS (quando buscar_proximas = true ou sem data específica)
     if (buscar_proximas || (!data_consulta && mensagem_original)) {
       console.log(`🔍 Buscando próximas ${quantidade_dias} datas disponíveis...`);
@@ -567,6 +916,8 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           vagas_disponiveis: number;
           limite_total: number;
           tipo: string;
+          hora?: string;
+          chegar?: string;
         }>;
       }> = [];
       
@@ -586,10 +937,178 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
       // 🎫 LÓGICA PARA ORDEM DE CHEGADA (todos os médicos)
       console.log('🎫 Buscando períodos disponíveis (ordem de chegada)...');
 
+      // ── fixed_time path (MAPA 24H): slots horários fixos por dia da semana ─
+      const rawServico = servicoKey ? regras?.servicos?.[servicoKey] : null;
+      const isFixedTime = rawServico?.tipo === 'fixed_time';
+
+      // ── [F1.2] walk_in_info_only path (ECG): apenas informa dias/horários ──
+      // Why: serviços walk-in NÃO devem retornar contagem de vagas — não há
+      // agendamento individual. Antes, o handler caía no fluxo normal e usava
+      // fallback `(config.limite || 9)` no retry loop, mostrando "9 vagas" fictício.
+      if (rawServico?.tipo === 'walk_in_info_only' && rawServico?.periodos) {
+        console.log(`🚶 [WALK_IN] "${servicoKey}" é walk_in_info_only — retornando informação sem contagem`);
+
+        const DIA_SEMANA_WI = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+        const horariosAtendimento: Array<Record<string, unknown>> = [];
+
+        for (let weekday = 1; weekday <= 5; weekday++) { // seg a sex
+          const diaInfo: Record<string, unknown> = {
+            dia_semana_num: weekday,
+            dia_semana:     DIA_SEMANA_WI[weekday],
+            manha:          null,
+            tarde:          null,
+          };
+
+          for (const [periodKey, cfg] of Object.entries(rawServico.periodos as Record<string, any>)) {
+            if (periodKey !== 'manha' && periodKey !== 'tarde') continue;
+            const c = cfg as any;
+            if (c?.ativo === false) continue;
+            const dias = c?.dias_especificos;
+            if (Array.isArray(dias) && !dias.includes(weekday)) continue;
+
+            diaInfo[periodKey] = {
+              ficha:              c?.distribuicao_fichas ?? (c?.inicio && c?.fim ? `${c.inicio} às ${c.fim}` : null),
+              atendimento_inicio: c?.atendimento_inicio ?? null,
+            };
+          }
+
+          if (diaInfo.manha || diaInfo.tarde) horariosAtendimento.push(diaInfo);
+        }
+
+        return successAvailability({
+          success:               true,
+          tipo_atendimento:      'walk_in_info_only',
+          message:               `${servicoKey} não requer agendamento. Venha por ordem de chegada nos dias e horários abaixo.`,
+          medico:                medico.nome,
+          medico_id:             medico.id,
+          atendimento_nome:      servicoKey,
+          horarios_atendimento:  horariosAtendimento,
+          observacao:            (rawServico as any)?.observacao ?? null,
+          permite_particular_sem_pedido_medico: (rawServico as any)?.permite_particular_sem_pedido_medico
+                                            ?? (rawServico as any)?.ecg_particular_sem_guia
+                                            ?? null,
+          contexto: {
+            medico_id:   medico.id,
+            medico_nome: medico.nome,
+            servico:     servicoKey,
+          },
+        });
+      }
+
+      if (isFixedTime && rawServico?.periodos) {
+        const DIAS_KEY: Record<number, string> = { 1: 'segunda', 2: 'terca', 3: 'quarta', 4: 'quinta', 5: 'sexta' };
+        const DIA_SEMANA_FT = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+        const datasNecessarias = 5;
+
+        // [F1.4] Para fixed_time (ex.: MAPA com 3 slots/dia útil), 7 dias é
+        // janela curta — frequentemente todas as vagas próximas estão lotadas.
+        // Ampliamos para 100 dias mantendo o early-stop em datasNecessarias,
+        // então não há custo extra quando o serviço tem disponibilidade próxima.
+        const limiteDiasFT = Math.max(quantidade_dias, 100);
+
+        // [F2] Carregar datas bloqueadas no range UMA vez (1 query) e usar Set
+        // para lookup O(1) no loop. Antes desta verificação, fixed_time não
+        // respeitava bloqueios_agenda — ofereci datas em feriados (ex.: 30/04).
+        const dataInicialFT = dataInicial;
+        const dataFimFT     = (() => {
+          const d = new Date(dataInicialFT + 'T00:00:00');
+          d.setDate(d.getDate() + limiteDiasFT);
+          return d.toISOString().split('T')[0];
+        })();
+        // [F2.2] Passa scope.doctorIds (família real+virtuais expandida pela F1.1).
+        // Bloqueio em qualquer medico_id da família bloqueia TODOS os atendimentos.
+        const datasBloqueadasFT = await carregarDatasBloqueadas(
+          supabase, clienteId, scope.doctorIds.length > 0 ? scope.doctorIds : medico.id, dataInicialFT, dataFimFT
+        );
+
+        for (let d = 0; d <= limiteDiasFT && proximasDatas.length < datasNecessarias; d++) {
+          const dataCheck = new Date(dataInicial + 'T00:00:00');
+          dataCheck.setDate(dataCheck.getDate() + d);
+          const dataCheckStr = dataCheck.toISOString().split('T')[0];
+          const diaSemanaNum = dataCheck.getDay();
+
+          if (diaPreferido && diaSemanaNum !== diaPreferido) continue;
+
+          // [F2] Pular datas bloqueadas (feriados, férias, etc.)
+          if (datasBloqueadasFT.has(dataCheckStr)) {
+            console.log(`⏭️ [FIXED_TIME] Pulando ${dataCheckStr} (bloqueada em bloqueios_agenda)`);
+            continue;
+          }
+
+          const chave = DIAS_KEY[diaSemanaNum];
+          const periodoFT = chave ? (rawServico.periodos as any)[chave] : null;
+          if (!periodoFT || periodoFT.ativo === false) continue;
+
+          // [F1.4] Bug 1 do fixed_time: a comparação exata `hora_agendamento = '08:00:00'`
+          // ignorava agendamentos lançados em placeholders cronológicos (07:00, 07:01, …).
+          // No banco do Dr. Marcelo: 41 de 42 agendamentos MAPA não casavam com a hora
+          // fixa, gerando "3 vagas livres" mesmo com o dia lotado.
+          // Solução: para fixed_time, contar todos os agendamentos do médico no dia
+          // (medico_id virtual já é exclusivo daquele serviço — "MAPA - Dr. Marcelo"),
+          // sem comparar hora_agendamento.
+          const { data: ocupados } = await supabase
+            .from('agendamentos')
+            .select('id')
+            .eq('medico_id', medico.id)
+            .eq('data_agendamento', dataCheckStr)
+            .eq('cliente_id', clienteId)
+            .is('cancelado_em', null)
+            .is('excluido_em', null)
+            .in('status', ['agendado', 'confirmado']);
+
+          const limite = periodoFT.limite ?? 3;
+          const vagas = limite - (ocupados?.length ?? 0);
+          if (vagas <= 0) continue;
+
+          proximasDatas.push({
+            data: dataCheckStr,
+            dia_semana: DIA_SEMANA_FT[diaSemanaNum],
+            periodos: [{
+              periodo: atendimento_nome || 'MAPA 24H',
+              horario_distribuicao: `às ${periodoFT.hora}`,
+              vagas_disponiveis: vagas,
+              limite_total: limite,
+              tipo: 'fixed_time',
+              hora: periodoFT.hora,
+              chegar: periodoFT.chegar,
+            }],
+          });
+        }
+
+        console.log(`📊 [FIXED_TIME] ${proximasDatas.length} datas encontradas`);
+
+        if (proximasDatas.length === 0) {
+          return successAvailability({
+            success: false,
+            sem_vagas: true,
+            message: `Não há vagas disponíveis para ${atendimento_nome} nos próximos ${quantidade_dias} dias. Entre em contato com a clínica.`,
+            medico: medico.nome,
+          });
+        }
+
+        return successAvailability({
+          success: true,
+          proximas_datas: proximasDatas,
+          medico: medico.nome,
+          message: `Vagas disponíveis para ${atendimento_nome}`,
+        });
+      }
+
       const hasSharedLimits = !!(servicoKey && servico && (servico.compartilha_limite_com || servico.limite_proprio));
 
       if (hasSharedLimits) {
         // 🔒 Rota especial: serviços com limites compartilhados/sublimites (bypass use case)
+        // [F2] Carregar bloqueios uma vez antes do loop (lookup O(1) via Set)
+        const dataFimSL = (() => {
+          const d = new Date(dataInicial + 'T00:00:00');
+          d.setDate(d.getDate() + quantidade_dias);
+          return d.toISOString().split('T')[0];
+        })();
+        // [F2.2] Bloqueios em QUALQUER medico_id relacionado bloqueiam o atendimento
+        const datasBloqueadasSL = await carregarDatasBloqueadas(
+          supabase, clienteId, scope.doctorIds.length > 0 ? scope.doctorIds : medico.id, dataInicial, dataFimSL
+        );
+
         for (let diasAdiantados = 0; diasAdiantados <= quantidade_dias; diasAdiantados++) {
           const dataCheck = new Date(dataInicial + 'T00:00:00');
           dataCheck.setDate(dataCheck.getDate() + diasAdiantados);
@@ -604,6 +1123,12 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
 
           // Verificar se dia permitido pelo serviço
           if (servico?.dias_semana && !servico.dias_semana.includes(diaSemanaNum)) continue;
+
+          // [F2] Pular datas bloqueadas (feriados, férias, etc.)
+          if (datasBloqueadasSL.has(dataCheckStr)) {
+            console.log(`⏭️ [SHARED_LIMITS] Pulando ${dataCheckStr} (bloqueada em bloqueios_agenda)`);
+            continue;
+          }
 
           // Calcular vagas com limites compartilhados/sublimites
           const vagasComLimites = await calcularVagasDisponiveisComLimites(
@@ -621,25 +1146,50 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
             continue;
           }
 
+          // Determina periodos aplicáveis para este dia da semana
+          const PERIODO_LABEL_SH: Record<string, string> = { manha: 'Manhã', tarde: 'Tarde' };
+          const periodosParaData: Array<{ periodo: string; horario_distribuicao: string; vagas_disponiveis: number; limite_total: number; tipo: string }> = [];
+          for (const [pk, pc] of Object.entries((servico as any)?.periodos ?? {})) {
+            if (pk !== 'manha' && pk !== 'tarde') continue;
+            const cfg: any = pc;
+            if (!isPeriodoPermitidoNoDia(cfg, diaSemanaNum)) continue;
+            if (periodoPreferido && pk !== periodoPreferido) continue;
+            const janela = cfg.distribuicao_fichas
+              ?? (cfg.inicio && cfg.fim ? `${cfg.inicio} às ${cfg.fim}` : null)
+              ?? '07:00 às 12:00';
+            periodosParaData.push({
+              periodo: PERIODO_LABEL_SH[pk] ?? pk,
+              horario_distribuicao: janela,
+              vagas_disponiveis: vagasComLimites,
+              limite_total: cfg.limite ?? (servico as any).limite_proprio ?? 14,
+              tipo: (servico as any).tipo_agendamento || 'ordem_chegada',
+            });
+          }
+          if (periodosParaData.length === 0) continue;
+
           const diasSemana = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
           proximasDatas.push({
             data: dataCheckStr,
             dia_semana: diasSemana[diaSemanaNum],
-            periodos: [{
-              periodo: 'Manhã',
-              horario_distribuicao: '07:00 às 12:00',
-              vagas_disponiveis: vagasComLimites,
-              limite_total: servico.limite_proprio || 1,
-              tipo: servico.tipo_agendamento || 'hora_marcada'
-            }]
+            periodos: periodosParaData,
           });
 
-          const datasNecessarias = periodoPreferido ? 5 : 3;
+          const datasNecessarias = 5;
           if (proximasDatas.length >= datasNecessarias) break;
         }
       } else {
         // 🆕 Rota normal: usar CheckAvailabilityUseCase via ScheduleRepository
-        const { diasDisponiveis } = await new CheckAvailabilityUseCase(
+        // [F5] Resolve atendimento_ids do serviço para que countByPool/countByPeriod
+        // não conte ocupação de OUTROS serviços que dividem a mesma janela de hora.
+        // Sem isso, MRPA-tarde-Wed era marcada como lotada por causa das Consultas-tarde-Wed.
+        const atendimentoIdsServico = servicoKey && servico
+          ? await resolverAtendimentoIdsParaServico(supabase, clienteId, servicoKey, servico)
+          : [];
+        if (atendimentoIdsServico.length > 0) {
+          console.log(`🎯 [F5] Restringindo contagem ao pool "${servicoKey}": ${atendimentoIdsServico.length} atendimento_id(s)`);
+        }
+
+        const { diasDisponiveis: diasUseCase } = await new CheckAvailabilityUseCase(
           new SupabaseAppointmentRepository(supabase),
           new SupabaseScheduleRepository(
             new DynamicConfigBusinessRulesRepository(config)
@@ -653,8 +1203,35 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           diaPreferido,
           servicoKey: servicoKey ?? undefined,
           minimumDate: getMinimumBookingDate(config),
-          datasNecessarias: periodoPreferido ? 5 : 3,
+          // [F6] Over-fetch: o UseCase não conhece bloqueios_agenda; se pedirmos 5
+          // e a F2.2 family-filter remover 1, ficaríamos com 4 (D5: TE perdeu 03/06
+          // por bloqueio cross-medico do MAPA virtual). Pedindo 10 e cortando a 5
+          // depois do filtro, absorvemos até 5 bloqueios sem encolher o resultado.
+          datasNecessarias: 10,
+          atendimentoIds: atendimentoIdsServico.length > 0 ? atendimentoIdsServico : undefined,
         });
+
+        // [F2] Filtrar datas bloqueadas (CheckAvailabilityUseCase não consulta
+        // bloqueios_agenda — verificação fica neste adapter).
+        const dataFimUC = (() => {
+          const d = new Date(dataInicial + 'T00:00:00');
+          d.setDate(d.getDate() + quantidade_dias);
+          return d.toISOString().split('T')[0];
+        })();
+        // [F2.2] Mesma regra: bloqueio em qualquer medico_id relacionado bloqueia
+        const datasBloqueadasUC = await carregarDatasBloqueadas(
+          supabase, clienteId, scope.doctorIds.length > 0 ? scope.doctorIds : medico.id, dataInicial, dataFimUC
+        );
+        const diasDisponiveis = diasUseCase
+          .filter((day: any) => {
+            if (datasBloqueadasUC.has(day.date)) {
+              console.log(`⏭️ [USE_CASE] Pulando ${day.date} (bloqueada em bloqueios_agenda)`);
+              return false;
+            }
+            return true;
+          })
+          // [F6] Cortar a 5 depois do filtro de bloqueios.
+          .slice(0, 5);
 
         // Adapter mapeia domínio → formato de apresentação do canal
         const DIA_SEMANA_PT = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
@@ -670,6 +1247,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
                 ? `${ordemChegadaConfig.hora_chegada_inicio} às ${ordemChegadaConfig.hora_chegada_fim}`
                 : (servico?.periodos?.[w.periodKey]?.distribuicao_fichas ?? `${w.start} às ${w.end}`);
 
+              // 🛡️ STRICT: nunca inventar limite=1. Se UseCase devolveu este window é porque capacity é válido.
               return {
                 periodo: PERIODO_LABEL[w.periodKey] ?? w.periodKey,
                 horario_distribuicao: horarioDistribuicao,
@@ -690,75 +1268,94 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
       if (proximasDatas.length === 0 && quantidade_dias < 100) {
         console.log(`⚠️ Nenhuma data encontrada em ${quantidade_dias} dias. Ampliando busca para 100 dias...`);
         quantidade_dias = 100;
-        
-        // 🔁 REPETIR O LOOP DE BUSCA com 45 dias
+
+        // [F5.1] Resolver atendimento_ids do serviço pra contagem ficar restrita
+        // ao pool — sem isso, o retry contava bookings de OUTROS serviços que
+        // dividem a janela de hora (ex.: Consulta-07:01 ocupava slot MRPA-manhã
+        // → 4 vagas em vez de 5 em 29/05).
+        const atendimentoIdsRetry = servicoKey && servico
+          ? await resolverAtendimentoIdsParaServico(supabase, clienteId, servicoKey, servico)
+          : [];
+        if (atendimentoIdsRetry.length > 0) {
+          console.log(`🎯 [F5.1] retry: pool "${servicoKey}" = ${atendimentoIdsRetry.length} atendimento_id(s)`);
+        }
+
+        // [F5.1+F2.2] Carregar bloqueios da família (não só do médico principal)
+        // antes do loop pra lookup O(1) — antes era N queries, e usava só
+        // `medico.id` (perdia bloqueios de virtuais como MAPA virtual).
+        const dataFimRetry = (() => {
+          const d = new Date(dataInicial + 'T00:00:00');
+          d.setDate(d.getDate() + quantidade_dias);
+          return d.toISOString().split('T')[0];
+        })();
+        const datasBloqueadasRetry = await carregarDatasBloqueadas(
+          supabase, clienteId,
+          scope.doctorIds.length > 0 ? scope.doctorIds : medico.id,
+          dataInicial, dataFimRetry,
+        );
+
         for (let diasAdiantados = 0; diasAdiantados <= quantidade_dias; diasAdiantados++) {
           const dataCheck = new Date(dataInicial + 'T00:00:00');
           dataCheck.setDate(dataCheck.getDate() + diasAdiantados);
           const dataCheckStr = dataCheck.toISOString().split('T')[0];
           const diaSemanaNum = dataCheck.getDay();
-          
+
           // Pular finais de semana
           if (diaSemanaNum === 0 || diaSemanaNum === 6) continue;
-          
+
           // 🗓️ Filtrar por dia da semana preferido
-          if (diaPreferido && diaSemanaNum !== diaPreferido) {
-            continue; // Pular dias que não correspondem ao preferido
-          }
-          
-          // 🔒 Verificar bloqueios
-          const { data: bloqueiosData } = await supabase
-            .from('bloqueios_agenda')
-            .select('id')
-            .eq('medico_id', medico.id)
-            .lte('data_inicio', dataCheckStr)
-            .gte('data_fim', dataCheckStr)
-            .eq('status', 'ativo')
-            .eq('cliente_id', clienteId);
-          
-          if (bloqueiosData && bloqueiosData.length > 0) {
-            console.log(`⏭️ Pulando ${dataCheckStr} (bloqueada)`);
+          if (diaPreferido && diaSemanaNum !== diaPreferido) continue;
+
+          // 🔒 Bloqueios da família (F2.2)
+          if (datasBloqueadasRetry.has(dataCheckStr)) {
+            console.log(`⏭️ [RETRY] Pulando ${dataCheckStr} (bloqueada)`);
             continue;
           }
-          
-          // Contar agendamentos para este dia
-          const { count: totalAgendamentos } = await supabase
-            .from('agendamentos')
-            .select('*', { count: 'exact', head: true })
-            .eq('medico_id', medico.id)
-            .eq('data_agendamento', dataCheckStr)
-            .neq('status', 'cancelado')
-            .eq('cliente_id', clienteId);
-          
+
           const periodosDisponiveis = [];
-          
+
           for (const [periodo, config] of Object.entries(servico?.periodos || {})) {
             if (periodoPreferido && periodo !== periodoPreferido) continue;
-            
-            const limite = (config as any).limite || 9;
-            const { count: agendadosPeriodo } = await supabase
+
+            // Respeitar dias_especificos do período. Sem isso o retry oferecia
+            // turnos onde a clínica não atende naquele dia da semana.
+            if (!isPeriodoPermitidoNoDia(config, diaSemanaNum)) continue;
+
+            const limite     = (config as any).limite || 9;
+            // Usar contagem_* (janela de capacidade formal) sobre inicio/fim (janela de exibição)
+            const contInicio = (config as any).contagem_inicio ?? (config as any).inicio;
+            const contFim    = (config as any).contagem_fim    ?? (config as any).fim;
+
+            let queryRetry = supabase
               .from('agendamentos')
-              .select('*', { count: 'exact', head: true })
+              .select('id')
               .eq('medico_id', medico.id)
+              .eq('cliente_id', clienteId)
               .eq('data_agendamento', dataCheckStr)
-              .gte('hora_agendamento', (config as any).inicio)
-              .lt('hora_agendamento', (config as any).fim)
-              .neq('status', 'cancelado')
-              .eq('cliente_id', clienteId);
-            
-            const vagasDisponiveis = limite - (agendadosPeriodo || 0);
-            
+              .gte('hora_agendamento', contInicio)
+              .lt('hora_agendamento', contFim)
+              .is('cancelado_em', null)
+              .is('excluido_em', null)
+              .in('status', ['agendado', 'confirmado']);
+            if (atendimentoIdsRetry.length > 0) {
+              queryRetry = queryRetry.in('atendimento_id', atendimentoIdsRetry);
+            }
+            const { data: slotsOcupados } = await queryRetry;
+
+            const agendadosPeriodo = slotsOcupados?.length ?? 0;
+            const vagasDisponiveis = limite - agendadosPeriodo;
+
             if (vagasDisponiveis > 0) {
               periodosDisponiveis.push({
-                periodo: periodo.charAt(0).toUpperCase() + periodo.slice(1),
-                horario_distribuicao: (config as any).distribuicao_fichas || `${(config as any).inicio} às ${(config as any).fim}`,
-                vagas_disponiveis: vagasDisponiveis,
-                limite_total: limite,
-                tipo: tipoAtendimento
+                periodo:              periodo.charAt(0).toUpperCase() + periodo.slice(1),
+                horario_distribuicao: (config as any).distribuicao_fichas ?? `${contInicio} às ${contFim}`,
+                vagas_disponiveis:    vagasDisponiveis,
+                limite_total:         limite,
+                tipo:                 tipoAtendimento,
               });
             }
           }
-          
+
           if (periodosDisponiveis.length > 0) {
             const diasSemana = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
             proximasDatas.push({
@@ -766,12 +1363,12 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
               dia_semana: diasSemana[diaSemanaNum],
               periodos: periodosDisponiveis
             });
-            
-            const datasNecessarias = periodoPreferido ? 5 : 3;
+
+            const datasNecessarias = 5;
             if (proximasDatas.length >= datasNecessarias) break;
           }
         }
-        
+
         console.log(`📊 Após ampliação: ${proximasDatas.length} datas encontradas`);
       }
       
@@ -796,7 +1393,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         
         console.log(`❌ Nenhuma data disponível mesmo após buscar ${quantidade_dias} dias`);
         
-        return successResponse({
+        return successAvailability({
           message: mensagemSemVagas,
           medico: medico.nome,
           medico_id: medico.id,
@@ -813,7 +1410,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         });
       }
       
-      return successResponse({
+      return successAvailability({
         message: mensagemEspecial || `${proximasDatas.length} datas disponíveis encontradas`,
         medico: medico.nome,
         medico_id: medico.id,
@@ -971,7 +1568,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
       
       console.log(`📝 Mensagem servico_nao_agendavel: ${mensagemDinamica ? 'dinâmica do banco' : servico.mensagem ? 'do business_rules' : 'genérica'}`);
       
-      return successResponse({
+      return successAvailability({
         permite_online: false,
         medico: medico.nome,
         servico: servicoKey,
@@ -1126,7 +1723,8 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
                   .eq('medico_id', medico.id)
                   .eq('data_agendamento', dataFormatada)
                   .eq('cliente_id', clienteId)
-                  .is('excluido_em', null)
+                  .is('cancelado_em', null)
+            .is('excluido_em', null)
                   .in('status', ['agendado', 'confirmado']);
                 
                 const horariosOcupados = new Set(agendamentosExistentes?.map(a => a.hora_agendamento) || []);
@@ -1213,6 +1811,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
             .eq('medico_id', medico.id)
             .eq('data_agendamento', dataFormatada)
             .eq('cliente_id', clienteId)
+            .is('cancelado_em', null)
             .is('excluido_em', null)
             .in('status', ['agendado', 'confirmado']);
 
@@ -1354,7 +1953,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
       // 🆕 FLAG DE BAIXA DISPONIBILIDADE
       const baixaDisponibilidade = proximasDatas.length <= 2;
       
-      return successResponse({
+      return successAvailability({
         disponivel: true,
         tipo_agendamento: tipoAtendimento,
         medico: medico.nome,
@@ -1428,7 +2027,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         mensagem += `Por favor, entre em contato com a clínica.`;
       }
       
-      return successResponse({
+      return successAvailability({
         disponivel: false,
         bloqueada: true,
         medico: medico.nome,
@@ -1504,7 +2103,8 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
               .eq('medico_id', medico.id)
               .eq('data_agendamento', data_consulta)
               .eq('cliente_id', clienteId)
-              .is('excluido_em', null)
+              .is('cancelado_em', null)
+            .is('excluido_em', null)
               .in('status', ['agendado', 'confirmado']);
             
             const horariosOcupadosFluxo3 = new Set(agendamentosFluxo3?.map(a => a.hora_agendamento) || []);
@@ -1583,11 +2183,19 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         .eq('medico_id', medico.id)
         .eq('data_agendamento', data_consulta)
         .eq('cliente_id', clienteId)
-        .is('excluido_em', null)
+        .is('cancelado_em', null)
+            .is('excluido_em', null)
         .in('status', ['agendado', 'confirmado']);
 
       if (countError) {
         console.error('❌ Erro ao buscar agendamentos:', countError);
+        continue;
+      }
+
+      // 🛡️ STRICT: limite do período DEVE estar configurado e > 0. Sem fallback fantasma.
+      const limiteCfg = (config as any).limite;
+      if (!Number.isFinite(limiteCfg) || limiteCfg <= 0) {
+        console.warn(`⚠️ [STRICT] Período ${periodo} em ${data_consulta} ignorado: limite inválido (${limiteCfg}) para ${medico.nome}/${servicoKey}`);
         continue;
       }
 
@@ -1602,18 +2210,18 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           return periodoClassificado === periodo;
         }).length;
         
-        console.log(`📊 ${data_consulta} - Período ${periodo}: ${vagasOcupadas}/${(config as any).limite} vagas ocupadas`);
+        console.log(`📊 ${data_consulta} - Período ${periodo}: ${vagasOcupadas}/${limiteCfg} vagas ocupadas`);
         console.log(`   Horários encontrados:`, todosAgendamentosData.map(a => a.hora_agendamento).join(', '));
       }
 
-      const vagasDisponiveis = (config as any).limite - vagasOcupadas;
+      const vagasDisponiveis = limiteCfg - vagasOcupadas;
 
       periodosDisponiveis.push({
         periodo: periodo === 'manha' ? 'Manhã' : 'Tarde',
         horario_distribuicao: (config as any).distribuicao_fichas || `${(config as any).inicio} às ${(config as any).fim}`,
         vagas_ocupadas: vagasOcupadas,
         vagas_disponiveis: vagasDisponiveis,
-        total_vagas: (config as any).limite,
+        total_vagas: limiteCfg,
         disponivel: vagasDisponiveis > 0,
         hora_inicio: (config as any).inicio,
         hora_fim: (config as any).fim,
@@ -1679,7 +2287,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
       }
       
       // ✅ Retornar resposta estruturada (status 200)
-      return successResponse({
+      return successAvailability({
         disponivel: false,
         motivo: 'periodo_data_nao_disponivel',
         medico: medico.nome,
@@ -1737,7 +2345,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           mensagem += `Por favor, entre em contato com a clínica.`;
         }
         
-        return successResponse({
+        return successAvailability({
           disponivel: false,
           tipo_agendamento: TIPO_ORDEM_CHEGADA,
           medico: medico.nome,
@@ -1758,7 +2366,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         ).join('\n\n') +
         '\n\n⚠️ ORDEM DE CHEGADA: Não há horário marcado. Paciente deve chegar no período para pegar ficha.';
       
-      return successResponse({
+      return successAvailability({
         disponivel: true,
         tipo_agendamento: TIPO_ORDEM_CHEGADA,
         medico: medico.nome,
@@ -1812,6 +2420,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
             .eq('data_agendamento', data_consulta)
             .eq('hora_agendamento', horarioFormatado)
             .eq('cliente_id', clienteId)
+            .is('cancelado_em', null)
             .is('excluido_em', null)
             .in('status', ['agendado', 'confirmado']);
           
@@ -1856,7 +2465,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           mensagem += `Por favor, entre em contato com a clínica.`;
         }
         
-        return successResponse({
+        return successAvailability({
           disponivel: false,
           tipo_agendamento: TIPO_ESTIMATIVA_HORARIO,
           medico: medico.nome,
@@ -1878,7 +2487,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         (horariosEstimados.length > 10 ? `\n... e mais ${horariosEstimados.length - 10} horário(s)` : '') +
         `\n\n⏰ ${mensagemEstimativa}`;
       
-      return successResponse({
+      return successAvailability({
         disponivel: horariosEstimados.length > 0,
         tipo_agendamento: TIPO_ESTIMATIVA_HORARIO,
         medico: medico.nome,
@@ -1931,6 +2540,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
             .eq('data_agendamento', data_consulta)
             .eq('hora_agendamento', horarioFormatado)
             .eq('cliente_id', clienteId)
+            .is('cancelado_em', null)
             .is('excluido_em', null)
             .in('status', ['agendado', 'confirmado']);
           
@@ -1973,7 +2583,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           mensagem += `Por favor, entre em contato com a clínica.`;
         }
         
-        return successResponse({
+        return successAvailability({
           disponivel: false,
           tipo_agendamento: 'hora_marcada',
           medico: medico.nome,
@@ -1992,7 +2602,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         `${horariosDisponiveis.length} horários disponíveis:\n` +
         horariosDisponiveis.map(h => `• ${h.hora}`).join('\n');
       
-      return successResponse({
+      return successAvailability({
         disponivel: horariosDisponiveis.length > 0,
         tipo_agendamento: 'hora_marcada',
         medico: medico.nome,

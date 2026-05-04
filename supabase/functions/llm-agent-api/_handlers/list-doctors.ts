@@ -4,7 +4,7 @@ import { getRequestScope, filterDoctorsByScope } from '../_lib/scope.ts'
 
 export async function handleListDoctors(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
-    const scope = getRequestScope(body);
+    const scope = getRequestScope(body, config);
     console.log('📥 [LIST-DOCTORS] Buscando médicos para cliente:', clienteId);
 
     let query = supabase

@@ -17,6 +17,13 @@ export interface CheckAvailabilityInput {
   minimumDate?: string;
   /** Quantas datas com vaga são suficientes. Default: 3 (ou 5 se periodoPreferido) */
   datasNecessarias?: number;
+  /**
+   * Restringe a contagem de ocupação aos atendimento_ids deste serviço/pool.
+   * Sem isso, capacity_window vê todas as bookings do médico no intervalo de hora —
+   * Consulta-tarde lota a janela MRPA-tarde mesmo sendo serviços distintos.
+   * Vazio/undefined = sem restrição (compat).
+   */
+  atendimentoIds?: string[];
 }
 
 export interface CheckAvailabilityOutput {
@@ -35,6 +42,7 @@ export class CheckAvailabilityUseCase {
     const {
       medicoId, clienteId, dataInicio, quantidadeDias,
       periodoPreferido, diaPreferido, servicoKey, minimumDate,
+      atendimentoIds,
     } = input;
 
     const datasNecessarias = input.datasNecessarias ?? (periodoPreferido ? 5 : 3);
@@ -93,6 +101,7 @@ export class CheckAvailabilityUseCase {
               start: config.inicio,
               end: config.fim,
               minimumDate,
+              atendimentoIds,
             })
           : await this.repo.countByPool({
               medicoId, clienteId,
@@ -100,9 +109,17 @@ export class CheckAvailabilityUseCase {
               poolStart: config.inicio,
               poolEnd: config.fim,
               minimumDate,
+              atendimentoIds,
             });
 
-        const available = config.limite - occupied;
+        // 🛡️ STRICT: capacidade DEVE vir definida e > 0. Sem fallback fantasma.
+        // Se a config não tem limite, este período NÃO é ofertado (em vez de inventar 1 vaga).
+        if (!Number.isFinite(config.limite as number) || (config.limite as number) <= 0) {
+          console.warn(`[CheckAvailability] Período ${periodKey} em ${dateStr} ignorado: limite inválido (${config.limite}) para medico=${medicoId}`);
+          continue;
+        }
+        const capacity = config.limite as number;
+        const available = Math.max(0, capacity - (occupied ?? 0));
         if (available <= 0) continue;
 
         windows.push({
@@ -110,7 +127,7 @@ export class CheckAvailabilityUseCase {
           start: config.inicio,
           end: config.fim,
           available,
-          capacity: config.limite,
+          capacity,
           bookingMode,
         });
       }

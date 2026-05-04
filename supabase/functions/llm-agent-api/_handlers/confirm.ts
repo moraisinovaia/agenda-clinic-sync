@@ -6,7 +6,7 @@ import { BUSINESS_RULES } from '../_lib/tipo-agendamento.ts'
 
 export async function handleConfirm(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
-    const scope = getRequestScope(body);
+    const scope = getRequestScope(body, config);
     const { agendamento_id, observacoes } = body;
 
     // Validação
@@ -14,7 +14,9 @@ export async function handleConfirm(supabase: any, body: any, clienteId: string,
       return errorResponse('Campo obrigatório: agendamento_id');
     }
 
-    // Buscar agendamento
+    // [F4.3] Buscar agendamento — filtrar soft-deletes consistentemente.
+    // status='cancelado' ainda passa porque tratamos abaixo com mensagem
+    // específica, mas excluido_em IS NOT NULL é "deletado" e não deve aparecer.
     const { data: agendamento, error: checkError } = await supabase
       .from('agendamentos')
       .select(`
@@ -31,7 +33,8 @@ export async function handleConfirm(supabase: any, body: any, clienteId: string,
       `)
       .eq('id', agendamento_id)
       .eq('cliente_id', clienteId)
-      .single();
+      .is('excluido_em', null)
+      .maybeSingle();
 
     if (checkError || !agendamento) {
       return errorResponse('Agendamento não encontrado');
@@ -85,8 +88,10 @@ export async function handleConfirm(supabase: any, body: any, clienteId: string,
       ? `${agendamento.observacoes || ''}\nConfirmado via LLM Agent: ${observacoes}`.trim()
       : `${agendamento.observacoes || ''}\nConfirmado via LLM Agent WhatsApp`.trim();
 
-    // Atualizar para confirmado
-    const { error: updateError } = await supabase
+    // [F4.4] UPDATE com guard de transição: só confirma se status='agendado'.
+    // Antes não havia guard, e dois confirms simultâneos sobrescreviam
+    // confirmado_em duas vezes. Idempotente, mas suja audit.
+    const { data: updateData, error: updateError } = await supabase
       .from('agendamentos')
       .update({
         status: 'confirmado',
@@ -96,10 +101,23 @@ export async function handleConfirm(supabase: any, body: any, clienteId: string,
         updated_at: new Date().toISOString()
       })
       .eq('id', agendamento_id)
-      .eq('cliente_id', clienteId);
+      .eq('cliente_id', clienteId)
+      .eq('status', 'agendado')
+      .is('cancelado_em', null)
+      .is('excluido_em', null)
+      .select('id');
 
     if (updateError) {
       return errorResponse(`Erro ao confirmar: ${updateError.message}`);
+    }
+    if (!updateData || updateData.length === 0) {
+      // Outro worker confirmou/cancelou nessa janela — recarregar e responder
+      return successResponse({
+        message: 'Consulta já foi confirmada anteriormente',
+        agendamento_id,
+        already_confirmed: true,
+        validado: true,
+      });
     }
 
     console.log(`✅ Agendamento ${agendamento_id} confirmado com sucesso`);

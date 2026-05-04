@@ -4,10 +4,11 @@ import { getRequestScope, isAppointmentAllowed } from '../_lib/scope.ts'
 import { getClinicPhone } from '../_lib/limites.ts'
 import { sanitizarCampoOpcional, normalizarDataNascimento, normalizarTelefone, normalizarNome } from '../_lib/normalizacao.ts'
 import { formatarConsultaComContexto } from '../_lib/tipo-agendamento.ts'
+import { maskName, maskBirthDate } from '../_lib/pii.ts'
 
 export async function handleCheckPatient(supabase: any, body: any, clienteId: string, config: DynamicConfig | null) {
   try {
-    const scope = getRequestScope(body);
+    const scope = getRequestScope(body, config);
     // Sanitizar dados de busca
     const celularRaw = sanitizarCampoOpcional(body.celular);
     const dataNascimentoNormalizada = normalizarDataNascimento(
@@ -21,11 +22,11 @@ export async function handleCheckPatient(supabase: any, body: any, clienteId: st
     const isCelularMascarado = celularRaw ? celularRaw.includes('*') : false;
     const celularNormalizado = isCelularMascarado ? null : normalizarTelefone(celularRaw);
 
-    // Log de busca
+    // Log de busca — PII mascarada
     console.log('🔍 Buscando paciente:', {
-      nome: pacienteNomeNormalizado,
-      nascimento: dataNascimentoNormalizada,
-      celular: isCelularMascarado ? `${celularRaw} (MASCARADO - IGNORADO)` : (celularNormalizado ? `${celularNormalizado.substring(0, 4)}****` : null)
+      nome:       maskName(pacienteNomeNormalizado),
+      nascimento: maskBirthDate(dataNascimentoNormalizada),
+      celular:    isCelularMascarado ? `${celularRaw} (MASCARADO - IGNORADO)` : (celularNormalizado ? `${celularNormalizado.substring(0, 4)}****` : null),
     });
 
     if (!pacienteNomeNormalizado && !dataNascimentoNormalizada && !celularNormalizado) {
@@ -104,7 +105,7 @@ export async function handleCheckPatient(supabase: any, body: any, clienteId: st
             const sufP = celP.slice(-4);
             const diff = Math.abs(parseInt(sufP) - parseInt(sufixoFornecido));
             if (diff > 5) {
-              console.log(`📱 Celular diferente mas MANTIDO por match nome+nascimento: ${sufP} vs ${sufixoFornecido} (diff=${diff}) - Paciente: ${p.nome_completo}`);
+              console.log(`📱 Celular diferente mas MANTIDO por match nome+nascimento: ${sufP} vs ${sufixoFornecido} (diff=${diff}) - Paciente: ${maskName(p.nome_completo)}`);
             }
           }
         });
