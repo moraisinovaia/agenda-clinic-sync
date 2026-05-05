@@ -6,6 +6,8 @@ import { AuthGuard } from "./components/AuthGuard";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
+import MedicoView from "./pages/MedicoView";
+import SetupSenha from "./pages/SetupSenha";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { useDynamicPageBranding } from "./hooks/useDynamicPageBranding";
 
@@ -24,6 +26,8 @@ const App = () => (
         <Routes>
           <Route path="/" element={<AuthGuard><Index /></AuthGuard>} />
           <Route path="/auth" element={<Auth />} />
+          <Route path="/setup-senha" element={<AuthGuard><SetupSenha /></AuthGuard>} />
+          <Route path="/medico" element={<AuthGuard><MedicoView /></AuthGuard>} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

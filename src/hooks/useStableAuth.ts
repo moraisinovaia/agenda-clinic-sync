@@ -14,6 +14,7 @@ export const useStableAuth = () => {
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [isClinicAdmin, setIsClinicAdmin] = useState<boolean>(false);
   const [clinicAdminClienteId, setClinicAdminClienteId] = useState<string | null>(null);
+  const [isMedico, setIsMedico] = useState<boolean>(false);
   const [rolesLoading, setRolesLoading] = useState<boolean>(true);
   
   // Cache para evitar chamadas repetidas
@@ -31,6 +32,7 @@ export const useStableAuth = () => {
         setIsAdmin(false);
         setIsClinicAdmin(false);
         setClinicAdminClienteId(null);
+        setIsMedico(false);
         setRolesLoading(false);
         return;
       }
@@ -60,11 +62,14 @@ export const useStableAuth = () => {
       setRolesLoading(true);
       
       try {
-        // ⚡ OTIMIZAÇÃO: Uma única RPC em vez de 3 separadas
-        const { data: authData, error } = await supabase.rpc('get_user_auth_data', { 
-          p_user_id: user.id 
-        });
-        
+        // ⚡ OTIMIZAÇÃO: Uma única RPC em vez de 3 separadas + has_role(medico) em paralelo
+        const [{ data: authData, error }, medicoCheck] = await Promise.all([
+          supabase.rpc('get_user_auth_data', { p_user_id: user.id }),
+          (supabase.rpc as any)('has_role', { _user_id: user.id, _role: 'medico' }),
+        ]);
+        const isApprovedMedico = medicoCheck?.data === true && profile?.status === 'aprovado';
+        setIsMedico(isApprovedMedico);
+
         if (error) {
           console.error('❌ useStableAuth: Erro na RPC get_user_auth_data:', error);
           // Fallback para método antigo
@@ -101,6 +106,7 @@ export const useStableAuth = () => {
         setIsAdmin(false);
         setIsClinicAdmin(false);
         setClinicAdminClienteId(null);
+        setIsMedico(false);
       } finally {
         setRolesLoading(false);
       }
@@ -113,16 +119,18 @@ export const useStableAuth = () => {
   const stableValues = useMemo(() => {
     return {
       userId: user?.id || null,
-      userRole: isAdmin ? 'admin' : isClinicAdmin ? 'admin_clinica' : 'user',
+      userRole: isAdmin ? 'admin' : isClinicAdmin ? 'admin_clinica' : isMedico ? 'medico' : 'user',
       userStatus: profile?.status || null,
       isAuthenticated: !!user,
       isApproved: profile?.status === 'aprovado',
+      mustChangePassword: profile?.must_change_password === true,
       isAdmin,
       isClinicAdmin,
+      isMedico,
       clinicAdminClienteId,
       loading: authLoading || rolesLoading
     };
-  }, [user?.id, isAdmin, isClinicAdmin, clinicAdminClienteId, profile?.status, authLoading, rolesLoading]);
+  }, [user?.id, isAdmin, isClinicAdmin, isMedico, clinicAdminClienteId, profile?.status, profile?.must_change_password, authLoading, rolesLoading]);
 
   return {
     ...stableValues,

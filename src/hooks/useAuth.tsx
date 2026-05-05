@@ -15,6 +15,7 @@ interface Profile {
   cliente_id?: string;
   created_at: string;
   updated_at: string;
+  must_change_password?: boolean;
 }
 
 interface AuthContextType {
