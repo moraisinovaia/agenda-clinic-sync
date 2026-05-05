@@ -10,7 +10,8 @@ dist/
 
 # Env
 .env
-.env.local
+.env.*
+!.env.example
 *.env
 
 # Logs

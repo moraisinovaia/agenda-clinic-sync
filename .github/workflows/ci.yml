@@ -34,7 +34,8 @@ jobs:
             supabase/functions/llm-agent-api/_tests/chat-unit.test.ts \
             supabase/functions/llm-agent-api/_tests/validate-config.test.ts \
             supabase/functions/llm-agent-api/_tests/validate-config-smoke.test.ts \
-            supabase/functions/llm-agent-api/_tests/schema-validation.test.ts
+            supabase/functions/llm-agent-api/_tests/schema-validation.test.ts \
+            supabase/functions/llm-agent-api/_tests/body-normalize.test.ts
 
       - name: Smoke script — syntax check
         run: bash -n supabase/functions/llm-agent-api/_tests/smoke-prod.sh

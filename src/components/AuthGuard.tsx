@@ -1,6 +1,7 @@
 import { ReactNode, useEffect, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useStableAuth } from '@/hooks/useStableAuth';
 import { Loader2, Clock, XCircle, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useDomainPartnerValidation } from '@/hooks/useDomainPartnerValidation';
@@ -12,6 +13,8 @@ interface AuthGuardProps {
 
 export function AuthGuard({ children }: AuthGuardProps) {
   const { user, session, loading, profile } = useAuth();
+  const { isMedico, mustChangePassword, loading: rolesLoading } = useStableAuth();
+  const location = useLocation();
   const [authTimeout, setAuthTimeout] = useState(false);
 
   useEffect(() => {
@@ -112,6 +115,25 @@ export function AuthGuard({ children }: AuthGuardProps) {
   // Se há usuário mas está carregando perfil, permitir acesso temporário
   if (user && !profile) {
     console.log('Usuário autenticado sem perfil carregado, permitindo acesso temporário');
+  }
+
+  // === Force-change senha no 1º login (Fase 3) ===
+  // Aguarda roles carregarem antes de decidir redirect (evita flash).
+  if (mustChangePassword && location.pathname !== '/setup-senha') {
+    return <Navigate to="/setup-senha" replace />;
+  }
+
+  // === Redirect médico pra /medico (Fase 4) ===
+  // Médico não tem o que fazer em / (dashboard de recepção). Mantém /setup-senha
+  // acessível durante a troca; depois disso, todo acesso vira /medico.
+  if (
+    !rolesLoading &&
+    isMedico &&
+    !mustChangePassword &&
+    location.pathname !== '/medico' &&
+    location.pathname !== '/setup-senha'
+  ) {
+    return <Navigate to="/medico" replace />;
   }
 
   // === CAMADA 2: Validação de domínio/parceiro ===

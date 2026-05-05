@@ -119,6 +119,17 @@ Itens que **já estão prontos** e não precisam de revisita:
 - Migrations versionadas em `supabase/migrations/` (10+ aplicadas via MCP em produção).
 - UptimeRobot health monitor.
 - Cron `cleanup_rate_limit_old` rodando a cada 10 min.
+- **Body normalization 2026-05-04** (`_lib/body-normalize.ts` + middleware no router):
+  - Schema validator rejeitava string vazia em campos opcionais (`config_id: "" → 400`).
+  - Cliente n8n (template engine) serializa valores faltantes como `""` por padrão.
+  - Solução profissional (Postel's Law / padrão Stripe): normalize `""`/`null`/`undefined` como ausência ANTES da validação. Validator continua rigoroso sobre valores presentes (UUID malformado, enum errado, datas inválidas continuam 400).
+  - Coberto por 15 testes em `_tests/body-normalize.test.ts`.
+
+- **Bug fix 2026-05-04** (migration `20260504142147_grant_service_role_permissions`):
+  - Tabelas `api_keys`, `tenant_quota_daily`, `tenant_rate_limit`, `clientes`, `audit_logs`, `confirmacoes_automaticas` **estavam sem GRANTs pra `service_role`** desde sua criação via MCP.
+  - Sintoma silencioso: `auth.ts:resolveAuth` caía SEMPRE no fallback legacy `N8N_API_KEY`; rate limit persistente e cost guard ficavam fail-open.
+  - Detectado durante smoke de isolamento multi-tenant (tentativa de validar que tenant A não vê dado de B). Bloqueio cross-tenant com keys per-tenant agora valida 403 corretamente.
+  - **Lição:** migrations criadas via MCP NÃO incluem GRANTs default. Sempre adicionar `GRANT ... TO service_role, authenticated` ao final de migrations que criam tabelas novas.
 
 Pra contexto histórico desses, consulte o git log:
 ```bash

@@ -30,6 +30,7 @@ import {
   validatePatientSearchRequest,
   buildSchemaErrorResponse,
 } from './_lib/schema-validation.ts'
+import { normalizeRequestBody } from './_lib/body-normalize.ts'
 
 serve(async (req) => {
   const requestId = generateRequestId();
@@ -156,6 +157,11 @@ serve(async (req) => {
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         );
       }
+
+      // [Postel's Law] Normaliza '' e null → ausência. Mantém validator rigoroso
+      // sobre valores presentes (UUID malformado, enum errado, etc continuam 400).
+      // Ver _lib/body-normalize.ts pra rationale completa.
+      body = normalizeRequestBody(body);
 
       // 🔍 DEBUG SANITIZADO (após normalização)
       console.log('📥 [DEBUG] Body keys:', Object.keys(body));
