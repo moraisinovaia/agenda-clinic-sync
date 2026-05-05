@@ -1,49 +1,119 @@
 // Página /medico — landing pra usuários com role medico.
 //
-// Só renderiza se:
-//   - user autenticado (AuthGuard)
-//   - profile aprovado (AuthGuard)
-//   - must_change_password = false (AuthGuard redireciona pra /setup-senha se true)
-//   - role = medico (AuthGuard redireciona pra / se admin/recepcionista)
+// Reaproveita o componente DoctorSchedule da recepção (mesmo layout
+// familiar — calendário lateral, filtros Manhã/Tarde/Noite, tabela de
+// agendamentos) com prop readOnly={true}, que esconde elementos de
+// escrita (Novo Agendamento, Fila de Espera, Gerenciar Horários, coluna
+// Ações com edit/cancel/delete).
 //
-// Carrega lista de médicos a que o user tem acesso (via assignments) e
-// renderiza MyAppointmentsView. Se tiver acesso a >1 médico, mostra
-// seletor; senão renderiza direto.
+// Carrega via supabase client direto. RLS já filtra automaticamente:
+//   - medicos: só os que o user tem assignment
+//   - agendamentos: só dos médicos com assignment
+//   - atendimentos: do mesmo cliente_id
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LogOut, Loader2 } from 'lucide-react';
-import { MyAppointmentsView } from '@/components/scheduling/MyAppointmentsView';
-import { Doctor } from '@/types/scheduling';
+import { DoctorSchedule } from '@/components/scheduling/DoctorSchedule';
+import { Doctor, AppointmentWithRelations, Atendimento } from '@/types/scheduling';
+
+const APPOINTMENTS_SELECT = `
+  *,
+  pacientes:paciente_id ( * ),
+  medicos:medico_id ( * ),
+  atendimentos:atendimento_id ( * )
+`;
 
 export default function MedicoView() {
   const { profile, signOut } = useAuth();
   const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [appointments, setAppointments] = useState<AppointmentWithRelations[]>([]);
+  const [atendimentos, setAtendimentos] = useState<Atendimento[]>([]);
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  // ─── Carrega médicos visíveis ao user (RLS já filtra) ────────────────────
   useEffect(() => {
     if (!profile?.cliente_id) return;
-    setLoading(true);
 
-    // RLS já filtra: SELECT em medicos retorna só os que o user tem assignment
-    supabase
-      .from('medicos')
-      .select('*')
-      .eq('cliente_id', profile.cliente_id)
-      .eq('ativo', true)
-      .order('nome')
-      .then(({ data }) => {
-        const list = (data || []) as Doctor[];
-        setDoctors(list);
-        if (list.length === 1) setSelectedId(list[0].id);
-        else if (list.length > 1) setSelectedId((curr) => curr ?? list[0].id);
-        setLoading(false);
-      });
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const [{ data: medicosData }, { data: atendimentosData }] = await Promise.all([
+        supabase
+          .from('medicos')
+          .select('*')
+          .eq('cliente_id', profile.cliente_id)
+          .eq('ativo', true)
+          .order('nome'),
+        supabase
+          .from('atendimentos')
+          .select('*')
+          .eq('cliente_id', profile.cliente_id)
+          .eq('ativo', true),
+      ]);
+
+      if (cancelled) return;
+
+      const list = (medicosData || []) as Doctor[];
+      setDoctors(list);
+      setAtendimentos((atendimentosData || []) as Atendimento[]);
+      if (list.length > 0) setSelectedDoctorId((curr) => curr ?? list[0].id);
+      setLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [profile?.cliente_id]);
+
+  // ─── Carrega agendamentos do médico selecionado ──────────────────────────
+  useEffect(() => {
+    if (!selectedDoctorId || !profile?.cliente_id) {
+      setAppointments([]);
+      return;
+    }
+
+    let cancelled = false;
+    const fetchAppointments = async () => {
+      const { data } = await supabase
+        .from('agendamentos')
+        .select(APPOINTMENTS_SELECT)
+        .eq('cliente_id', profile.cliente_id)
+        .eq('medico_id', selectedDoctorId)
+        .is('excluido_em', null)
+        .order('data_agendamento', { ascending: true })
+        .order('hora_agendamento', { ascending: true });
+
+      if (!cancelled) {
+        setAppointments((data || []) as unknown as AppointmentWithRelations[]);
+      }
+    };
+
+    fetchAppointments();
+
+    // Realtime: refetch quando algo mudar nesse médico
+    const channel = supabase
+      .channel('medico-view-' + selectedDoctorId)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'agendamentos',
+          filter: `medico_id=eq.${selectedDoctorId}`,
+        },
+        () => fetchAppointments()
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
+  }, [selectedDoctorId, profile?.cliente_id]);
 
   if (loading) {
     return (
@@ -71,34 +141,21 @@ export default function MedicoView() {
     );
   }
 
-  const selectedDoctor = doctors.find((d) => d.id === selectedId) ?? doctors[0];
+  const selectedDoctor = doctors.find((d) => d.id === selectedDoctorId) ?? doctors[0];
+
+  // No-ops pras props obrigatórias de mutação (DoctorSchedule não vai
+  // chamar com readOnly=true, mas a interface exige os handlers).
+  const noopAsync = async () => {};
+  const noopAsyncBool = async () => false;
+  const noopAsyncArr = async () => [];
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b bg-card sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="min-w-0">
-              {doctors.length === 1 ? (
-                <>
-                  <p className="text-xs text-muted-foreground">Médico</p>
-                  <p className="font-medium truncate">{selectedDoctor.nome}</p>
-                </>
-              ) : (
-                <Select value={selectedId ?? ''} onValueChange={setSelectedId}>
-                  <SelectTrigger className="w-[280px]">
-                    <SelectValue placeholder="Selecione um médico" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {doctors.map((d) => (
-                      <SelectItem key={d.id} value={d.id}>
-                        {d.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
+      <header className="border-b bg-card sticky top-0 z-20">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">Médico</p>
+            <p className="font-semibold text-base truncate">{selectedDoctor.nome}</p>
           </div>
           <Button variant="ghost" size="sm" onClick={signOut} className="shrink-0">
             <LogOut className="h-4 w-4 sm:mr-2" />
@@ -107,8 +164,18 @@ export default function MedicoView() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-4">
-        <MyAppointmentsView doctors={selectedDoctor ? [selectedDoctor] : []} />
+      <main className="max-w-7xl mx-auto px-4 py-4">
+        <DoctorSchedule
+          doctor={selectedDoctor}
+          doctors={doctors}
+          onDoctorChange={(id) => setSelectedDoctorId(id)}
+          appointments={appointments}
+          atendimentos={atendimentos}
+          adicionarFilaEspera={noopAsyncBool}
+          searchPatientsByBirthDate={noopAsyncArr}
+          onCancelAppointment={noopAsync}
+          readOnly
+        />
       </main>
     </div>
   );

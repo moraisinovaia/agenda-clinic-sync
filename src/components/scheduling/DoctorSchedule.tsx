@@ -58,6 +58,12 @@ interface DoctorScheduleProps {
   searchPatientsByBirthDate: (birthDate: string) => Promise<any[]>;
   emptySlots?: any[];
   onSlotsChanged?: () => void;
+  /**
+   * Se true, esconde elementos de escrita (Novo Agendamento, Fila de Espera,
+   * Gerenciar Horários, coluna Ações com edit/cancel/confirm/delete, double-click
+   * em horário vago). Usado pela view do médico — apenas leitura.
+   */
+  readOnly?: boolean;
 }
 
 // Função auxiliar para validar e formatar datas com segurança
@@ -318,7 +324,8 @@ export function DoctorSchedule({
   adicionarFilaEspera, 
   searchPatientsByBirthDate, 
   emptySlots = [],
-  onSlotsChanged
+  onSlotsChanged,
+  readOnly = false,
 }: DoctorScheduleProps) {
   
   // Estado para data selecionada com validação segura
@@ -651,7 +658,15 @@ export function DoctorSchedule({
                 {doctor.especialidade}
               </div>
             </div>
-            {onNewAppointment && (
+            {/* readOnly (médico): só mostra "Relatório". Recepção: todos os botões. */}
+            {readOnly ? (
+              <div className="print:hidden">
+                <Button onClick={() => setViewMode('report')} variant="outline" size="sm">
+                  <FileText className="h-4 w-4" />
+                  Relatório
+                </Button>
+              </div>
+            ) : onNewAppointment && (
               <div className="print:hidden">
                 <p className="text-xs text-muted-foreground mb-2">
                   💡 Horários livres são opcionais - você pode agendar em qualquer horário disponível
@@ -898,27 +913,27 @@ export function DoctorSchedule({
                           <TableHead className="w-[120px] print:text-[9px]">Tipo</TableHead>
                           <TableHead className="w-[120px] print:text-[9px]">Registrado em</TableHead>
                           <TableHead className="w-[120px] print:text-[9px]">Última alteração</TableHead>
-                          <TableHead className="w-[100px] text-center print:hidden">Ações</TableHead>
+                          {!readOnly && <TableHead className="w-[100px] text-center print:hidden">Ações</TableHead>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {allSlots.map((slot, index) => 
+                        {allSlots.map((slot, index) =>
                           slot.type === 'empty' ? (
-                            <TableRow 
+                            <TableRow
                               key={`empty-${index}`}
-                              className="hover:bg-blue-50 cursor-pointer transition-colors"
-                              onDoubleClick={() => onNewAppointmentWithTime?.(
+                              className={readOnly ? 'transition-colors' : 'hover:bg-blue-50 cursor-pointer transition-colors'}
+                              onDoubleClick={readOnly ? undefined : () => onNewAppointmentWithTime?.(
                                 format(selectedDate, 'yyyy-MM-dd'),
                                 slot.hora
                               )}
-                              title="Duplo clique para agendar neste horário"
+                              title={readOnly ? undefined : 'Duplo clique para agendar neste horário'}
                             >
-                              <TableCell colSpan={8} className="text-center py-3">
+                              <TableCell colSpan={readOnly ? 7 : 8} className="text-center py-3">
                                 <div className="flex items-center justify-center gap-3 text-muted-foreground">
                                   <Clock className="h-4 w-4" />
                                   <span className="font-mono font-semibold">{slot.hora}</span>
                                   <Badge variant="outline" className="text-xs bg-blue-50">
-                                    Horário Vago - Duplo clique para agendar
+                                    {readOnly ? 'Horário Vago' : 'Horário Vago - Duplo clique para agendar'}
                                   </Badge>
                                 </div>
                               </TableCell>
@@ -996,6 +1011,7 @@ export function DoctorSchedule({
                                 </div>
                               </TableCell>
                               
+                              {!readOnly && (
                               <TableCell className="w-[100px] py-1 px-2 print:hidden">
                                 <div className="flex items-center justify-center gap-0.5">
                                   {onEditAppointment && (
@@ -1111,6 +1127,7 @@ export function DoctorSchedule({
                                   )}
                                 </div>
                               </TableCell>
+                              )}
                             </TableRow>
                             );
                           })()
@@ -1129,7 +1146,7 @@ export function DoctorSchedule({
                       <p className="text-sm text-muted-foreground">
                         Não há agendamentos para esta data.
                       </p>
-                      {onNewAppointment && (
+                      {!readOnly && onNewAppointment && (
                         <Button onClick={() => onNewAppointment(format(selectedDate, 'yyyy-MM-dd'))} className="mt-4" size="sm">
                           <Plus className="h-4 w-4 mr-2" />
                           Novo Agendamento

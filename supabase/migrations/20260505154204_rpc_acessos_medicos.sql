@@ -120,9 +120,16 @@ BEGIN
   v_email := v_username_norm || '@medicos.' || v_medico.cliente_id::text || '.local';
 
   -- ─── 1. Criar auth.users (trigger handle_new_user cria profile pendente) ───
+  -- IMPORTANTE: GoTrue (Supabase Auth) lê confirmation_token/recovery_token/etc
+  -- como string Go (não nullable). NULL nesses campos faz signInWithPassword
+  -- explodir com "Database error querying schema". Setamos '' (string vazia)
+  -- explicitamente em todos eles.
   INSERT INTO auth.users (
     id, instance_id, email, role, aud, encrypted_password,
-    email_confirmed_at, created_at, updated_at, raw_user_meta_data
+    email_confirmed_at, created_at, updated_at, raw_user_meta_data,
+    confirmation_token, recovery_token, email_change_token_new,
+    email_change, email_change_token_current,
+    phone_change, phone_change_token, reauthentication_token
   )
   VALUES (
     v_user_id,
@@ -136,7 +143,8 @@ BEGIN
       'nome',       v_medico.nome,
       'username',   v_username_norm,
       'cliente_id', v_medico.cliente_id::text
-    )
+    ),
+    '', '', '', '', '', '', '', ''
   );
 
   -- ─── 2. Aprovar profile + flag must_change_password ───
