@@ -7,10 +7,30 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "12.2.3 (519615d)"
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -175,6 +195,7 @@ export type Database = {
           coparticipacao_unimed_20: number | null
           coparticipacao_unimed_40: number | null
           created_at: string | null
+          exige_guia_medica: boolean
           forma_pagamento: string | null
           horarios: Json | null
           id: string
@@ -196,6 +217,7 @@ export type Database = {
           coparticipacao_unimed_20?: number | null
           coparticipacao_unimed_40?: number | null
           created_at?: string | null
+          exige_guia_medica?: boolean
           forma_pagamento?: string | null
           horarios?: Json | null
           id?: string
@@ -217,6 +239,7 @@ export type Database = {
           coparticipacao_unimed_20?: number | null
           coparticipacao_unimed_40?: number | null
           created_at?: string | null
+          exige_guia_medica?: boolean
           forma_pagamento?: string | null
           horarios?: Json | null
           id?: string
@@ -730,6 +753,112 @@ export type Database = {
           },
         ]
       }
+      clinica_integracoes_secretas: {
+        Row: {
+          chatwoot_api_token: string | null
+          cliente_id: string
+          created_at: string
+          evolution_api_key: string | null
+          id: string
+          openai_api_key: string | null
+          updated_at: string
+        }
+        Insert: {
+          chatwoot_api_token?: string | null
+          cliente_id: string
+          created_at?: string
+          evolution_api_key?: string | null
+          id?: string
+          openai_api_key?: string | null
+          updated_at?: string
+        }
+        Update: {
+          chatwoot_api_token?: string | null
+          cliente_id?: string
+          created_at?: string
+          evolution_api_key?: string | null
+          id?: string
+          openai_api_key?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clinica_integracoes_secretas_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: true
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clinica_motor_config: {
+        Row: {
+          api_cliente_id: string | null
+          chatwoot_account_id: string | null
+          chatwoot_inbox_id: string | null
+          chatwoot_provisionado_em: string | null
+          chatwoot_provisionamento_erro: string | null
+          chatwoot_url: string | null
+          cliente_id_agendamento: string | null
+          created_at: string
+          id: string
+          mensagem_transbordo: string | null
+          modelo_ia: string | null
+          nome_clinica: string
+          prompt_agendamentos: string | null
+          prompt_sistema: string | null
+          telefone_publico: string | null
+          transbordo_humano_ativo: boolean
+          updated_at: string
+        }
+        Insert: {
+          api_cliente_id?: string | null
+          chatwoot_account_id?: string | null
+          chatwoot_inbox_id?: string | null
+          chatwoot_provisionado_em?: string | null
+          chatwoot_provisionamento_erro?: string | null
+          chatwoot_url?: string | null
+          cliente_id_agendamento?: string | null
+          created_at?: string
+          id: string
+          mensagem_transbordo?: string | null
+          modelo_ia?: string | null
+          nome_clinica: string
+          prompt_agendamentos?: string | null
+          prompt_sistema?: string | null
+          telefone_publico?: string | null
+          transbordo_humano_ativo?: boolean
+          updated_at?: string
+        }
+        Update: {
+          api_cliente_id?: string | null
+          chatwoot_account_id?: string | null
+          chatwoot_inbox_id?: string | null
+          chatwoot_provisionado_em?: string | null
+          chatwoot_provisionamento_erro?: string | null
+          chatwoot_url?: string | null
+          cliente_id_agendamento?: string | null
+          created_at?: string
+          id?: string
+          mensagem_transbordo?: string | null
+          modelo_ia?: string | null
+          nome_clinica?: string
+          prompt_agendamentos?: string | null
+          prompt_sistema?: string | null
+          telefone_publico?: string | null
+          transbordo_humano_ativo?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clinica_motor_config_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       configuracoes_clinica: {
         Row: {
           ativo: boolean | null
@@ -738,7 +867,9 @@ export type Database = {
           cliente_id: string
           created_at: string | null
           dados_extras: Json | null
+          evolution_instance_id: string | null
           id: string
+          nome_clinica: string | null
           updated_at: string | null
           valor: string
         }
@@ -749,7 +880,9 @@ export type Database = {
           cliente_id: string
           created_at?: string | null
           dados_extras?: Json | null
+          evolution_instance_id?: string | null
           id?: string
+          nome_clinica?: string | null
           updated_at?: string | null
           valor: string
         }
@@ -760,7 +893,9 @@ export type Database = {
           cliente_id?: string
           created_at?: string | null
           dados_extras?: Json | null
+          evolution_instance_id?: string | null
           id?: string
+          nome_clinica?: string | null
           updated_at?: string | null
           valor?: string
         }
@@ -833,6 +968,57 @@ export type Database = {
             columns: ["cliente_id"]
             isOneToOne: false
             referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      convenios_medico: {
+        Row: {
+          cliente_id: string
+          convenio_nome: string
+          created_at: string | null
+          id: string
+          medico_id: string
+          mensagem_orientacao: string | null
+          observacao: string | null
+          tipo: string
+          updated_at: string | null
+        }
+        Insert: {
+          cliente_id: string
+          convenio_nome: string
+          created_at?: string | null
+          id?: string
+          medico_id: string
+          mensagem_orientacao?: string | null
+          observacao?: string | null
+          tipo?: string
+          updated_at?: string | null
+        }
+        Update: {
+          cliente_id?: string
+          convenio_nome?: string
+          created_at?: string | null
+          id?: string
+          medico_id?: string
+          mensagem_orientacao?: string | null
+          observacao?: string | null
+          tipo?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "convenios_medico_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "convenios_medico_medico_id_fkey"
+            columns: ["medico_id"]
+            isOneToOne: false
+            referencedRelation: "medicos"
             referencedColumns: ["id"]
           },
         ]
@@ -1156,6 +1342,81 @@ export type Database = {
           },
         ]
       }
+      fila_pendente_resposta: {
+        Row: {
+          celular: string
+          created_at: string
+          id: string
+          notif_id: string
+          payload: Json | null
+          tempo_limite: string
+        }
+        Insert: {
+          celular: string
+          created_at?: string
+          id?: string
+          notif_id: string
+          payload?: Json | null
+          tempo_limite: string
+        }
+        Update: {
+          celular?: string
+          created_at?: string
+          id?: string
+          notif_id?: string
+          payload?: Json | null
+          tempo_limite?: string
+        }
+        Relationships: []
+      }
+      historico_eventos: {
+        Row: {
+          cliente_id: string
+          created_at: string
+          dados_extraidos: Json | null
+          estado_antes: string | null
+          estado_depois: string | null
+          id: string
+          intencao: string | null
+          modelo_ia: string | null
+          paciente_nome: string | null
+          paciente_telefone: string | null
+          resultado: string | null
+          session_id: string
+          tipo_evento: string
+        }
+        Insert: {
+          cliente_id: string
+          created_at?: string
+          dados_extraidos?: Json | null
+          estado_antes?: string | null
+          estado_depois?: string | null
+          id?: string
+          intencao?: string | null
+          modelo_ia?: string | null
+          paciente_nome?: string | null
+          paciente_telefone?: string | null
+          resultado?: string | null
+          session_id: string
+          tipo_evento: string
+        }
+        Update: {
+          cliente_id?: string
+          created_at?: string
+          dados_extraidos?: Json | null
+          estado_antes?: string | null
+          estado_depois?: string | null
+          id?: string
+          intencao?: string | null
+          modelo_ia?: string | null
+          paciente_nome?: string | null
+          paciente_telefone?: string | null
+          resultado?: string | null
+          session_id?: string
+          tipo_evento?: string
+        }
+        Relationships: []
+      }
       horarios_configuracao: {
         Row: {
           ativo: boolean | null
@@ -1263,6 +1524,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      ia_contexto_sessao: {
+        Row: {
+          cliente_id: string
+          contexto: Json | null
+          dados_faltantes: Json | null
+          estado_atual: string | null
+          id: string
+          metadata: Json | null
+          nome_paciente_detectado: string | null
+          resumo_contexto: string | null
+          session_id: string
+          ultima_interacao: string
+          updated_at: string
+          whatsapp_number: string | null
+        }
+        Insert: {
+          cliente_id: string
+          contexto?: Json | null
+          dados_faltantes?: Json | null
+          estado_atual?: string | null
+          id?: string
+          metadata?: Json | null
+          nome_paciente_detectado?: string | null
+          resumo_contexto?: string | null
+          session_id: string
+          ultima_interacao?: string
+          updated_at?: string
+          whatsapp_number?: string | null
+        }
+        Update: {
+          cliente_id?: string
+          contexto?: Json | null
+          dados_faltantes?: Json | null
+          estado_atual?: string | null
+          id?: string
+          metadata?: Json | null
+          nome_paciente_detectado?: string | null
+          resumo_contexto?: string | null
+          session_id?: string
+          ultima_interacao?: string
+          updated_at?: string
+          whatsapp_number?: string | null
+        }
+        Relationships: []
       }
       llm_clinic_config: {
         Row: {
@@ -1435,6 +1741,7 @@ export type Database = {
       }
       medicos: {
         Row: {
+          agendamento_indisponivel: boolean
           atende_adultos: boolean | null
           atende_criancas: boolean | null
           ativo: boolean | null
@@ -1457,6 +1764,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          agendamento_indisponivel?: boolean
           atende_adultos?: boolean | null
           atende_criancas?: boolean | null
           ativo?: boolean | null
@@ -1479,6 +1787,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          agendamento_indisponivel?: boolean
           atende_adultos?: boolean | null
           atende_criancas?: boolean | null
           ativo?: boolean | null
@@ -1509,6 +1818,66 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      n8n_chat_histories: {
+        Row: {
+          created_at: string
+          id: number
+          message: Json
+          session_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          message: Json
+          session_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          message?: Json
+          session_id?: string
+        }
+        Relationships: []
+      }
+      n8n_status_atendimento: {
+        Row: {
+          aguardando_followup: boolean
+          chatwoot_conversation_id: string | null
+          cliente_id: string
+          id: string
+          lock_conversa: boolean
+          modo_atendimento: string
+          numero_followup: number
+          session_id: string
+          transbordo_iniciado_em: string | null
+          updated_at: string
+        }
+        Insert: {
+          aguardando_followup?: boolean
+          chatwoot_conversation_id?: string | null
+          cliente_id: string
+          id?: string
+          lock_conversa?: boolean
+          modo_atendimento?: string
+          numero_followup?: number
+          session_id: string
+          transbordo_iniciado_em?: string | null
+          updated_at?: string
+        }
+        Update: {
+          aguardando_followup?: boolean
+          chatwoot_conversation_id?: string | null
+          cliente_id?: string
+          id?: string
+          lock_conversa?: boolean
+          modo_atendimento?: string
+          numero_followup?: number
+          session_id?: string
+          transbordo_iniciado_em?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       notificacoes_enviadas: {
         Row: {
@@ -2287,8 +2656,16 @@ export type Database = {
           status: string
         }[]
       }
-      bytea_to_text: { Args: { data: string }; Returns: string }
       can_access_patient_data: { Args: never; Returns: boolean }
+      cancelar_agendamento_atomico: {
+        Args: {
+          p_agendamento_id: string
+          p_cancelado_por?: string
+          p_cliente_id: string
+          p_motivo?: string
+        }
+        Returns: Json
+      }
       cancelar_agendamento_soft:
         | {
             Args: {
@@ -2336,6 +2713,10 @@ export type Database = {
           }
       confirmar_email_usuario_aprovado: {
         Args: { p_admin_id: string; p_user_email: string }
+        Returns: Json
+      }
+      consultar_regras_atendimento: {
+        Args: { p_cliente_id: string; p_medico_id: string }
         Returns: Json
       }
       contar_agendamentos_periodo: {
@@ -2509,6 +2890,19 @@ export type Database = {
           }
       diagnosticar_whatsapp_sistema: { Args: never; Returns: Json }
       ensure_user_cliente_id: { Args: never; Returns: undefined }
+      entrar_fila_espera_atomico: {
+        Args: {
+          p_atendimento_id: string
+          p_cliente_id: string
+          p_data_limite?: string
+          p_data_preferida: string
+          p_medico_id: string
+          p_observacoes?: string
+          p_paciente_id: string
+          p_periodo_preferido?: string
+        }
+        Returns: Json
+      }
       enviar_whatsapp_fallback:
         | { Args: { p_agendamento_id: string }; Returns: Json }
         | { Args: { p_celular: string; p_mensagem: string }; Returns: Json }
@@ -2770,6 +3164,10 @@ export type Database = {
           cliente_id: string
         }[]
       }
+      get_clinic_runtime_context: {
+        Args: { p_cliente_id: string }
+        Returns: Json
+      }
       get_clinicas_para_signup: {
         Args: { p_parceiro?: string }
         Returns: {
@@ -2930,131 +3328,6 @@ export type Database = {
         }
         Returns: boolean
       }
-      http: {
-        Args: { request: Database["public"]["CompositeTypes"]["http_request"] }
-        Returns: Database["public"]["CompositeTypes"]["http_response"]
-        SetofOptions: {
-          from: "http_request"
-          to: "http_response"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      http_delete:
-        | {
-            Args: { uri: string }
-            Returns: Database["public"]["CompositeTypes"]["http_response"]
-            SetofOptions: {
-              from: "*"
-              to: "http_response"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-        | {
-            Args: { content: string; content_type: string; uri: string }
-            Returns: Database["public"]["CompositeTypes"]["http_response"]
-            SetofOptions: {
-              from: "*"
-              to: "http_response"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-      http_get:
-        | {
-            Args: { uri: string }
-            Returns: Database["public"]["CompositeTypes"]["http_response"]
-            SetofOptions: {
-              from: "*"
-              to: "http_response"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-        | {
-            Args: { data: Json; uri: string }
-            Returns: Database["public"]["CompositeTypes"]["http_response"]
-            SetofOptions: {
-              from: "*"
-              to: "http_response"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-      http_head: {
-        Args: { uri: string }
-        Returns: Database["public"]["CompositeTypes"]["http_response"]
-        SetofOptions: {
-          from: "*"
-          to: "http_response"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      http_header: {
-        Args: { field: string; value: string }
-        Returns: Database["public"]["CompositeTypes"]["http_header"]
-        SetofOptions: {
-          from: "*"
-          to: "http_header"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      http_list_curlopt: {
-        Args: never
-        Returns: {
-          curlopt: string
-          value: string
-        }[]
-      }
-      http_patch: {
-        Args: { content: string; content_type: string; uri: string }
-        Returns: Database["public"]["CompositeTypes"]["http_response"]
-        SetofOptions: {
-          from: "*"
-          to: "http_response"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      http_post:
-        | {
-            Args: { content: string; content_type: string; uri: string }
-            Returns: Database["public"]["CompositeTypes"]["http_response"]
-            SetofOptions: {
-              from: "*"
-              to: "http_response"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-        | {
-            Args: { data: Json; uri: string }
-            Returns: Database["public"]["CompositeTypes"]["http_response"]
-            SetofOptions: {
-              from: "*"
-              to: "http_response"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-      http_put: {
-        Args: { content: string; content_type: string; uri: string }
-        Returns: Database["public"]["CompositeTypes"]["http_response"]
-        SetofOptions: {
-          from: "*"
-          to: "http_response"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      http_reset_curlopt: { Args: never; Returns: boolean }
-      http_set_curlopt: {
-        Args: { curlopt: string; value: string }
-        Returns: boolean
-      }
       insert_audit_log: {
         Args: {
           p_action: string
@@ -3155,6 +3428,17 @@ export type Database = {
         Args: { p_aprovador_user_id: string; p_user_id: string }
         Returns: Json
       }
+      remarcar_agendamento_atomico: {
+        Args: {
+          p_agendamento_id: string
+          p_alterado_por?: string
+          p_cliente_id: string
+          p_idempotency_key?: string
+          p_nova_data: string
+          p_nova_hora: string
+        }
+        Returns: Json
+      }
       reset_fila_notificados_expirados: { Args: never; Returns: Json }
       resolver_tenant: {
         Args: { p_cliente_id?: string; p_config_id?: string }
@@ -3248,7 +3532,6 @@ export type Database = {
         }
         Returns: Json
       }
-      text_to_bytea: { Args: { data: string }; Returns: string }
       toggle_backup_cron: { Args: { enable_cron: boolean }; Returns: boolean }
       update_business_rules_config: {
         Args: { p_config: Json; p_medico_id: string }
@@ -3291,6 +3574,15 @@ export type Database = {
         }
         Returns: Json
       }
+      validar_convenio_medico: {
+        Args: {
+          p_atendimento_nome?: string
+          p_cliente_id: string
+          p_convenio: string
+          p_medico_nome: string
+        }
+        Returns: Json
+      }
       validar_limite_recurso: {
         Args: {
           p_atendimento_id: string
@@ -3322,23 +3614,7 @@ export type Database = {
         | "super_admin"
     }
     CompositeTypes: {
-      http_header: {
-        field: string | null
-        value: string | null
-      }
-      http_request: {
-        method: unknown
-        uri: string | null
-        headers: Database["public"]["CompositeTypes"]["http_header"][] | null
-        content_type: string | null
-        content: string | null
-      }
-      http_response: {
-        status: number | null
-        content_type: string | null
-        headers: Database["public"]["CompositeTypes"]["http_header"][] | null
-        content: string | null
-      }
+      [_ in never]: never
     }
   }
 }
@@ -3461,6 +3737,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: [
@@ -3473,3 +3752,4 @@ export const Constants = {
     },
   },
 } as const
+

@@ -75,6 +75,7 @@ export const BloqueioAgenda: React.FC<BloqueioAgendaProps> = ({ onBack, onRefres
           .from('medicos')
           .select('id, nome, especialidade')
           .eq('ativo', true)
+          .or('agendamento_indisponivel.is.null,agendamento_indisponivel.eq.false')
           .order('nome');
         if (error) throw error;
         setMedicos(data || []);

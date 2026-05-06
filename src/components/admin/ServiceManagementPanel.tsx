@@ -29,6 +29,7 @@ interface AtendimentoFormData {
   observacoes: string;
   restricoes: string;
   ativo: boolean;
+  exige_guia_medica: boolean;
 }
 
 const emptyFormData: AtendimentoFormData = {
@@ -42,6 +43,7 @@ const emptyFormData: AtendimentoFormData = {
   observacoes: '',
   restricoes: '',
   ativo: true,
+  exige_guia_medica: false,
 };
 
 export function ServiceManagementPanel() {
@@ -113,6 +115,24 @@ export function ServiceManagementPanel() {
     enabled: !!effectiveClinicId,
   });
 
+  // Query: Médicos da clínica (para vínculo opcional)
+  const { data: medicos = [] } = useQuery({
+    queryKey: ['medicos-admin', effectiveClinicId],
+    queryFn: async () => {
+      if (!effectiveClinicId) return [];
+      const { data, error } = await supabase
+        .from('medicos')
+        .select('id, nome, especialidade')
+        .eq('cliente_id', effectiveClinicId)
+        .eq('ativo', true)
+        .or('agendamento_indisponivel.is.null,agendamento_indisponivel.eq.false')
+        .order('nome');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!effectiveClinicId,
+  });
+
   // Filtrar atendimentos
   const filteredAtendimentos = useMemo(() => {
     return atendimentos.filter((atendimento) => {
@@ -146,6 +166,7 @@ export function ServiceManagementPanel() {
         observacoes: data.observacoes || null,
         restricoes: data.restricoes || null,
         ativo: data.ativo,
+        exige_guia_medica: data.exige_guia_medica,
       });
       if (error) throw error;
     },
@@ -173,6 +194,7 @@ export function ServiceManagementPanel() {
         observacoes: data.observacoes || null,
         restricoes: data.restricoes || null,
         ativo: data.ativo,
+        exige_guia_medica: data.exige_guia_medica,
       }).eq('id', id);
       if (error) throw error;
     },
@@ -225,6 +247,7 @@ export function ServiceManagementPanel() {
       observacoes: service.observacoes || '',
       restricoes: service.restricoes || '',
       ativo: service.ativo ?? true,
+      exige_guia_medica: service.exige_guia_medica ?? false,
     });
     // Carregar médicos vinculados via pivot (pós-migration M:N)
     try {
@@ -707,6 +730,15 @@ export function ServiceManagementPanel() {
                 )}
               </div>
             )}
+
+            <div className="flex items-center gap-2">
+              <Switch
+                id="exige_guia_medica"
+                checked={formData.exige_guia_medica}
+                onCheckedChange={(checked) => setFormData({ ...formData, exige_guia_medica: checked })}
+              />
+              <Label htmlFor="exige_guia_medica">Exige guia médica</Label>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={closeModal}>

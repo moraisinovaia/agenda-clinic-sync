@@ -66,6 +66,9 @@ interface EditFormData {
   dias_busca_inicial: number;
   dias_busca_expandida: number;
   mensagem_bloqueio_padrao: string;
+  // configuracoes_clinica (mapeamento Evolution / WhatsApp)
+  evolution_instance_id: string;
+  nome_clinica: string;
 }
 
 export function ClinicManagementPanel() {
@@ -93,7 +96,9 @@ export function ClinicManagementPanel() {
     data_minima_agendamento: '',
     dias_busca_inicial: 14,
     dias_busca_expandida: 45,
-    mensagem_bloqueio_padrao: ''
+    mensagem_bloqueio_padrao: '',
+    evolution_instance_id: '',
+    nome_clinica: ''
   });
   const [llmConfig, setLlmConfig] = useState<LLMConfig | null>(null);
   const [clienteStats, setClienteStats] = useState<Record<string, ClienteStats>>({});
@@ -321,6 +326,16 @@ export function ClinicManagementPanel() {
         });
         // Modal permanece aberto para o admin poder tentar novamente
       } else {
+        // Upsert configuracoes_clinica (mapeamento Evolution)
+        const { error: cfgError } = await supabase
+          .from('configuracoes_clinica')
+          .upsert({
+            cliente_id: editingCliente.id,
+            evolution_instance_id: editFormData.evolution_instance_id || null,
+            nome_clinica: editFormData.nome_clinica || editFormData.nome
+          }, { onConflict: 'cliente_id' });
+        if (cfgError) console.error('Erro ao salvar configuracoes_clinica:', cfgError);
+
         toast({
           title: 'Sucesso',
           description: 'Clínica atualizada e sincronizada com sucesso',
@@ -353,7 +368,9 @@ export function ClinicManagementPanel() {
       data_minima_agendamento: '',
       dias_busca_inicial: 14,
       dias_busca_expandida: 45,
-      mensagem_bloqueio_padrao: ''
+      mensagem_bloqueio_padrao: '',
+      evolution_instance_id: '',
+      nome_clinica: ''
     });
     setLlmConfig(null);
 
@@ -368,6 +385,20 @@ export function ClinicManagementPanel() {
 
     setOpeningEditModal(null);
     setShowEditModal(true);
+
+    // Buscar mapeamento Evolution em configuracoes_clinica
+    const { data: cfgData } = await supabase
+      .from('configuracoes_clinica')
+      .select('evolution_instance_id, nome_clinica')
+      .eq('cliente_id', cliente.id)
+      .maybeSingle();
+    if (cfgData) {
+      setEditFormData(prev => ({
+        ...prev,
+        evolution_instance_id: cfgData.evolution_instance_id || '',
+        nome_clinica: cfgData.nome_clinica || ''
+      }));
+    }
   };
 
   const getConfigStatus = (cliente: Cliente) => {
@@ -735,6 +766,33 @@ export function ClinicManagementPanel() {
                       placeholder="(00) 00000-0000"
                     />
                   </div>
+                </div>
+
+                <div className="space-y-3 p-3 border rounded-lg bg-muted/30">
+                  <div className="text-sm font-medium">Mapeamento Evolution / WhatsApp</div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-evolution-instance">Evolution Instance ID</Label>
+                      <Input
+                        id="edit-evolution-instance"
+                        value={editFormData.evolution_instance_id}
+                        onChange={(e) => setEditFormData(prev => ({ ...prev, evolution_instance_id: e.target.value }))}
+                        placeholder="uuid da instância na Evolution API"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-nome-clinica">Nome curto (configuracoes_clinica)</Label>
+                      <Input
+                        id="edit-nome-clinica"
+                        value={editFormData.nome_clinica}
+                        onChange={(e) => setEditFormData(prev => ({ ...prev, nome_clinica: e.target.value }))}
+                        placeholder="Nome usado nos workflows do n8n"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    O webhook de WhatsApp do n8n usa esses campos para identificar a clínica via instância Evolution.
+                  </p>
                 </div>
                 
                 <div className="space-y-2">

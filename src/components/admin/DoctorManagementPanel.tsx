@@ -15,9 +15,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
-import { RefreshCw, Plus, Pencil, Stethoscope, Users, Search, AlertCircle, Clock, Settings2, FileText } from 'lucide-react';
+import { RefreshCw, Plus, Pencil, Stethoscope, Users, Search, AlertCircle, Clock, Settings2, FileText, Info } from 'lucide-react';
 import { RuleEditDialog } from './llm-config/RuleEditDialog';
 import { useLLMConfig, BusinessRule } from '@/hooks/useLLMConfig';
+import { ConveniosMedicoEditor } from './ConveniosMedicoEditor';
 
 interface ServiceConfig {
   periodos?: Record<string, {
@@ -47,8 +48,6 @@ interface Medico {
   nome: string;
   especialidade: string;
   ativo: boolean;
-  convenios_aceitos: string[] | null;
-  convenios_restricoes: Record<string, string> | null;
   idade_minima: number | null;
   idade_maxima: number | null;
   observacoes: string | null;
@@ -60,6 +59,7 @@ interface Medico {
   atende_criancas?: boolean;
   atende_adultos?: boolean;
   atendimentos_ids?: string[];
+  agendamento_indisponivel?: boolean;
 }
 
 interface Atendimento {
@@ -85,9 +85,6 @@ interface HorariosPeriodos {
 interface MedicoFormData {
   nome: string;
   especialidade: string;
-  convenios_aceitos: string[];
-  convenios_restricoes: Record<string, string>;
-  outroConvenio: string;
   atendimentos_ids: string[];
   valoresOverride: Record<string, string>; // atendimento_id → valor_override (vazio = sem override)
   outroAtendimento: string;
@@ -105,6 +102,7 @@ interface MedicoFormData {
   telefone_alternativo: string;
   horarios_periodos: HorariosPeriodos;
   intervalo_minutos: number;
+  agendamento_indisponivel: boolean;
 }
 
 const DIAS_SEMANA = [
@@ -122,25 +120,6 @@ const initialPeriodos: HorariosPeriodos = {
   tarde: { ativo: false, hora_inicio: '14:00', hora_fim: '18:00', limite_pacientes: 10, dias_semana: [1, 2, 3, 4, 5] },
   noite: { ativo: false, hora_inicio: '18:00', hora_fim: '21:00', limite_pacientes: 10, dias_semana: [1, 2, 3, 4, 5] },
 };
-
-const CONVENIOS_DISPONIVEIS = [
-  'PARTICULAR',
-  'UNIMED NACIONAL',
-  'UNIMED REGIONAL',
-  'UNIMED 40%',
-  'UNIMED 20%',
-  'UNIMED INTERCÂMBIO',
-  'BRADESCO',
-  'SULAMERICA',
-  'AMIL',
-  'HAPVIDA',
-  'NOTREDAME',
-  'CASSI',
-  'GEAP',
-  'IPSEMG',
-  'PLANSERV',
-  'OUTRO'
-];
 
 const ESPECIALIDADES_SUGERIDAS = [
   'Gastroenterologia',
@@ -171,9 +150,6 @@ export const DoctorManagementPanel: React.FC = () => {
   const [formData, setFormData] = useState<MedicoFormData>({
     nome: '',
     especialidade: '',
-    convenios_aceitos: [],
-    convenios_restricoes: {},
-    outroConvenio: '',
     atendimentos_ids: [],
     valoresOverride: {},
     outroAtendimento: '',
@@ -190,7 +166,8 @@ export const DoctorManagementPanel: React.FC = () => {
     rqe: '',
     telefone_alternativo: '',
     horarios_periodos: { ...initialPeriodos },
-    intervalo_minutos: 15
+    intervalo_minutos: 15,
+    agendamento_indisponivel: false
   });
 
   // Para admin_clinica, usar seu cliente_id automaticamente
@@ -219,7 +196,16 @@ export const DoctorManagementPanel: React.FC = () => {
         p_cliente_id: effectiveClinicId
       });
       if (error) throw error;
-      return (data || []) as Medico[];
+      const base = (data || []) as Medico[];
+      if (base.length === 0) return base;
+
+      // Merge campos não retornados pela RPC (ex.: agendamento_indisponivel).
+      const { data: extras } = await supabase
+        .from('medicos')
+        .select('id, agendamento_indisponivel')
+        .in('id', base.map(m => m.id));
+      const extraMap = new Map((extras || []).map(e => [e.id, e.agendamento_indisponivel ?? false]));
+      return base.map(m => ({ ...m, agendamento_indisponivel: extraMap.get(m.id) ?? false }));
     },
     enabled: !!effectiveClinicId
   });
@@ -298,7 +284,7 @@ export const DoctorManagementPanel: React.FC = () => {
         p_cliente_id: effectiveClinicId,
         p_nome: data.nome,
         p_especialidade: data.especialidade,
-        p_convenios_aceitos: data.convenios_aceitos.length > 0 ? data.convenios_aceitos : null,
+        p_convenios_aceitos: null,
         p_idade_minima: data.idade_minima || 0,
         p_idade_maxima: data.idade_maxima,
         p_observacoes: data.observacoes || null,
@@ -322,13 +308,18 @@ export const DoctorManagementPanel: React.FC = () => {
             telefone_alternativo: data.telefone_alternativo || null,
             atende_criancas: data.atende_criancas,
             atende_adultos: data.atende_adultos,
-            convenios_restricoes: data.convenios_restricoes,
             horarios: {
               tipo_agendamento: data.tipo_agendamento,
               permite_agendamento_online: data.permite_agendamento_online
             }
           }
         });
+
+        // Coluna nova fora do allowlist do RPC: update direto
+        await supabase
+          .from('medicos')
+          .update({ agendamento_indisponivel: data.agendamento_indisponivel })
+          .eq('id', resultObj.medico_id);
       }
       
       // Salvar horários de atendimento e overrides de valor
@@ -363,8 +354,6 @@ export const DoctorManagementPanel: React.FC = () => {
           nome: data.nome,
           especialidade: data.especialidade,
           ativo: data.ativo,
-          convenios_aceitos: data.convenios_aceitos,
-          convenios_restricoes: data.convenios_restricoes,
           idade_minima: data.idade_minima,
           idade_maxima: data.idade_maxima,
           atende_criancas: data.atende_criancas,
@@ -388,6 +377,12 @@ export const DoctorManagementPanel: React.FC = () => {
         throw new Error(resultObj.error || 'Erro ao atualizar médico');
       }
       
+      // Coluna fora do allowlist do RPC: update direto
+      await supabase
+        .from('medicos')
+        .update({ agendamento_indisponivel: data.agendamento_indisponivel })
+        .eq('id', medicoId);
+
       // Salvar horários de atendimento, overrides de valor e sincronizar business_rules
       await saveHorariosConfig(medicoId);
       try {
@@ -411,7 +406,6 @@ export const DoctorManagementPanel: React.FC = () => {
             const config = existingRule.config as Record<string, any>;
             const updatedConfig = {
               ...config,
-              convenios: data.convenios_aceitos,
               idade_minima: data.idade_minima,
               idade_maxima: data.idade_maxima,
               tipo_agendamento: data.tipo_agendamento,
@@ -463,9 +457,6 @@ export const DoctorManagementPanel: React.FC = () => {
     setFormData({
       nome: '',
       especialidade: '',
-      convenios_aceitos: [],
-      convenios_restricoes: {},
-      outroConvenio: '',
       atendimentos_ids: [],
       valoresOverride: {},
       outroAtendimento: '',
@@ -482,7 +473,8 @@ export const DoctorManagementPanel: React.FC = () => {
       rqe: '',
       telefone_alternativo: '',
       horarios_periodos: { ...initialPeriodos },
-      intervalo_minutos: 15
+      intervalo_minutos: 15,
+      agendamento_indisponivel: false
     });
     setEditingDoctor(null);
   };
@@ -494,12 +486,12 @@ export const DoctorManagementPanel: React.FC = () => {
 
   const handleOpenEdit = async (medico: Medico) => {
     setEditingDoctor(medico);
-    
+
     // Separar convênios padrão dos personalizados
     const conveniosPadrao = medico.convenios_aceitos?.filter(c => CONVENIOS_DISPONIVEIS.includes(c)) || [];
     const conveniosPersonalizados = medico.convenios_aceitos?.filter(c => !CONVENIOS_DISPONIVEIS.includes(c)) || [];
     const outroConvenioExistente = conveniosPersonalizados.length > 0 ? conveniosPersonalizados.join(', ') : '';
-    
+
     // Buscar atendimentos vinculados ao médico via pivot (pós-migration) ou fallback por medico_id
     const atendimentosDoMedico: string[] =
       (medico.atendimentos_ids && medico.atendimentos_ids.length > 0)
@@ -576,11 +568,6 @@ export const DoctorManagementPanel: React.FC = () => {
     setFormData({
       nome: medico.nome,
       especialidade: medico.especialidade,
-      convenios_aceitos: conveniosPersonalizados.length > 0 
-        ? [...conveniosPadrao, 'OUTRO'] 
-        : conveniosPadrao,
-      convenios_restricoes: (medico.convenios_restricoes as Record<string, string>) || {},
-      outroConvenio: outroConvenioExistente,
       atendimentos_ids: atendimentosDoMedico,
       valoresOverride: overrides,
       outroAtendimento: '',
@@ -597,7 +584,8 @@ export const DoctorManagementPanel: React.FC = () => {
       rqe: medico.rqe || '',
       telefone_alternativo: medico.telefone_alternativo || '',
       horarios_periodos: periodosConfig,
-      intervalo_minutos: intervalo
+      intervalo_minutos: intervalo,
+      agendamento_indisponivel: medico.agendamento_indisponivel === true
     });
     setIsDialogOpen(true);
   };
@@ -743,7 +731,7 @@ export const DoctorManagementPanel: React.FC = () => {
       ...conveniosPersonalizados
     ];
     // Normalizar: expandir qualquer item que contenha vírgulas internas (dados legados)
-    const conveniosNormalizados = conveniosFinal.flatMap(c => 
+    const conveniosNormalizados = conveniosFinal.flatMap(c =>
       c.includes(',') ? c.split(',').map(s => s.trim().toUpperCase()).filter(s => s.length > 0) : [c]
     );
     // Remover duplicatas
@@ -782,7 +770,6 @@ export const DoctorManagementPanel: React.FC = () => {
 
     const dataToSubmit = {
       ...formData,
-      convenios_aceitos: conveniosUnicos,
       atendimentos_ids: atendimentosIdsFinal
     };
 
@@ -799,36 +786,6 @@ export const DoctorManagementPanel: React.FC = () => {
       atendimentos_ids: prev.atendimentos_ids.includes(atendimentoId)
         ? prev.atendimentos_ids.filter(id => id !== atendimentoId)
         : [...prev.atendimentos_ids, atendimentoId]
-    }));
-  };
-
-  const handleConvenioToggle = (convenio: string) => {
-    setFormData(prev => {
-      const newConvenios = prev.convenios_aceitos.includes(convenio)
-        ? prev.convenios_aceitos.filter(c => c !== convenio)
-        : [...prev.convenios_aceitos, convenio];
-      
-      // Remover restrições de convênios desmarcados
-      const newRestricoes = { ...prev.convenios_restricoes };
-      if (!newConvenios.includes(convenio)) {
-        delete newRestricoes[convenio];
-      }
-      
-      return {
-        ...prev,
-        convenios_aceitos: newConvenios,
-        convenios_restricoes: newRestricoes
-      };
-    });
-  };
-
-  const handleConvenioRestricaoChange = (convenio: string, restricao: string) => {
-    setFormData(prev => ({
-      ...prev,
-      convenios_restricoes: {
-        ...prev.convenios_restricoes,
-        [convenio]: restricao
-      }
     }));
   };
 
@@ -960,7 +917,14 @@ export const DoctorManagementPanel: React.FC = () => {
                     
                     return (
                       <TableRow key={medico.id}>
-                        <TableCell className="font-medium">{medico.nome}</TableCell>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            <span>{medico.nome}</span>
+                            {medico.agendamento_indisponivel && (
+                              <Badge variant="secondary" className="text-[10px]">Sem agendamento</Badge>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <div className="flex flex-col gap-0.5 text-xs">
                             {medico.crm && <span className="text-muted-foreground">CRM: {medico.crm}</span>}
@@ -1025,13 +989,9 @@ export const DoctorManagementPanel: React.FC = () => {
                           </TooltipProvider>
                         </TableCell>
                         <TableCell>
-                          {medico.convenios_aceitos?.length ? (
-                            <Badge variant="outline">
-                              {medico.convenios_aceitos.length} aceitos
-                            </Badge>
-                          ) : (
-                            <span className="text-muted-foreground text-sm">-</span>
-                          )}
+                          <span className="text-muted-foreground text-xs">
+                            ver no editor
+                          </span>
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-col gap-0.5 text-xs">
@@ -1084,7 +1044,7 @@ export const DoctorManagementPanel: React.FC = () => {
                                           tipo_agendamento: (medico.horarios as any)?.tipo_agendamento || 'ordem_chegada',
                                           permite_agendamento_online: true,
                                           servicos: {},
-                                          convenios: medico.convenios_aceitos || [],
+                                          convenios: [],
                                           idade_minima: medico.idade_minima,
                                           idade_maxima: medico.idade_maxima
                                         },
@@ -1299,6 +1259,25 @@ export const DoctorManagementPanel: React.FC = () => {
                       Permite agendamentos via WhatsApp/Bot
                     </p>
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="agendamento_indisponivel">Agendamento indisponível</Label>
+                  <div className="flex items-center justify-between p-3 border rounded-md">
+                    <span className="text-sm">
+                      {formData.agendamento_indisponivel ? 'Não recebe agendamentos pela recepção' : 'Disponível para agendamento'}
+                    </span>
+                    <Switch
+                      id="agendamento_indisponivel"
+                      checked={formData.agendamento_indisponivel}
+                      onCheckedChange={(checked) =>
+                        setFormData(prev => ({ ...prev, agendamento_indisponivel: checked }))
+                      }
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Quando ligado, o médico fica oculto nas listas de agendamento da recepção. Use para profissionais cuja agenda é gerida fora do sistema, em férias prolongadas, ou cadastrados apenas para anexar regras/atendimentos.
+                  </p>
                 </div>
               </div>
 
@@ -1568,63 +1547,24 @@ export const DoctorManagementPanel: React.FC = () => {
                 </p>
               </div>
 
-              {/* Convênios */}
+              {/* Convênios — CRUD normalizado, só após o médico ser salvo */}
               <div className="space-y-2">
-                <Label>Convênios Aceitos</Label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3 border rounded-lg">
-                  {CONVENIOS_DISPONIVEIS.map((convenio) => (
-                    <div key={convenio} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`conv-${convenio}`}
-                        checked={formData.convenios_aceitos.includes(convenio)}
-                        onCheckedChange={() => handleConvenioToggle(convenio)}
-                      />
-                      <label 
-                        htmlFor={`conv-${convenio}`}
-                        className="text-sm cursor-pointer"
-                      >
-                        {convenio}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-                
-                {/* Campo condicional para "Outro Convênio" */}
-                {formData.convenios_aceitos.includes('OUTRO') && (
-                  <div className="mt-2">
-                    <Input
-                      placeholder="Digite o nome do outro convênio..."
-                      value={formData.outroConvenio}
-                      onChange={(e) => setFormData(prev => ({ ...prev, outroConvenio: e.target.value }))}
-                      className="border-dashed"
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      O convênio será salvo em MAIÚSCULAS
-                    </p>
-                  </div>
-                )}
-
-                {/* Restrições por Convênio */}
-                {formData.convenios_aceitos.filter(c => c !== 'OUTRO').length > 0 && (
-                  <div className="mt-3 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <AlertCircle className="h-4 w-4 text-amber-500" />
-                      <span className="text-sm font-medium">Restrições por Convênio (opcional)</span>
-                    </div>
-                    <div className="grid gap-2 p-3 border rounded-lg bg-amber-50/50">
-                      {formData.convenios_aceitos.filter(c => c !== 'OUTRO').map((convenio) => (
-                        <div key={convenio} className="flex items-center gap-2">
-                          <Badge variant="outline" className="min-w-[100px] justify-center">
-                            {convenio}
-                          </Badge>
-                          <Input
-                            placeholder="Ex: Apenas consultas, Carência de 30 dias..."
-                            value={formData.convenios_restricoes[convenio] || ''}
-                            onChange={(e) => handleConvenioRestricaoChange(convenio, e.target.value)}
-                            className="flex-1"
-                          />
-                        </div>
-                      ))}
+                <Label>Convênios</Label>
+                {editingDoctor && effectiveClinicId ? (
+                  <ConveniosMedicoEditor
+                    medicoId={editingDoctor.id}
+                    clienteId={effectiveClinicId}
+                  />
+                ) : (
+                  <div className="flex items-start gap-3 p-4 border border-dashed rounded-lg bg-muted/30">
+                    <Info className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">Disponível após salvar o médico</p>
+                      <p className="text-xs text-muted-foreground">
+                        Preencha os dados básicos e clique em <strong>Salvar</strong>. Depois, abra o médico em
+                        modo edição para cadastrar os convênios aceitos, com tipo (informativo, apenas consulta,
+                        bloqueado etc.) e mensagem de orientação.
+                      </p>
                     </div>
                   </div>
                 )}

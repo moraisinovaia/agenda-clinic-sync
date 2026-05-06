@@ -20,6 +20,7 @@ export function useSchedulingData() {
         .from('medicos')
         .select('*')
         .eq('ativo', true)
+        .or('agendamento_indisponivel.is.null,agendamento_indisponivel.eq.false')
         .order('nome');
 
       if (error) {
@@ -30,6 +31,7 @@ export function useSchedulingData() {
             const { data: fallbackData, error: fallbackError } = await supabase
               .from('medicos')
               .select('*')
+              .or('agendamento_indisponivel.is.null,agendamento_indisponivel.eq.false')
               .limit(50); // Limite para não sobrecarregar
             
             if (!fallbackError && fallbackData) {
