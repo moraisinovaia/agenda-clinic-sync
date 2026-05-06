@@ -82,23 +82,6 @@ export function ServiceManagementPanel() {
     }
   }, [isAdmin, isClinicAdmin, clinicas, selectedClinicId]);
 
-  // Query: Médicos da clínica (para vínculo por serviço)
-  const { data: medicos = [] } = useQuery({
-    queryKey: ['medicos-admin', effectiveClinicId],
-    queryFn: async () => {
-      if (!effectiveClinicId) return [];
-      const { data, error } = await supabase
-        .from('medicos')
-        .select('id, nome, especialidade')
-        .eq('cliente_id', effectiveClinicId)
-        .eq('ativo', true)
-        .order('nome');
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!effectiveClinicId,
-  });
-
   // Query: Atendimentos da clínica selecionada
   const { data: atendimentos = [], isLoading: loadingAtendimentos } = useQuery({
     queryKey: ['atendimentos-admin', effectiveClinicId],

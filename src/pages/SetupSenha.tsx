@@ -66,10 +66,10 @@ export default function SetupSenha() {
         return;
       }
 
-      // 2. Limpa flag must_change_password
+      // 2. Limpa flag must_change_password (coluna não está nos types regenerados)
       const { error: profileErr } = await supabase
         .from('profiles')
-        .update({ must_change_password: false })
+        .update({ must_change_password: false } as any)
         .eq('user_id', user.id);
 
       if (profileErr) {

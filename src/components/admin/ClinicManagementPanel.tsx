@@ -327,13 +327,17 @@ export function ClinicManagementPanel() {
         // Modal permanece aberto para o admin poder tentar novamente
       } else {
         // Upsert configuracoes_clinica (mapeamento Evolution)
+        // tabela é EAV (categoria/chave/valor NOT NULL) — schema/constraint a alinhar
         const { error: cfgError } = await supabase
           .from('configuracoes_clinica')
           .upsert({
             cliente_id: editingCliente.id,
+            categoria: 'whatsapp',
+            chave: 'evolution_instance',
+            valor: editFormData.evolution_instance_id || '',
             evolution_instance_id: editFormData.evolution_instance_id || null,
             nome_clinica: editFormData.nome_clinica || editFormData.nome
-          }, { onConflict: 'cliente_id' });
+          } as any, { onConflict: 'cliente_id,categoria,chave' } as any);
         if (cfgError) console.error('Erro ao salvar configuracoes_clinica:', cfgError);
 
         toast({

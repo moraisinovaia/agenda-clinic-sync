@@ -487,11 +487,6 @@ export const DoctorManagementPanel: React.FC = () => {
   const handleOpenEdit = async (medico: Medico) => {
     setEditingDoctor(medico);
 
-    // Separar convênios padrão dos personalizados
-    const conveniosPadrao = medico.convenios_aceitos?.filter(c => CONVENIOS_DISPONIVEIS.includes(c)) || [];
-    const conveniosPersonalizados = medico.convenios_aceitos?.filter(c => !CONVENIOS_DISPONIVEIS.includes(c)) || [];
-    const outroConvenioExistente = conveniosPersonalizados.length > 0 ? conveniosPersonalizados.join(', ') : '';
-
     // Buscar atendimentos vinculados ao médico via pivot (pós-migration) ou fallback por medico_id
     const atendimentosDoMedico: string[] =
       (medico.atendimentos_ids && medico.atendimentos_ids.length > 0)
@@ -721,21 +716,6 @@ export const DoctorManagementPanel: React.FC = () => {
         return;
       }
     }
-
-    // Processar convênios: remover "OUTRO" e separar convênios personalizados por vírgula
-    const conveniosPersonalizados = formData.outroConvenio.trim()
-      ? formData.outroConvenio.split(',').map(c => c.trim().toUpperCase()).filter(c => c.length > 0)
-      : [];
-    const conveniosFinal = [
-      ...formData.convenios_aceitos.filter(c => c !== 'OUTRO'),
-      ...conveniosPersonalizados
-    ];
-    // Normalizar: expandir qualquer item que contenha vírgulas internas (dados legados)
-    const conveniosNormalizados = conveniosFinal.flatMap(c =>
-      c.includes(',') ? c.split(',').map(s => s.trim().toUpperCase()).filter(s => s.length > 0) : [c]
-    );
-    // Remover duplicatas
-    const conveniosUnicos = [...new Set(conveniosNormalizados)];
 
     let atendimentosIdsFinal = [...formData.atendimentos_ids];
 
