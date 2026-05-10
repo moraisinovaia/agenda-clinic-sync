@@ -100,9 +100,19 @@ export function useAtomicAppointmentCreation() {
   };
 
   // ✅ DEFINITIVO: Criar agendamento com função atômica com locks
-  const createAppointment = useCallback(async (formData: SchedulingFormData, editingAppointmentId?: string, forceConflict = false): Promise<any> => {
+  //
+  // [Override profissional] forceOverride: quando setado, recepção decidiu
+  // forçar agendamento que viola regra de recurso (MAPA/HOLTER/ECG).
+  // Pula validação validar_limite_recurso e usa criar_agendamento_com_override
+  // (que grava force_* + audit_log).
+  const createAppointment = useCallback(async (
+    formData: SchedulingFormData,
+    editingAppointmentId?: string,
+    forceConflict = false,
+    forceOverride?: { categoria: 'encaixe' | 'emergencia' | 'paciente_vip' | 'outro'; reason: string | null }
+  ): Promise<any> => {
     console.log('🚀🚀🚀 INÍCIO ABSOLUTO - createAppointment CHAMADO!', new Date().toISOString());
-    console.log('📦 Dados recebidos:', { formData, editingAppointmentId, forceConflict, userId: user?.id });
+    console.log('📦 Dados recebidos:', { formData, editingAppointmentId, forceConflict, forceOverride, userId: user?.id });
     
     try {
       setLoading(true);
@@ -150,7 +160,9 @@ export function useAtomicAppointmentCreation() {
       const medicoData = medicoResult.data;
 
       // Validar limite de recursos (MAPA, HOLTER, ECG) - apenas se não for edição
-      if (medicoData?.cliente_id && !editingAppointmentId) {
+      // [Override] Pula validação quando recepção já decidiu forçar — backend
+      // grava force_* + audit_log via criar_agendamento_com_override.
+      if (medicoData?.cliente_id && !editingAppointmentId && !forceOverride) {
         const { data: limiteResult, error: limiteError } = await supabase.rpc('validar_limite_recurso', {
           p_atendimento_id: formData.atendimentoId,
           p_medico_id: formData.medicoId,
@@ -159,11 +171,13 @@ export function useAtomicAppointmentCreation() {
         });
 
         if (!limiteError && limiteResult && typeof limiteResult === 'object' && 'disponivel' in limiteResult) {
-          const resultado = limiteResult as { disponivel: boolean; motivo?: string; recurso_nome?: string; vagas_usadas?: number; vagas_total?: number };
+          const resultado = limiteResult as { disponivel: boolean; motivo?: string; recurso_nome?: string; vagas_usadas?: number; vagas_total?: number; medico_nome?: string; data?: string };
           if (!resultado.disponivel) {
             const resourceError = new Error(resultado.motivo || 'Limite de recurso atingido') as any;
             resourceError.isResourceLimit = true;
             resourceError.recursoNome = resultado.recurso_nome;
+            resourceError.medicoNome = resultado.medico_nome;
+            resourceError.dataAgendamento = resultado.data;
             resourceError.vagasUsadas = resultado.vagas_usadas;
             resourceError.vagasTotal = resultado.vagas_total;
             throw resourceError;
@@ -181,7 +195,10 @@ export function useAtomicAppointmentCreation() {
       }
 
       // Chamar função SQL atômica COM LOCKS (uma única tentativa)
-      const { data, error } = await supabase.rpc('criar_agendamento_atomico', {
+      // [Override] usa criar_agendamento_com_override quando recepção forçou
+      // (grava force_* + audit_log automaticamente).
+      const rpcName = forceOverride ? 'criar_agendamento_com_override' : 'criar_agendamento_atomico';
+      const rpcParams: any = {
         p_nome_completo: formData.nomeCompleto,
         p_data_nascimento: formData.dataNascimento || null,
         p_convenio: formData.convenio,
@@ -195,8 +212,13 @@ export function useAtomicAppointmentCreation() {
         p_criado_por: criadorNome,
         p_criado_por_user_id: user.id,
         p_agendamento_id_edicao: editingAppointmentId || null,
-        p_force_conflict: forceConflict
-      } as any);
+        p_force_conflict: forceConflict,
+      };
+      if (forceOverride) {
+        rpcParams.p_force_motivo_categoria = forceOverride.categoria;
+        rpcParams.p_force_reason = forceOverride.reason;
+      }
+      const { data, error } = await supabase.rpc(rpcName, rpcParams);
 
       if (error) {
         console.error('❌ Erro na chamada da função:', error);

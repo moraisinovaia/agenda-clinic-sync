@@ -276,17 +276,30 @@ export const AppointmentsList = React.memo(({ appointments, doctors, onEditAppoi
                     className="grid grid-cols-[100px_100px_80px_200px_120px_150px_100px_120px_140px_140px_50px_120px] gap-2 p-4 border-b hover:bg-muted/30 items-center text-sm"
                   >
                     {/* Status */}
-                    <div>
+                    <div className="flex flex-col gap-1">
                       <Badge
-                        variant={appointment.status === 'confirmado' ? 'outline' : getStatusColor(appointment.status)} 
+                        variant={appointment.status === 'confirmado' ? 'outline' : getStatusColor(appointment.status)}
                         className={`text-xs ${
-                          appointment.status === 'confirmado' 
-                            ? 'bg-green-500 text-white border-green-600 hover:bg-green-600' 
+                          appointment.status === 'confirmado'
+                            ? 'bg-green-500 text-white border-green-600 hover:bg-green-600'
                             : ''
                         }`}
                       >
                         {getStatusLabel(appointment.status)}
                       </Badge>
+                      {/* [Override profissional] Badge "Forçado" pra agendamentos fora-da-regra */}
+                      {(appointment as any).force_motivo_categoria && (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] border-amber-400 bg-amber-50 text-amber-800"
+                          title={
+                            `Forçado: ${(appointment as any).force_motivo_categoria}` +
+                            ((appointment as any).force_reason ? ` — ${(appointment as any).force_reason}` : '')
+                          }
+                        >
+                          ⚠️ Forçado
+                        </Badge>
+                      )}
                     </div>
 
                     {/* Data */}
