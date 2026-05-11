@@ -21,11 +21,16 @@ export function useSupabaseScheduling() {
   }, [schedulingData.refetch, appointmentsList.refetch]);
 
   // ⚡ OTIMIZAÇÃO FASE 9: Update otimista INSTANTÂNEO - sem refetch pesado
-  const createAppointment = useCallback(async (formData: any, editingAppointmentId?: string, forceConflict = false) => {
+  const createAppointment = useCallback(async (
+    formData: any,
+    editingAppointmentId?: string,
+    forceConflict = false,
+    forceOverride?: { categoria: 'encaixe' | 'emergencia' | 'paciente_vip' | 'outro'; reason: string | null }
+  ) => {
     console.log('🌟 useSupabaseScheduling.createAppointment CHAMADO');
     
     try {
-      const result = await appointmentCreation.createAppointment(formData, editingAppointmentId, forceConflict);
+      const result = await appointmentCreation.createAppointment(formData, editingAppointmentId, forceConflict, forceOverride);
       
       // ⚡ FASE 9: Update otimista instantâneo - buscar apenas o novo agendamento (1 registro)
       if (result && result.success !== false && result.agendamento_id) {
