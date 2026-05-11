@@ -71,6 +71,9 @@ availability_direct() {
 
 schedule_direct() {
   local servico="$1" medico="$2"
+  # Data dinâmica (hoje+7d) — evita falso negativo DATA_PASSADA com data hardcoded
+  local data_futura
+  data_futura=$(date -d "+7 days" +%Y-%m-%d 2>/dev/null || date -v+7d +%Y-%m-%d 2>/dev/null)
   curl -s -X POST "${ENDPOINT}/schedule" \
     -H "Content-Type: application/json" \
     -H "x-api-key: ${API_KEY}" \
@@ -79,11 +82,12 @@ schedule_direct() {
       --arg config_id  "$CONFIG_ID" \
       --arg atend      "$servico" \
       --arg medico     "$medico" \
+      --arg data       "$data_futura" \
       '{cliente_id:$cliente_id, config_id:$config_id,
         atendimento_nome:$atend, medico_nome:$medico,
         paciente_nome:"Paciente Teste", data_nascimento:"1980-01-01",
         convenio:"PARTICULAR", celular:"87999999999",
-        data_consulta:"2026-05-07", hora_consulta:"08:00:00"}')"
+        data_consulta:$data, hora_consulta:"08:00:00"}')"
 }
 
 jq_get() { echo "$1" | jq -r "$2" 2>/dev/null; }
@@ -325,6 +329,48 @@ run_mapa_mrpa() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
+# CENÁRIO 7 — CASEMBRAPA + tipo_atendimento_contexto (P2)
+# ═══════════════════════════════════════════════════════════════════════════
+run_casembrapa() {
+  echo ""
+  echo -e "${YELLOW}━━ CENÁRIO 7a: CASEMBRAPA + consulta normal → BLOQUEAR ━━${NC}"
+  DADOS='{"servico":"Consulta","medico_nome":"Dr. Marcelo","convenio":"CASEMBRAPA"}'
+  R=$(chat_turn "quero marcar consulta" "inicio" "$DADOS")
+  RESP=$(resposta_de "$R")
+  assert_field    "audit_reason=CASEMBRAPA_BLOCK"  "$R" "._debug.audit_reason" "CASEMBRAPA_BLOCK"
+  assert_contains "menciona periódica/check-up"    "$RESP" "periódica\|check-up"
+
+  echo ""
+  echo -e "${YELLOW}━━ CENÁRIO 7b: CASEMBRAPA + contexto periódico (dados pré-set) → LIBERA ━━${NC}"
+  DADOS='{"servico":"Consulta","medico_nome":"Dr. Marcelo","convenio":"CASEMBRAPA","tipo_atendimento_contexto":"periodico"}'
+  R=$(chat_turn "consulta periódica anual" "inicio" "$DADOS")
+  RESP=$(resposta_de "$R")
+  assert_not_contains "não bloqueia por CASEMBRAPA_BLOCK" "$R" "CASEMBRAPA_BLOCK"
+  assert_not_contains "resposta não orienta operadora"    "$RESP" "operadora\|particular"
+
+  echo ""
+  echo -e "${YELLOW}━━ CENÁRIO 7c: CASEMBRAPA SAÚDE (variante) + normal → BLOQUEAR ━━${NC}"
+  DADOS='{"servico":"Consulta","medico_nome":"Dr. Marcelo","convenio":"CASEMBRAPA SAÚDE"}'
+  R=$(chat_turn "quero agendar uma consulta" "inicio" "$DADOS")
+  assert_field "audit_reason=CASEMBRAPA_BLOCK (variante)" "$R" "._debug.audit_reason" "CASEMBRAPA_BLOCK"
+
+  echo ""
+  echo -e "${YELLOW}━━ CENÁRIO 7d: LLM extrai tipo_atendimento_contexto a partir de 'check-up' ━━${NC}"
+  # Sem pré-setar contexto — LLM deve extrair "periodico" da mensagem
+  DADOS='{"servico":"Consulta","medico_nome":"Dr. Marcelo","convenio":"CASEMBRAPA"}'
+  R=$(chat_turn "quero fazer meu check-up anual com Dr. Marcelo" "inicio" "$DADOS")
+  assert_field        "LLM extrai tipo_atendimento_contexto=periodico" "$R" \
+                      ".dados_coletados.tipo_atendimento_contexto" "periodico"
+  assert_not_contains "não bloqueia quando LLM detecta check-up" "$R" "CASEMBRAPA_BLOCK"
+
+  echo ""
+  echo -e "${YELLOW}━━ CENÁRIO 7e: Particular + check-up → flui sem audit ━━${NC}"
+  DADOS='{"servico":"Consulta","medico_nome":"Dr. Marcelo","convenio":"PARTICULAR"}'
+  R=$(chat_turn "quero fazer um check-up anual" "inicio" "$DADOS")
+  assert_not_contains "particular nunca bloqueia por CASEMBRAPA" "$R" "CASEMBRAPA_BLOCK"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
 # MAIN
 # ═══════════════════════════════════════════════════════════════════════════
 echo ""
@@ -340,6 +386,7 @@ case "$CENARIO" in
   mrpa)       run_mrpa       ;;
   ergo)       run_ergo       ;;
   mapa_mrpa)  run_mapa_mrpa  ;;
+  casembrapa) run_casembrapa ;;
   all|*)
     run_consulta
     run_formato
@@ -347,6 +394,7 @@ case "$CENARIO" in
     run_mrpa
     run_ergo
     run_mapa_mrpa
+    run_casembrapa
     ;;
 esac
 

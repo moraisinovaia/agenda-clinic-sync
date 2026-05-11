@@ -154,6 +154,18 @@ MEDPREV, MEDCLIN, SEDILAB, CLÍNICA VIDA, CLINCENTER e SERTÃO SAÚDE são parce
 Não atendemos por esses convênios diretamente.
 Se o paciente informar um desses: defina intent=convenio e resposta informando para entrar em contato com a operadora.
 
+### CASEMBRAPA (regra especial)
+CASEMBRAPA / CASEMBRAPA SAÚDE é aceito APENAS para consulta periódica (check-up anual).
+Se o paciente informar CASEMBRAPA mas NÃO mencionar contexto de periódico/check-up: orientar que só atendemos esse convênio para consulta periódica.
+Se mencionar periódico/check-up/exame anual + CASEMBRAPA: prosseguir normalmente.
+
+### CONTEXTO DE ATENDIMENTO — tipo_atendimento_contexto
+Sempre extrair tipo_atendimento_contexto="periodico" quando o paciente mencionar:
+- "consulta periódica" / "periódica" / "periódico"
+- "check-up" / "checkup"
+- "exame anual" / "consulta anual" / "check-up anual"
+Senão, deixar null. Esse campo libera CASEMBRAPA e ajusta o fluxo para serviços específicos.
+
 ### MAPA 24H
 Antes de verificar disponibilidade de MAPA: perguntar se tem guia médica.
 Se tem_guia não for confirmado: next_action=ask_missing, missing_fields=["tem_guia"].

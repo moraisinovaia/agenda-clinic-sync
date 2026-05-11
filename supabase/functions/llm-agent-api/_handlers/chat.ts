@@ -40,6 +40,9 @@ export interface DadosColetados {
   tem_guia: boolean | null;
   fistula: boolean | null;
   peso: number | null;
+  // Contexto da consulta (P2). Hoje só "periodico" — paciente fazendo
+  // check-up / consulta anual. Libera CASEMBRAPA (única exceção entre parceiros).
+  tipo_atendimento_contexto: 'periodico' | null;
 }
 
 interface ExtractionResult {
@@ -85,11 +88,18 @@ const DADOS_EXTRAIDOS_SCHEMA = {
     tem_guia:        { type: ['boolean', 'null'], description: 'true se mencionou que tem guia médica' },
     fistula:         { type: ['boolean', 'null'], description: 'true se mencionou fístula no braço' },
     peso:            { type: ['number', 'null'],  description: 'Peso em kg, se mencionado' },
+    tipo_atendimento_contexto: {
+      type: ['string', 'null'],
+      enum: ['periodico', null],
+      description:
+        'Contexto da consulta. "periodico" se o paciente mencionar consulta periódica, periódica, ' +
+        'check-up, checkup, exame anual ou consulta anual. Caso contrário, null.',
+    },
   },
   required: [
     'servico', 'medico_nome', 'medico_id', 'data_consulta', 'periodo',
     'convenio', 'nome_paciente', 'data_nascimento', 'confirmado',
-    'tem_guia', 'fistula', 'peso',
+    'tem_guia', 'fistula', 'peso', 'tipo_atendimento_contexto',
   ],
 };
 
@@ -245,6 +255,15 @@ function isConvenioParceiro(convenio: string | null): boolean {
   return PARCEIROS_NORM.some((p) => n.includes(p));
 }
 
+// CASEMBRAPA tem regra diferente dos demais parceiros: BLOQUEIA para serviços
+// normais, mas LIBERA quando o contexto é "periodico" (check-up anual).
+// Cobre "CASEMBRAPA" e "CASEMBRAPA SAÚDE" (e variantes com espaço/acento)
+// via normalização — basta o nome começar com "casembrapa" após normStr.
+function isConvenioCasembrapa(convenio: string | null): boolean {
+  if (!convenio) return false;
+  return normStr(convenio).startsWith('casembrapa');
+}
+
 function isServicoTergo(servico: string | null): boolean {
   return !!servico && normStr(servico).includes('ergom');
 }
@@ -336,6 +355,7 @@ function mergeDados(
       tem_guia: (m.tem_guia as boolean | null) ?? null,
       fistula: (m.fistula as boolean | null) ?? null,
       peso: (m.peso as number | null) ?? null,
+      tipo_atendimento_contexto: (m.tipo_atendimento_contexto as 'periodico' | null) ?? null,
     };
   }
   for (const [k, v] of Object.entries(extraido)) {
@@ -354,6 +374,8 @@ function mergeDados(
     tem_guia:        (m.tem_guia        as boolean | null) ?? null,
     fistula:         (m.fistula         as boolean | null) ?? null,
     peso:            (m.peso            as number  | null) ?? null,
+    tipo_atendimento_contexto:
+      (m.tipo_atendimento_contexto as 'periodico' | null) ?? null,
   };
 }
 
@@ -374,6 +396,22 @@ function auditRules(
       override_response:
         `Para o convênio ${dados.convenio}, orientamos entrar em contato diretamente com a operadora ou realizar o agendamento como particular. Posso ajudar com mais alguma coisa?`,
       reason: 'CONVENIO_PARCEIRO',
+    };
+  }
+
+  // CASEMBRAPA: bloqueia salvo se contexto = periódico (check-up anual).
+  // Aplica apenas em fluxos de scheduling (disponibilidade/agendar).
+  if (
+    isConvenioCasembrapa(dados.convenio) &&
+    (intent === 'disponibilidade' || intent === 'agendar') &&
+    dados.tipo_atendimento_contexto !== 'periodico'
+  ) {
+    return {
+      blocked: true,
+      override_response:
+        `O convênio ${dados.convenio} é aceito apenas para consulta periódica (check-up anual). ` +
+        `Se for o seu caso, posso ajudar a agendar. Caso contrário, oriente-se com a operadora ou agende como particular.`,
+      reason: 'CASEMBRAPA_BLOCK',
     };
   }
 

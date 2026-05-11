@@ -400,14 +400,39 @@ export async function handleSchedule(supabase: any, body: any, clienteId: string
             if (servicoKeyValidacao) {
               const servicoLocal = regras.servicos[servicoKeyValidacao];
               console.log(`🔍 Validando serviço: ${servicoKeyValidacao}`);
-              
-              
-              // 2.1 Verificar se permite agendamento online (multi-nível: serviço, raiz, config nested)
-              const permiteOnline = 
-                servicoLocal.permite_online || 
-                servicoLocal.permite_agendamento_online ||
-                regras?.permite_agendamento_online ||      // Nível raiz das regras (agendas dedicadas)
-                (regras as any)?.config?.permite_agendamento_online;  // Fallback config nested
+
+              // 2.0 BLOQUEIO walk_in_info_only — serviço informativo, nunca cria agendamento
+              // (ex: ECG do Dr. Marcelo). Backend tem autoridade; LLM já bloqueia em chat.ts,
+              // mas /schedule pode ser chamado direto por integrações externas.
+              if (servicoLocal.tipo === 'walk_in_info_only' || servicoLocal.nao_necessita_agendamento === true) {
+                console.log(`🚶 [WALK_IN_BLOCK] Serviço "${servicoKeyValidacao}" é walk_in_info_only — bloqueando criação de agendamento`);
+                return businessErrorResponse({
+                  codigo_erro: 'SERVICO_SEM_AGENDAMENTO',
+                  mensagem_usuario: servicoLocal.observacao || `ℹ️ ${servicoKeyValidacao} não necessita agendamento. Compareça nos dias e horários definidos pela clínica (ordem de chegada).`,
+                  detalhes: {
+                    servico: servicoKeyValidacao,
+                    medico: regras.nome,
+                    tipo: 'walk_in_info_only',
+                  },
+                });
+              }
+
+              // 2.1 Verificar se permite agendamento online — explicit-false do serviço
+              // tem precedência sobre fallback raiz (config legada pode ter root=true).
+              // Hierarquia: serviço.permite_online (explicit) > serviço.permite_agendamento_online >
+              //             raiz.permite_agendamento_online > config.permite_agendamento_online
+              let permiteOnline: boolean;
+              if (typeof servicoLocal.permite_online === 'boolean') {
+                permiteOnline = servicoLocal.permite_online;
+              } else if (typeof servicoLocal.permite_agendamento_online === 'boolean') {
+                permiteOnline = servicoLocal.permite_agendamento_online;
+              } else if (typeof regras?.permite_agendamento_online === 'boolean') {
+                permiteOnline = regras.permite_agendamento_online;
+              } else if (typeof (regras as any)?.config?.permite_agendamento_online === 'boolean') {
+                permiteOnline = (regras as any).config.permite_agendamento_online;
+              } else {
+                permiteOnline = true; // default permissivo (preserva comportamento legado para serviços sem flag)
+              }
               if (!permiteOnline) {
                 console.log(`❌ Serviço ${servicoKeyValidacao} não permite agendamento online`);
                 return businessErrorResponse({
