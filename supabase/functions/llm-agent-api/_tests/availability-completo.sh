@@ -187,6 +187,56 @@ R=$(avail "$MARCELO_CID" "$MARCELO_CFG" "Dr. Marcelo" "Consulta" "2026-08-15")
 # Sistema deve responder com sugestões alternativas (não com a data bloqueada)
 assert_data_ausente "15/08 bloqueado não retornado"  "$R" "2026-08-15"
 
+# ── E2. BLOQUEIO PARCIAL POR HORÁRIO ─────────────────────────────────────
+#
+# Cenário real: recepcionista bloqueia SÓ a manhã (médico saiu pra emergência),
+# mas vai atender tarde. O sistema deve oferecer só a tarde do dia em questão.
+#
+# Usa serviço MRPA do Dr. Marcelo que atende manhã + tarde na quarta.
+# Cria bloqueio temporário via Postgres direto (test isolation), valida,
+# limpa imediatamente.
+
+header "E4: Bloqueio parcial (só manhã) — médico atende tarde"
+
+# Setup: precisa de psql? Usar Supabase REST com service_role pode complicar.
+# Convenção: pular se SUPABASE_SERVICE_KEY não setada.
+if [ -z "${SUPABASE_SERVICE_KEY:-}" ]; then
+  echo -e "${YELLOW}  ⊘ pulado (defina SUPABASE_SERVICE_KEY pra rodar este cenário)${NC}"
+else
+  TARGET_DATE="2026-06-17"  # quarta, MRPA atende ambos períodos
+  SUPABASE_URL="${SUPABASE_URL:-https://qxlvzbvzajibdtlzngdy.supabase.co}"
+
+  # Insere bloqueio teste (manhã 07:00-12:00)
+  BLOQ_ID=$(curl -s -X POST "${SUPABASE_URL}/rest/v1/bloqueios_agenda" \
+    -H "apikey: ${SUPABASE_SERVICE_KEY}" \
+    -H "Authorization: Bearer ${SUPABASE_SERVICE_KEY}" \
+    -H "Content-Type: application/json" \
+    -H "Prefer: return=representation" \
+    -d "{\"medico_id\":\"1e110923-50df-46ff-a57a-29d88e372900\",\"cliente_id\":\"$MARCELO_CID\",\"data_inicio\":\"$TARGET_DATE\",\"data_fim\":\"$TARGET_DATE\",\"hora_inicio\":\"07:00\",\"hora_fim\":\"12:00\",\"motivo\":\"TESTE-availability-completo\",\"criado_por\":\"test\",\"status\":\"ativo\"}" \
+    | jq -r '.[0].id // empty')
+
+  if [ -z "$BLOQ_ID" ]; then
+    echo -e "${RED}  ✗ falha ao criar bloqueio teste${NC}"; FAIL=$((FAIL+1))
+  else
+    # Consulta /availability na data alvo
+    R=$(avail "$MARCELO_CID" "$MARCELO_CFG" "Dr. Marcelo" "MRPA" "$TARGET_DATE")
+    PERIODOS=$(echo "$R" | jq -r "[.proximas_datas[]? | select(.data==\"$TARGET_DATE\") | .periodos[].periodo] | join(\",\")")
+
+    if [ "$PERIODOS" = "Tarde" ]; then
+      echo -e "${GREEN}  ✓ Bloqueio parcial filtra só manhã, tarde permanece${NC} (periodos=Tarde)"; PASS=$((PASS+1))
+    elif [ -z "$PERIODOS" ]; then
+      echo -e "${RED}  ✗ Bug: dia inteiro foi descartado (esperado: só Tarde)${NC}"; FAIL=$((FAIL+1))
+    else
+      echo -e "${RED}  ✗ Periodos retornados inesperados: $PERIODOS (esperado: Tarde)${NC}"; FAIL=$((FAIL+1))
+    fi
+
+    # Cleanup
+    curl -s -X DELETE "${SUPABASE_URL}/rest/v1/bloqueios_agenda?id=eq.${BLOQ_ID}" \
+      -H "apikey: ${SUPABASE_SERVICE_KEY}" \
+      -H "Authorization: Bearer ${SUPABASE_SERVICE_KEY}" > /dev/null
+  fi
+fi
+
 # ── F. MULTI-TENANT ───────────────────────────────────────────────────────
 
 header "F1: Suely (Oftalmo, outro cliente) → independente do Marcelo"

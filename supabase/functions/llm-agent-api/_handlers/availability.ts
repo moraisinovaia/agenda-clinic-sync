@@ -13,7 +13,13 @@ import { normalizarServicoPeriodos, buscarAgendaDedicada } from '../_lib/config.
 import { sanitizarCampoOpcional, getDiaSemana } from '../_lib/normalizacao.ts'
 import { getTipoAgendamentoEfetivo, isOrdemChegada, isEstimativaHorario, getIntervaloMinutos, getMensagemEstimativa, formatarHorarioParaExibicao, getDataHoraAtualBrasil, filtrarPeriodosPassados, classificarPeriodoAgendamento, buscarProximasDatasDisponiveis, TIPO_ORDEM_CHEGADA, TIPO_ESTIMATIVA_HORARIO } from '../_lib/tipo-agendamento.ts'
 import { fuzzyMatchMedicos } from '../_lib/fuzzy-match.ts'
-import { carregarDatasBloqueadas } from '../_lib/bloqueios.ts'
+import {
+  carregarDatasBloqueadas,
+  carregarBloqueiosDetalhados,
+  isDataBlockedFully,
+  isHoraBlocked,
+  isPeriodBlocked,
+} from '../_lib/bloqueios.ts'
 
 /**
  * Verifica se um período (manha/tarde) está permitido em dado dia da semana,
@@ -1037,7 +1043,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         })();
         // [F2.2] Passa scope.doctorIds (família real+virtuais expandida pela F1.1).
         // Bloqueio em qualquer medico_id da família bloqueia TODOS os atendimentos.
-        const datasBloqueadasFT = await carregarDatasBloqueadas(
+        const bloqueiosFT = await carregarBloqueiosDetalhados(
           supabase, clienteId, scope.doctorIds.length > 0 ? scope.doctorIds : medico.id, dataInicialFT, dataFimFT
         );
 
@@ -1049,15 +1055,21 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
 
           if (diaPreferido && diaSemanaNum !== diaPreferido) continue;
 
-          // [F2] Pular datas bloqueadas (feriados, férias, etc.)
-          if (datasBloqueadasFT.has(dataCheckStr)) {
-            console.log(`⏭️ [FIXED_TIME] Pulando ${dataCheckStr} (bloqueada em bloqueios_agenda)`);
+          // [F2] Dia inteiro bloqueado (feriado/férias)
+          if (isDataBlockedFully(bloqueiosFT, dataCheckStr)) {
+            console.log(`⏭️ [FIXED_TIME] Pulando ${dataCheckStr} (dia inteiro bloqueado)`);
             continue;
           }
 
           const chave = DIAS_KEY[diaSemanaNum];
           const periodoFT = chave ? (rawServico.periodos as any)[chave] : null;
           if (!periodoFT || periodoFT.ativo === false) continue;
+
+          // Bloqueio PARCIAL: a hora fixa (ex: MAPA às 10:30) cai num range bloqueado?
+          if (periodoFT.hora && isHoraBlocked(bloqueiosFT, dataCheckStr, periodoFT.hora)) {
+            console.log(`⏭️ [FIXED_TIME] Pulando ${dataCheckStr} ${periodoFT.hora} (hora dentro de bloqueio parcial)`);
+            continue;
+          }
 
           // [F1.4] Bug 1 do fixed_time: a comparação exata `hora_agendamento = '08:00:00'`
           // ignorava agendamentos lançados em placeholders cronológicos (07:00, 07:01, …).
@@ -1125,7 +1137,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           return d.toISOString().split('T')[0];
         })();
         // [F2.2] Bloqueios em QUALQUER medico_id relacionado bloqueiam o atendimento
-        const datasBloqueadasSL = await carregarDatasBloqueadas(
+        const bloqueiosSL = await carregarBloqueiosDetalhados(
           supabase, clienteId, scope.doctorIds.length > 0 ? scope.doctorIds : medico.id, dataInicial, dataFimSL
         );
 
@@ -1144,9 +1156,9 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           // Verificar se dia permitido pelo serviço
           if (servico?.dias_semana && !servico.dias_semana.includes(diaSemanaNum)) continue;
 
-          // [F2] Pular datas bloqueadas (feriados, férias, etc.)
-          if (datasBloqueadasSL.has(dataCheckStr)) {
-            console.log(`⏭️ [SHARED_LIMITS] Pulando ${dataCheckStr} (bloqueada em bloqueios_agenda)`);
+          // [F2] Dia inteiro bloqueado
+          if (isDataBlockedFully(bloqueiosSL, dataCheckStr)) {
+            console.log(`⏭️ [SHARED_LIMITS] Pulando ${dataCheckStr} (dia inteiro bloqueado)`);
             continue;
           }
 
@@ -1174,6 +1186,13 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
             const cfg: any = pc;
             if (!isPeriodoPermitidoNoDia(cfg, diaSemanaNum)) continue;
             if (periodoPreferido && pk !== periodoPreferido) continue;
+
+            // Bloqueio PARCIAL: pula período se horário sobrepõe um range bloqueado
+            if (cfg.inicio && cfg.fim && isPeriodBlocked(bloqueiosSL, dataCheckStr, cfg.inicio, cfg.fim)) {
+              console.log(`⏭️ [SHARED_LIMITS] Pulando ${dataCheckStr} ${pk} (${cfg.inicio}-${cfg.fim} sobrepõe bloqueio parcial)`);
+              continue;
+            }
+
             const janela = cfg.distribuicao_fichas
               ?? (cfg.inicio && cfg.fim ? `${cfg.inicio} às ${cfg.fim}` : null)
               ?? '07:00 às 12:00';
@@ -1239,17 +1258,28 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           return d.toISOString().split('T')[0];
         })();
         // [F2.2] Mesma regra: bloqueio em qualquer medico_id relacionado bloqueia
-        const datasBloqueadasUC = await carregarDatasBloqueadas(
+        const bloqueiosUC = await carregarBloqueiosDetalhados(
           supabase, clienteId, scope.doctorIds.length > 0 ? scope.doctorIds : medico.id, dataInicial, dataFimUC
         );
         const diasDisponiveis = diasUseCase
-          .filter((day: any) => {
-            if (datasBloqueadasUC.has(day.date)) {
-              console.log(`⏭️ [USE_CASE] Pulando ${day.date} (bloqueada em bloqueios_agenda)`);
-              return false;
+          .map((day: any) => {
+            // Dia inteiro bloqueado: remove
+            if (isDataBlockedFully(bloqueiosUC, day.date)) {
+              console.log(`⏭️ [USE_CASE] Pulando ${day.date} (dia inteiro bloqueado)`);
+              return null;
             }
-            return true;
+            // Bloqueio PARCIAL: remove apenas as windows cujo horário sobrepõe
+            const windowsFiltradas = (day.windows ?? []).filter((w: any) => {
+              if (w?.start && w?.end && isPeriodBlocked(bloqueiosUC, day.date, w.start, w.end)) {
+                console.log(`⏭️ [USE_CASE] Removendo window ${day.date} ${w.periodKey ?? ''} ${w.start}-${w.end} (sobrepõe bloqueio parcial)`);
+                return false;
+              }
+              return true;
+            });
+            if (windowsFiltradas.length === 0) return null; // sem períodos disponíveis após filtro
+            return { ...day, windows: windowsFiltradas };
           })
+          .filter((d: any) => d !== null)
           // [F6] Cortar a 5 depois do filtro de bloqueios.
           .slice(0, 5);
 
@@ -1308,7 +1338,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           d.setDate(d.getDate() + quantidade_dias);
           return d.toISOString().split('T')[0];
         })();
-        const datasBloqueadasRetry = await carregarDatasBloqueadas(
+        const bloqueiosRetry = await carregarBloqueiosDetalhados(
           supabase, clienteId,
           scope.doctorIds.length > 0 ? scope.doctorIds : medico.id,
           dataInicial, dataFimRetry,
@@ -1326,9 +1356,9 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           // 🗓️ Filtrar por dia da semana preferido
           if (diaPreferido && diaSemanaNum !== diaPreferido) continue;
 
-          // 🔒 Bloqueios da família (F2.2)
-          if (datasBloqueadasRetry.has(dataCheckStr)) {
-            console.log(`⏭️ [RETRY] Pulando ${dataCheckStr} (bloqueada)`);
+          // 🔒 Dia inteiro bloqueado (F2.2)
+          if (isDataBlockedFully(bloqueiosRetry, dataCheckStr)) {
+            console.log(`⏭️ [RETRY] Pulando ${dataCheckStr} (dia inteiro bloqueado)`);
             continue;
           }
 
@@ -1340,6 +1370,14 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
             // Respeitar dias_especificos do período. Sem isso o retry oferecia
             // turnos onde a clínica não atende naquele dia da semana.
             if (!isPeriodoPermitidoNoDia(config, diaSemanaNum)) continue;
+
+            // Bloqueio PARCIAL: pula período se horário sobrepõe range bloqueado
+            const cfgPInicio = (config as any).inicio;
+            const cfgPFim    = (config as any).fim;
+            if (cfgPInicio && cfgPFim && isPeriodBlocked(bloqueiosRetry, dataCheckStr, cfgPInicio, cfgPFim)) {
+              console.log(`⏭️ [RETRY] Pulando ${dataCheckStr} ${periodo} (${cfgPInicio}-${cfgPFim} sobrepõe bloqueio parcial)`);
+              continue;
+            }
 
             const limite     = (config as any).limite || 9;
             // Usar contagem_* (janela de capacidade formal) sobre inicio/fim (janela de exibição)
