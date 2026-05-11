@@ -229,7 +229,7 @@ export async function handleSchedule(supabase: any, body: any, clienteId: string
       
       // Matching inteligente com fuzzy fallback
       console.log(`🔍 Buscando médico: "${medico_nome}"`);
-      const medicosEncontrados = fuzzyMatchMedicos(medico_nome, medicosDentroDoEscopo);
+      const medicosEncontrados = fuzzyMatchMedicos(medico_nome, medicosDentroDoEscopo as any) as Array<{ id?: string; nome: string }>;
       
       if (medicosEncontrados.length === 0) {
         console.log(`❌ Nenhum médico encontrado para: "${medico_nome}"`);
@@ -556,7 +556,7 @@ export async function handleSchedule(supabase: any, body: any, clienteId: string
                   const periodoTexto = periodo === 'manha' ? 'Manhã' : periodo === 'tarde' ? 'Tarde' : 'Noite';
                   return businessErrorResponse({
                     codigo_erro: 'PERIODO_NAO_PERMITIDO',
-                    mensagem_usuario: `❌ ${regras.nome} não atende ${servicoKeyValidacao} no período da ${periodoTexto} às ${dia_semana}s.\n\n✅ Períodos disponíveis neste dia: ${periodosPermitidos.map(p => p === 'manha' ? 'Manhã' : p === 'tarde' ? 'Tarde' : 'Noite').join(', ')}\n\n💡 Escolha um dos períodos disponíveis.`,
+                    mensagem_usuario: `❌ ${regras.nome} não atende ${servicoKeyValidacao} no período da ${periodoTexto} às ${dia_semana}s.\n\n✅ Períodos disponíveis neste dia: ${periodosPermitidos.map((p: string) => p === 'manha' ? 'Manhã' : p === 'tarde' ? 'Tarde' : 'Noite').join(', ')}\n\n💡 Escolha um dos períodos disponíveis.`,
                     detalhes: {
                       medico: regras.nome,
                       servico: servicoKeyValidacao,
@@ -1346,7 +1346,7 @@ export async function handleSchedule(supabase: any, body: any, clienteId: string
             .is('cancelado_em', null)
             .in('status', ['agendado', 'confirmado']);
           
-          const agendamentosNoPeriodo = agendamentosDoPeriodo?.filter(a => {
+          const agendamentosNoPeriodo = agendamentosDoPeriodo?.filter((a: any) => {
             const [h, m] = a.hora_agendamento.split(':').map(Number);
             const minutoAgendamento = h * 60 + m;
             return minutoAgendamento >= minInicioContagem && minutoAgendamento < minFimContagem;

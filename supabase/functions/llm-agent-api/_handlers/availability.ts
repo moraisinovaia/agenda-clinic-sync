@@ -414,7 +414,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
       
       // Matching inteligente com fuzzy fallback
       console.log(`🔍 Buscando médico: "${medico_nome}"`);
-      const medicosEncontrados = fuzzyMatchMedicos(medico_nome, medicosDentroDoEscopo);
+      const medicosEncontrados = fuzzyMatchMedicos(medico_nome, medicosDentroDoEscopo as any);
       
       if (medicosEncontrados.length === 0) {
         console.error(`❌ Nenhum médico encontrado para: "${medico_nome}"`);
@@ -1168,7 +1168,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
             clienteId,
             medico.id,
             dataCheckStr,
-            servicoKey,
+            servicoKey as string,
             servico,
             regras
           );
@@ -1238,10 +1238,10 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           clienteId,
           dataInicio: dataInicial,
           quantidadeDias: quantidade_dias,
-          periodoPreferido,
+          periodoPreferido: periodoPreferido ?? undefined,
           diaPreferido,
           servicoKey: servicoKey ?? undefined,
-          minimumDate: getMinimumBookingDate(config),
+          minimumDate: getMinimumBookingDate(config) ?? undefined,
           // [F6] Over-fetch: o UseCase não conhece bloqueios_agenda; se pedirmos 5
           // e a F2.2 family-filter remover 1, ficaríamos com 4 (D5: TE perdeu 03/06
           // por bloqueio cross-medico do MAPA virtual). Pedindo 10 e cortando a 5
@@ -1292,7 +1292,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           proximasDatas.push({
             data: day.date,
             dia_semana: DIA_SEMANA_PT[day.weekday],
-            periodos: day.windows.map(w => {
+            periodos: day.windows.map((w: any) => {
               const horarioDistribuicao = ordemChegadaConfig
                 ? `${ordemChegadaConfig.hora_chegada_inicio} às ${ordemChegadaConfig.hora_chegada_fim}`
                 : (servico?.periodos?.[w.periodKey]?.distribuicao_fichas ?? `${w.start} às ${w.end}`);
@@ -1438,7 +1438,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
       }
       // Substituir array original pelo filtrado
       proximasDatas.length = 0;
-      proximasDatas.push(...proximasDatasFiltradas);
+      proximasDatas.push(...(proximasDatasFiltradas as typeof proximasDatas));
 
       // 🚫 SE AINDA NÃO ENCONTROU NADA, retornar erro claro
       if (proximasDatas.length === 0) {
@@ -1462,7 +1462,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
             medico_id: medico.id,
             medico_nome: medico.nome,
             servico: atendimento_nome,
-            periodo_solicitado: periodoPreferido,
+            periodo_solicitado: periodoPreferido ?? undefined,
             dias_buscados: 45
           }
         });
@@ -1785,8 +1785,8 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
             .is('excluido_em', null)
                   .in('status', ['agendado', 'confirmado']);
                 
-                const horariosOcupados = new Set(agendamentosExistentes?.map(a => a.hora_agendamento) || []);
-                const horariosLivres = horariosVazios.filter(h => {
+                const horariosOcupados = new Set(agendamentosExistentes?.map((a: any) => a.hora_agendamento) || []);
+                const horariosLivres = horariosVazios.filter((h: any) => {
                   const horaFormatada = h.hora.includes(':') ? h.hora : `${h.hora}:00:00`;
                   return !horariosOcupados.has(horaFormatada);
                 });
@@ -1802,7 +1802,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
                     horario_distribuicao: `${horariosLivres.length} horário(s) específico(s) disponível(is)`,
                     vagas_disponiveis: Math.min(vagasDisponiveis, horariosLivres.length),
                     total_vagas: servico.limite_proprio || vagasDisponiveis,
-                    horarios: horariosLivres.map(h => h.hora)
+                    horarios: horariosLivres.map((h: any) => h.hora)
                   });
                   
                   console.log(`✅ [HORA MARCADA] ${horariosLivres.length} horários disponíveis para ${servicoKey} em ${dataFormatada}`);
@@ -1881,7 +1881,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           // Classificar cada agendamento no período correto
           let vagasOcupadas = 0;
           if (todosAgendamentos && todosAgendamentos.length > 0) {
-            vagasOcupadas = todosAgendamentos.filter(ag => {
+            vagasOcupadas = todosAgendamentos.filter((ag: any) => {
               const periodoClassificado = classificarPeriodoAgendamento(
                 ag.hora_agendamento, 
                 { [periodo]: config }
@@ -2031,7 +2031,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           medico_id: medico.id,
           medico_nome: medico.nome,
           servico: atendimento_nome,
-          periodo_solicitado: periodoPreferido,
+          periodo_solicitado: periodoPreferido ?? undefined,
           dias_buscados: quantidade_dias
         }
       });
@@ -2066,7 +2066,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         servico,
         data_consulta,
         clienteId,
-        periodoPreferido,
+        periodoPreferido ?? undefined,
         60,
         5
       );
@@ -2165,8 +2165,8 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
             .is('excluido_em', null)
               .in('status', ['agendado', 'confirmado']);
             
-            const horariosOcupadosFluxo3 = new Set(agendamentosFluxo3?.map(a => a.hora_agendamento) || []);
-            const horariosLivresFluxo3 = horariosVaziosFluxo3.filter(h => {
+            const horariosOcupadosFluxo3 = new Set(agendamentosFluxo3?.map((a: any) => a.hora_agendamento) || []);
+            const horariosLivresFluxo3 = horariosVaziosFluxo3.filter((h: any) => {
               const horaFormatada = h.hora.includes(':') ? h.hora : `${h.hora}:00:00`;
               return !horariosOcupadosFluxo3.has(horaFormatada);
             });
@@ -2184,7 +2184,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
                 vagas_disponiveis: Math.min(vagasDisponiveisFluxo3, horariosLivresFluxo3.length),
                 total_vagas: servico.limite_proprio || vagasDisponiveisFluxo3,
                 intervalo_minutos: 30,
-                horarios: horariosLivresFluxo3.map(h => h.hora)
+                horarios: horariosLivresFluxo3.map((h: any) => h.hora)
               });
               
               console.log(`✅ [FLUXO 3 - HORA MARCADA] ${horariosLivresFluxo3.length} horários disponíveis`);
@@ -2260,7 +2260,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
       // Classificar cada agendamento no período correto
       let vagasOcupadas = 0;
       if (todosAgendamentosData && todosAgendamentosData.length > 0) {
-        vagasOcupadas = todosAgendamentosData.filter(ag => {
+        vagasOcupadas = todosAgendamentosData.filter((ag: any) => {
           const periodoClassificado = classificarPeriodoAgendamento(
             ag.hora_agendamento,
             { [periodo]: config }
@@ -2269,7 +2269,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         }).length;
         
         console.log(`📊 ${data_consulta} - Período ${periodo}: ${vagasOcupadas}/${limiteCfg} vagas ocupadas`);
-        console.log(`   Horários encontrados:`, todosAgendamentosData.map(a => a.hora_agendamento).join(', '));
+        console.log(`   Horários encontrados:`, todosAgendamentosData.map((a: any) => a.hora_agendamento).join(', '));
       }
 
       const vagasDisponiveis = limiteCfg - vagasOcupadas;
@@ -2299,7 +2299,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         servico,
         data_consulta,
         clienteId,
-        periodoPreferido, // ✅ Mantém período solicitado (manhã/tarde)
+        periodoPreferido ?? undefined, // ✅ Mantém período solicitado (manhã/tarde)
         60, // Buscar nos próximos 60 dias
         5   // Máximo 5 sugestões
       );
@@ -2351,7 +2351,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         medico: medico.nome,
         servico: servicoKey,
         data_solicitada: data_consulta,
-        periodo_solicitado: periodoPreferido,
+        periodo_solicitado: periodoPreferido ?? undefined,
         proximas_datas: proximasDatas,
         message: mensagem,
         contexto: {
@@ -2359,7 +2359,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           medico_nome: medico.nome,
           servico: atendimento_nome,
           data_original: data_consulta,
-          periodo_preferido: periodoPreferido,
+          periodo_preferido: periodoPreferido ?? undefined,
           total_alternativas: proximasDatas.length
         }
       });
@@ -2385,7 +2385,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           servico,
           data_consulta,
           clienteId,
-          periodoPreferido,
+          periodoPreferido ?? undefined,
           60,
           5
         );
@@ -2505,7 +2505,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           servico,
           data_consulta,
           clienteId,
-          periodoPreferido,
+          periodoPreferido ?? undefined,
           60,
           5
         );
@@ -2623,7 +2623,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           servico,
           data_consulta,
           clienteId,
-          periodoPreferido,
+          periodoPreferido ?? undefined,
           60,
           5
         );

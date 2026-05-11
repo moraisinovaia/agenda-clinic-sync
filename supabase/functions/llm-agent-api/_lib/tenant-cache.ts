@@ -67,14 +67,14 @@ export async function getTenantMedicos(supabase: any, clienteId: string): Promis
 
   if (error) {
     console.warn(`[tenant-cache] erro ao carregar medicos do cliente ${clienteId}: ${error.message}`);
-    return cached?.medicos ?? [];  // fallback pro cached antigo se houver
+    return (cached as TenantCacheEntry | undefined)?.medicos ?? [];  // fallback pro cached antigo se houver
   }
 
   const medicos = (data ?? []) as MedicoCached[];
   // Atualizar entry preservando atendimentos se já carregados
   TENANT_CACHE.set(clienteId, {
     medicos,
-    atendimentos: cached?.atendimentos ?? [],
+    atendimentos: (cached as TenantCacheEntry | undefined)?.atendimentos ?? [],
     loadedAt:     Date.now(),
   });
   return medicos;

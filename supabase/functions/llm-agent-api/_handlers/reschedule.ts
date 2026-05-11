@@ -120,8 +120,8 @@ export async function handleReschedule(supabase: any, body: any, clienteId: stri
       const { data: dataAtualBrasil } = getDataHoraAtualBrasil();
       
       return businessErrorResponse({
-        codigo_erro: validacaoDataReschedule.erro,
-        mensagem_usuario: validacaoDataReschedule.erro === 'DATA_PASSADA' 
+        codigo_erro: validacaoDataReschedule.erro ?? 'DATA_INVALIDA',
+        mensagem_usuario: validacaoDataReschedule.erro === 'DATA_PASSADA'
           ? `❌ Não é possível remarcar para ${formatarDataPorExtenso(nova_data)} pois essa data já passou.\n\n📅 A data de hoje é ${formatarDataPorExtenso(dataAtualBrasil)}.\n\n💡 Por favor, escolha uma data futura.`
           : `❌ Não é possível remarcar para ${nova_hora} hoje pois esse horário já passou ou está muito próximo.\n\n⏰ Horário mínimo: ${validacaoDataReschedule.horaMinima}\n\n💡 Escolha um horário posterior ou remarque para outro dia.`,
         detalhes: { 
