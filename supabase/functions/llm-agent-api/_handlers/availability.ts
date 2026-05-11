@@ -185,6 +185,26 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
     // ✅ LÓGICA INTELIGENTE: Se for noite, buscar a partir de AMANHÃ
     const { data: dataAtual, hora: horaAtual, horarioEmMinutos: horarioAtualEmMinutos } = getDataHoraAtualBrasil();
 
+    // 📅 VALIDAÇÃO DE DATA PASSADA — antes de qualquer busca, rejeitar datas
+    // anteriores a hoje. /schedule já rejeita; este endpoint estava aceitando
+    // silenciosamente e retornando "disponibilidade" do passado, confundindo
+    // o paciente. Resposta uniforme com /schedule (mesmo codigo_erro).
+    if (data_consulta && data_consulta < dataAtual) {
+      const [ano, mes, dia] = data_consulta.split('-');
+      const [anoH, mesH, diaH] = dataAtual.split('-');
+      return businessErrorResponse({
+        codigo_erro: 'DATA_PASSADA',
+        mensagem_usuario:
+          `❌ Não é possível verificar disponibilidade para ${dia}/${mes}/${ano} pois essa data já passou.\n\n` +
+          `📅 A data de hoje é ${diaH}/${mesH}/${anoH}.\n\n` +
+          `💡 Por favor, escolha uma data a partir de hoje.`,
+        detalhes: {
+          data_informada: data_consulta,
+          data_atual: dataAtual,
+        },
+      });
+    }
+
     // Variáveis para controle de migração e data original
     let mensagemEspecial = null;
     let data_consulta_original = data_consulta;

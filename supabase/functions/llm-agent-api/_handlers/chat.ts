@@ -13,6 +13,7 @@
 
 import type { DynamicConfig } from '../_lib/types.ts';
 import { successResponse, errorResponse } from '../_lib/responses.ts';
+import { getDataHoraAtualBrasil } from '../_lib/tipo-agendamento.ts';
 import { chatCompletion, OpenAIUnavailableError, OPENAI_FALLBACK_MESSAGE } from '../_lib/openai.ts';
 import { checkAndIncrementQuota } from '../_lib/quota.ts';
 import { checkRateLimitPersistent } from '../_lib/rate-limit.ts';
@@ -389,6 +390,28 @@ function auditRules(
   nextAction: string,
   mensagemOriginal?: string,
 ): AuditOutcome {
+  // Data passada — bloqueia ANTES de coletar mais dados, pra o paciente
+  // corrigir cedo no fluxo (e não preencher nome/nascimento pra descobrir
+  // só no fim que a data não vale). Aplica apenas a fluxos de scheduling.
+  if (
+    dados.data_consulta &&
+    /^\d{4}-\d{2}-\d{2}$/.test(dados.data_consulta) &&
+    (intent === 'disponibilidade' || intent === 'agendar')
+  ) {
+    const { data: hojeBR } = getDataHoraAtualBrasil();
+    if (dados.data_consulta < hojeBR) {
+      const [ano, mes, dia] = dados.data_consulta.split('-');
+      const [anoH, mesH, diaH] = hojeBR.split('-');
+      return {
+        blocked: true,
+        override_response:
+          `A data ${dia}/${mes}/${ano} já passou (hoje é ${diaH}/${mesH}/${anoH}). ` +
+          `Por favor, escolha uma nova data a partir de hoje.`,
+        reason: 'DATA_PASSADA',
+      };
+    }
+  }
+
   // Convênio parceiro: nunca agendar diretamente
   if (isConvenioParceiro(dados.convenio)) {
     return {
