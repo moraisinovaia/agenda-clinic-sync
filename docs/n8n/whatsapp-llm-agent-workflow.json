@@ -1,0 +1,281 @@
+{
+  "name": "WhatsApp LLM Agent — Marcelo + Suely",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp/marcelo",
+        "options": {}
+      },
+      "id": "webhook-marcelo",
+      "name": "Webhook Marcelo",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 200],
+      "webhookId": "whatsapp-marcelo"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp/suely",
+        "options": {}
+      },
+      "id": "webhook-suely",
+      "name": "Webhook Suely",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 480],
+      "webhookId": "whatsapp-suely"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cliente-id-marcelo",
+              "name": "cliente_id",
+              "value": "2bfb98b5-ae41-4f96-8ba7-acc797c22054",
+              "type": "string"
+            },
+            {
+              "id": "config-id-marcelo",
+              "name": "config_id",
+              "value": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+              "type": "string"
+            },
+            {
+              "id": "evolution-instance-marcelo",
+              "name": "evolution_instance",
+              "value": "={{ $env.EVOLUTION_INSTANCE_MARCELO }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-marcelo",
+      "name": "Set ids Marcelo",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 200]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cliente-id-suely",
+              "name": "cliente_id",
+              "value": "0b6a0a35-0059-4a0c-9fb8-413b6253c2ad",
+              "type": "string"
+            },
+            {
+              "id": "config-id-suely",
+              "name": "config_id",
+              "value": "e78600e1-c965-4578-92e5-e9d4cb4ed790",
+              "type": "string"
+            },
+            {
+              "id": "evolution-instance-suely",
+              "name": "evolution_instance",
+              "value": "={{ $env.EVOLUTION_INSTANCE_SUELY }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-suely",
+      "name": "Set ids Suely",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 480]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrai dados do payload Evolution v2.\n// Espera: { data: { key: { remoteJid }, message: { conversation | extendedTextMessage.text } } }\n// Filtra mensagens enviadas pelo bot (fromMe=true) — só processa do paciente.\n\nconst item = $input.first().json;\nconst data = item.data || item;\n\nconst fromMe = data?.key?.fromMe === true;\nif (fromMe) {\n  return [];  // descarta, não responde a si mesmo\n}\n\nconst remoteJid = data?.key?.remoteJid || '';\nconst telefone = remoteJid.replace(/@s\\.whatsapp\\.net$/, '').replace(/@c\\.us$/, '');\n\nconst mensagem =\n  data?.message?.conversation ||\n  data?.message?.extendedTextMessage?.text ||\n  data?.message?.imageMessage?.caption ||\n  '';\n\nif (!telefone || !mensagem) {\n  return [];\n}\n\nreturn [{\n  json: {\n    telefone,\n    session_id: telefone,\n    mensagem: String(mensagem).trim(),\n    cliente_id: $input.first().json.cliente_id,\n    config_id: $input.first().json.config_id,\n    evolution_instance: $input.first().json.evolution_instance,\n  },\n}];"
+      },
+      "id": "extract-payload",
+      "name": "Extract payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 340]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT estado_atual, dados_coletados, historico_contexto, lock_conversa, modo_atendimento\nFROM public.n8n_status_atendimento\nWHERE session_id = $1 AND cliente_id = $2\nLIMIT 1;",
+        "additionalFields": {
+          "queryParams": "={{ $json.session_id }},{{ $json.cliente_id }}"
+        }
+      },
+      "id": "load-state",
+      "name": "Load state",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [900, 340],
+      "credentials": {
+        "postgres": {
+          "id": "PLACEHOLDER_POSTGRES_CRED_ID",
+          "name": "Supabase Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge state do DB com payload. Se conversa nova → defaults.\n// Bloqueia se lock_conversa=true (humano assumiu via Chatwoot).\n\nconst payload = $('Extract payload').first().json;\nconst row = $input.first().json;\n\n// Sem row = conversa nova\nconst hasState = row && row.session_id !== undefined ? true : Object.keys(row || {}).length > 0;\n\nif (hasState && row.lock_conversa === true) {\n  return [{\n    json: { ...payload, _skip_llm: true, _reason: 'lock_conversa' },\n  }];\n}\n\nreturn [{\n  json: {\n    ...payload,\n    estado_atual: row?.estado_atual || 'inicio',\n    dados_coletados: row?.dados_coletados || {},\n    historico_contexto: row?.historico_contexto || [],\n  },\n}];"
+      },
+      "id": "merge-state",
+      "name": "Merge state",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 340]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json._skip_llm }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-locked",
+      "name": "Conversa bloqueada?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1340, 340]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://qxlvzbvzajibdtlzngdy.supabase.co/functions/v1/llm-agent-api/chat",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "88-gP.6Z-?gPrh!"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"cliente_id\": \"{{ $json.cliente_id }}\",\n  \"config_id\": \"{{ $json.config_id }}\",\n  \"mensagem\": {{ JSON.stringify($json.mensagem) }},\n  \"estado_atual\": \"{{ $json.estado_atual }}\",\n  \"dados_coletados\": {{ JSON.stringify($json.dados_coletados) }},\n  \"historico_contexto\": {{ JSON.stringify($json.historico_contexto) }}\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "call-chat",
+      "name": "POST /chat",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1560, 240]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.n8n_status_atendimento (\n  session_id, cliente_id, config_id,\n  estado_atual, dados_coletados, historico_contexto, updated_at\n) VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, now())\nON CONFLICT (session_id, cliente_id) DO UPDATE SET\n  config_id          = EXCLUDED.config_id,\n  estado_atual       = EXCLUDED.estado_atual,\n  dados_coletados    = EXCLUDED.dados_coletados,\n  historico_contexto = EXCLUDED.historico_contexto,\n  updated_at         = now();",
+        "additionalFields": {
+          "queryParams": "={{ $('Merge state').first().json.session_id }},{{ $('Merge state').first().json.cliente_id }},{{ $('Merge state').first().json.config_id }},{{ $json.novo_estado }},{{ JSON.stringify($json.dados_coletados) }},{{ JSON.stringify($json.historico_contexto) }}"
+        }
+      },
+      "id": "save-state",
+      "name": "Save state",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1780, 240],
+      "credentials": {
+        "postgres": {
+          "id": "PLACEHOLDER_POSTGRES_CRED_ID",
+          "name": "Supabase Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_URL }}/message/sendText/{{ $('Merge state').first().json.evolution_instance }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "apikey",
+              "value": "={{ $env.EVOLUTION_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Merge state').first().json.telefone }}\",\n  \"text\": {{ JSON.stringify($('POST /chat').first().json.resposta) }}\n}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "send-evolution",
+      "name": "Send WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 240]
+    }
+  ],
+  "connections": {
+    "Webhook Marcelo": {
+      "main": [[{ "node": "Set ids Marcelo", "type": "main", "index": 0 }]]
+    },
+    "Webhook Suely": {
+      "main": [[{ "node": "Set ids Suely", "type": "main", "index": 0 }]]
+    },
+    "Set ids Marcelo": {
+      "main": [[{ "node": "Extract payload", "type": "main", "index": 0 }]]
+    },
+    "Set ids Suely": {
+      "main": [[{ "node": "Extract payload", "type": "main", "index": 0 }]]
+    },
+    "Extract payload": {
+      "main": [[{ "node": "Load state", "type": "main", "index": 0 }]]
+    },
+    "Load state": {
+      "main": [[{ "node": "Merge state", "type": "main", "index": 0 }]]
+    },
+    "Merge state": {
+      "main": [[{ "node": "Conversa bloqueada?", "type": "main", "index": 0 }]]
+    },
+    "Conversa bloqueada?": {
+      "main": [
+        [],
+        [{ "node": "POST /chat", "type": "main", "index": 0 }]
+      ]
+    },
+    "POST /chat": {
+      "main": [[{ "node": "Save state", "type": "main", "index": 0 }]]
+    },
+    "Save state": {
+      "main": [[{ "node": "Send WhatsApp", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
