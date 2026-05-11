@@ -150,7 +150,7 @@ ${mensagens}
 ## REGRAS DE NEGÓCIO (para contexto — o backend aplica deterministicamente)
 
 ### CONVÊNIOS PARCEIROS
-MEDPREV, MEDCLIN, SEDILAB, CLÍNICA VIDA, CLINCENTER e SERTÃO SAÚDE são parceiros.
+MEDCLIN, SEDILAB, CLÍNICA VIDA, CLINCENTER e SERTÃO SAÚDE são parceiros.
 Não atendemos por esses convênios diretamente.
 Se o paciente informar um desses: defina intent=convenio e resposta informando para entrar em contato com a operadora.
 

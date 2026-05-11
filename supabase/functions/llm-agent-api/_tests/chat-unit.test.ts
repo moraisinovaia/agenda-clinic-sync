@@ -90,13 +90,14 @@ Deno.test('isServicoTergo: reconhece variantes de Teste Ergométrico', () => {
 // ── isConvenioParceiro ────────────────────────────────────────────────────
 
 Deno.test('isConvenioParceiro: identifica parceiros corretamente', () => {
-  assertEquals(isConvenioParceiro('MEDPREV'), true);
-  assertEquals(isConvenioParceiro('medprev'), true);
   assertEquals(isConvenioParceiro('MEDCLIN'), true);
+  assertEquals(isConvenioParceiro('medclin'), true);
   assertEquals(isConvenioParceiro('SEDILAB'), true);
   assertEquals(isConvenioParceiro('CLINICA VIDA'), true);
   assertEquals(isConvenioParceiro('CLINCENTER'), true);
   assertEquals(isConvenioParceiro('SERTAO SAUDE'), true);
+  // MEDPREV foi removido do bloqueio global em 2026-05-11
+  assertEquals(isConvenioParceiro('MEDPREV'), false);
   // Convênios normais não são parceiros
   assertEquals(isConvenioParceiro('UNIMED'), false);
   assertEquals(isConvenioParceiro('PARTICULAR'), false);
@@ -193,11 +194,17 @@ Deno.test('auditRules: Ergométrico peso 80kg libera', () => {
 
 // ── auditRules — Convênio Parceiro ────────────────────────────────────────
 
-Deno.test('auditRules: MEDPREV bloqueia agendamento', () => {
-  const dados = { ...dadosVazios(), convenio: 'MEDPREV', servico: 'Consulta' };
+Deno.test('auditRules: MEDCLIN bloqueia agendamento (parceiro)', () => {
+  const dados = { ...dadosVazios(), convenio: 'MEDCLIN', servico: 'Consulta' };
   const result = auditRules(dados, 'agendar', 'confirm_schedule');
   assertEquals(result.blocked, true);
   assertEquals(result.reason, 'CONVENIO_PARCEIRO');
+});
+
+Deno.test('auditRules: MEDPREV NÃO bloqueia (removido do parceiro em 2026-05-11)', () => {
+  const dados = { ...dadosVazios(), convenio: 'MEDPREV', servico: 'Consulta' };
+  const result = auditRules(dados, 'agendar', 'confirm_schedule');
+  assertEquals(result.blocked, false);
 });
 
 Deno.test('auditRules: UNIMED não bloqueia', () => {

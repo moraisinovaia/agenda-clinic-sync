@@ -246,8 +246,14 @@ export function contemIntencaoExplicita(mensagem: string): boolean {
   return INTENCAO_SCHEDULING_NORM.some((p) => n.includes(p));
 }
 
+// Convênios marcadores como "parceiros bloqueados globalmente". Quando a
+// clínica atende um deles em sua escala real (ex: MEDPREV pela Pro Oftalmo),
+// basta NÃO incluí-lo na config.convenios_aceitos da clínica — o agente
+// rejeita por outro caminho (convênio não atendido) em vez de pelo bloqueio
+// global. Histórico: MEDPREV foi removido daqui em 2026-05-11 ao descobrir
+// que 26 médicos de 4 clínicas o aceitavam em cadastro.
 const PARCEIROS_NORM = [
-  'medprev', 'medclin', 'sedilab', 'clinicavida', 'clincenter', 'sertaosaude',
+  'medclin', 'sedilab', 'clinicavida', 'clincenter', 'sertaosaude',
 ];
 
 function isConvenioParceiro(convenio: string | null): boolean {
