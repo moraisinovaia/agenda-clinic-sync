@@ -1336,6 +1336,7 @@ function dadosVaziosE(): DadosColetados {
     data_consulta: null, periodo: null, convenio: null,
     nome_paciente: null, data_nascimento: null, confirmado: null,
     tem_guia: null, fistula: null, peso: null,
+    tipo_atendimento_contexto: null,
   };
 }
 
