@@ -2733,6 +2733,14 @@ export type Database = {
         }
         Returns: Json
       }
+      atualizar_observacao_agendamento: {
+        Args: {
+          p_agendamento_id: string
+          p_expected_updated_at: string
+          p_observacao: string
+        }
+        Returns: Json
+      }
       atualizar_role_usuario: {
         Args: {
           p_action: string
