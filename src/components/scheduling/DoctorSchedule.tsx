@@ -32,6 +32,7 @@ import { FilaEsperaFormData } from '@/types/fila-espera';
 import { RelatorioAgenda } from './RelatorioAgenda';
 import { FileText, Sun, Sunset, Moon } from 'lucide-react';
 import { DoctorScheduleGenerator } from './DoctorScheduleGenerator';
+import { InlineObservacaoEdit } from './InlineObservacaoEdit';
 import { toast } from 'sonner';
 import { matchesPeriod, PERIOD_LABELS, type PeriodFilter } from '@/utils/periodFilter';
 import { CancelAppointmentModal } from './CancelAppointmentModal';
@@ -965,11 +966,15 @@ export function DoctorSchedule({
                                       </span>
                                     )}
                                   </div>
-                                  {appointment.observacoes && (
-                                    <div className="text-[9px] text-muted-foreground truncate mt-0.5 leading-none">
-                                      {appointment.observacoes}
-                                    </div>
-                                  )}
+                                  <InlineObservacaoEdit
+                                    agendamentoId={appointment.id}
+                                    value={appointment.observacoes}
+                                    updatedAt={appointment.updated_at}
+                                    status={appointment.status}
+                                    disabled={readOnly}
+                                    textClassName="text-[9px] leading-none"
+                                  />
+
                                 </div>
                               </TableCell>
                               
