@@ -24,6 +24,28 @@ export interface ServicoConfig {
   };
 }
 
+export type ConvenioMedicoTipoDraft =
+  | 'informativo'
+  | 'apenas_consulta'
+  | 'apenas_exame'
+  | 'agendamento_externo'
+  | 'bloqueado';
+
+export interface ConvenioMedicoDraft {
+  convenio_nome: string;
+  tipo: ConvenioMedicoTipoDraft;
+  observacao: string;
+  mensagem_orientacao: string;
+}
+
+export const CONVENIO_TIPOS_DRAFT: { value: ConvenioMedicoTipoDraft; label: string; descricao: string }[] = [
+  { value: 'informativo',         label: 'Informativo',         descricao: 'Aceita o convênio sem restrições especiais.' },
+  { value: 'apenas_consulta',     label: 'Apenas consulta',     descricao: 'Apenas consultas; exames pelo convênio precisam ser tratados fora.' },
+  { value: 'apenas_exame',        label: 'Apenas exame',        descricao: 'Apenas exames; consultas pelo convênio precisam ser tratadas fora.' },
+  { value: 'agendamento_externo', label: 'Agendamento externo', descricao: 'Paciente precisa marcar por outro canal (operadora ou central).' },
+  { value: 'bloqueado',           label: 'Bloqueado',           descricao: 'Convênio listado para informar o paciente que NÃO é atendido.' },
+];
+
 export interface PreparoConfig {
   id?: string;
   nome: string;
@@ -51,10 +73,8 @@ export interface DoctorOnboardingFormData {
   atende_criancas: boolean;
   atende_adultos: boolean;
   
-  // Seção 3: Convênios
-  convenios_aceitos: string[];
-  convenio_personalizado: string;
-  convenios_restricoes: Record<string, string>;
+  // Seção 3: Convênios (modelo normalizado — vai pra tabela convenios_medico)
+  convenios_medico: ConvenioMedicoDraft[];
   
   // Seção 4: Tipo de Agendamento
   tipo_agendamento: 'ordem_chegada' | 'hora_marcada';
@@ -148,9 +168,7 @@ export const initialDoctorFormData: DoctorOnboardingFormData = {
   idade_maxima: null,
   atende_criancas: true,
   atende_adultos: true,
-  convenios_aceitos: [],
-  convenio_personalizado: '',
-  convenios_restricoes: {},
+  convenios_medico: [],
   tipo_agendamento: 'ordem_chegada',
   permite_agendamento_online: true,
   servicos: [],

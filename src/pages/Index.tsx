@@ -11,6 +11,7 @@ import { SchedulingFormData, AppointmentWithRelations } from '@/types/scheduling
 import { useStableAuth } from '@/hooks/useStableAuth';
 import { GoogleTranslateWarning } from '@/components/ui/google-translate-warning';
 import { DoctorScheduleGenerator } from '@/components/scheduling/DoctorScheduleGenerator';
+import { ForceAppointmentDialog, ForceCategoria } from '@/components/scheduling/ForceAppointmentDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { usePartnerBranding } from '@/hooks/usePartnerBranding';
@@ -34,6 +35,15 @@ const Index = () => {
   const [multipleSchedulingOpen, setMultipleSchedulingOpen] = useState(false);
   const [emptySlots, setEmptySlots] = useState<any[]>([]);
   const [scheduleGenOpen, setScheduleGenOpen] = useState(false);
+  // [Override profissional] estado do modal pra forçar agendamento fora-da-regra
+  const [forceDialog, setForceDialog] = useState<{
+    open: boolean;
+    formData?: SchedulingFormData;
+    conflictReason?: string;
+    recursoNome?: string;
+    medicoNome?: string;
+    data?: string;
+  }>({ open: false });
   const [selectedAppointmentTime, setSelectedAppointmentTime] = useState<string | undefined>();
   const [userClienteId, setUserClienteId] = useState<string | null>(null);
   
@@ -472,11 +482,54 @@ const Index = () => {
           setViewMode('schedule');
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.log('❌ Index.tsx: Erro capturado - NÃO navegando, deixando formulário intacto');
+      // [Override profissional] Se foi bloqueio de recurso (MAPA/HOLTER/ECG fora
+      // do dia regular), abre modal pra recepção decidir forçar com motivo.
+      // Não propaga o erro (não mostra toast vermelho), pq o modal cuida disso.
+      if (error?.isResourceLimit) {
+        setForceDialog({
+          open: true,
+          formData,
+          conflictReason: error.message,
+          recursoNome: error.recursoNome,
+          medicoNome: error.medicoNome,
+          data: error.dataAgendamento,
+        });
+        return;
+      }
       // CRÍTICO: Em caso de erro, NÃO fazer nenhuma mudança de estado
       // Deixar o erro subir para o SimpleSchedulingForm tratar
       throw error;
+    }
+  };
+
+  // [Override profissional] Confirma override com motivo + categoria.
+  // Chamado pelo ForceAppointmentDialog quando user clica "Forçar agendamento".
+  const handleForceOverrideConfirm = async (categoria: ForceCategoria, reason: string | null) => {
+    const formData = forceDialog.formData;
+    if (!formData) return;
+
+    await createAppointment(formData, editingAppointment?.id, false, { categoria, reason });
+
+    // Atualização otimista da UI (mesmo padrão do submit normal)
+    setEmptySlots(prev => prev.filter(slot =>
+      !(slot.medico_id === formData.medicoId &&
+        slot.data     === formData.dataAgendamento &&
+        slot.hora     === formData.horaAgendamento)
+    ));
+    reloadEmptySlots().catch(() => {});
+    refetch();
+
+    const doctor = doctors.find(d => d.id === formData.medicoId);
+    if (doctor) {
+      if (!editingAppointment) {
+        notifyNewAppointment(formData.nomeCompleto, doctor.nome, formData.horaAgendamento);
+      }
+      setSelectedDoctor(doctor);
+      setLastAppointmentDate(formData.dataAgendamento);
+      setEditingAppointment(null);
+      setViewMode('schedule');
     }
   };
 
@@ -709,6 +762,17 @@ const Index = () => {
         onOpenChange={setScheduleGenOpen}
         doctors={doctors}
         onSuccess={reloadEmptySlots}
+      />
+
+      {/* [Override profissional] Modal de força fora-da-regra com motivo + audit */}
+      <ForceAppointmentDialog
+        open={forceDialog.open}
+        onOpenChange={(open) => setForceDialog((prev) => ({ ...prev, open }))}
+        conflictReason={forceDialog.conflictReason || ''}
+        recursoNome={forceDialog.recursoNome}
+        medicoNome={forceDialog.medicoNome}
+        data={forceDialog.data}
+        onConfirm={handleForceOverrideConfirm}
       />
     </div>
   );

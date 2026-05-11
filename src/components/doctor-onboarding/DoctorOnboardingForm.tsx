@@ -44,7 +44,9 @@ export function DoctorOnboardingForm({ clienteId, onSuccess, onCancel }: DoctorO
     addPreparo,
     updatePreparo,
     removePreparo,
-    toggleConvenio,
+    addConvenio,
+    updateConvenio,
+    removeConvenio,
     nextStep,
     prevStep,
     goToStep,
@@ -60,7 +62,7 @@ export function DoctorOnboardingForm({ clienteId, onSuccess, onCancel }: DoctorO
       case 1:
         return <AgeRestrictionsSection formData={formData} errors={errors} updateField={updateField} />;
       case 2:
-        return <ConveniosSection formData={formData} errors={errors} updateField={updateField} toggleConvenio={toggleConvenio} />;
+        return <ConveniosSection formData={formData} errors={errors} addConvenio={addConvenio} updateConvenio={updateConvenio} removeConvenio={removeConvenio} />;
       case 3:
         return <SchedulingTypeSection formData={formData} updateField={updateField} />;
       case 4:

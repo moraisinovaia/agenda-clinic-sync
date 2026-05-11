@@ -19,3 +19,7 @@ dist/
 
 # OS
 .DS_Store
+
+# Env locais (Vite carrega com prioridade sobre .env)
+.env.local
+.env.*.local

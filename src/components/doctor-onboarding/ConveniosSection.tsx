@@ -1,102 +1,129 @@
 import React from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
-import { DoctorOnboardingFormData, CONVENIOS_PADRAO } from '@/types/doctor-onboarding';
-import { CreditCard, AlertCircle } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  DoctorOnboardingFormData,
+  ConvenioMedicoDraft,
+  ConvenioMedicoTipoDraft,
+  CONVENIO_TIPOS_DRAFT,
+  CONVENIOS_PADRAO,
+} from '@/types/doctor-onboarding';
+import { CreditCard, Plus, Trash2, Info } from 'lucide-react';
 
 interface ConveniosSectionProps {
   formData: DoctorOnboardingFormData;
   errors: Record<string, string>;
-  updateField: <K extends keyof DoctorOnboardingFormData>(
-    field: K,
-    value: DoctorOnboardingFormData[K]
-  ) => void;
-  toggleConvenio: (convenio: string) => void;
+  addConvenio: () => void;
+  updateConvenio: (index: number, patch: Partial<ConvenioMedicoDraft>) => void;
+  removeConvenio: (index: number) => void;
 }
 
-export function ConveniosSection({ formData, errors, updateField, toggleConvenio }: ConveniosSectionProps) {
-  const handleRestrictionChange = (convenio: string, restriction: string) => {
-    updateField('convenios_restricoes', {
-      ...formData.convenios_restricoes,
-      [convenio]: restriction,
-    });
-  };
+export function ConveniosSection({
+  formData,
+  addConvenio,
+  updateConvenio,
+  removeConvenio,
+}: ConveniosSectionProps) {
+  const datalistId = 'convenios-padrao-suggestions';
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-2 mb-4">
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 mb-2">
         <CreditCard className="h-5 w-5 text-primary" />
-        <h3 className="text-lg font-semibold">Convênios Aceitos</h3>
+        <h3 className="text-lg font-semibold">Convênios</h3>
       </div>
 
-      <p className="text-sm text-muted-foreground">
-        Selecione os convênios que este médico aceita. Se não selecionar nenhum, 
-        o médico aceitará todos os convênios da clínica.
-      </p>
-
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-        {CONVENIOS_PADRAO.map((convenio) => (
-          <div
-            key={convenio}
-            className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-colors ${
-              formData.convenios_aceitos.includes(convenio)
-                ? 'bg-primary/10 border-primary'
-                : 'hover:bg-muted/50'
-            }`}
-            onClick={() => toggleConvenio(convenio)}
-          >
-            <Checkbox
-              checked={formData.convenios_aceitos.includes(convenio)}
-              onCheckedChange={() => toggleConvenio(convenio)}
-            />
-            <span className="text-sm font-medium">{convenio}</span>
-          </div>
-        ))}
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="convenio_personalizado">Outros Convênios</Label>
-        <Input
-          id="convenio_personalizado"
-          placeholder="Digite outros convênios separados por vírgula"
-          value={formData.convenio_personalizado}
-          onChange={(e) => updateField('convenio_personalizado', e.target.value)}
-        />
+      <div className="flex items-start gap-3 p-3 border border-dashed rounded-lg bg-muted/30">
+        <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
         <p className="text-xs text-muted-foreground">
-          Ex: IPASGO, IPSM, SES
+          Cadastre cada convênio com seu <strong>tipo</strong> (informativo, apenas consulta, bloqueado, etc.)
+          e uma <strong>mensagem ao paciente</strong> opcional. A IA usará esses dados para responder no WhatsApp.
+          Convênios sem nome serão ignorados ao salvar.
         </p>
       </div>
 
-      {formData.convenios_aceitos.length > 0 && (
-        <div className="space-y-4 pt-4 border-t">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 text-warning" />
-            <h4 className="font-medium">Restrições por Convênio (opcional)</h4>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Adicione restrições específicas para cada convênio selecionado
-          </p>
+      <datalist id={datalistId}>
+        {CONVENIOS_PADRAO.map(c => (
+          <option key={c} value={c} />
+        ))}
+      </datalist>
 
-          <div className="space-y-3">
-            {formData.convenios_aceitos.map((convenio) => (
-              <div key={convenio} className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline">{convenio}</Badge>
-                </div>
-                <Textarea
-                  placeholder={`Restrições para ${convenio}... (ex: apenas consultas, não cobre exames)`}
-                  value={formData.convenios_restricoes[convenio] || ''}
-                  onChange={(e) => handleRestrictionChange(convenio, e.target.value)}
-                  className="min-h-[60px]"
+      <div className="space-y-3">
+        {formData.convenios_medico.length === 0 ? (
+          <div className="text-xs text-muted-foreground italic p-3 text-center border rounded">
+            Nenhum convênio adicionado.
+          </div>
+        ) : (
+          formData.convenios_medico.map((row, index) => (
+            <div key={index} className="grid grid-cols-12 gap-2 items-start p-3 border rounded-lg">
+              <div className="col-span-12 md:col-span-3 space-y-1">
+                <Label className="text-xs">Nome do convênio</Label>
+                <Input
+                  list={datalistId}
+                  placeholder="Ex.: UNIMED NACIONAL"
+                  value={row.convenio_nome}
+                  onChange={(e) => updateConvenio(index, { convenio_nome: e.target.value })}
                 />
               </div>
-            ))}
-          </div>
-        </div>
-      )}
+              <div className="col-span-12 md:col-span-3 space-y-1">
+                <Label className="text-xs">Tipo</Label>
+                <Select
+                  value={row.tipo}
+                  onValueChange={(value: ConvenioMedicoTipoDraft) => updateConvenio(index, { tipo: value })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CONVENIO_TIPOS_DRAFT.map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-12 md:col-span-2 space-y-1">
+                <Label className="text-xs">Observação</Label>
+                <Input
+                  placeholder="Interna"
+                  value={row.observacao}
+                  onChange={(e) => updateConvenio(index, { observacao: e.target.value })}
+                />
+              </div>
+              <div className="col-span-11 md:col-span-3 space-y-1">
+                <Label className="text-xs">Mensagem ao paciente</Label>
+                <Textarea
+                  placeholder="Ex.: Atendemos somente consultas."
+                  value={row.mensagem_orientacao}
+                  onChange={(e) => updateConvenio(index, { mensagem_orientacao: e.target.value })}
+                  rows={1}
+                />
+              </div>
+              <div className="col-span-1 flex justify-end pt-5">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => removeConvenio(index)}
+                  title="Remover"
+                >
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <Button type="button" variant="outline" onClick={addConvenio} className="w-full">
+        <Plus className="h-4 w-4 mr-2" /> Adicionar convênio
+      </Button>
     </div>
   );
 }

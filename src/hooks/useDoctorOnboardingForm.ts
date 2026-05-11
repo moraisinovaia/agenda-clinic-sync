@@ -6,6 +6,7 @@ import {
   DoctorOnboardingFormData,
   ServicoConfig,
   PreparoConfig,
+  ConvenioMedicoDraft,
   initialDoctorFormData,
   initialServicoConfig,
   initialPreparoConfig,
@@ -88,13 +89,28 @@ export function useDoctorOnboardingForm({ clienteId, onSuccess }: UseDoctorOnboa
     }));
   }, []);
 
-  // Toggle convenio
-  const toggleConvenio = useCallback((convenio: string) => {
+  // Convênios (modelo normalizado — drafts antes do médico ser salvo)
+  const addConvenio = useCallback(() => {
     setFormData(prev => ({
       ...prev,
-      convenios_aceitos: prev.convenios_aceitos.includes(convenio)
-        ? prev.convenios_aceitos.filter(c => c !== convenio)
-        : [...prev.convenios_aceitos, convenio],
+      convenios_medico: [
+        ...prev.convenios_medico,
+        { convenio_nome: '', tipo: 'informativo', observacao: '', mensagem_orientacao: '' },
+      ],
+    }));
+  }, []);
+
+  const updateConvenio = useCallback((index: number, patch: Partial<ConvenioMedicoDraft>) => {
+    setFormData(prev => ({
+      ...prev,
+      convenios_medico: prev.convenios_medico.map((c, i) => (i === index ? { ...c, ...patch } : c)),
+    }));
+  }, []);
+
+  const removeConvenio = useCallback((index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      convenios_medico: prev.convenios_medico.filter((_, i) => i !== index),
     }));
   }, []);
 
@@ -199,20 +215,12 @@ export function useDoctorOnboardingForm({ clienteId, onSuccess }: UseDoctorOnboa
     setIsSubmitting(true);
 
     try {
-      // 1. Create the doctor
-      const conveniosFinal = [
-        ...formData.convenios_aceitos,
-        ...(formData.convenio_personalizado.trim() 
-          ? formData.convenio_personalizado.split(',').map(c => c.trim().toUpperCase())
-          : []
-        ),
-      ];
-
+      // 1. Create the doctor (convenios vão na tabela normalizada após criação)
       const { data: medicoResult, error: medicoError } = await supabase.rpc('criar_medico', {
         p_cliente_id: clienteId,
         p_nome: formData.nome,
         p_especialidade: formData.especialidade,
-        p_convenios_aceitos: conveniosFinal.length > 0 ? conveniosFinal : null,
+        p_convenios_aceitos: null,
         p_idade_minima: formData.idade_minima || 0,
         p_idade_maxima: formData.idade_maxima,
         p_observacoes: formData.observacoes_gerais || null,
@@ -227,6 +235,22 @@ export function useDoctorOnboardingForm({ clienteId, onSuccess }: UseDoctorOnboa
 
       const medicoId = result.medico_id;
       if (!medicoId) throw new Error('ID do médico não retornado');
+
+      // 1.b. Inserir convênios na tabela normalizada (filtra rascunhos sem nome)
+      const conveniosRows = formData.convenios_medico
+        .filter(c => c.convenio_nome.trim().length > 0)
+        .map(c => ({
+          cliente_id: clienteId,
+          medico_id: medicoId,
+          convenio_nome: c.convenio_nome.trim(),
+          tipo: c.tipo,
+          observacao: c.observacao.trim() || null,
+          mensagem_orientacao: c.mensagem_orientacao.trim() || null,
+        }));
+      if (conveniosRows.length > 0) {
+        const { error: convError } = await supabase.from('convenios_medico').insert(conveniosRows);
+        if (convError) console.error('Erro ao inserir convenios_medico:', convError);
+      }
 
       // 2. Create atendimentos (services) for the doctor
       const atendimentosIds: string[] = [];
@@ -259,8 +283,6 @@ export function useDoctorOnboardingForm({ clienteId, onSuccess }: UseDoctorOnboa
         idade_maxima: formData.idade_maxima,
         atende_criancas: formData.atende_criancas,
         atende_adultos: formData.atende_adultos,
-        convenios: conveniosFinal,
-        convenios_restricoes: formData.convenios_restricoes,
         observacoes: formData.observacoes_gerais,
         regras_especiais: formData.regras_especiais,
         restricoes_gerais: formData.restricoes_gerais,
@@ -339,7 +361,9 @@ export function useDoctorOnboardingForm({ clienteId, onSuccess }: UseDoctorOnboa
     addPreparo,
     updatePreparo,
     removePreparo,
-    toggleConvenio,
+    addConvenio,
+    updateConvenio,
+    removeConvenio,
     nextStep,
     prevStep,
     goToStep,

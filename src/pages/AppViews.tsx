@@ -27,6 +27,8 @@ import { MultiClinicDashboard } from '@/components/admin/MultiClinicDashboard';
 import { LLMConfigPanel } from '@/components/admin/LLMConfigPanel';
 import { PreparosManagementPanel } from '@/components/admin/PreparosManagementPanel';
 import { SubscriptionPlansPanel } from '@/components/admin/SubscriptionPlansPanel';
+import { MotorIAConfigPanel } from '@/components/admin/MotorIAConfigPanel';
+import { IntegrationsPanel } from '@/components/admin/IntegrationsPanel';
 
 export interface AppViewsProps {
   // Navigation
@@ -118,7 +120,7 @@ export function AppViews({
         <div className="space-y-6">
           {(isAdmin || isClinicAdmin) ? (
             <Tabs defaultValue="usuarios" className="w-full">
-              <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-9' : 'grid-cols-6'} max-w-6xl mb-6`}>
+              <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-11' : 'grid-cols-8'} max-w-6xl mb-6`}>
                 {isAdmin && <TabsTrigger value="dashboard">Dashboard</TabsTrigger>}
                 <TabsTrigger value="usuarios">Usuários</TabsTrigger>
                 {isAdmin && <TabsTrigger value="clinicas">Clínicas</TabsTrigger>}
@@ -127,6 +129,8 @@ export function AppViews({
                 <TabsTrigger value="preparos">Preparos</TabsTrigger>
                 <TabsTrigger value="horarios">Horários</TabsTrigger>
                 <TabsTrigger value="llm-config">LLM API</TabsTrigger>
+                <TabsTrigger value="motor-ia">Motor IA</TabsTrigger>
+                <TabsTrigger value="integracoes">Integrações</TabsTrigger>
                 {isAdmin && <TabsTrigger value="planos">Planos</TabsTrigger>}
               </TabsList>
               {isAdmin && (
@@ -156,6 +160,12 @@ export function AppViews({
               </TabsContent>
               <TabsContent value="llm-config">
                 <LLMConfigPanel />
+              </TabsContent>
+              <TabsContent value="motor-ia">
+                <MotorIAConfigPanel />
+              </TabsContent>
+              <TabsContent value="integracoes">
+                <IntegrationsPanel />
               </TabsContent>
               {isAdmin && (
                 <TabsContent value="planos">

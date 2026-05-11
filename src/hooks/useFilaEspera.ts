@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useStableAuth } from '@/hooks/useStableAuth';
 import { FilaEsperaWithRelations, FilaEsperaFormData, FilaStatus } from '@/types/fila-espera';
 
 export const useFilaEspera = () => {
+  const { clinicAdminClienteId, isClinicAdmin } = useStableAuth();
   const [filaEspera, setFilaEspera] = useState<FilaEsperaWithRelations[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,28 +71,42 @@ export const useFilaEspera = () => {
   const adicionarFilaEspera = async (formData: FilaEsperaFormData) => {
     try {
       setLoading(true);
-      const { error } = await supabase
-        .from('fila_espera')
-        .insert({
-          paciente_id: formData.pacienteId,
-          medico_id: formData.medicoId,
-          atendimento_id: formData.atendimentoId,
-          data_preferida: formData.dataPreferida,
-          periodo_preferido: formData.periodoPreferido,
-          observacoes: formData.observacoes,
-          cliente_id: '00000000-0000-0000-0000-000000000000', // Usar ID padrão temporário
-          prioridade: formData.prioridade,
-          data_limite: formData.dataLimite,
-          status: 'aguardando'
-        });
 
-      if (error) {
-        console.error('Erro ao adicionar à fila:', error);
+      // Resolver cliente_id: admin_clinica usa o próprio; senão tenta via medico
+      let clienteId = clinicAdminClienteId;
+      if (!clienteId) {
+        const { data: medico } = await supabase
+          .from('medicos')
+          .select('cliente_id')
+          .eq('id', formData.medicoId)
+          .single();
+        clienteId = medico?.cliente_id ?? null;
+      }
+      if (!clienteId) {
         toast({
-          title: "Erro",
-          description: "Não foi possível adicionar à fila de espera.",
-          variant: "destructive",
+          title: 'Erro',
+          description: 'Não foi possível identificar a clínica.',
+          variant: 'destructive',
         });
+        return false;
+      }
+
+      const { data, error } = await supabase.rpc('entrar_fila_espera_atomico', {
+        p_cliente_id: clienteId,
+        p_paciente_id: formData.pacienteId,
+        p_medico_id: formData.medicoId,
+        p_atendimento_id: formData.atendimentoId,
+        p_data_preferida: formData.dataPreferida,
+        p_periodo_preferido: formData.periodoPreferido,
+        p_data_limite: formData.dataLimite,
+        p_observacoes: formData.observacoes ?? null,
+      });
+
+      const result = data as { success?: boolean; error?: string } | null;
+      if (error || (result && result.success === false)) {
+        const msg = result?.error || error?.message || 'Não foi possível adicionar à fila de espera.';
+        console.error('Erro ao adicionar à fila:', msg);
+        toast({ title: 'Erro', description: msg, variant: 'destructive' });
         return false;
       }
 

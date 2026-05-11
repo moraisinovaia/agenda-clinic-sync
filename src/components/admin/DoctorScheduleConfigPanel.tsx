@@ -139,6 +139,7 @@ export default function DoctorScheduleConfigPanel() {
         .select("id, nome, especialidade")
         .eq("cliente_id", selectedClinicId)
         .eq("ativo", true)
+        .or("agendamento_indisponivel.is.null,agendamento_indisponivel.eq.false")
         .order("nome");
       if (error) throw error;
       return data || [];
