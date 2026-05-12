@@ -1288,6 +1288,27 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         const PERIODO_LABEL: Record<string, string> = { manha: 'Manhã', tarde: 'Tarde' };
         const BOOKING_MODE_LEGADO: Record<string, string> = { capacity_window: 'ordem_chegada', time_slot: 'hora_marcada' };
 
+        // [HORA MARCADA] Pré-busca de horários ocupados por dia, pra evitar
+        // N queries por slot. Só faz a busca se algum window do dia for time_slot.
+        const horariosOcupadosPorDia = new Map<string, Set<string>>();
+        for (const day of diasDisponiveis) {
+          const temTimeSlot = day.windows.some((w: any) => w.bookingMode === 'time_slot');
+          if (!temTimeSlot) continue;
+          const { data: ags } = await supabase
+            .from('agendamentos')
+            .select('hora_agendamento')
+            .eq('medico_id', medico.id)
+            .eq('cliente_id', clienteId)
+            .eq('data_agendamento', day.date)
+            .is('cancelado_em', null)
+            .is('excluido_em', null)
+            .in('status', ['agendado', 'confirmado']);
+          horariosOcupadosPorDia.set(
+            day.date,
+            new Set((ags ?? []).map((a: any) => (a.hora_agendamento ?? '').substring(0, 5))),
+          );
+        }
+
         for (const day of diasDisponiveis) {
           proximasDatas.push({
             data: day.date,
@@ -1298,7 +1319,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
                 : (servico?.periodos?.[w.periodKey]?.distribuicao_fichas ?? `${w.start} às ${w.end}`);
 
               // 🛡️ STRICT: nunca inventar limite=1. Se UseCase devolveu este window é porque capacity é válido.
-              return {
+              const result: any = {
                 periodo: PERIODO_LABEL[w.periodKey] ?? w.periodKey,
                 horario_distribuicao: horarioDistribuicao,
                 vagas_disponiveis: w.available,
@@ -1307,6 +1328,38 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
                 mensagem_ordem_chegada: ordemChegadaConfig?.mensagem ?? null,
                 hora_atendimento_inicio: ordemChegadaConfig?.hora_atendimento_inicio ?? null,
               };
+
+              // [HORA MARCADA] Gera a lista de slots disponíveis no formato "HH:MM"
+              // a partir do intervalo_minutos do período. Necessário pro agente
+              // listar pro paciente quais horários estão livres.
+              if (w.bookingMode === 'time_slot') {
+                const periodoConfig: any = servico?.periodos?.[w.periodKey] ?? {};
+                const intervalo = periodoConfig.intervalo_minutos
+                  ?? (servico as any)?.intervalo_minutos
+                  ?? 30;
+                const [hi, mi] = String(w.start).split(':').map((n: string) => parseInt(n, 10));
+                const [hf, mf] = String(w.end).split(':').map((n: string) => parseInt(n, 10));
+                if (Number.isFinite(hi) && Number.isFinite(hf)) {
+                  const ocupados = horariosOcupadosPorDia.get(day.date) ?? new Set<string>();
+                  const slots: string[] = [];
+                  let t = hi * 60 + (mi || 0);
+                  const tFim = hf * 60 + (mf || 0);
+                  while (t < tFim) {
+                    const hh = String(Math.floor(t / 60)).padStart(2, '0');
+                    const mm = String(t % 60).padStart(2, '0');
+                    const hhmm = `${hh}:${mm}`;
+                    if (!ocupados.has(hhmm)) slots.push(hhmm);
+                    t += intervalo;
+                  }
+                  result.horarios = slots;
+                  result.intervalo_minutos = intervalo;
+                  // Refletir vagas reais baseado em slots livres (UseCase contou
+                  // por janela; aqui temos granularidade por slot).
+                  result.vagas_disponiveis = slots.length;
+                }
+              }
+
+              return result;
             }),
           });
         }
@@ -1468,11 +1521,18 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         });
       }
       
+      // tipo_atendimento real (não mais hardcoded 'ordem_chegada'): respeita
+      // servico.tipo / tipo_agendamento ou herda do médico. Vital pra clínicas
+      // com hora_marcada (Pro Oftalmo) terem o tipo correto no top-level.
+      const tipoAtendimentoEfetivo = servico
+        ? getTipoAgendamentoEfetivo(servico, regras)
+        : 'ordem_chegada';
+
       return successAvailability({
         message: mensagemEspecial || `${proximasDatas.length} datas disponíveis encontradas`,
         medico: medico.nome,
         medico_id: medico.id,
-        tipo_atendimento: 'ordem_chegada',
+        tipo_atendimento: tipoAtendimentoEfetivo,
         proximas_datas: proximasDatas,
         data_solicitada: data_consulta_original || data_consulta,
         contexto: {
