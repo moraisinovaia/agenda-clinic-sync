@@ -1035,6 +1035,50 @@ export async function handleSchedule(supabase: any, body: any, clienteId: string
       console.log(`🎯 Horário final selecionado: ${horarioFinal} (convertido de "${hora_consulta}")`);
     }
 
+    // Para serviços HORA MARCADA com slot horário explícito, validamos slot
+    // ocupado ANTES de tentar criar. Se já existe agendamento ativo em
+    // (medico_id, data, hora_exata), rejeitamos com HORARIO_OCUPADO em vez de
+    // deixar o retry minuto-a-minuto criar em hora errada (ex: paciente pediu
+    // 11:30; ocupado → criar em 11:31 quebraria a grade de 15min).
+    {
+      const regrasHm = getMedicoRules(config, medico.id, BUSINESS_RULES.medicos[medico.id]);
+      const servicoHm = regrasHm?.servicos
+        ? Object.values(regrasHm.servicos as Record<string, any>).find((s: any) => {
+            const sn = (s?.nome || '').toLowerCase();
+            return sn && (sn.includes(atendimento_nome.toLowerCase()) || atendimento_nome.toLowerCase().includes(sn));
+          }) || regrasHm.servicos[Object.keys(regrasHm.servicos).find((k: string) =>
+            k.toLowerCase().includes(atendimento_nome.toLowerCase()) ||
+            atendimento_nome.toLowerCase().includes(k.toLowerCase())
+          ) ?? '']
+        : null;
+      const tipoEfetivoHm =
+        servicoHm?.tipo_agendamento ?? servicoHm?.tipo ?? regrasHm?.tipo_agendamento;
+      const isHoraMarcada = tipoEfetivoHm === 'hora_marcada';
+
+      if (isHoraMarcada && !/^(manh[aã]|tarde|noite)$/i.test(hora_consulta)) {
+        const { count: slotOcupado } = await supabase
+          .from('agendamentos')
+          .select('*', { count: 'exact', head: true })
+          .eq('medico_id', medico.id)
+          .eq('cliente_id', clienteId)
+          .eq('data_agendamento', data_consulta)
+          .eq('hora_agendamento', horarioFinal)
+          .is('cancelado_em', null)
+          .is('excluido_em', null)
+          .in('status', ['agendado', 'confirmado']);
+        if ((slotOcupado ?? 0) > 0) {
+          console.log(`❌ [HORA_MARCADA] Slot ocupado: ${data_consulta} ${horarioFinal}`);
+          return businessErrorResponse({
+            codigo_erro: 'HORARIO_OCUPADO',
+            mensagem_usuario:
+              `❌ O horário ${horarioFinal.substring(0, 5)} de ${data_consulta} já está reservado para ${medico.nome}.\n\n` +
+              `💡 Por favor, escolha outro horário disponível.`,
+            detalhes: { medico: medico.nome, data: data_consulta, hora: horarioFinal },
+          });
+        }
+      }
+    }
+
     // Criar agendamento via BookAppointmentUseCase
     console.log(`📅 Criando agendamento para ${maskName(paciente_nome)} com médico ${medico.nome} às ${horarioFinal}`);
 
