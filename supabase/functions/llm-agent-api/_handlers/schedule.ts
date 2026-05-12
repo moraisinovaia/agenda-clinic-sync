@@ -229,7 +229,7 @@ export async function handleSchedule(supabase: any, body: any, clienteId: string
       
       // Matching inteligente com fuzzy fallback
       console.log(`🔍 Buscando médico: "${medico_nome}"`);
-      const medicosEncontrados = fuzzyMatchMedicos(medico_nome, medicosDentroDoEscopo);
+      const medicosEncontrados = fuzzyMatchMedicos(medico_nome, medicosDentroDoEscopo as any) as Array<{ id?: string; nome: string }>;
       
       if (medicosEncontrados.length === 0) {
         console.log(`❌ Nenhum médico encontrado para: "${medico_nome}"`);
@@ -400,14 +400,39 @@ export async function handleSchedule(supabase: any, body: any, clienteId: string
             if (servicoKeyValidacao) {
               const servicoLocal = regras.servicos[servicoKeyValidacao];
               console.log(`🔍 Validando serviço: ${servicoKeyValidacao}`);
-              
-              
-              // 2.1 Verificar se permite agendamento online (multi-nível: serviço, raiz, config nested)
-              const permiteOnline = 
-                servicoLocal.permite_online || 
-                servicoLocal.permite_agendamento_online ||
-                regras?.permite_agendamento_online ||      // Nível raiz das regras (agendas dedicadas)
-                (regras as any)?.config?.permite_agendamento_online;  // Fallback config nested
+
+              // 2.0 BLOQUEIO walk_in_info_only — serviço informativo, nunca cria agendamento
+              // (ex: ECG do Dr. Marcelo). Backend tem autoridade; LLM já bloqueia em chat.ts,
+              // mas /schedule pode ser chamado direto por integrações externas.
+              if (servicoLocal.tipo === 'walk_in_info_only' || servicoLocal.nao_necessita_agendamento === true) {
+                console.log(`🚶 [WALK_IN_BLOCK] Serviço "${servicoKeyValidacao}" é walk_in_info_only — bloqueando criação de agendamento`);
+                return businessErrorResponse({
+                  codigo_erro: 'SERVICO_SEM_AGENDAMENTO',
+                  mensagem_usuario: servicoLocal.observacao || `ℹ️ ${servicoKeyValidacao} não necessita agendamento. Compareça nos dias e horários definidos pela clínica (ordem de chegada).`,
+                  detalhes: {
+                    servico: servicoKeyValidacao,
+                    medico: regras.nome,
+                    tipo: 'walk_in_info_only',
+                  },
+                });
+              }
+
+              // 2.1 Verificar se permite agendamento online — explicit-false do serviço
+              // tem precedência sobre fallback raiz (config legada pode ter root=true).
+              // Hierarquia: serviço.permite_online (explicit) > serviço.permite_agendamento_online >
+              //             raiz.permite_agendamento_online > config.permite_agendamento_online
+              let permiteOnline: boolean;
+              if (typeof servicoLocal.permite_online === 'boolean') {
+                permiteOnline = servicoLocal.permite_online;
+              } else if (typeof servicoLocal.permite_agendamento_online === 'boolean') {
+                permiteOnline = servicoLocal.permite_agendamento_online;
+              } else if (typeof regras?.permite_agendamento_online === 'boolean') {
+                permiteOnline = regras.permite_agendamento_online;
+              } else if (typeof (regras as any)?.config?.permite_agendamento_online === 'boolean') {
+                permiteOnline = (regras as any).config.permite_agendamento_online;
+              } else {
+                permiteOnline = true; // default permissivo (preserva comportamento legado para serviços sem flag)
+              }
               if (!permiteOnline) {
                 console.log(`❌ Serviço ${servicoKeyValidacao} não permite agendamento online`);
                 return businessErrorResponse({
@@ -531,7 +556,7 @@ export async function handleSchedule(supabase: any, body: any, clienteId: string
                   const periodoTexto = periodo === 'manha' ? 'Manhã' : periodo === 'tarde' ? 'Tarde' : 'Noite';
                   return businessErrorResponse({
                     codigo_erro: 'PERIODO_NAO_PERMITIDO',
-                    mensagem_usuario: `❌ ${regras.nome} não atende ${servicoKeyValidacao} no período da ${periodoTexto} às ${dia_semana}s.\n\n✅ Períodos disponíveis neste dia: ${periodosPermitidos.map(p => p === 'manha' ? 'Manhã' : p === 'tarde' ? 'Tarde' : 'Noite').join(', ')}\n\n💡 Escolha um dos períodos disponíveis.`,
+                    mensagem_usuario: `❌ ${regras.nome} não atende ${servicoKeyValidacao} no período da ${periodoTexto} às ${dia_semana}s.\n\n✅ Períodos disponíveis neste dia: ${periodosPermitidos.map((p: string) => p === 'manha' ? 'Manhã' : p === 'tarde' ? 'Tarde' : 'Noite').join(', ')}\n\n💡 Escolha um dos períodos disponíveis.`,
                     detalhes: {
                       medico: regras.nome,
                       servico: servicoKeyValidacao,
@@ -1010,6 +1035,93 @@ export async function handleSchedule(supabase: any, body: any, clienteId: string
       console.log(`🎯 Horário final selecionado: ${horarioFinal} (convertido de "${hora_consulta}")`);
     }
 
+    // Validação dia da semana — qualquer serviço cujos períodos declarem
+    // dias_especificos. Sem isso, o handler aceitava agendar em dias que o
+    // médico não atende (ex: Suely sábado). Aplica APÓS resolver horarioFinal
+    // (necessário pra saber qual período do dia), e ANTES de criar o
+    // agendamento. Use o weekday de data_consulta (0=dom, 1=seg, ..., 6=sab).
+    {
+      const regrasDS = getMedicoRules(config, medico.id, BUSINESS_RULES.medicos[medico.id]);
+      const servicoDS: any = regrasDS?.servicos
+        ? regrasDS.servicos[Object.keys(regrasDS.servicos).find((k: string) =>
+            k.toLowerCase().includes(atendimento_nome.toLowerCase()) ||
+            atendimento_nome.toLowerCase().includes(k.toLowerCase())
+          ) ?? '']
+        : null;
+      const periodosDS: any = servicoDS?.periodos || {};
+      const weekday = new Date(data_consulta + 'T00:00:00').getDay();
+
+      // Se houver alguma config de dias_especificos, valida que pelo menos
+      // 1 período declarado atende esse weekday. Se serviço não declara
+      // dias_especificos em nenhum período, considera atende (compat com configs antigas).
+      const anyPeriodoDeclaraDia = Object.values(periodosDS).some(
+        (p: any) => Array.isArray(p?.dias_especificos),
+      );
+      if (anyPeriodoDeclaraDia) {
+        const atendeNoDia = Object.values(periodosDS).some((p: any) => {
+          if (!p) return false;
+          if (p.ativo === false) return false;
+          if (!Array.isArray(p.dias_especificos)) return false;
+          return p.dias_especificos.includes(weekday);
+        });
+        if (!atendeNoDia) {
+          const diasSemanaPT = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+          console.log(`❌ [DIA_NAO_ATENDIDO] ${medico.nome} não atende ${atendimento_nome} em ${diasSemanaPT[weekday]} (${data_consulta})`);
+          return businessErrorResponse({
+            codigo_erro: 'DIA_NAO_ATENDIDO',
+            mensagem_usuario:
+              `❌ ${medico.nome} não atende ${atendimento_nome} ${diasSemanaPT[weekday]}-feira.\n\n` +
+              `💡 Por favor, escolha outro dia da semana.`,
+            detalhes: { medico: medico.nome, servico: atendimento_nome, data: data_consulta, dia_semana: diasSemanaPT[weekday] },
+          });
+        }
+      }
+    }
+
+    // Para serviços HORA MARCADA com slot horário explícito, validamos slot
+    // ocupado ANTES de tentar criar. Se já existe agendamento ativo em
+    // (medico_id, data, hora_exata), rejeitamos com HORARIO_OCUPADO em vez de
+    // deixar o retry minuto-a-minuto criar em hora errada (ex: paciente pediu
+    // 11:30; ocupado → criar em 11:31 quebraria a grade de 15min).
+    {
+      const regrasHm = getMedicoRules(config, medico.id, BUSINESS_RULES.medicos[medico.id]);
+      const servicoHm = regrasHm?.servicos
+        ? Object.values(regrasHm.servicos as Record<string, any>).find((s: any) => {
+            const sn = (s?.nome || '').toLowerCase();
+            return sn && (sn.includes(atendimento_nome.toLowerCase()) || atendimento_nome.toLowerCase().includes(sn));
+          }) || regrasHm.servicos[Object.keys(regrasHm.servicos).find((k: string) =>
+            k.toLowerCase().includes(atendimento_nome.toLowerCase()) ||
+            atendimento_nome.toLowerCase().includes(k.toLowerCase())
+          ) ?? '']
+        : null;
+      const tipoEfetivoHm =
+        servicoHm?.tipo_agendamento ?? servicoHm?.tipo ?? regrasHm?.tipo_agendamento;
+      const isHoraMarcada = tipoEfetivoHm === 'hora_marcada';
+
+      if (isHoraMarcada && !/^(manh[aã]|tarde|noite)$/i.test(hora_consulta)) {
+        const { count: slotOcupado } = await supabase
+          .from('agendamentos')
+          .select('*', { count: 'exact', head: true })
+          .eq('medico_id', medico.id)
+          .eq('cliente_id', clienteId)
+          .eq('data_agendamento', data_consulta)
+          .eq('hora_agendamento', horarioFinal)
+          .is('cancelado_em', null)
+          .is('excluido_em', null)
+          .in('status', ['agendado', 'confirmado']);
+        if ((slotOcupado ?? 0) > 0) {
+          console.log(`❌ [HORA_MARCADA] Slot ocupado: ${data_consulta} ${horarioFinal}`);
+          return businessErrorResponse({
+            codigo_erro: 'HORARIO_OCUPADO',
+            mensagem_usuario:
+              `❌ O horário ${horarioFinal.substring(0, 5)} de ${data_consulta} já está reservado para ${medico.nome}.\n\n` +
+              `💡 Por favor, escolha outro horário disponível.`,
+            detalhes: { medico: medico.nome, data: data_consulta, hora: horarioFinal },
+          });
+        }
+      }
+    }
+
     // Criar agendamento via BookAppointmentUseCase
     console.log(`📅 Criando agendamento para ${maskName(paciente_nome)} com médico ${medico.nome} às ${horarioFinal}`);
 
@@ -1321,7 +1433,7 @@ export async function handleSchedule(supabase: any, body: any, clienteId: string
             .is('cancelado_em', null)
             .in('status', ['agendado', 'confirmado']);
           
-          const agendamentosNoPeriodo = agendamentosDoPeriodo?.filter(a => {
+          const agendamentosNoPeriodo = agendamentosDoPeriodo?.filter((a: any) => {
             const [h, m] = a.hora_agendamento.split(':').map(Number);
             const minutoAgendamento = h * 60 + m;
             return minutoAgendamento >= minInicioContagem && minutoAgendamento < minFimContagem;

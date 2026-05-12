@@ -1,0 +1,114 @@
+{
+  "name": "MTCL__Tool__criarAgendamento-v2-http",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            { "name": "cliente_id" },
+            { "name": "nome_completo" },
+            { "name": "data_nascimento" },
+            { "name": "convenio" },
+            { "name": "telefone" },
+            { "name": "celular" },
+            { "name": "medico_id" },
+            { "name": "atendimento_id" },
+            { "name": "data_agendamento" },
+            { "name": "hora_agendamento" },
+            { "name": "observacoes" },
+            { "name": "criado_por" },
+            { "name": "force_conflict" },
+            { "name": "idempotency_key" }
+          ]
+        }
+      },
+      "id": "165c0ef2-92ef-4dda-8a19-f34f1ce8c82d",
+      "name": "receberInputAgente",
+      "position": [0, 0],
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "jsCode": "// tool_criarAgendamento v2 — HTTP wrapper pra llm-agent-api /agendar\n// Valida inputs (mesma rigidez do v1) e monta payload pro HTTP.\n// Regras clínicas, idempotência, criação de paciente: tudo no endpoint.\n//\n// Erros de validação são lançados (throw). O sub-workflow falha e o AI Agent\n// recebe a mensagem como resultado da tool, podendo reagir (ex: pedir dado certo).\n\nconst input = $json || {};\nconst UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;\nconst DATE_RE = /^\\d{4}-\\d{2}-\\d{2}$/;\nconst TIME_RE = /^([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d)?$/;\n\nconst norm = (v) => {\n  if (v === undefined || v === null) return null;\n  const s = String(v).trim();\n  return s.length === 0 ? null : s;\n};\n\nconst reqUuid = (v, name) => {\n  const s = norm(v);\n  if (!s || !UUID_RE.test(s)) {\n    throw new Error(`${name} inválido ou ausente — esperado UUID, recebido: \"${v ?? ''}\"`);\n  }\n  return s;\n};\n\nconst cliente_id     = reqUuid(input.cliente_id, 'cliente_id');\nconst medico_id      = reqUuid(input.medico_id, 'medico_id');\nconst atendimento_id = reqUuid(input.atendimento_id, 'atendimento_id');\n\nconst nome_completo = norm(input.nome_completo);\nif (!nome_completo || nome_completo.length < 2) {\n  throw new Error(`nome_completo ausente ou muito curto — recebido: \"${input.nome_completo ?? ''}\"`);\n}\n\nconst data_nasc = norm(input.data_nascimento);\nif (!data_nasc || !DATE_RE.test(data_nasc)) {\n  throw new Error(`data_nascimento deve ser YYYY-MM-DD — recebido: \"${input.data_nascimento ?? ''}\"`);\n}\n\nconst convenio = norm(input.convenio);\nif (!convenio) {\n  throw new Error(`convenio ausente`);\n}\n\nconst data_ag = norm(input.data_agendamento);\nif (!data_ag || !DATE_RE.test(data_ag)) {\n  throw new Error(`data_agendamento deve ser YYYY-MM-DD — recebido: \"${input.data_agendamento ?? ''}\"`);\n}\n\nconst hora_ag = norm(input.hora_agendamento);\nif (!hora_ag || !TIME_RE.test(hora_ag)) {\n  throw new Error(`hora_agendamento deve ser HH:MM[:SS] — recebido: \"${input.hora_agendamento ?? ''}\"`);\n}\n\nconst celularRaw = norm(input.celular);\nif (!celularRaw) {\n  throw new Error(`celular ausente`);\n}\nconst celular = celularRaw.replace(/\\D/g, '');\nif (celular.length < 10 || celular.length > 13) {\n  throw new Error(`celular inválido — esperado 10-13 dígitos, recebido: \"${celularRaw}\" (após limpeza: \"${celular}\")`);\n}\n\nconst telefone    = norm(input.telefone);\nconst observacoes = norm(input.observacoes);\n\n// Payload pra llm-agent-api /agendar (campos alinhados com mapSchedulingData)\nconst payload = {\n  cliente_id,\n  paciente_nome:    nome_completo,\n  data_nascimento:  data_nasc,\n  convenio,\n  telefone:         telefone || undefined,\n  celular,\n  medico_id,\n  atendimento_id,\n  data_consulta:    data_ag,\n  hora_consulta:    hora_ag,\n  observacoes:      observacoes || undefined,\n};\n\nreturn [{ json: { payload } }];\n"
+      },
+      "id": "b5567bdc-7a4e-4eed-bdcc-ade5048cbf64",
+      "name": "validarEMontarPayload",
+      "position": [224, 0],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://qxlvzbvzajibdtlzngdy.supabase.co/functions/v1/llm-agent-api/agendar",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "fullResponse": false,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "0ea2f29c-c79d-41e9-9bd5-a02c8be0038c",
+      "name": "chamarLlmAgentApi",
+      "position": [448, 0],
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_PRO_OFTALMO_CREDENTIAL_ID",
+          "name": "llm-agent-api - PRO OFTALMO"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Empacota o response do llm-agent-api num shape compatível com o tool v1.\n// v1 retornava { ok, resultado } onde resultado vinha da RPC.\n// Aqui resultado vira o JSON do response HTTP inteiro pra IA ler mensagem_usuario etc.\n\nconst resp = $input.first()?.json || null;\n\nif (!resp) {\n  return [{ json: { ok: false, mensagem: 'HTTP sem resposta.', resultado: null } }];\n}\n\n// success=true do llm-agent-api → ok=true\n// success=false (regra clínica ou erro técnico) → ok=false\nconst ok = resp.success === true;\n\nreturn [{ json: { ok, resultado: resp } }];\n"
+      },
+      "id": "98ac5646-fb41-4f46-a45f-ef4f54f61420",
+      "name": "formatarResposta",
+      "position": [672, 0],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "receberInputAgente": {
+      "main": [[{ "index": 0, "node": "validarEMontarPayload", "type": "main" }]]
+    },
+    "validarEMontarPayload": {
+      "main": [[{ "index": 0, "node": "chamarLlmAgentApi", "type": "main" }]]
+    },
+    "chamarLlmAgentApi": {
+      "main": [[{ "index": 0, "node": "formatarResposta", "type": "main" }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "v2-http-2026-05-12",
+  "meta": {
+    "instanceId": "29904fb7452e8c571d1daed834613de10cd7bd3fb8c86085e9fca2451931424c"
+  },
+  "id": "PGYy0zhkykcWPShH",
+  "tags": []
+}

@@ -13,6 +13,7 @@
 
 import type { DynamicConfig } from '../_lib/types.ts';
 import { successResponse, errorResponse } from '../_lib/responses.ts';
+import { getDataHoraAtualBrasil } from '../_lib/tipo-agendamento.ts';
 import { chatCompletion, OpenAIUnavailableError, OPENAI_FALLBACK_MESSAGE } from '../_lib/openai.ts';
 import { checkAndIncrementQuota } from '../_lib/quota.ts';
 import { checkRateLimitPersistent } from '../_lib/rate-limit.ts';
@@ -40,6 +41,10 @@ export interface DadosColetados {
   tem_guia: boolean | null;
   fistula: boolean | null;
   peso: number | null;
+  // Contexto da consulta. Valores reconhecidos:
+  //  - "periodico"      → check-up / consulta anual (libera CASEMBRAPA)
+  //  - "pre_operatorio" → consulta + ECG pré-cirurgia (cobrança dupla se particular/copart)
+  tipo_atendimento_contexto: 'periodico' | 'pre_operatorio' | null;
 }
 
 interface ExtractionResult {
@@ -85,11 +90,20 @@ const DADOS_EXTRAIDOS_SCHEMA = {
     tem_guia:        { type: ['boolean', 'null'], description: 'true se mencionou que tem guia médica' },
     fistula:         { type: ['boolean', 'null'], description: 'true se mencionou fístula no braço' },
     peso:            { type: ['number', 'null'],  description: 'Peso em kg, se mencionado' },
+    tipo_atendimento_contexto: {
+      type: ['string', 'null'],
+      enum: ['periodico', 'pre_operatorio', null],
+      description:
+        'Contexto da consulta. Valores aceitos:\n' +
+        ' - "periodico": paciente mencionar consulta periódica/periódica/check-up/checkup/exame anual/consulta anual\n' +
+        ' - "pre_operatorio": paciente mencionar pré-operatório/pre-operatorio/cirurgia/laudo pra cirurgia/exame pré-cirúrgico\n' +
+        ' - null: caso contrário',
+    },
   },
   required: [
     'servico', 'medico_nome', 'medico_id', 'data_consulta', 'periodo',
     'convenio', 'nome_paciente', 'data_nascimento', 'confirmado',
-    'tem_guia', 'fistula', 'peso',
+    'tem_guia', 'fistula', 'peso', 'tipo_atendimento_contexto',
   ],
 };
 
@@ -235,14 +249,29 @@ export function contemIntencaoExplicita(mensagem: string): boolean {
   return INTENCAO_SCHEDULING_NORM.some((p) => n.includes(p));
 }
 
+// Convênios marcadores como "parceiros bloqueados globalmente". Quando a
+// clínica atende um deles em sua escala real (ex: MEDPREV pela Pro Oftalmo),
+// basta NÃO incluí-lo na config.convenios_aceitos da clínica — o agente
+// rejeita por outro caminho (convênio não atendido) em vez de pelo bloqueio
+// global. Histórico: MEDPREV foi removido daqui em 2026-05-11 ao descobrir
+// que 26 médicos de 4 clínicas o aceitavam em cadastro.
 const PARCEIROS_NORM = [
-  'medprev', 'medclin', 'sedilab', 'clinicavida', 'clincenter', 'sertaosaude',
+  'medclin', 'sedilab', 'clinicavida', 'clincenter', 'sertaosaude',
 ];
 
 function isConvenioParceiro(convenio: string | null): boolean {
   if (!convenio) return false;
   const n = normStr(convenio);
   return PARCEIROS_NORM.some((p) => n.includes(p));
+}
+
+// CASEMBRAPA tem regra diferente dos demais parceiros: BLOQUEIA para serviços
+// normais, mas LIBERA quando o contexto é "periodico" (check-up anual).
+// Cobre "CASEMBRAPA" e "CASEMBRAPA SAÚDE" (e variantes com espaço/acento)
+// via normalização — basta o nome começar com "casembrapa" após normStr.
+function isConvenioCasembrapa(convenio: string | null): boolean {
+  if (!convenio) return false;
+  return normStr(convenio).startsWith('casembrapa');
 }
 
 function isServicoTergo(servico: string | null): boolean {
@@ -336,6 +365,7 @@ function mergeDados(
       tem_guia: (m.tem_guia as boolean | null) ?? null,
       fistula: (m.fistula as boolean | null) ?? null,
       peso: (m.peso as number | null) ?? null,
+      tipo_atendimento_contexto: (m.tipo_atendimento_contexto as 'periodico' | null) ?? null,
     };
   }
   for (const [k, v] of Object.entries(extraido)) {
@@ -354,6 +384,8 @@ function mergeDados(
     tem_guia:        (m.tem_guia        as boolean | null) ?? null,
     fistula:         (m.fistula         as boolean | null) ?? null,
     peso:            (m.peso            as number  | null) ?? null,
+    tipo_atendimento_contexto:
+      (m.tipo_atendimento_contexto as 'periodico' | null) ?? null,
   };
 }
 
@@ -361,12 +393,79 @@ function mergeDados(
 // Backend tem autoridade total. Se blocked=true, override_response substitui
 // a sugestão do LLM sem exceções.
 
+// Triggers de handover (transferência para humano via Chatwoot).
+// O n8n vê audit_reason e seta n8n_status_atendimento.lock_conversa = true,
+// adiciona etiqueta "atendimento humano" no Chatwoot, e a IA para de responder
+// até a recepção marcar como concluída ou 4h sem interação.
+const HANDOVER_PATTERNS: Array<{ regex: RegExp; reason: string; resposta: string }> = [
+  {
+    regex: /(nota\s*fiscal|emiss(?:a|ã)o\s*de\s*nf|nf-?e|cupom\s*fiscal|recibo\s*fiscal)/i,
+    reason: 'HANDOVER_NOTA_FISCAL',
+    resposta:
+      'Vou transferir você para a recepção, que cuida da emissão de nota fiscal. ' +
+      'Em instantes alguém entra em contato.',
+  },
+  {
+    // Aceita variações: "renovar receita", "renovar minha receita", "renovação de receita".
+    // Heurística: palavra "renova" + até 30 chars + palavra "receita" (ou inverso).
+    regex: /(renova\w*\b[\s\S]{0,30}\breceita|receita[\s\S]{0,15}\brenova\w*)/i,
+    reason: 'HANDOVER_RENOVACAO_RECEITA',
+    resposta:
+      'Renovação de receita precisa ser feita diretamente com a equipe. ' +
+      'Vou transferir para a recepção, em instantes alguém entra em contato.',
+  },
+  {
+    regex: /(falar\s*com\s*(?:um\s*)?(?:atendente|humano|pessoa|recep(?:c|ç)ionista|funcion(?:a|á)rio)|atendimento\s*humano|quero\s*falar\s*com\s*algu(?:e|é)m)/i,
+    reason: 'HANDOVER_PEDIDO_HUMANO',
+    resposta:
+      'Claro! Vou transferir para a recepção. Em instantes alguém entra em contato.',
+  },
+];
+
+function detectHandover(mensagem?: string): AuditOutcome | null {
+  if (!mensagem) return null;
+  for (const { regex, reason, resposta } of HANDOVER_PATTERNS) {
+    if (regex.test(mensagem)) {
+      return { blocked: true, override_response: resposta, reason };
+    }
+  }
+  return null;
+}
+
 function auditRules(
   dados: DadosColetados,
   intent: string,
   nextAction: string,
   mensagemOriginal?: string,
 ): AuditOutcome {
+  // Handover para humano — checar PRIMEIRO, antes de qualquer outra regra.
+  // Se paciente menciona NF/receita/quer humano, transferir imediatamente
+  // sem coletar mais dados.
+  const handover = detectHandover(mensagemOriginal);
+  if (handover) return handover;
+
+  // Data passada — bloqueia ANTES de coletar mais dados, pra o paciente
+  // corrigir cedo no fluxo (e não preencher nome/nascimento pra descobrir
+  // só no fim que a data não vale). Aplica apenas a fluxos de scheduling.
+  if (
+    dados.data_consulta &&
+    /^\d{4}-\d{2}-\d{2}$/.test(dados.data_consulta) &&
+    (intent === 'disponibilidade' || intent === 'agendar')
+  ) {
+    const { data: hojeBR } = getDataHoraAtualBrasil();
+    if (dados.data_consulta < hojeBR) {
+      const [ano, mes, dia] = dados.data_consulta.split('-');
+      const [anoH, mesH, diaH] = hojeBR.split('-');
+      return {
+        blocked: true,
+        override_response:
+          `A data ${dia}/${mes}/${ano} já passou (hoje é ${diaH}/${mesH}/${anoH}). ` +
+          `Por favor, escolha uma nova data a partir de hoje.`,
+        reason: 'DATA_PASSADA',
+      };
+    }
+  }
+
   // Convênio parceiro: nunca agendar diretamente
   if (isConvenioParceiro(dados.convenio)) {
     return {
@@ -374,6 +473,22 @@ function auditRules(
       override_response:
         `Para o convênio ${dados.convenio}, orientamos entrar em contato diretamente com a operadora ou realizar o agendamento como particular. Posso ajudar com mais alguma coisa?`,
       reason: 'CONVENIO_PARCEIRO',
+    };
+  }
+
+  // CASEMBRAPA: bloqueia salvo se contexto = periódico (check-up anual).
+  // Aplica apenas em fluxos de scheduling (disponibilidade/agendar).
+  if (
+    isConvenioCasembrapa(dados.convenio) &&
+    (intent === 'disponibilidade' || intent === 'agendar') &&
+    dados.tipo_atendimento_contexto !== 'periodico'
+  ) {
+    return {
+      blocked: true,
+      override_response:
+        `O convênio ${dados.convenio} é aceito apenas para consulta periódica (check-up anual). ` +
+        `Se for o seu caso, posso ajudar a agendar. Caso contrário, oriente-se com a operadora ou agende como particular.`,
+      reason: 'CASEMBRAPA_BLOCK',
     };
   }
 

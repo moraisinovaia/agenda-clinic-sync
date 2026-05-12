@@ -253,7 +253,7 @@ export async function handleCheckPatient(supabase: any, body: any, clienteId: st
     });
 
     // Construir mensagem geral com todas as consultas formatadas
-    const mensagensConsultas = consultas.map((c, i) => 
+    const mensagensConsultas = consultas.map((c: any, i: number) =>
       `${i + 1}. ${c.mensagem}`
     ).join('\n\n');
 

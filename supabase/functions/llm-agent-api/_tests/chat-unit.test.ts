@@ -63,6 +63,7 @@ function dadosVazios(): DadosColetados {
     data_consulta: null, periodo: null, convenio: null,
     nome_paciente: null, data_nascimento: null, confirmado: null,
     tem_guia: null, fistula: null, peso: null,
+    tipo_atendimento_contexto: null,
   };
 }
 
@@ -89,13 +90,14 @@ Deno.test('isServicoTergo: reconhece variantes de Teste Ergométrico', () => {
 // ── isConvenioParceiro ────────────────────────────────────────────────────
 
 Deno.test('isConvenioParceiro: identifica parceiros corretamente', () => {
-  assertEquals(isConvenioParceiro('MEDPREV'), true);
-  assertEquals(isConvenioParceiro('medprev'), true);
   assertEquals(isConvenioParceiro('MEDCLIN'), true);
+  assertEquals(isConvenioParceiro('medclin'), true);
   assertEquals(isConvenioParceiro('SEDILAB'), true);
   assertEquals(isConvenioParceiro('CLINICA VIDA'), true);
   assertEquals(isConvenioParceiro('CLINCENTER'), true);
   assertEquals(isConvenioParceiro('SERTAO SAUDE'), true);
+  // MEDPREV foi removido do bloqueio global em 2026-05-11
+  assertEquals(isConvenioParceiro('MEDPREV'), false);
   // Convênios normais não são parceiros
   assertEquals(isConvenioParceiro('UNIMED'), false);
   assertEquals(isConvenioParceiro('PARTICULAR'), false);
@@ -192,17 +194,55 @@ Deno.test('auditRules: Ergométrico peso 80kg libera', () => {
 
 // ── auditRules — Convênio Parceiro ────────────────────────────────────────
 
-Deno.test('auditRules: MEDPREV bloqueia agendamento', () => {
-  const dados = { ...dadosVazios(), convenio: 'MEDPREV', servico: 'Consulta' };
+Deno.test('auditRules: MEDCLIN bloqueia agendamento (parceiro)', () => {
+  const dados = { ...dadosVazios(), convenio: 'MEDCLIN', servico: 'Consulta' };
   const result = auditRules(dados, 'agendar', 'confirm_schedule');
   assertEquals(result.blocked, true);
   assertEquals(result.reason, 'CONVENIO_PARCEIRO');
+});
+
+Deno.test('auditRules: MEDPREV NÃO bloqueia (removido do parceiro em 2026-05-11)', () => {
+  const dados = { ...dadosVazios(), convenio: 'MEDPREV', servico: 'Consulta' };
+  const result = auditRules(dados, 'agendar', 'confirm_schedule');
+  assertEquals(result.blocked, false);
 });
 
 Deno.test('auditRules: UNIMED não bloqueia', () => {
   const dados = { ...dadosVazios(), convenio: 'UNIMED 20%', servico: 'Consulta' };
   const result = auditRules(dados, 'agendar', 'confirm_schedule');
   assertFalse(result.blocked);
+});
+
+// ── Handover triggers (Sprint 1 — Chatwoot lock) ──────────────────────────
+
+Deno.test('auditRules: paciente menciona "nota fiscal" → HANDOVER_NOTA_FISCAL', () => {
+  const dados = dadosVazios();
+  const result = auditRules(dados, 'outro', 'answer_info', 'preciso da nota fiscal da minha consulta');
+  assertEquals(result.blocked, true);
+  assertEquals(result.reason, 'HANDOVER_NOTA_FISCAL');
+});
+
+Deno.test('auditRules: paciente pede "renovar receita" → HANDOVER_RENOVACAO_RECEITA', () => {
+  const dados = dadosVazios();
+  const result = auditRules(dados, 'outro', 'answer_info', 'preciso renovar minha receita');
+  assertEquals(result.blocked, true);
+  assertEquals(result.reason, 'HANDOVER_RENOVACAO_RECEITA');
+});
+
+Deno.test('auditRules: paciente pede "falar com humano" → HANDOVER_PEDIDO_HUMANO', () => {
+  const dados = dadosVazios();
+  const result = auditRules(dados, 'humano', 'escalate_human', 'quero falar com um atendente');
+  assertEquals(result.blocked, true);
+  assertEquals(result.reason, 'HANDOVER_PEDIDO_HUMANO');
+});
+
+Deno.test('auditRules: mensagem normal NÃO dispara handover', () => {
+  const dados = dadosVazios();
+  const result = auditRules(dados, 'agendar', 'ask_missing', 'quero marcar uma consulta');
+  // pode bloquear por outra razão, mas não por handover
+  if (result.blocked) {
+    assertEquals(result.reason?.startsWith('HANDOVER_'), false);
+  }
 });
 
 // ── computeMissingFields ──────────────────────────────────────────────────
@@ -1335,6 +1375,7 @@ function dadosVaziosE(): DadosColetados {
     data_consulta: null, periodo: null, convenio: null,
     nome_paciente: null, data_nascimento: null, confirmado: null,
     tem_guia: null, fistula: null, peso: null,
+    tipo_atendimento_contexto: null,
   };
 }
 

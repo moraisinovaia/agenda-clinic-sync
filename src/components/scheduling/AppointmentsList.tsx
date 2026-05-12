@@ -19,6 +19,7 @@ import { usePagination } from '@/hooks/usePagination';
 import { PaginationControls } from '@/components/ui/pagination-controls';
 import { AuditHistoryModal } from './AuditHistoryModal';
 import { CancelAppointmentModal } from './CancelAppointmentModal';
+import { InlineObservacaoEdit } from './InlineObservacaoEdit';
 import { useAuth } from '@/hooks/useAuth';
 
 interface AppointmentsListProps {
@@ -324,11 +325,13 @@ export const AppointmentsList = React.memo(({ appointments, doctors, onEditAppoi
                           </span>
                         )}
                       </div>
-                      {appointment.observacoes && (
-                        <div className="text-xs text-muted-foreground truncate mt-1">
-                          {appointment.observacoes}
-                        </div>
-                      )}
+                      <InlineObservacaoEdit
+                        agendamentoId={appointment.id}
+                        value={appointment.observacoes}
+                        updatedAt={appointment.updated_at}
+                        status={appointment.status}
+                      />
+
                       {appointment.status === 'cancelado' && appointment.cancelado_por && (
                         <div className="text-xs text-red-600 mt-1 space-y-0.5">
                           <div>

@@ -399,7 +399,7 @@ export async function buscarProximasDatasDisponiveis(
           const [horaInicio] = horaInicioContagem.split(':').map(Number);
           const [horaFim] = horaFimContagem.split(':').map(Number);
 
-          vagasOcupadas = agendamentos.filter(ag => {
+          vagasOcupadas = agendamentos.filter((ag: any) => {
             const [horaAg] = ag.hora_agendamento.split(':').map(Number);
             return horaAg >= horaInicio && horaAg < horaFim;
           }).length;
@@ -644,7 +644,7 @@ export async function buscarProximoHorarioLivre(
     .in('status', ['agendado', 'confirmado']);
 
   // 🆕 FILTRAR AGENDAMENTOS USANDO OS HORÁRIOS DE CONTAGEM
-  const agendamentos = agendamentosDia?.filter(a => {
+  const agendamentos = agendamentosDia?.filter((a: any) => {
     const [h, m] = a.hora_agendamento.split(':').map(Number);
     const minutoAgendamento = h * 60 + m;
     return minutoAgendamento >= minutoInicioContagem && minutoAgendamento < minutoFimContagem;
@@ -663,7 +663,7 @@ export async function buscarProximoHorarioLivre(
 
   // Criar Set de horários ocupados para busca rápida (formato HH:MM)
   const horariosOcupados = new Set(
-    agendamentos?.map(a => a.hora_agendamento.substring(0, 5)) || []
+    agendamentos?.map((a: any) => a.hora_agendamento.substring(0, 5)) || []
   );
 
   // 🔄 BUSCAR MINUTO A MINUTO até encontrar horário livre

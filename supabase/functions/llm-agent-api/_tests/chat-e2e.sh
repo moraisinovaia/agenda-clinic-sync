@@ -228,11 +228,13 @@ run_agendamento() {
 # ═════════════════════════════════════════════════════════════════════════════
 run_convenio() {
   echo ""
-  echo -e "${YELLOW}━━ CENÁRIO 8: Convênio MEDPREV → recusar agendamento ━━${NC}"
-  DADOS='{"servico":"Consulta","medico_nome":"Dr. Marcelo","convenio":"MEDPREV"}'
-  R=$(chat_turn "quero agendar pelo MEDPREV" "identificando_servico" "$DADOS")
+  # MEDPREV foi removido do bloqueio global em 2026-05-11 (26 médicos o aceitam).
+  # Use MEDCLIN que continua sendo parceiro real.
+  echo -e "${YELLOW}━━ CENÁRIO 8: Convênio MEDCLIN → recusar agendamento ━━${NC}"
+  DADOS='{"servico":"Consulta","medico_nome":"Dr. Marcelo","convenio":"MEDCLIN"}'
+  R=$(chat_turn "quero agendar pelo MEDCLIN" "identificando_servico" "$DADOS")
   assert_field    "audit_reason=CONVENIO_PARCEIRO"  "$R" "._debug.audit_reason" "CONVENIO_PARCEIRO"
-  assert_contains "orienta contato com operadora"   "$R" "MEDPREV\|operadora\|convênio parceiro"
+  assert_contains "orienta contato com operadora"   "$R" "MEDCLIN\|operadora\|convênio parceiro"
   assert_not_contains "não agenda"                  "$R" "agendado"
 }
 

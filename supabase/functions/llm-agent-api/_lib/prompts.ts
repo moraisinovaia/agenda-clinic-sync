@@ -113,6 +113,22 @@ export function buildExtractionSystemPrompt(
     ? coletadosEntries.map(([k, v]) => `  ${k}: ${JSON.stringify(v)}`).join('\n')
     : '  (nenhum dado coletado ainda)';
 
+  // Saudação personalizada (Sprint 1 #2): se estado=inicio E nome_paciente
+  // está pré-preenchido (n8n fez lookup pelo telefone), instruir LLM a usar
+  // o primeiro nome na saudação obrigatoriamente.
+  const nomePaciente = (dadosColetados?.nome_paciente as string | null) ?? null;
+  const primeiroNome = nomePaciente ? String(nomePaciente).trim().split(/\s+/)[0] : null;
+  let saudacaoSection = '';
+  if (estadoAtual === 'inicio' && primeiroNome) {
+    saudacaoSection =
+      `\n## SAUDAÇÃO OBRIGATÓRIA NO TURNO ATUAL ⚠️\n` +
+      `Esta é a PRIMEIRA mensagem do paciente. O nome dele está disponível: ${primeiroNome}.\n` +
+      `Sua resposta DEVE começar saudando "${primeiroNome}" pelo nome.\n` +
+      `Use "Olá, ${primeiroNome}!" + saudação por horário (Bom dia / Boa tarde / Boa noite).\n` +
+      `Se ele já fez pergunta na mensagem, responda DEPOIS da saudação, na mesma resposta.\n` +
+      `NÃO use "Olá!" genérico nem "Seja bem-vindo(a)" sem o nome. ESTA INSTRUÇÃO É ABSOLUTA.\n`;
+  }
+
   // Instrução de médico único (quando config tem exatamente 1 médico)
   let medicoUnicoSection = '';
   if (config?.business_rules) {
@@ -142,6 +158,7 @@ Quando não souber, informe o telefone da clínica.
 Estado: ${estadoAtual}
 ## DADOS JÁ COLETADOS (NÃO pedir novamente estes campos)
 ${dadosColetadosText}
+${saudacaoSection}
 ${medicoUnicoSection}
 ${regras}
 
@@ -150,9 +167,62 @@ ${mensagens}
 ## REGRAS DE NEGÓCIO (para contexto — o backend aplica deterministicamente)
 
 ### CONVÊNIOS PARCEIROS
-MEDPREV, MEDCLIN, SEDILAB, CLÍNICA VIDA, CLINCENTER e SERTÃO SAÚDE são parceiros.
+MEDCLIN, SEDILAB, CLÍNICA VIDA, CLINCENTER e SERTÃO SAÚDE são parceiros.
 Não atendemos por esses convênios diretamente.
 Se o paciente informar um desses: defina intent=convenio e resposta informando para entrar em contato com a operadora.
+
+### CASEMBRAPA (regra especial)
+CASEMBRAPA / CASEMBRAPA SAÚDE é aceito APENAS para consulta periódica (check-up anual).
+Se o paciente informar CASEMBRAPA mas NÃO mencionar contexto de periódico/check-up: orientar que só atendemos esse convênio para consulta periódica.
+Se mencionar periódico/check-up/exame anual + CASEMBRAPA: prosseguir normalmente.
+
+### CONTEXTO DE ATENDIMENTO — tipo_atendimento_contexto
+Sempre extrair tipo_atendimento_contexto="periodico" quando o paciente mencionar:
+- "consulta periódica" / "periódica" / "periódico"
+- "check-up" / "checkup"
+- "exame anual" / "consulta anual" / "check-up anual"
+
+Extrair tipo_atendimento_contexto="pre_operatorio" quando o paciente mencionar:
+- "pré-operatório" / "pre-operatorio" / "pré operatório"
+- "laudo para cirurgia" / "vou operar" / "antes da cirurgia"
+- "preparo pra cirurgia" / "avaliação pré-cirúrgica"
+
+Senão, deixar null. Esse campo libera CASEMBRAPA (só para "periodico") e ajusta
+mensagens para "pre_operatorio".
+
+### PRÉ-OPERATÓRIO (regra de produto)
+Se tipo_atendimento_contexto="pre_operatorio":
+- O agendamento É de CONSULTA normal (mesmo procedimento, NÃO criar serviço diferente).
+- Na confirmação da consulta, AVISE o paciente:
+  "No dia da consulta, ao chegar, INFORME a recepção que é pré-operatório.
+   A recepção vai ajustar o atendimento para incluir o ECG/Eletrocardiograma
+   antes da consulta — assim você sai com o laudo cardiológico para a cirurgia.
+   Se você for PARTICULAR ou UNIMED COPARTICIPAÇÃO: serão cobrados os dois
+   procedimentos (consulta + ECG)."
+- Caso o paciente queira saber valores antes, consultar valor_particular da
+  Consulta + valor do ECG no contexto (Marcelo: R$80 ECG, R$<valor> Consulta).
+
+### CONVÊNIO NÃO ATENDIDO — FALLBACK PARA PARTICULAR
+Se o paciente informar um convênio que NÃO ESTÁ na lista de "Convênios aceitos"
+do médico (e não é parceiro bloqueado):
+1. Informe educadamente que esse convênio não é atendido para este médico.
+2. Ofereça o agendamento como PARTICULAR já mencionando o valor exato da
+   Consulta (valor_particular) e formas de pagamento (Dinheiro, Cartão, PIX).
+3. Pergunte se o paciente quer prosseguir como particular.
+4. Se sim, atualize "convenio" para "PARTICULAR" no extracted data e siga
+   normalmente.
+
+### PRIMEIRA INTERAÇÃO DO DIA — SAUDAÇÃO PERSONALIZADA
+Se "historico_contexto" está vazio (turno 1) E "dados_coletados.nome_paciente"
+está preenchido:
+- SAUDAÇÃO obrigatória antes de qualquer outra coisa, usando o primeiro nome
+  do paciente. Ex: "Olá, Maria! Boa tarde 😊"
+- Se o paciente já fez uma pergunta na mensagem inicial, responda DEPOIS da
+  saudação, na mesma mensagem.
+- Adapte "Bom dia" / "Boa tarde" / "Boa noite" pela hora atual (Brasil).
+- NUNCA omita a saudação no turno 1 quando o nome estiver disponível —
+  o lookup do paciente pelo telefone garante que esse campo só vem populado
+  quando reconhecido.
 
 ### MAPA 24H
 Antes de verificar disponibilidade de MAPA: perguntar se tem guia médica.

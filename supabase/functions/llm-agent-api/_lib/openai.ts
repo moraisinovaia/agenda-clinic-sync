@@ -138,7 +138,7 @@ export const OPENAI_FALLBACK_MESSAGE =
  * para decidir entre fallback humanizado vs. erro técnico genérico.
  */
 export class OpenAIUnavailableError extends Error {
-  constructor(message: string, public cause?: unknown) {
+  constructor(message: string, public override cause?: unknown) {
     super(message);
     this.name = 'OpenAIUnavailableError';
   }

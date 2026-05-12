@@ -7,30 +7,10 @@ export type Json =
   | Json[]
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "12.2.3 (519615d)"
   }
   public: {
     Tables: {
@@ -53,6 +33,10 @@ export type Database = {
           excluido_em: string | null
           excluido_por: string | null
           excluido_por_user_id: string | null
+          force_motivo_categoria: string | null
+          force_reason: string | null
+          forced_at: string | null
+          forced_by_user_id: string | null
           hora_agendamento: string
           id: string
           idempotency_key: string | null
@@ -84,6 +68,10 @@ export type Database = {
           excluido_em?: string | null
           excluido_por?: string | null
           excluido_por_user_id?: string | null
+          force_motivo_categoria?: string | null
+          force_reason?: string | null
+          forced_at?: string | null
+          forced_by_user_id?: string | null
           hora_agendamento: string
           id?: string
           idempotency_key?: string | null
@@ -115,6 +103,10 @@ export type Database = {
           excluido_em?: string | null
           excluido_por?: string | null
           excluido_por_user_id?: string | null
+          force_motivo_categoria?: string | null
+          force_reason?: string | null
+          forced_at?: string | null
+          forced_by_user_id?: string | null
           hora_agendamento?: string
           id?: string
           idempotency_key?: string | null
@@ -183,6 +175,47 @@ export type Database = {
             columns: ["paciente_id"]
             isOneToOne: false
             referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      api_keys: {
+        Row: {
+          ativo: boolean
+          cliente_id: string
+          created_at: string
+          id: string
+          key_hash: string
+          label: string | null
+          last_used_at: string | null
+          revoked_at: string | null
+        }
+        Insert: {
+          ativo?: boolean
+          cliente_id: string
+          created_at?: string
+          id?: string
+          key_hash: string
+          label?: string | null
+          last_used_at?: string | null
+          revoked_at?: string | null
+        }
+        Update: {
+          ativo?: boolean
+          cliente_id?: string
+          created_at?: string
+          id?: string
+          key_hash?: string
+          label?: string | null
+          last_used_at?: string | null
+          revoked_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_keys_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
             referencedColumns: ["id"]
           },
         ]
@@ -2248,6 +2281,7 @@ export type Database = {
           data_aprovacao: string | null
           email: string
           id: string
+          must_change_password: boolean
           nome: string
           parceiro_id: string
           status: string
@@ -2264,6 +2298,7 @@ export type Database = {
           data_aprovacao?: string | null
           email: string
           id?: string
+          must_change_password?: boolean
           nome: string
           parceiro_id: string
           status?: string
@@ -2280,6 +2315,7 @@ export type Database = {
           data_aprovacao?: string | null
           email?: string
           id?: string
+          must_change_password?: boolean
           nome?: string
           parceiro_id?: string
           status?: string
@@ -2494,6 +2530,118 @@ export type Database = {
           },
         ]
       }
+      tenant_quota_daily: {
+        Row: {
+          cliente_id: string
+          dia: string
+          openai_calls: number
+          total_calls: number
+          updated_at: string
+        }
+        Insert: {
+          cliente_id: string
+          dia?: string
+          openai_calls?: number
+          total_calls?: number
+          updated_at?: string
+        }
+        Update: {
+          cliente_id?: string
+          dia?: string
+          openai_calls?: number
+          total_calls?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_quota_daily_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_rate_limit: {
+        Row: {
+          bucket_min: string
+          cliente_id: string
+          count: number
+          updated_at: string
+        }
+        Insert: {
+          bucket_min: string
+          cliente_id: string
+          count?: number
+          updated_at?: string
+        }
+        Update: {
+          bucket_min?: string
+          cliente_id?: string
+          count?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_rate_limit_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_medico_access: {
+        Row: {
+          ativo: boolean
+          cliente_id: string
+          granted_at: string
+          granted_by: string | null
+          id: string
+          medico_id: string
+          motivo: string | null
+          revoked_at: string | null
+          user_id: string
+        }
+        Insert: {
+          ativo?: boolean
+          cliente_id: string
+          granted_at?: string
+          granted_by?: string | null
+          id?: string
+          medico_id: string
+          motivo?: string | null
+          revoked_at?: string | null
+          user_id: string
+        }
+        Update: {
+          ativo?: boolean
+          cliente_id?: string
+          granted_at?: string
+          granted_by?: string | null
+          id?: string
+          medico_id?: string
+          motivo?: string | null
+          revoked_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_medico_access_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_medico_access_medico_id_fkey"
+            columns: ["medico_id"]
+            isOneToOne: false
+            referencedRelation: "medicos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           cliente_id: string | null
@@ -2534,6 +2682,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _username_from_medico_nome: { Args: { nome: string }; Returns: string }
       aprovar_usuario: {
         Args: {
           p_aprovador_user_id: string
@@ -2581,6 +2730,14 @@ export type Database = {
           p_atendimentos_ids?: string[]
           p_dados: Json
           p_medico_id: string
+        }
+        Returns: Json
+      }
+      atualizar_observacao_agendamento: {
+        Args: {
+          p_agendamento_id: string
+          p_expected_updated_at: string
+          p_observacao: string
         }
         Returns: Json
       }
@@ -2656,6 +2813,7 @@ export type Database = {
           status: string
         }[]
       }
+      bytea_to_text: { Args: { data: string }; Returns: string }
       can_access_patient_data: { Args: never; Returns: boolean }
       cancelar_agendamento_atomico: {
         Args: {
@@ -2701,6 +2859,7 @@ export type Database = {
       cleanup_old_backups_auto: { Args: never; Returns: undefined }
       cleanup_old_logs: { Args: never; Returns: undefined }
       cleanup_old_security_logs: { Args: never; Returns: undefined }
+      cleanup_rate_limit_old: { Args: never; Returns: number }
       confirmar_agendamento:
         | { Args: { p_agendamento_id: string }; Returns: Json }
         | {
@@ -2747,6 +2906,14 @@ export type Database = {
           p_nome: string
           p_user_id: string
           p_username: string
+        }
+        Returns: Json
+      }
+      criar_acesso_medico: {
+        Args: {
+          p_medico_id: string
+          p_senha_inicial?: string
+          p_username?: string
         }
         Returns: Json
       }
@@ -2803,6 +2970,27 @@ export type Database = {
           p_nome_completo: string
           p_observacoes?: string
           p_telefone: string
+        }
+        Returns: Json
+      }
+      criar_agendamento_com_override: {
+        Args: {
+          p_agendamento_id_edicao?: string
+          p_atendimento_id?: string
+          p_celular?: string
+          p_convenio?: string
+          p_criado_por?: string
+          p_criado_por_user_id?: string
+          p_data_agendamento?: string
+          p_data_nascimento?: string
+          p_force_conflict?: boolean
+          p_force_motivo_categoria?: string
+          p_force_reason?: string
+          p_hora_agendamento?: string
+          p_medico_id?: string
+          p_nome_completo: string
+          p_observacoes?: string
+          p_telefone?: string
         }
         Returns: Json
       }
@@ -3328,6 +3516,139 @@ export type Database = {
         }
         Returns: boolean
       }
+      http: {
+        Args: { request: Database["public"]["CompositeTypes"]["http_request"] }
+        Returns: Database["public"]["CompositeTypes"]["http_response"]
+        SetofOptions: {
+          from: "http_request"
+          to: "http_response"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      http_delete:
+        | {
+            Args: { uri: string }
+            Returns: Database["public"]["CompositeTypes"]["http_response"]
+            SetofOptions: {
+              from: "*"
+              to: "http_response"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: { content: string; content_type: string; uri: string }
+            Returns: Database["public"]["CompositeTypes"]["http_response"]
+            SetofOptions: {
+              from: "*"
+              to: "http_response"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+      http_get:
+        | {
+            Args: { uri: string }
+            Returns: Database["public"]["CompositeTypes"]["http_response"]
+            SetofOptions: {
+              from: "*"
+              to: "http_response"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: { data: Json; uri: string }
+            Returns: Database["public"]["CompositeTypes"]["http_response"]
+            SetofOptions: {
+              from: "*"
+              to: "http_response"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+      http_head: {
+        Args: { uri: string }
+        Returns: Database["public"]["CompositeTypes"]["http_response"]
+        SetofOptions: {
+          from: "*"
+          to: "http_response"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      http_header: {
+        Args: { field: string; value: string }
+        Returns: Database["public"]["CompositeTypes"]["http_header"]
+        SetofOptions: {
+          from: "*"
+          to: "http_header"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      http_list_curlopt: {
+        Args: never
+        Returns: {
+          curlopt: string
+          value: string
+        }[]
+      }
+      http_patch: {
+        Args: { content: string; content_type: string; uri: string }
+        Returns: Database["public"]["CompositeTypes"]["http_response"]
+        SetofOptions: {
+          from: "*"
+          to: "http_response"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      http_post:
+        | {
+            Args: { content: string; content_type: string; uri: string }
+            Returns: Database["public"]["CompositeTypes"]["http_response"]
+            SetofOptions: {
+              from: "*"
+              to: "http_response"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: { data: Json; uri: string }
+            Returns: Database["public"]["CompositeTypes"]["http_response"]
+            SetofOptions: {
+              from: "*"
+              to: "http_response"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+      http_put: {
+        Args: { content: string; content_type: string; uri: string }
+        Returns: Database["public"]["CompositeTypes"]["http_response"]
+        SetofOptions: {
+          from: "*"
+          to: "http_response"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      http_reset_curlopt: { Args: never; Returns: boolean }
+      http_set_curlopt: {
+        Args: { curlopt: string; value: string }
+        Returns: boolean
+      }
+      increment_rate_limit: {
+        Args: { p_cliente_id: string; p_window_seconds?: number }
+        Returns: Json
+      }
+      increment_tenant_quota: {
+        Args: { p_cliente_id: string; p_kind?: string }
+        Returns: Json
+      }
       insert_audit_log: {
         Args: {
           p_action: string
@@ -3357,6 +3678,24 @@ export type Database = {
       is_clinic_admin: { Args: never; Returns: boolean }
       is_current_user_admin: { Args: never; Returns: boolean }
       is_super_admin: { Args: never; Returns: boolean }
+      listar_acessos_clinica: {
+        Args: never
+        Returns: {
+          assignment_id: string
+          ativo: boolean
+          granted_at: string
+          granted_by_nome: string
+          medico_especialidade: string
+          medico_id: string
+          medico_nome: string
+          motivo: string
+          must_change_password: boolean
+          revoked_at: string
+          user_id: string
+          user_nome: string
+          user_username: string
+        }[]
+      }
       listar_agendamentos_medico_dia: {
         Args: { p_data: string; p_nome_medico: string }
         Returns: Json
@@ -3439,9 +3778,24 @@ export type Database = {
         }
         Returns: Json
       }
+      remarcar_agendamento_atomico_externo: {
+        Args: {
+          p_agendamento_id: string
+          p_cliente_id: string
+          p_nova_data: string
+          p_nova_hora: string
+          p_observacoes?: string
+          p_remarcado_por?: string
+        }
+        Returns: Json
+      }
       reset_fila_notificados_expirados: { Args: never; Returns: Json }
       resolver_tenant: {
         Args: { p_cliente_id?: string; p_config_id?: string }
+        Returns: Json
+      }
+      revogar_acesso_medico: {
+        Args: { p_assignment_id: string; p_motivo?: string }
         Returns: Json
       }
       rpc_cancelar_agendamento: {
@@ -3532,6 +3886,7 @@ export type Database = {
         }
         Returns: Json
       }
+      text_to_bytea: { Args: { data: string }; Returns: string }
       toggle_backup_cron: { Args: { enable_cron: boolean }; Returns: boolean }
       update_business_rules_config: {
         Args: { p_config: Json; p_medico_id: string }
@@ -3565,6 +3920,7 @@ export type Database = {
             } & "Could not choose the best candidate function between: public.urlencode(string => bytea), public.urlencode(string => varchar). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
           }
       user_can_access_system: { Args: never; Returns: boolean }
+      user_has_medico_access: { Args: { _medico_id: string }; Returns: boolean }
       validar_conflito_agendamento: {
         Args: {
           p_agendamento_id_edicao?: string
@@ -3588,6 +3944,7 @@ export type Database = {
           p_atendimento_id: string
           p_cliente_id: string
           p_data_agendamento: string
+          p_force?: boolean
           p_medico_id: string
         }
         Returns: Json
@@ -3614,7 +3971,23 @@ export type Database = {
         | "super_admin"
     }
     CompositeTypes: {
-      [_ in never]: never
+      http_header: {
+        field: string | null
+        value: string | null
+      }
+      http_request: {
+        method: unknown
+        uri: string | null
+        headers: Database["public"]["CompositeTypes"]["http_header"][] | null
+        content_type: string | null
+        content: string | null
+      }
+      http_response: {
+        status: number | null
+        content_type: string | null
+        headers: Database["public"]["CompositeTypes"]["http_header"][] | null
+        content: string | null
+      }
     }
   }
 }
@@ -3737,9 +4110,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       app_role: [
@@ -3752,4 +4122,3 @@ export const Constants = {
     },
   },
 } as const
-

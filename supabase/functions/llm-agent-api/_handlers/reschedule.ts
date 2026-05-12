@@ -120,8 +120,8 @@ export async function handleReschedule(supabase: any, body: any, clienteId: stri
       const { data: dataAtualBrasil } = getDataHoraAtualBrasil();
       
       return businessErrorResponse({
-        codigo_erro: validacaoDataReschedule.erro,
-        mensagem_usuario: validacaoDataReschedule.erro === 'DATA_PASSADA' 
+        codigo_erro: validacaoDataReschedule.erro ?? 'DATA_INVALIDA',
+        mensagem_usuario: validacaoDataReschedule.erro === 'DATA_PASSADA'
           ? `❌ Não é possível remarcar para ${formatarDataPorExtenso(nova_data)} pois essa data já passou.\n\n📅 A data de hoje é ${formatarDataPorExtenso(dataAtualBrasil)}.\n\n💡 Por favor, escolha uma data futura.`
           : `❌ Não é possível remarcar para ${nova_hora} hoje pois esse horário já passou ou está muito próximo.\n\n⏰ Horário mínimo: ${validacaoDataReschedule.horaMinima}\n\n💡 Escolha um horário posterior ou remarque para outro dia.`,
         detalhes: { 
@@ -130,6 +130,41 @@ export async function handleReschedule(supabase: any, body: any, clienteId: stri
           data_atual: dataAtualBrasil
         }
       });
+    }
+
+    // 🚫 VALIDAR: dia da semana suportado pelo serviço (dias_especificos)
+    // Mesma lógica do /schedule — se algum período declara dias_especificos,
+    // pelo menos um período ativo deve cobrir o weekday de nova_data.
+    {
+      const regrasDS = getMedicoRules(config, agendamento.medico_id, BUSINESS_RULES.medicos[agendamento.medico_id]);
+      const atendNome = (agendamento as any).atendimentos?.nome || '';
+      const servicoDS: any = regrasDS?.servicos
+        ? regrasDS.servicos[Object.keys(regrasDS.servicos).find((k: string) =>
+            k.toLowerCase().includes(atendNome.toLowerCase()) ||
+            atendNome.toLowerCase().includes(k.toLowerCase())
+          ) ?? '']
+        : null;
+      const periodosDS: any = servicoDS?.periodos || {};
+      const weekday = new Date(nova_data + 'T00:00:00').getDay();
+      const anyPeriodoDeclaraDia = Object.values(periodosDS).some(
+        (p: any) => Array.isArray(p?.dias_especificos),
+      );
+      if (anyPeriodoDeclaraDia) {
+        const atende = Object.values(periodosDS).some((p: any) =>
+          p && p.ativo !== false && Array.isArray(p.dias_especificos) && p.dias_especificos.includes(weekday)
+        );
+        if (!atende) {
+          const diasSemanaPT = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+          console.log(`❌ [RESCHEDULE/DIA_NAO_ATENDIDO] ${agendamento.medicos?.nome} não atende em ${diasSemanaPT[weekday]}`);
+          return businessErrorResponse({
+            codigo_erro: 'DIA_NAO_ATENDIDO',
+            mensagem_usuario:
+              `❌ ${agendamento.medicos?.nome} não atende ${atendNome} ${diasSemanaPT[weekday]}-feira.\n\n` +
+              `💡 Por favor, escolha outro dia da semana.`,
+            detalhes: { medico: agendamento.medicos?.nome, servico: atendNome, data: nova_data, dia_semana: diasSemanaPT[weekday] },
+          });
+        }
+      }
     }
 
     // 🔒 VERIFICAR SE A NOVA DATA ESTÁ BLOQUEADA

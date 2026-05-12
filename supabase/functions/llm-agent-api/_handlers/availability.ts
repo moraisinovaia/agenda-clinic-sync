@@ -13,7 +13,13 @@ import { normalizarServicoPeriodos, buscarAgendaDedicada } from '../_lib/config.
 import { sanitizarCampoOpcional, getDiaSemana } from '../_lib/normalizacao.ts'
 import { getTipoAgendamentoEfetivo, isOrdemChegada, isEstimativaHorario, getIntervaloMinutos, getMensagemEstimativa, formatarHorarioParaExibicao, getDataHoraAtualBrasil, filtrarPeriodosPassados, classificarPeriodoAgendamento, buscarProximasDatasDisponiveis, TIPO_ORDEM_CHEGADA, TIPO_ESTIMATIVA_HORARIO } from '../_lib/tipo-agendamento.ts'
 import { fuzzyMatchMedicos } from '../_lib/fuzzy-match.ts'
-import { carregarDatasBloqueadas } from '../_lib/bloqueios.ts'
+import {
+  carregarDatasBloqueadas,
+  carregarBloqueiosDetalhados,
+  isDataBlockedFully,
+  isHoraBlocked,
+  isPeriodBlocked,
+} from '../_lib/bloqueios.ts'
 
 /**
  * Verifica se um período (manha/tarde) está permitido em dado dia da semana,
@@ -184,6 +190,26 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
     
     // ✅ LÓGICA INTELIGENTE: Se for noite, buscar a partir de AMANHÃ
     const { data: dataAtual, hora: horaAtual, horarioEmMinutos: horarioAtualEmMinutos } = getDataHoraAtualBrasil();
+
+    // 📅 VALIDAÇÃO DE DATA PASSADA — antes de qualquer busca, rejeitar datas
+    // anteriores a hoje. /schedule já rejeita; este endpoint estava aceitando
+    // silenciosamente e retornando "disponibilidade" do passado, confundindo
+    // o paciente. Resposta uniforme com /schedule (mesmo codigo_erro).
+    if (data_consulta && data_consulta < dataAtual) {
+      const [ano, mes, dia] = data_consulta.split('-');
+      const [anoH, mesH, diaH] = dataAtual.split('-');
+      return businessErrorResponse({
+        codigo_erro: 'DATA_PASSADA',
+        mensagem_usuario:
+          `❌ Não é possível verificar disponibilidade para ${dia}/${mes}/${ano} pois essa data já passou.\n\n` +
+          `📅 A data de hoje é ${diaH}/${mesH}/${anoH}.\n\n` +
+          `💡 Por favor, escolha uma data a partir de hoje.`,
+        detalhes: {
+          data_informada: data_consulta,
+          data_atual: dataAtual,
+        },
+      });
+    }
 
     // Variáveis para controle de migração e data original
     let mensagemEspecial = null;
@@ -388,7 +414,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
       
       // Matching inteligente com fuzzy fallback
       console.log(`🔍 Buscando médico: "${medico_nome}"`);
-      const medicosEncontrados = fuzzyMatchMedicos(medico_nome, medicosDentroDoEscopo);
+      const medicosEncontrados = fuzzyMatchMedicos(medico_nome, medicosDentroDoEscopo as any);
       
       if (medicosEncontrados.length === 0) {
         console.error(`❌ Nenhum médico encontrado para: "${medico_nome}"`);
@@ -1017,7 +1043,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         })();
         // [F2.2] Passa scope.doctorIds (família real+virtuais expandida pela F1.1).
         // Bloqueio em qualquer medico_id da família bloqueia TODOS os atendimentos.
-        const datasBloqueadasFT = await carregarDatasBloqueadas(
+        const bloqueiosFT = await carregarBloqueiosDetalhados(
           supabase, clienteId, scope.doctorIds.length > 0 ? scope.doctorIds : medico.id, dataInicialFT, dataFimFT
         );
 
@@ -1029,15 +1055,21 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
 
           if (diaPreferido && diaSemanaNum !== diaPreferido) continue;
 
-          // [F2] Pular datas bloqueadas (feriados, férias, etc.)
-          if (datasBloqueadasFT.has(dataCheckStr)) {
-            console.log(`⏭️ [FIXED_TIME] Pulando ${dataCheckStr} (bloqueada em bloqueios_agenda)`);
+          // [F2] Dia inteiro bloqueado (feriado/férias)
+          if (isDataBlockedFully(bloqueiosFT, dataCheckStr)) {
+            console.log(`⏭️ [FIXED_TIME] Pulando ${dataCheckStr} (dia inteiro bloqueado)`);
             continue;
           }
 
           const chave = DIAS_KEY[diaSemanaNum];
           const periodoFT = chave ? (rawServico.periodos as any)[chave] : null;
           if (!periodoFT || periodoFT.ativo === false) continue;
+
+          // Bloqueio PARCIAL: a hora fixa (ex: MAPA às 10:30) cai num range bloqueado?
+          if (periodoFT.hora && isHoraBlocked(bloqueiosFT, dataCheckStr, periodoFT.hora)) {
+            console.log(`⏭️ [FIXED_TIME] Pulando ${dataCheckStr} ${periodoFT.hora} (hora dentro de bloqueio parcial)`);
+            continue;
+          }
 
           // [F1.4] Bug 1 do fixed_time: a comparação exata `hora_agendamento = '08:00:00'`
           // ignorava agendamentos lançados em placeholders cronológicos (07:00, 07:01, …).
@@ -1105,7 +1137,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           return d.toISOString().split('T')[0];
         })();
         // [F2.2] Bloqueios em QUALQUER medico_id relacionado bloqueiam o atendimento
-        const datasBloqueadasSL = await carregarDatasBloqueadas(
+        const bloqueiosSL = await carregarBloqueiosDetalhados(
           supabase, clienteId, scope.doctorIds.length > 0 ? scope.doctorIds : medico.id, dataInicial, dataFimSL
         );
 
@@ -1124,9 +1156,9 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           // Verificar se dia permitido pelo serviço
           if (servico?.dias_semana && !servico.dias_semana.includes(diaSemanaNum)) continue;
 
-          // [F2] Pular datas bloqueadas (feriados, férias, etc.)
-          if (datasBloqueadasSL.has(dataCheckStr)) {
-            console.log(`⏭️ [SHARED_LIMITS] Pulando ${dataCheckStr} (bloqueada em bloqueios_agenda)`);
+          // [F2] Dia inteiro bloqueado
+          if (isDataBlockedFully(bloqueiosSL, dataCheckStr)) {
+            console.log(`⏭️ [SHARED_LIMITS] Pulando ${dataCheckStr} (dia inteiro bloqueado)`);
             continue;
           }
 
@@ -1136,7 +1168,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
             clienteId,
             medico.id,
             dataCheckStr,
-            servicoKey,
+            servicoKey as string,
             servico,
             regras
           );
@@ -1154,6 +1186,13 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
             const cfg: any = pc;
             if (!isPeriodoPermitidoNoDia(cfg, diaSemanaNum)) continue;
             if (periodoPreferido && pk !== periodoPreferido) continue;
+
+            // Bloqueio PARCIAL: pula período se horário sobrepõe um range bloqueado
+            if (cfg.inicio && cfg.fim && isPeriodBlocked(bloqueiosSL, dataCheckStr, cfg.inicio, cfg.fim)) {
+              console.log(`⏭️ [SHARED_LIMITS] Pulando ${dataCheckStr} ${pk} (${cfg.inicio}-${cfg.fim} sobrepõe bloqueio parcial)`);
+              continue;
+            }
+
             const janela = cfg.distribuicao_fichas
               ?? (cfg.inicio && cfg.fim ? `${cfg.inicio} às ${cfg.fim}` : null)
               ?? '07:00 às 12:00';
@@ -1199,10 +1238,10 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           clienteId,
           dataInicio: dataInicial,
           quantidadeDias: quantidade_dias,
-          periodoPreferido,
+          periodoPreferido: periodoPreferido ?? undefined,
           diaPreferido,
           servicoKey: servicoKey ?? undefined,
-          minimumDate: getMinimumBookingDate(config),
+          minimumDate: getMinimumBookingDate(config) ?? undefined,
           // [F6] Over-fetch: o UseCase não conhece bloqueios_agenda; se pedirmos 5
           // e a F2.2 family-filter remover 1, ficaríamos com 4 (D5: TE perdeu 03/06
           // por bloqueio cross-medico do MAPA virtual). Pedindo 10 e cortando a 5
@@ -1219,17 +1258,28 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           return d.toISOString().split('T')[0];
         })();
         // [F2.2] Mesma regra: bloqueio em qualquer medico_id relacionado bloqueia
-        const datasBloqueadasUC = await carregarDatasBloqueadas(
+        const bloqueiosUC = await carregarBloqueiosDetalhados(
           supabase, clienteId, scope.doctorIds.length > 0 ? scope.doctorIds : medico.id, dataInicial, dataFimUC
         );
         const diasDisponiveis = diasUseCase
-          .filter((day: any) => {
-            if (datasBloqueadasUC.has(day.date)) {
-              console.log(`⏭️ [USE_CASE] Pulando ${day.date} (bloqueada em bloqueios_agenda)`);
-              return false;
+          .map((day: any) => {
+            // Dia inteiro bloqueado: remove
+            if (isDataBlockedFully(bloqueiosUC, day.date)) {
+              console.log(`⏭️ [USE_CASE] Pulando ${day.date} (dia inteiro bloqueado)`);
+              return null;
             }
-            return true;
+            // Bloqueio PARCIAL: remove apenas as windows cujo horário sobrepõe
+            const windowsFiltradas = (day.windows ?? []).filter((w: any) => {
+              if (w?.start && w?.end && isPeriodBlocked(bloqueiosUC, day.date, w.start, w.end)) {
+                console.log(`⏭️ [USE_CASE] Removendo window ${day.date} ${w.periodKey ?? ''} ${w.start}-${w.end} (sobrepõe bloqueio parcial)`);
+                return false;
+              }
+              return true;
+            });
+            if (windowsFiltradas.length === 0) return null; // sem períodos disponíveis após filtro
+            return { ...day, windows: windowsFiltradas };
           })
+          .filter((d: any) => d !== null)
           // [F6] Cortar a 5 depois do filtro de bloqueios.
           .slice(0, 5);
 
@@ -1238,17 +1288,38 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         const PERIODO_LABEL: Record<string, string> = { manha: 'Manhã', tarde: 'Tarde' };
         const BOOKING_MODE_LEGADO: Record<string, string> = { capacity_window: 'ordem_chegada', time_slot: 'hora_marcada' };
 
+        // [HORA MARCADA] Pré-busca de horários ocupados por dia, pra evitar
+        // N queries por slot. Só faz a busca se algum window do dia for time_slot.
+        const horariosOcupadosPorDia = new Map<string, Set<string>>();
+        for (const day of diasDisponiveis) {
+          const temTimeSlot = day.windows.some((w: any) => w.bookingMode === 'time_slot');
+          if (!temTimeSlot) continue;
+          const { data: ags } = await supabase
+            .from('agendamentos')
+            .select('hora_agendamento')
+            .eq('medico_id', medico.id)
+            .eq('cliente_id', clienteId)
+            .eq('data_agendamento', day.date)
+            .is('cancelado_em', null)
+            .is('excluido_em', null)
+            .in('status', ['agendado', 'confirmado']);
+          horariosOcupadosPorDia.set(
+            day.date,
+            new Set((ags ?? []).map((a: any) => (a.hora_agendamento ?? '').substring(0, 5))),
+          );
+        }
+
         for (const day of diasDisponiveis) {
           proximasDatas.push({
             data: day.date,
             dia_semana: DIA_SEMANA_PT[day.weekday],
-            periodos: day.windows.map(w => {
+            periodos: day.windows.map((w: any) => {
               const horarioDistribuicao = ordemChegadaConfig
                 ? `${ordemChegadaConfig.hora_chegada_inicio} às ${ordemChegadaConfig.hora_chegada_fim}`
                 : (servico?.periodos?.[w.periodKey]?.distribuicao_fichas ?? `${w.start} às ${w.end}`);
 
               // 🛡️ STRICT: nunca inventar limite=1. Se UseCase devolveu este window é porque capacity é válido.
-              return {
+              const result: any = {
                 periodo: PERIODO_LABEL[w.periodKey] ?? w.periodKey,
                 horario_distribuicao: horarioDistribuicao,
                 vagas_disponiveis: w.available,
@@ -1257,6 +1328,38 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
                 mensagem_ordem_chegada: ordemChegadaConfig?.mensagem ?? null,
                 hora_atendimento_inicio: ordemChegadaConfig?.hora_atendimento_inicio ?? null,
               };
+
+              // [HORA MARCADA] Gera a lista de slots disponíveis no formato "HH:MM"
+              // a partir do intervalo_minutos do período. Necessário pro agente
+              // listar pro paciente quais horários estão livres.
+              if (w.bookingMode === 'time_slot') {
+                const periodoConfig: any = servico?.periodos?.[w.periodKey] ?? {};
+                const intervalo = periodoConfig.intervalo_minutos
+                  ?? (servico as any)?.intervalo_minutos
+                  ?? 30;
+                const [hi, mi] = String(w.start).split(':').map((n: string) => parseInt(n, 10));
+                const [hf, mf] = String(w.end).split(':').map((n: string) => parseInt(n, 10));
+                if (Number.isFinite(hi) && Number.isFinite(hf)) {
+                  const ocupados = horariosOcupadosPorDia.get(day.date) ?? new Set<string>();
+                  const slots: string[] = [];
+                  let t = hi * 60 + (mi || 0);
+                  const tFim = hf * 60 + (mf || 0);
+                  while (t < tFim) {
+                    const hh = String(Math.floor(t / 60)).padStart(2, '0');
+                    const mm = String(t % 60).padStart(2, '0');
+                    const hhmm = `${hh}:${mm}`;
+                    if (!ocupados.has(hhmm)) slots.push(hhmm);
+                    t += intervalo;
+                  }
+                  result.horarios = slots;
+                  result.intervalo_minutos = intervalo;
+                  // Refletir vagas reais baseado em slots livres (UseCase contou
+                  // por janela; aqui temos granularidade por slot).
+                  result.vagas_disponiveis = slots.length;
+                }
+              }
+
+              return result;
             }),
           });
         }
@@ -1288,7 +1391,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           d.setDate(d.getDate() + quantidade_dias);
           return d.toISOString().split('T')[0];
         })();
-        const datasBloqueadasRetry = await carregarDatasBloqueadas(
+        const bloqueiosRetry = await carregarBloqueiosDetalhados(
           supabase, clienteId,
           scope.doctorIds.length > 0 ? scope.doctorIds : medico.id,
           dataInicial, dataFimRetry,
@@ -1306,9 +1409,9 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           // 🗓️ Filtrar por dia da semana preferido
           if (diaPreferido && diaSemanaNum !== diaPreferido) continue;
 
-          // 🔒 Bloqueios da família (F2.2)
-          if (datasBloqueadasRetry.has(dataCheckStr)) {
-            console.log(`⏭️ [RETRY] Pulando ${dataCheckStr} (bloqueada)`);
+          // 🔒 Dia inteiro bloqueado (F2.2)
+          if (isDataBlockedFully(bloqueiosRetry, dataCheckStr)) {
+            console.log(`⏭️ [RETRY] Pulando ${dataCheckStr} (dia inteiro bloqueado)`);
             continue;
           }
 
@@ -1320,6 +1423,14 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
             // Respeitar dias_especificos do período. Sem isso o retry oferecia
             // turnos onde a clínica não atende naquele dia da semana.
             if (!isPeriodoPermitidoNoDia(config, diaSemanaNum)) continue;
+
+            // Bloqueio PARCIAL: pula período se horário sobrepõe range bloqueado
+            const cfgPInicio = (config as any).inicio;
+            const cfgPFim    = (config as any).fim;
+            if (cfgPInicio && cfgPFim && isPeriodBlocked(bloqueiosRetry, dataCheckStr, cfgPInicio, cfgPFim)) {
+              console.log(`⏭️ [RETRY] Pulando ${dataCheckStr} ${periodo} (${cfgPInicio}-${cfgPFim} sobrepõe bloqueio parcial)`);
+              continue;
+            }
 
             const limite     = (config as any).limite || 9;
             // Usar contagem_* (janela de capacidade formal) sobre inicio/fim (janela de exibição)
@@ -1380,7 +1491,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
       }
       // Substituir array original pelo filtrado
       proximasDatas.length = 0;
-      proximasDatas.push(...proximasDatasFiltradas);
+      proximasDatas.push(...(proximasDatasFiltradas as typeof proximasDatas));
 
       // 🚫 SE AINDA NÃO ENCONTROU NADA, retornar erro claro
       if (proximasDatas.length === 0) {
@@ -1404,17 +1515,24 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
             medico_id: medico.id,
             medico_nome: medico.nome,
             servico: atendimento_nome,
-            periodo_solicitado: periodoPreferido,
+            periodo_solicitado: periodoPreferido ?? undefined,
             dias_buscados: 45
           }
         });
       }
       
+      // tipo_atendimento real (não mais hardcoded 'ordem_chegada'): respeita
+      // servico.tipo / tipo_agendamento ou herda do médico. Vital pra clínicas
+      // com hora_marcada (Pro Oftalmo) terem o tipo correto no top-level.
+      const tipoAtendimentoEfetivo = servico
+        ? getTipoAgendamentoEfetivo(servico, regras)
+        : 'ordem_chegada';
+
       return successAvailability({
         message: mensagemEspecial || `${proximasDatas.length} datas disponíveis encontradas`,
         medico: medico.nome,
         medico_id: medico.id,
-        tipo_atendimento: 'ordem_chegada',
+        tipo_atendimento: tipoAtendimentoEfetivo,
         proximas_datas: proximasDatas,
         data_solicitada: data_consulta_original || data_consulta,
         contexto: {
@@ -1727,8 +1845,8 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
             .is('excluido_em', null)
                   .in('status', ['agendado', 'confirmado']);
                 
-                const horariosOcupados = new Set(agendamentosExistentes?.map(a => a.hora_agendamento) || []);
-                const horariosLivres = horariosVazios.filter(h => {
+                const horariosOcupados = new Set(agendamentosExistentes?.map((a: any) => a.hora_agendamento) || []);
+                const horariosLivres = horariosVazios.filter((h: any) => {
                   const horaFormatada = h.hora.includes(':') ? h.hora : `${h.hora}:00:00`;
                   return !horariosOcupados.has(horaFormatada);
                 });
@@ -1744,7 +1862,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
                     horario_distribuicao: `${horariosLivres.length} horário(s) específico(s) disponível(is)`,
                     vagas_disponiveis: Math.min(vagasDisponiveis, horariosLivres.length),
                     total_vagas: servico.limite_proprio || vagasDisponiveis,
-                    horarios: horariosLivres.map(h => h.hora)
+                    horarios: horariosLivres.map((h: any) => h.hora)
                   });
                   
                   console.log(`✅ [HORA MARCADA] ${horariosLivres.length} horários disponíveis para ${servicoKey} em ${dataFormatada}`);
@@ -1823,7 +1941,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           // Classificar cada agendamento no período correto
           let vagasOcupadas = 0;
           if (todosAgendamentos && todosAgendamentos.length > 0) {
-            vagasOcupadas = todosAgendamentos.filter(ag => {
+            vagasOcupadas = todosAgendamentos.filter((ag: any) => {
               const periodoClassificado = classificarPeriodoAgendamento(
                 ag.hora_agendamento, 
                 { [periodo]: config }
@@ -1973,7 +2091,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           medico_id: medico.id,
           medico_nome: medico.nome,
           servico: atendimento_nome,
-          periodo_solicitado: periodoPreferido,
+          periodo_solicitado: periodoPreferido ?? undefined,
           dias_buscados: quantidade_dias
         }
       });
@@ -2008,7 +2126,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         servico,
         data_consulta,
         clienteId,
-        periodoPreferido,
+        periodoPreferido ?? undefined,
         60,
         5
       );
@@ -2107,8 +2225,8 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
             .is('excluido_em', null)
               .in('status', ['agendado', 'confirmado']);
             
-            const horariosOcupadosFluxo3 = new Set(agendamentosFluxo3?.map(a => a.hora_agendamento) || []);
-            const horariosLivresFluxo3 = horariosVaziosFluxo3.filter(h => {
+            const horariosOcupadosFluxo3 = new Set(agendamentosFluxo3?.map((a: any) => a.hora_agendamento) || []);
+            const horariosLivresFluxo3 = horariosVaziosFluxo3.filter((h: any) => {
               const horaFormatada = h.hora.includes(':') ? h.hora : `${h.hora}:00:00`;
               return !horariosOcupadosFluxo3.has(horaFormatada);
             });
@@ -2126,7 +2244,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
                 vagas_disponiveis: Math.min(vagasDisponiveisFluxo3, horariosLivresFluxo3.length),
                 total_vagas: servico.limite_proprio || vagasDisponiveisFluxo3,
                 intervalo_minutos: 30,
-                horarios: horariosLivresFluxo3.map(h => h.hora)
+                horarios: horariosLivresFluxo3.map((h: any) => h.hora)
               });
               
               console.log(`✅ [FLUXO 3 - HORA MARCADA] ${horariosLivresFluxo3.length} horários disponíveis`);
@@ -2202,7 +2320,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
       // Classificar cada agendamento no período correto
       let vagasOcupadas = 0;
       if (todosAgendamentosData && todosAgendamentosData.length > 0) {
-        vagasOcupadas = todosAgendamentosData.filter(ag => {
+        vagasOcupadas = todosAgendamentosData.filter((ag: any) => {
           const periodoClassificado = classificarPeriodoAgendamento(
             ag.hora_agendamento,
             { [periodo]: config }
@@ -2211,7 +2329,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         }).length;
         
         console.log(`📊 ${data_consulta} - Período ${periodo}: ${vagasOcupadas}/${limiteCfg} vagas ocupadas`);
-        console.log(`   Horários encontrados:`, todosAgendamentosData.map(a => a.hora_agendamento).join(', '));
+        console.log(`   Horários encontrados:`, todosAgendamentosData.map((a: any) => a.hora_agendamento).join(', '));
       }
 
       const vagasDisponiveis = limiteCfg - vagasOcupadas;
@@ -2241,7 +2359,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         servico,
         data_consulta,
         clienteId,
-        periodoPreferido, // ✅ Mantém período solicitado (manhã/tarde)
+        periodoPreferido ?? undefined, // ✅ Mantém período solicitado (manhã/tarde)
         60, // Buscar nos próximos 60 dias
         5   // Máximo 5 sugestões
       );
@@ -2293,7 +2411,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
         medico: medico.nome,
         servico: servicoKey,
         data_solicitada: data_consulta,
-        periodo_solicitado: periodoPreferido,
+        periodo_solicitado: periodoPreferido ?? undefined,
         proximas_datas: proximasDatas,
         message: mensagem,
         contexto: {
@@ -2301,7 +2419,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           medico_nome: medico.nome,
           servico: atendimento_nome,
           data_original: data_consulta,
-          periodo_preferido: periodoPreferido,
+          periodo_preferido: periodoPreferido ?? undefined,
           total_alternativas: proximasDatas.length
         }
       });
@@ -2327,7 +2445,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           servico,
           data_consulta,
           clienteId,
-          periodoPreferido,
+          periodoPreferido ?? undefined,
           60,
           5
         );
@@ -2447,7 +2565,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           servico,
           data_consulta,
           clienteId,
-          periodoPreferido,
+          periodoPreferido ?? undefined,
           60,
           5
         );
@@ -2565,7 +2683,7 @@ export async function handleAvailability(supabase: any, body: any, clienteId: st
           servico,
           data_consulta,
           clienteId,
-          periodoPreferido,
+          periodoPreferido ?? undefined,
           60,
           5
         );
