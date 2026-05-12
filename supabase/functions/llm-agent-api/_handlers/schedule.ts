@@ -1035,6 +1035,49 @@ export async function handleSchedule(supabase: any, body: any, clienteId: string
       console.log(`🎯 Horário final selecionado: ${horarioFinal} (convertido de "${hora_consulta}")`);
     }
 
+    // Validação dia da semana — qualquer serviço cujos períodos declarem
+    // dias_especificos. Sem isso, o handler aceitava agendar em dias que o
+    // médico não atende (ex: Suely sábado). Aplica APÓS resolver horarioFinal
+    // (necessário pra saber qual período do dia), e ANTES de criar o
+    // agendamento. Use o weekday de data_consulta (0=dom, 1=seg, ..., 6=sab).
+    {
+      const regrasDS = getMedicoRules(config, medico.id, BUSINESS_RULES.medicos[medico.id]);
+      const servicoDS: any = regrasDS?.servicos
+        ? regrasDS.servicos[Object.keys(regrasDS.servicos).find((k: string) =>
+            k.toLowerCase().includes(atendimento_nome.toLowerCase()) ||
+            atendimento_nome.toLowerCase().includes(k.toLowerCase())
+          ) ?? '']
+        : null;
+      const periodosDS: any = servicoDS?.periodos || {};
+      const weekday = new Date(data_consulta + 'T00:00:00').getDay();
+
+      // Se houver alguma config de dias_especificos, valida que pelo menos
+      // 1 período declarado atende esse weekday. Se serviço não declara
+      // dias_especificos em nenhum período, considera atende (compat com configs antigas).
+      const anyPeriodoDeclaraDia = Object.values(periodosDS).some(
+        (p: any) => Array.isArray(p?.dias_especificos),
+      );
+      if (anyPeriodoDeclaraDia) {
+        const atendeNoDia = Object.values(periodosDS).some((p: any) => {
+          if (!p) return false;
+          if (p.ativo === false) return false;
+          if (!Array.isArray(p.dias_especificos)) return false;
+          return p.dias_especificos.includes(weekday);
+        });
+        if (!atendeNoDia) {
+          const diasSemanaPT = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+          console.log(`❌ [DIA_NAO_ATENDIDO] ${medico.nome} não atende ${atendimento_nome} em ${diasSemanaPT[weekday]} (${data_consulta})`);
+          return businessErrorResponse({
+            codigo_erro: 'DIA_NAO_ATENDIDO',
+            mensagem_usuario:
+              `❌ ${medico.nome} não atende ${atendimento_nome} ${diasSemanaPT[weekday]}-feira.\n\n` +
+              `💡 Por favor, escolha outro dia da semana.`,
+            detalhes: { medico: medico.nome, servico: atendimento_nome, data: data_consulta, dia_semana: diasSemanaPT[weekday] },
+          });
+        }
+      }
+    }
+
     // Para serviços HORA MARCADA com slot horário explícito, validamos slot
     // ocupado ANTES de tentar criar. Se já existe agendamento ativo em
     // (medico_id, data, hora_exata), rejeitamos com HORARIO_OCUPADO em vez de
