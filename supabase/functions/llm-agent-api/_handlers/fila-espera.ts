@@ -144,9 +144,20 @@ export async function handleAdicionarFila(supabase: any, body: any, clienteId: s
           .trim();
 
       const nomeNorm = normalizarNomeFuzzy(medicoNome);
+      // Tokens significativos (>=3 chars) da query: ex "Dra Suely" → ["dra","suely"]
+      // Sigla "dra"/"dr" ignoradas — sobra apenas o nome principal (suely).
+      const stopwords = new Set(['dr', 'dra', 'doutor', 'doutora', 'medico', 'medica', 'de', 'da', 'do', 'das', 'dos']);
+      const tokensQuery = nomeNorm
+        .split(/\s+/)
+        .filter((t) => t.length >= 3 && !stopwords.has(t));
+
       const medicosEncontrados = filterDoctorsByScope(todosMedicos, scope).filter((m: any) => {
         const nomeComplNorm = normalizarNomeFuzzy(m.nome);
-        return nomeComplNorm.includes(nomeNorm) || nomeNorm.includes(nomeComplNorm);
+        // (1) substring direta em qualquer direção
+        if (nomeComplNorm.includes(nomeNorm) || nomeNorm.includes(nomeComplNorm)) return true;
+        // (2) Todos os tokens significativos da query batem no nome do médico
+        if (tokensQuery.length > 0 && tokensQuery.every((t) => nomeComplNorm.includes(t))) return true;
+        return false;
       });
 
       if (medicosEncontrados.length === 0) {
