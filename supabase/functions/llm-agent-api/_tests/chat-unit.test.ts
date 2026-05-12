@@ -213,6 +213,38 @@ Deno.test('auditRules: UNIMED não bloqueia', () => {
   assertFalse(result.blocked);
 });
 
+// ── Handover triggers (Sprint 1 — Chatwoot lock) ──────────────────────────
+
+Deno.test('auditRules: paciente menciona "nota fiscal" → HANDOVER_NOTA_FISCAL', () => {
+  const dados = dadosVazios();
+  const result = auditRules(dados, 'outro', 'answer_info', 'preciso da nota fiscal da minha consulta');
+  assertEquals(result.blocked, true);
+  assertEquals(result.reason, 'HANDOVER_NOTA_FISCAL');
+});
+
+Deno.test('auditRules: paciente pede "renovar receita" → HANDOVER_RENOVACAO_RECEITA', () => {
+  const dados = dadosVazios();
+  const result = auditRules(dados, 'outro', 'answer_info', 'preciso renovar minha receita');
+  assertEquals(result.blocked, true);
+  assertEquals(result.reason, 'HANDOVER_RENOVACAO_RECEITA');
+});
+
+Deno.test('auditRules: paciente pede "falar com humano" → HANDOVER_PEDIDO_HUMANO', () => {
+  const dados = dadosVazios();
+  const result = auditRules(dados, 'humano', 'escalate_human', 'quero falar com um atendente');
+  assertEquals(result.blocked, true);
+  assertEquals(result.reason, 'HANDOVER_PEDIDO_HUMANO');
+});
+
+Deno.test('auditRules: mensagem normal NÃO dispara handover', () => {
+  const dados = dadosVazios();
+  const result = auditRules(dados, 'agendar', 'ask_missing', 'quero marcar uma consulta');
+  // pode bloquear por outra razão, mas não por handover
+  if (result.blocked) {
+    assertEquals(result.reason?.startsWith('HANDOVER_'), false);
+  }
+});
+
 // ── computeMissingFields ──────────────────────────────────────────────────
 
 Deno.test('computeMissingFields: agendar sem dados → todos os campos obrigatórios faltam', () => {

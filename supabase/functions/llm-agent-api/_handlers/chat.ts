@@ -41,9 +41,10 @@ export interface DadosColetados {
   tem_guia: boolean | null;
   fistula: boolean | null;
   peso: number | null;
-  // Contexto da consulta (P2). Hoje só "periodico" — paciente fazendo
-  // check-up / consulta anual. Libera CASEMBRAPA (única exceção entre parceiros).
-  tipo_atendimento_contexto: 'periodico' | null;
+  // Contexto da consulta. Valores reconhecidos:
+  //  - "periodico"      → check-up / consulta anual (libera CASEMBRAPA)
+  //  - "pre_operatorio" → consulta + ECG pré-cirurgia (cobrança dupla se particular/copart)
+  tipo_atendimento_contexto: 'periodico' | 'pre_operatorio' | null;
 }
 
 interface ExtractionResult {
@@ -91,10 +92,12 @@ const DADOS_EXTRAIDOS_SCHEMA = {
     peso:            { type: ['number', 'null'],  description: 'Peso em kg, se mencionado' },
     tipo_atendimento_contexto: {
       type: ['string', 'null'],
-      enum: ['periodico', null],
+      enum: ['periodico', 'pre_operatorio', null],
       description:
-        'Contexto da consulta. "periodico" se o paciente mencionar consulta periódica, periódica, ' +
-        'check-up, checkup, exame anual ou consulta anual. Caso contrário, null.',
+        'Contexto da consulta. Valores aceitos:\n' +
+        ' - "periodico": paciente mencionar consulta periódica/periódica/check-up/checkup/exame anual/consulta anual\n' +
+        ' - "pre_operatorio": paciente mencionar pré-operatório/pre-operatorio/cirurgia/laudo pra cirurgia/exame pré-cirúrgico\n' +
+        ' - null: caso contrário',
     },
   },
   required: [
@@ -390,12 +393,57 @@ function mergeDados(
 // Backend tem autoridade total. Se blocked=true, override_response substitui
 // a sugestão do LLM sem exceções.
 
+// Triggers de handover (transferência para humano via Chatwoot).
+// O n8n vê audit_reason e seta n8n_status_atendimento.lock_conversa = true,
+// adiciona etiqueta "atendimento humano" no Chatwoot, e a IA para de responder
+// até a recepção marcar como concluída ou 4h sem interação.
+const HANDOVER_PATTERNS: Array<{ regex: RegExp; reason: string; resposta: string }> = [
+  {
+    regex: /(nota\s*fiscal|emiss(?:a|ã)o\s*de\s*nf|nf-?e|cupom\s*fiscal|recibo\s*fiscal)/i,
+    reason: 'HANDOVER_NOTA_FISCAL',
+    resposta:
+      'Vou transferir você para a recepção, que cuida da emissão de nota fiscal. ' +
+      'Em instantes alguém entra em contato.',
+  },
+  {
+    // Aceita variações: "renovar receita", "renovar minha receita", "renovação de receita".
+    // Heurística: palavra "renova" + até 30 chars + palavra "receita" (ou inverso).
+    regex: /(renova\w*\b[\s\S]{0,30}\breceita|receita[\s\S]{0,15}\brenova\w*)/i,
+    reason: 'HANDOVER_RENOVACAO_RECEITA',
+    resposta:
+      'Renovação de receita precisa ser feita diretamente com a equipe. ' +
+      'Vou transferir para a recepção, em instantes alguém entra em contato.',
+  },
+  {
+    regex: /(falar\s*com\s*(?:um\s*)?(?:atendente|humano|pessoa|recep(?:c|ç)ionista|funcion(?:a|á)rio)|atendimento\s*humano|quero\s*falar\s*com\s*algu(?:e|é)m)/i,
+    reason: 'HANDOVER_PEDIDO_HUMANO',
+    resposta:
+      'Claro! Vou transferir para a recepção. Em instantes alguém entra em contato.',
+  },
+];
+
+function detectHandover(mensagem?: string): AuditOutcome | null {
+  if (!mensagem) return null;
+  for (const { regex, reason, resposta } of HANDOVER_PATTERNS) {
+    if (regex.test(mensagem)) {
+      return { blocked: true, override_response: resposta, reason };
+    }
+  }
+  return null;
+}
+
 function auditRules(
   dados: DadosColetados,
   intent: string,
   nextAction: string,
   mensagemOriginal?: string,
 ): AuditOutcome {
+  // Handover para humano — checar PRIMEIRO, antes de qualquer outra regra.
+  // Se paciente menciona NF/receita/quer humano, transferir imediatamente
+  // sem coletar mais dados.
+  const handover = detectHandover(mensagemOriginal);
+  if (handover) return handover;
+
   // Data passada — bloqueia ANTES de coletar mais dados, pra o paciente
   // corrigir cedo no fluxo (e não preencher nome/nascimento pra descobrir
   // só no fim que a data não vale). Aplica apenas a fluxos de scheduling.
