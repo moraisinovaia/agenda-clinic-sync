@@ -1,0 +1,102 @@
+{
+  "name": "MTCL__Tool__confirmarAgendamento-v1-http",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            { "name": "cliente_id" },
+            { "name": "agendamento_id" }
+          ]
+        }
+      },
+      "id": "a1b2c3d4-confirm-001-0001-000000000001",
+      "name": "receberInputAgente",
+      "position": [0, 0],
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "jsCode": "// tool_confirmarAgendamento v1 — HTTP wrapper pra llm-agent-api /confirmar.\n// Valida UUIDs e monta payload.\n\nconst input = $json || {};\nconst UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;\n\nconst norm = (v) => {\n  if (v === undefined || v === null) return null;\n  const s = String(v).trim();\n  return s.length === 0 ? null : s;\n};\n\nconst reqUuid = (v, name) => {\n  const s = norm(v);\n  if (!s || !UUID_RE.test(s)) {\n    throw new Error(`${name} inválido ou ausente — esperado UUID, recebido: \"${v ?? ''}\"`);\n  }\n  return s;\n};\n\nconst cliente_id     = reqUuid(input.cliente_id, 'cliente_id');\nconst agendamento_id = reqUuid(input.agendamento_id, 'agendamento_id');\n\nconst payload = {\n  cliente_id,\n  agendamento_id,\n};\n\nreturn [{ json: { payload } }];\n"
+      },
+      "id": "b1b2c3d4-confirm-001-0001-000000000002",
+      "name": "validarEMontarPayload",
+      "position": [224, 0],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://qxlvzbvzajibdtlzngdy.supabase.co/functions/v1/llm-agent-api/confirmar",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "fullResponse": false,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "c1b2c3d4-confirm-001-0001-000000000003",
+      "name": "chamarLlmAgentApi",
+      "position": [448, 0],
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_PRO_OFTALMO_CREDENTIAL_ID",
+          "name": "llm-agent-api - PRO OFTALMO"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Empacota response do llm-agent-api em { ok, resultado } pra IA consumir.\nconst resp = $input.first()?.json || null;\nif (!resp) {\n  return [{ json: { ok: false, mensagem: 'HTTP sem resposta.', resultado: null } }];\n}\nconst ok = resp.success === true;\nreturn [{ json: { ok, resultado: resp } }];\n"
+      },
+      "id": "d1b2c3d4-confirm-001-0001-000000000004",
+      "name": "formatarResposta",
+      "position": [672, 0],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "receberInputAgente": {
+      "main": [[{ "index": 0, "node": "validarEMontarPayload", "type": "main" }]]
+    },
+    "validarEMontarPayload": {
+      "main": [[{ "index": 0, "node": "chamarLlmAgentApi", "type": "main" }]]
+    },
+    "chamarLlmAgentApi": {
+      "main": [[{ "index": 0, "node": "formatarResposta", "type": "main" }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "v1-http-2026-05-12",
+  "meta": {
+    "instanceId": "29904fb7452e8c571d1daed834613de10cd7bd3fb8c86085e9fca2451931424c"
+  },
+  "id": "",
+  "tags": []
+}
