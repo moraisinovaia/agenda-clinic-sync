@@ -1,17 +1,96 @@
 # Patches Workflows v2 — Sprint 1
 
-Patches dos 3 workflows n8n descobertos na auditoria. Aplique em ordem.
-DB migrations C.2/C.3 já foram aplicadas via Supabase MCP (não precisa fazer nada).
+Patches dos 4 workflows n8n descobertos na auditoria. Aplique em ordem.
+DB migrations C.1/C.2/C.3/C.7 já foram aplicadas via Supabase MCP (não precisa fazer nada).
 
 ## Resumo dos fixes
 
 | ID | Severidade | Workflow | O que muda |
 |---|---|---|---|
-| **C.6** | 🔴 P0 crítico | PosBloco | Trocar `telefone` por `numero` no UPDATE (lock travado) |
-| **C.2** | 🔴 P0 crítico | DB (já aplicado) | INSERT em `clinica_motor_config` (FK `cmc.id = clientes.id`) |
+| **C.7** | 🔴 P0 **CRÍTICO** | Recepção | Buscar config em `clinica_motor_config` (não `configuracoes_clinica`). Sem isso, multi-tenant routing está quebrado E vazamento de dados entre clínicas |
+| **C.6** | 🔴 P0 crítico | PosBloco | Trocar `telefone` por `numero` no UPDATE (lock travado infinito) |
+| **C.1** | 🔴 P0 | DB (já aplicado) | 7 colunas adicionadas em `fila_pendente_resposta` (alinha com SELECT de `checarFilaPendente`) |
+| **C.2** | 🔴 P0 | DB (já aplicado) | JOIN `clinica_motor_config` funcionando (cmc.id = clientes.id) |
 | **C.3** | 🔴 P0 | DB (já aplicado) | 2 rows inseridos: IPADO + PRO OFTALMO |
 | **A.1** | ⚠️ médio | PreBloco | Adicionar `nome_clinica` no SELECT (preparar pra Motor IA usar) |
 | **A.2** | ⚠️ médio | Motor IA | Remover placeholder literal + saudação personalizada + flexibilizar handover |
+| **PRE-REQ** | 🟡 dados | Você | Popular `evolution_instance_id` em `clinica_motor_config` pras 3 clínicas |
+
+---
+
+## Patch 0 — Recepção (C.7 P0 CRÍTICO — fazer PRIMEIRO)
+
+**Arquivo no n8n**: `MTCL__RecepcaoMensagemWhatsapp-v1`
+**Nó alterado**: `buscarClinicaSupabase`
+
+### Por quê (urgência máxima)
+
+Bug duplo gravíssimo descoberto:
+
+**7.a** — `evolution_instance_id` está NULL em todas as 7 rows de `configuracoes_clinica`. O SELECT atual sempre volta vazio. Resultado: TODA mensagem cai no `notificarPacienteClinicaNaoEncontrada` ("serviço em manutenção"). **Em produção hoje, nenhuma mensagem chega ao Motor IA.**
+
+**7.b** — Mesmo se 7.a fosse populada, `formatarDadosCredenciais` usa `.json.id` (ID da config) como `clinica_id`, mas o restante do sistema espera `clientes.id`. Tools filtrariam dados da clínica errada → **vazamento multi-tenant**.
+
+### Correção arquitetural aplicada (DB)
+
+Migração `clinica_motor_config_add_evolution_instance_id` já aplicada:
+- Adicionada coluna `evolution_instance_id` em `clinica_motor_config`
+- UNIQUE index pra evitar 2 clínicas com mesmo Evolution ID
+
+Como `clinica_motor_config.id = clientes.id` por design (FK), basta a Recepção buscar nessa tabela e o `clinica_id` passado adiante já será o correto. **Bônus**: `transbordo_humano_ativo` e `mensagem_transbordo` também vêm dessa tabela, fixando o C.8 (campos undefined no `chamarSubAtendimento`).
+
+### Patch — Nó `buscarClinicaSupabase`
+
+**Antes:**
+```
+operation: getAll
+tableId: configuracoes_clinica
+filters:
+  - keyName: evolution_instance_id
+    condition: eq
+    keyValue: {{ $json.body.data.instanceId }}
+```
+
+**Depois:**
+```
+operation: getAll
+tableId: clinica_motor_config
+filters:
+  - keyName: evolution_instance_id
+    condition: eq
+    keyValue: {{ $json.body.data.instanceId }}
+```
+
+Só muda o `tableId`. Não é preciso alterar mais nada — `formatarDadosCredenciais` que usa `.json.id` agora vai pegar o ID correto (cmc.id = clientes.id), e o `chamarSubAtendimento` que lê `transbordo_humano_ativo` e `mensagem_transbordo` vai encontrar as colunas existentes.
+
+### Pré-requisito: popular `evolution_instance_id`
+
+**Antes de ativar os workflows**, você precisa rodar este SQL (substituindo os IDs reais Evolution de cada clínica):
+
+```sql
+UPDATE public.clinica_motor_config
+SET evolution_instance_id = '<INSTANCE_ID_IPADO>',
+    updated_at = now()
+WHERE id = '2bfb98b5-ae41-4f96-8ba7-acc797c22054'; -- IPADO
+
+UPDATE public.clinica_motor_config
+SET evolution_instance_id = '<INSTANCE_ID_PRO_OFTALMO>',
+    updated_at = now()
+WHERE id = '0b6a0a35-0059-4a0c-9fb8-413b6253c2ad'; -- PRO OFTALMO
+
+-- A 3ª clínica entrará separadamente quando cadastrada.
+```
+
+Sem isso, o SELECT continua voltando vazio.
+
+### Sugestão extra (não bloqueante)
+
+A Recepção tem várias queries com **SQL injection latente** (concatenação direta de strings):
+- `consultarLockConversa`: `WHERE session_id = '{{ ... }}'`
+- `consultarModoAtendimento`: `WHERE session_id = '{{ ... }}'`
+- `checarFilaPendente`: `WHERE celular = '{{ ... }}'`
+
+Em produção real (clientes legítimos), o risco é baixo. Mas se um número de telefone tiver apóstrofo malformado, quebra. Refatorar pra `queryReplacement` parametrizado em Sprint 2.
 
 ---
 
@@ -211,24 +290,51 @@ Use esta linha como referência absoluta para "hoje", "amanhã", "esta sexta".
 
 ---
 
-## Como aplicar
+## Como aplicar (ordem importa)
 
-1. **No n8n UI**: abra cada workflow, clique no nó indicado, edite o campo conforme descrito acima.
-2. **Salvar** cada workflow após edição.
-3. **NÃO ativar** o workflow ainda — esperar passar pela Recepção (C.1) primeiro.
+1. **Rodar SQL pra popular `evolution_instance_id`** — pegue os IDs Evolution de Pro Oftalmo + IPADO e rode o UPDATE do Patch 0.
+2. **No n8n UI**: abrir cada workflow na ordem (Recepção → PosBloco → PreBloco → Motor IA), aplicar o patch indicado, salvar.
+3. **NÃO ativar** os workflows ainda — primeiro fazer smoke test com 1 número de teste.
 
 ## Checklist de validação pós-aplicação
 
+- [ ] DB: `clinica_motor_config` tem `evolution_instance_id` populado pras 2 clínicas (Pro Oftalmo + IPADO)
+- [ ] Recepção: nó `buscarClinicaSupabase` aponta pra `clinica_motor_config` (não `configuracoes_clinica`)
 - [ ] PosBloco: nó `receberRespostaAgente` tem campo `numero` no schema
 - [ ] PosBloco: nó `desativarLockConversa` usa `numero` (não `telefone`) na query
 - [ ] Motor IA: nó `prepararDadosPosBloco` mapeia `numero` no Set
 - [ ] PreBloco: query `buscarConfigClinica` retorna `nome_clinica` + `transbordo_humano_ativo` + `mensagem_transbordo`
 - [ ] Motor IA: systemMessage atualizado (sem `{nome da clínica}` literal, com bloco TRANSFERIR PARA ATENDENTE HUMANO)
+- [ ] Smoke test: 1 mensagem WhatsApp → resposta da IA + lock desativa corretamente após resposta
 
-## Pendente (depende da Recepção JSON)
+## Bugs descobertos mas NÃO consertados aqui (Sprint 2/3)
 
-- **C.1** — schema `fila_pendente_resposta` precisa do entrypoint `MTCL__RecepcaoMensagemWhatsapp` pra confirmar SELECT.
-- **3ª clínica** — INSERT em `clinica_motor_config` aguarda dados (nome, médicos, convênios).
-- **evolution_instance_id** — 3 IDs pra rota multi-tenant.
-- **Sprint 2** — tool `transferirHumano` (subworkflow que envia label "atendimento humano" pro Chatwoot).
-- **Sprint 3** — tools `cancelarAgendamento` + `confirmarAgendamento`.
+| ID | Onde | Risco | Sprint |
+|---|---|---|---|
+| **SQL Injection latente** | Recepção (queries várias) | Baixo (input controlado), mas má prática | Sprint 2 |
+| **Webhook sem auth** | Recepção `/recp` | Médio (sticky note já reconhece) | Sprint 2 |
+| **Admin notification hardcoded** | `5587991311991` em `notificarAdminClinicaNaoEncontrada` | Baixo | Sprint 2 |
+| **`consultarModoAtendimento` não normaliza `@lid`** | Recepção | Médio (pode causar mismatch session_id) | Sprint 2 |
+| **Tool `transferirHumano` não existe** | Motor IA | Médio (Chatwoot bidi não funciona) | Sprint 2 |
+| **Tools `cancelarAgendamento` / `confirmarAgendamento` não existem** | Motor IA | Alto (paciente não consegue cancelar/confirmar) | Sprint 3 |
+
+## Pendente (aguardando você)
+
+- **3ª clínica nova** (6 médicos) — INSERT em `clientes` + `medicos` + `convenios_medico` + `clinica_motor_config` aguarda dados (nome da clínica, lista de médicos com convênios e horários).
+- **3 `evolution_instance_id`** — Pro Oftalmo, IPADO, 3ª clínica nova.
+
+## Smoke test sugerido (após aplicar tudo)
+
+1. Mandar WhatsApp pro número da Pro Oftalmo: "Oi"
+2. **Esperado**: IA responde "Olá, [seu nome]! Sou a assistente virtual da PRO OFTALMO. Como posso te ajudar?" (saudação dinâmica)
+3. Continuar: "Quero marcar consulta com Dra. Suely"
+4. **Esperado**: IA pergunta convênio + data preferida
+5. Encerrar conversa e checar no DB:
+   ```sql
+   SELECT session_id, lock_conversa, updated_at
+   FROM n8n_status_atendimento
+   WHERE cliente_id = '0b6a0a35-0059-4a0c-9fb8-413b6253c2ad';
+   ```
+   `lock_conversa` deve estar `false` (PosBloco desativou).
+6. Mandar de novo "Oi". **Esperado**: IA responde normalmente (sem trava do lock).
+7. Mandar "Quero falar com um atendente". **Esperado**: IA responde "Vou te encaminhar para nossa equipe..." e para.
